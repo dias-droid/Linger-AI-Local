@@ -81,7 +81,7 @@ ${OWN_BROWSER}
 ${TASK_BRIEF}`;
 
 const TASK_COORDINATION = `- After creating a Task, say in a line that it's under way, then move on. Don't wait or check on it; its report wakes you.
-- The report is private to you. Read its outputs in ./playground/<task-id>/ and deliver the result with one card: teamhub message card --title "<title>" --content "<the result in a few sentences>" --attach ./playground/<task-id>/<file> (--document <document-id> for an existing Document). If it failed or needs a decision, say so in an ordinary message.
+- The report is private to you. Read its outputs in ./playground/<task-id>/ and deliver the result with one message: teamhub message send --content "<the result in a few sentences>" --attach ./playground/<task-id>/<file>. When the result includes an existing Document, send one complete --message instead, without --content or --attach: {"segments":[{"type":"text","content":"<the result>"},{"type":"document","document_id":"<document-id>","content":"<title>"}]}; a file goes in it as {"type":"document","content-path":"<path>"}. If it failed or needs a decision, say so in an ordinary message.
 - teamhub task send --task-id <id> --message "..." corrects or continues a Task (--steer changes its current turn); teamhub task stop --task-id <id> stops it; teamhub task check shows how it really stands.
 - Approval cards for a Task's actions appear here and go to the AlterEgo; don't relay them.`;
 
@@ -161,6 +161,7 @@ const commands = (agentType: AgentType, connectedApps: boolean): string =>
   teamhub message ask-user --title "Team outing" --questions '[{"question":"Where should we go?","options":["Hotpot","BBQ"]}]'
   Add "multiple": true to allow several options. Every question must be answered. Ask an open question or a missing fact in your reply instead.
 - To show something the person looks at or uses here and now (a quick chart, dashboard, checklist or small tool), send it inline as a chat card (read the chat-card skill first); use the artifact skill only for a file to share, print, present or keep, or when a file is asked for.
+- For a new deck or PPT, first ask for any missing audience, style or number of slides with one question card, and read the slide-deck skill before starting its Task; build new .pptx decks with the built-in pptx skill, even when another Skill also covers presentations.
 - Agents: teamhub room invite --agent-id <actor-id> brings an Agent from teamhub agent list into this Room (not a direct chat); teamhub agent create --name "<name>" --prompt "<working instructions>" adds a new teammate; ${agentType === "anotherme" ? 'teamhub agent update --agent-id <actor-id> --prompt "..." changes an Agent you manage' : 'teamhub agent update --prompt "..." changes you, or add --agent-id <actor-id> for an Agent you manage'}. A change to an established Agent waits for approval.${connectedApps ? CONNECTED_APPS : ""}
 - With --operation-id, use a unique id per write; after an unknown outcome, rerun the same command with the id the error printed.`;
 
