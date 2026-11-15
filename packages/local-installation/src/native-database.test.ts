@@ -5,6 +5,11 @@ vi.mock("./native-process.js", () => ({
   inspectNativeProcess: vi.fn(async () => ({ running: true })),
   startNativeProcess: vi.fn(async () => {}),
 }));
+import { removeRetrying, renameRetrying } from "./fs-retry.js";
+vi.mock("./fs-retry.js", () => ({
+  removeRetrying: vi.fn(async () => {}),
+  renameRetrying: vi.fn(async () => {}),
+}));
 vi.mock("./instance.js", () => ({
   privateDirectory: vi.fn(async () => {}),
   atomicPrivate: vi.fn(async () => {}),
@@ -119,6 +124,41 @@ describe("prepareNativeDatabase on Windows", () => {
       /cannot run as administrator/,
     );
     expect(run).toHaveBeenCalledTimes(1);
+    expect(startNativeProcess).not.toHaveBeenCalled();
+  });
+});
+
+describe("prepareNativeDatabase initdb", () => {
+  const data = path.join(instance.root, "native/postgres-data");
+  const pending = `${data}.partial`;
+  const pgdata = () =>
+    run.mock.calls
+      .filter(([command]) => path.basename(command) === "initdb")
+      .map(([, args]) => args[args.indexOf("--pgdata") + 1]);
+
+  it("builds the data directory aside and moves it in once initdb succeeds", async () => {
+    run.mockResolvedValue(ok());
+    await prepareNativeDatabase(options);
+    expect(pgdata()).toEqual([pending]);
+    expect(vi.mocked(removeRetrying).mock.calls).toEqual([[pending], [data]]);
+    expect(vi.mocked(renameRetrying)).toHaveBeenCalledWith(pending, data, {
+      signal: options.signal,
+    });
+  });
+
+  // A killed initdb has already written PG_VERSION; publishing it would make
+  // every later attempt skip initdb and fail on an incomplete cluster.
+  it("leaves the data directory alone when initdb fails", async () => {
+    run.mockImplementation(async (command) =>
+      path.basename(command) === "initdb"
+        ? { code: 1, stdout: "", stderr: "" }
+        : ok(),
+    );
+    await expect(prepareNativeDatabase(options)).rejects.toThrow(
+      /initdb failed/,
+    );
+    expect(vi.mocked(removeRetrying).mock.calls).toEqual([[pending]]);
+    expect(renameRetrying).not.toHaveBeenCalled();
     expect(startNativeProcess).not.toHaveBeenCalled();
   });
 });

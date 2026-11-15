@@ -7,6 +7,7 @@ import {
   readPrivate,
   type Instance,
 } from "./instance.js";
+import { removeRetrying, renameRetrying } from "./fs-retry.js";
 import { inspectNativeProcess, startNativeProcess } from "./native-process.js";
 import { runProcess } from "./process.js";
 import { parseEnv } from "node:util";
@@ -95,22 +96,37 @@ export async function prepareNativeDatabase(options: {
       );
     return result;
   };
-  if (!initialized)
-    await command("initdb", [
-      "--pgdata",
-      data,
-      "--username",
-      "simplexai",
-      "--pwfile",
-      passwordFile,
-      "--auth-host",
-      "scram-sha-256",
-      "--auth-local",
-      "scram-sha-256",
-      "--encoding",
-      "UTF8",
-      "--no-locale",
-    ]);
+  if (!initialized) {
+    // initdb writes PG_VERSION long before it finishes, and a forced kill
+    // (Windows ends the tree on timeout or cancel) leaves no cleanup: such a
+    // directory would pass the check above on every retry. It is built aside
+    // and becomes the data directory only once initdb succeeded.
+    const pending = `${data}.partial`;
+    await removeRetrying(pending);
+    await privateDirectory(pending);
+    await command(
+      "initdb",
+      [
+        "--pgdata",
+        pending,
+        "--username",
+        "simplexai",
+        "--pwfile",
+        passwordFile,
+        "--auth-host",
+        "scram-sha-256",
+        "--auth-local",
+        "scram-sha-256",
+        "--encoding",
+        "UTF8",
+        "--no-locale",
+      ],
+      // Antivirus scanning of the new files can make it take minutes.
+      10 * 60_000,
+    );
+    await removeRetrying(data);
+    await renameRetrying(pending, data, { signal });
+  }
   await startNativeProcess({
     root: instance.root,
     name: "postgres",
