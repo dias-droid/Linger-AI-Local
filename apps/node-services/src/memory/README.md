@@ -250,24 +250,35 @@ projection. Raw is checked by Tenant, Human, Agent and content hash; publishing 
 original-text queries do not depend on the graph. `memory-state/raw/` is the current original-text storage path, not
 old graph data; cleaning old graphs must keep it and all Memory and Wiki bodies.
 
-A Raw Chunk query deduplicates by immutable Raw source and returns at most 20 items; `dateFrom/dateTo` compare the
-source's business date, not the date of the events the text describes. For "the chats of some month" use the source
-date filter; for "what was done in some month" search by entity and action and verify the event time from the
-original text, which lets later records recount past events. Relative event times resolve against the date of the
-source they appear in, and an explicit historical cutoff still applies.
-A query may also pass `event_from/event_to` (the time range of interest): following Hindsight's temporal window, it
-is one weighted recall channel and filters no source. A fact matches when its event interval overlaps the window or
-its mention time falls inside it; an original Chunk matches by source date; both must also match the query keywords.
-The channel takes at most 60 by `ts_rank_cd`, then picks 10 round-robin over 8 time buckets so no single day fills
-it. TeamHub merges the Agent's `dateFrom/dateTo` and `eventFrom/eventTo` into this one soft window (the event range
-first) and sends Memory no hard filter; `date_from/date_to` remain for other callers.
-The Agent's time parameters only weight and never exclude: in LongMemEval the model writes the current date into the
-source filter almost every time, and a hard filter would exclude the earlier conversation that holds the answer.
-The soft window also requires the query itself to mention time (as Hindsight extracts time from the question text):
-when the query has no time expression such as "last week", "last month", "2023" or "October 3", Memory ignores
-`event_from/event_to` and uses only the keyword channels. The model often fills in the current date or
-`0001-01-01~9999-12-31` on every search, and this check does not rely on the model behaving; the tool description
-asks it to keep time words in the query when the question mentions time.
+A Raw Chunk query deduplicates by immutable Raw source and returns at most 20 items. Three kinds of time can come
+with a query, and none filters a source. The two windows are each one more recall channel (following Hindsight's
+temporal window) that also requires the query keywords; `as_of` only reorders the fused list:
+
+- `event_from/event_to`, when the asked event happened, for an event that may have been told later: a fact votes when
+  its event interval overlaps the window, or, with no interval (something said rather than an event), when its source
+  date falls inside it; a mention in the window does not count for an event elsewhere, unlike Hindsight. A period
+  report or a Session page is about its own day and votes by that date. A conversation, transcript, note or mail Chunk
+  only knows when it was recorded, so it takes no event vote: its events reach the Agent through the facts list, as in
+  Hindsight, where time is judged on facts only. In a benchmark of events told later, a vote through facts gave
+  original Chunks no better rank than none.
+- `date_from/date_to`, when the asked records were made (mail received in January, Monday's meeting): a Chunk or a
+  fact votes when its source's local date falls inside the window.
+- `as_of`, the day a changing value or state is asked for (today for the current one): Hindsight's recency boost
+  without a cross-encoder. Each fused candidate's rank maps to a base score from 1.0 down to 0.1, multiplied by
+  `1 + 0.2 * (recency - 0.5)`; recency is 1.0 on that day and falls linearly to 0.1 sixty days before it (Hindsight
+  uses a year; a changing value is restated within weeks), a source after that day takes the 0.1 floor, and an
+  undated source is neutral (0.5). Close matches move toward the record nearest before the day; a
+  weak match is never lifted over a strong one.
+
+A window channel takes at most 60 by `ts_rank_cd`, then picks 10 round-robin over 8 time buckets so no single day
+fills it. Each wording (the query and each alternate) runs its own time channels. A Wiki page other than a Session
+page is dated by the Wiki's publication, not by what it is about, so no time channel takes it; a Session page
+(`sessions/<date>/<session>.md`) is dated by its Session. TeamHub forwards the Agent's `dateFrom/dateTo`,
+`eventFrom/eventTo` and `asOf` unchanged. None of them excludes a source: in LongMemEval the model writes the current
+date into a time parameter almost every time, and a filter would exclude the earlier conversation that holds the
+answer. For "what was done in some month" search by entity and action and verify the event time from the original
+text, which lets later records recount past events. Relative event times resolve against the date of the source they
+appear in, and an explicit historical cutoff still applies.
 
 Raw and Wiki queries may also pass `alternates`: at most 6 synonymous wordings or translations, each at most 200
 characters. Each wording runs its own keyword search in parallel with the query and votes as its own RRF list, so a
@@ -427,7 +438,9 @@ UTC date: `memory-state/raw/<YYYY>/<MM>/<DD>/<roomId>/` holds the current `manif
 hash. The raw collection input is still written before the summary to
 `updates/sessionly/<date>/<subjectKey>/<tenantId>/<roomId>/collection.json`; the Raw search snapshot is saved after
 the Session summary is written and holds message times, authors, text and the text of attachments read successfully,
-without the Provider transcript. A standalone recording replaces the `<roomId>` subpath with `recordings/<captureId>`;
+without the Provider transcript. Each message heading is `## <local time with offset> · <author>`, such as
+`## 2026-11-11T11:45:38+08:00 · Ada`, in the process time zone, so Agents and fact extraction read the time the Web
+client shows. Snapshots of earlier days keep the UTC headings they were written with; both forms carry an offset. A standalone recording replaces the `<roomId>` subpath with `recordings/<captureId>`;
 its Raw is the full original transcript without uploader speaker labels. The formal audio is still managed by
 TeamHub's object storage.
 

@@ -133,4 +133,32 @@ describe("temporal window coverage", () => {
     // Similarity order (input order) is kept among the selected rows.
     expect(selected.at(-1)!.id).toBe("late");
   });
+
+  it("nudges the fused order toward records near the as-of day", async () => {
+    const { boostByRecency, recencyOnOrBefore } =
+      await import("../../src/memory/search/temporal-window.js");
+    expect(recencyOnOrBefore("2026-11-13", "2026-11-13")).toBe(1);
+    expect(recencyOnOrBefore("2026-10-14", "2026-11-13")).toBe(0.5);
+    expect(recencyOnOrBefore("2026-08-01", "2026-11-13")).toBe(0.1);
+    // Not yet said on the day: the floor. Undated: neutral.
+    expect(recencyOnOrBefore("2026-11-14", "2026-11-13")).toBe(0.1);
+    expect(recencyOnOrBefore(undefined, "2026-11-13")).toBe(0.5);
+    // Best-ranked first: a year-old best match, a fresh second, then filler.
+    const rows = [
+      { id: "old", date: "2025-11-01" },
+      { id: "fresh", date: "2026-11-10" },
+      ...Array.from({ length: 8 }, (_, i) => ({
+        id: `filler${i}`,
+        date: "2025-06-01",
+      })),
+      { id: "fresh-weak", date: "2026-11-13" },
+    ];
+    const order = (asOf: string) =>
+      boostByRecency(rows, (row) => row.date, asOf).map((row) => row.id);
+    expect(order("2026-11-13").slice(0, 2)).toEqual(["fresh", "old"]);
+    // A fresh but weak match stays near the end.
+    expect(order("2026-11-13").indexOf("fresh-weak")).toBeGreaterThan(5);
+    // Before the fresh record existed, the relevance order stands.
+    expect(order("2025-11-02").slice(0, 2)).toEqual(["old", "fresh"]);
+  });
 });
