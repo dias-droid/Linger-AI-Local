@@ -4810,6 +4810,18 @@ export interface components {
       entry_document_id?: components["schemas"]["Id"];
       entry_document_version_id?: components["schemas"]["Id"];
     } & (unknown | unknown);
+    /** @description A finished recording's quick notes, which TeamHub writes from its transcript after posting the recording and transcript. Clients read them from the Capture's quick_notes. Only TeamHub creates it. */
+    MeetingNotesSegment: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: "meeting_notes";
+      /** @description User-visible label included in raw_message. */
+      content: string;
+      /** @description The recording's Capture Session; its meeting in Library carries the full notes. */
+      capture_id: components["schemas"]["Id"];
+    };
     MessageSegment:
       | components["schemas"]["ReferenceSegment"]
       | components["schemas"]["TextSegment"]
@@ -4817,7 +4829,8 @@ export interface components {
       | components["schemas"]["HtmlFragmentSegment"]
       | components["schemas"]["DocumentSegment"]
       | components["schemas"]["SkillSegment"]
-      | components["schemas"]["ArtifactTreeSegment"];
+      | components["schemas"]["ArtifactTreeSegment"]
+      | components["schemas"]["MeetingNotesSegment"];
     MessageAttachment: {
       id: components["schemas"]["Id"];
       document_id: components["schemas"]["Id"];
@@ -6068,6 +6081,16 @@ export interface components {
       /** @enum {string} */
       status: "accepted";
     };
+    /** @description Quick notes written from the transcript seconds after the completion Message, which promised them. title and sections are present once state is ready; failed means the Message keeps only the recording and transcript. */
+    VoiceCaptureQuickNotes: {
+      /** @enum {string} */
+      state: "pending" | "ready" | "failed";
+      title?: string;
+      sections?: {
+        heading: string;
+        bullets: string[];
+      }[];
+    };
     /** @enum {string} */
     VoiceCaptureStatus:
       | "starting"
@@ -6077,6 +6100,7 @@ export interface components {
       | "finalized"
       | "failed";
     VoiceCapture: {
+      quick_notes?: components["schemas"]["VoiceCaptureQuickNotes"];
       source_audio_document_version_id?: components["schemas"]["Id"];
       /** @enum {string} */
       transcript_recovery_status?:

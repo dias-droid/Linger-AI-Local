@@ -62,6 +62,7 @@ import {
 } from "./message-body-blocks";
 import { MessageCard } from "./message-card";
 import { MessageHtmlFragment } from "./message-html-fragment";
+import { MessageMeetingNotes } from "./message-meeting-notes";
 import { MessageMarkdown } from "./message-markdown";
 import { MessageReactionBar } from "./message-reactions/message-reaction-bar";
 import { MessageReactionPicker } from "./message-reactions/message-reaction-picker";
@@ -308,7 +309,7 @@ function ConversationMessageRow({
     ),
   );
   const hasHtmlFragment = bodyBlocks.some(
-    (block) => block.kind === "html_fragment",
+    (block) => block.kind === "html_fragment" || block.kind === "meeting_notes",
   );
   // Cards and inline HTML take the full lane on narrow screens.
   const wideCard = Boolean(card || message.card_title || hasHtmlFragment);
@@ -452,6 +453,15 @@ function ConversationMessageRow({
           html={block.segment.html}
           key={`html-fragment:${block.segment.content}:${block.segment.html.length}:${block.segment.html.slice(0, 32)}`}
           title={block.segment.content}
+        />
+      );
+    }
+    if (block.kind === "meeting_notes") {
+      return (
+        <MessageMeetingNotes
+          key={`meeting-notes:${block.segment.capture_id}`}
+          segment={block.segment}
+          tenantId={tenantId}
         />
       );
     }

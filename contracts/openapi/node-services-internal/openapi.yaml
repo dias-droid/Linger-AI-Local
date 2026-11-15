@@ -1369,6 +1369,7 @@ components:
       enum:
         - approval
         - voice_ask
+        - meeting_notes
         - memory
         - agent_memory
         - wiki
@@ -1377,6 +1378,7 @@ components:
       x-enum-varnames:
         - ModelCallKindApproval
         - ModelCallKindVoiceAsk
+        - ModelCallKindMeetingNotes
         - ModelCallKindMemory
         - ModelCallKindAgentMemory
         - ModelCallKindWiki
@@ -1385,7 +1387,7 @@ components:
       description: >-
         What the call is for. It sets the call's place in the queue of the
         Runtime it runs on, where an approval goes first and Runs come next;
-        voice_ask never queues. approval and voice_ask have a person waiting,
+        voice_ask and meeting_notes never queue. approval, voice_ask and meeting_notes have someone waiting,
         so they stop once the request is gone and never answer pending.
     ModelCallErrorCode:
       type: string

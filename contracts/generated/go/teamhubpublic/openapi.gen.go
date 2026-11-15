@@ -3119,6 +3119,27 @@ func (e VoiceCaptureQuestionKind) Valid() bool {
 	}
 }
 
+// Defines values for VoiceCaptureQuickNotesState.
+const (
+	VoiceCaptureQuickNotesStateFailed  VoiceCaptureQuickNotesState = "failed"
+	VoiceCaptureQuickNotesStatePending VoiceCaptureQuickNotesState = "pending"
+	VoiceCaptureQuickNotesStateReady   VoiceCaptureQuickNotesState = "ready"
+)
+
+// Valid indicates whether the value is a known member of the VoiceCaptureQuickNotesState enum.
+func (e VoiceCaptureQuickNotesState) Valid() bool {
+	switch e {
+	case VoiceCaptureQuickNotesStateFailed:
+		return true
+	case VoiceCaptureQuickNotesStatePending:
+		return true
+	case VoiceCaptureQuickNotesStateReady:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for VoiceCaptureStatus.
 const (
 	VoiceCaptureStatusFailed     VoiceCaptureStatus = "failed"
@@ -3406,22 +3427,22 @@ func (e WorkItemPriority) Valid() bool {
 
 // Defines values for WorkItemResolution.
 const (
-	Completed  WorkItemResolution = "completed"
-	Duplicate  WorkItemResolution = "duplicate"
-	Failed     WorkItemResolution = "failed"
-	NotPlanned WorkItemResolution = "not_planned"
+	WorkItemResolutionCompleted  WorkItemResolution = "completed"
+	WorkItemResolutionDuplicate  WorkItemResolution = "duplicate"
+	WorkItemResolutionFailed     WorkItemResolution = "failed"
+	WorkItemResolutionNotPlanned WorkItemResolution = "not_planned"
 )
 
 // Valid indicates whether the value is a known member of the WorkItemResolution enum.
 func (e WorkItemResolution) Valid() bool {
 	switch e {
-	case Completed:
+	case WorkItemResolutionCompleted:
 		return true
-	case Duplicate:
+	case WorkItemResolutionDuplicate:
 		return true
-	case Failed:
+	case WorkItemResolutionFailed:
 		return true
-	case NotPlanned:
+	case WorkItemResolutionNotPlanned:
 		return true
 	default:
 		return false
@@ -5778,6 +5799,16 @@ type MeetingFiles struct {
 	TranscriptVersionId  string  `json:"transcript_version_id"`
 }
 
+// MeetingNotesSegment A finished recording's quick notes, which TeamHub writes from its transcript after posting the recording and transcript. Clients read them from the Capture's quick_notes. Only TeamHub creates it.
+type MeetingNotesSegment struct {
+	// CaptureId Opaque, case-sensitive identifier. Clients must not infer type or time from it.
+	CaptureId Id `json:"capture_id"`
+
+	// Content User-visible label included in raw_message.
+	Content string `json:"content"`
+	Type    string `json:"type"`
+}
+
 // MemberAddedNotice The Message author added this Human or Agent to the Room.
 type MemberAddedNotice struct {
 	Member ActorRef `json:"member"`
@@ -7715,6 +7746,9 @@ type VoiceCapture struct {
 	Id              Id      `json:"id"`
 	LastFailureCode *string `json:"last_failure_code,omitempty"`
 
+	// QuickNotes Quick notes written from the transcript seconds after the completion Message, which promised them. title and sections are present once state is ready; failed means the Message keeps only the recording and transcript.
+	QuickNotes *VoiceCaptureQuickNotes `json:"quick_notes,omitempty"`
+
 	// RequestedStartOffsetMs Original Capture start request on the VoiceSession audio timeline. Stable across media startup alignment; scopes transient ASR previews, not archived audio trimming.
 	RequestedStartOffsetMs int64 `json:"requested_start_offset_ms"`
 
@@ -7785,6 +7819,19 @@ type VoiceCaptureQuestionSource struct {
 	StartOffsetMs int64  `json:"start_offset_ms"`
 	Text          string `json:"text"`
 }
+
+// VoiceCaptureQuickNotes Quick notes written from the transcript seconds after the completion Message, which promised them. title and sections are present once state is ready; failed means the Message keeps only the recording and transcript.
+type VoiceCaptureQuickNotes struct {
+	Sections *[]struct {
+		Bullets []string `json:"bullets"`
+		Heading string   `json:"heading"`
+	} `json:"sections,omitempty"`
+	State VoiceCaptureQuickNotesState `json:"state"`
+	Title *string                     `json:"title,omitempty"`
+}
+
+// VoiceCaptureQuickNotesState defines model for VoiceCaptureQuickNotes.State.
+type VoiceCaptureQuickNotesState string
 
 // VoiceCaptureStartRequest defines model for VoiceCaptureStartRequest.
 type VoiceCaptureStartRequest struct {
@@ -10136,6 +10183,34 @@ func (t *MessageSegment) MergeArtifactTreeSegment(v ArtifactTreeSegment) error {
 	return err
 }
 
+// AsMeetingNotesSegment returns the union data inside the MessageSegment as a MeetingNotesSegment
+func (t MessageSegment) AsMeetingNotesSegment() (MeetingNotesSegment, error) {
+	var body MeetingNotesSegment
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromMeetingNotesSegment overwrites any union data inside the MessageSegment as the provided MeetingNotesSegment
+func (t *MessageSegment) FromMeetingNotesSegment(v MeetingNotesSegment) error {
+	v.Type = "meeting_notes"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeMeetingNotesSegment performs a merge with any union data inside the MessageSegment, using the provided MeetingNotesSegment
+func (t *MessageSegment) MergeMeetingNotesSegment(v MeetingNotesSegment) error {
+	v.Type = "meeting_notes"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t MessageSegment) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"type"`
@@ -10158,6 +10233,8 @@ func (t MessageSegment) ValueByDiscriminator() (interface{}, error) {
 		return t.AsFileSegment()
 	case "html_fragment":
 		return t.AsHtmlFragmentSegment()
+	case "meeting_notes":
+		return t.AsMeetingNotesSegment()
 	case "reference":
 		return t.AsReferenceSegment()
 	case "skill":

@@ -409,6 +409,8 @@ type CaptureSession struct {
 	TranscriptRecoveryFailureCode    pgtype.Text        `json:"transcript_recovery_failure_code"`
 	TranscriptRecoveryRetryAt        pgtype.Timestamptz `json:"transcript_recovery_retry_at"`
 	HiddenAt                         pgtype.Timestamptz `json:"hidden_at"`
+	QuickNotesState                  pgtype.Text        `json:"quick_notes_state"`
+	QuickNotes                       []byte             `json:"quick_notes"`
 }
 
 type CaptureTranscriptCoverage struct {

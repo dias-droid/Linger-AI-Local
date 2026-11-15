@@ -2804,6 +2804,16 @@ type Id = string
 // ManifestVersion Immutable strict Semantic Version for a Skill Manifest.
 type ManifestVersion = string
 
+// MeetingNotesSegment A finished recording's quick notes, which TeamHub writes from its transcript after posting the recording and transcript. Clients read them from the Capture's quick_notes. Only TeamHub creates it.
+type MeetingNotesSegment struct {
+	// CaptureId Opaque, case-sensitive identifier. Clients must not infer type or time from it.
+	CaptureId Id `json:"capture_id"`
+
+	// Content User-visible label included in raw_message.
+	Content string `json:"content"`
+	Type    string `json:"type"`
+}
+
 // MessageReactionId Stable emoji ID in the official Reaction library shared by Humans and Agents: the emoji IDs of @emoji-mart/data 1.2.1 set 15 (Unicode Emoji 15). TeamHub rejects IDs outside that library.
 type MessageReactionId = string
 
@@ -4493,6 +4503,34 @@ func (t *MessageSegment) MergeArtifactTreeSegment(v ArtifactTreeSegment) error {
 	return err
 }
 
+// AsMeetingNotesSegment returns the union data inside the MessageSegment as a MeetingNotesSegment
+func (t MessageSegment) AsMeetingNotesSegment() (MeetingNotesSegment, error) {
+	var body MeetingNotesSegment
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromMeetingNotesSegment overwrites any union data inside the MessageSegment as the provided MeetingNotesSegment
+func (t *MessageSegment) FromMeetingNotesSegment(v MeetingNotesSegment) error {
+	v.Type = "meeting_notes"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeMeetingNotesSegment performs a merge with any union data inside the MessageSegment, using the provided MeetingNotesSegment
+func (t *MessageSegment) MergeMeetingNotesSegment(v MeetingNotesSegment) error {
+	v.Type = "meeting_notes"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t MessageSegment) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"type"`
@@ -4515,6 +4553,8 @@ func (t MessageSegment) ValueByDiscriminator() (interface{}, error) {
 		return t.AsFileSegment()
 	case "html_fragment":
 		return t.AsHtmlFragmentSegment()
+	case "meeting_notes":
+		return t.AsMeetingNotesSegment()
 	case "reference":
 		return t.AsReferenceSegment()
 	case "skill":

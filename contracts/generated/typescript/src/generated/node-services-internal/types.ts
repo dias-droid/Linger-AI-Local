@@ -648,12 +648,13 @@ export interface components {
      */
     ModelCallEffort: "low" | "medium" | "high";
     /**
-     * @description What the call is for. It sets the call's place in the queue of the Runtime it runs on, where an approval goes first and Runs come next; voice_ask never queues. approval and voice_ask have a person waiting, so they stop once the request is gone and never answer pending.
+     * @description What the call is for. It sets the call's place in the queue of the Runtime it runs on, where an approval goes first and Runs come next; voice_ask and meeting_notes never queue. approval, voice_ask and meeting_notes have someone waiting, so they stop once the request is gone and never answer pending.
      * @enum {string}
      */
     ModelCallKind:
       | "approval"
       | "voice_ask"
+      | "meeting_notes"
       | "memory"
       | "agent_memory"
       | "wiki"

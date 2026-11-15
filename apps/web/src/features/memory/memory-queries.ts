@@ -10,13 +10,21 @@ export function meetingPath(tenantId: string, meetingId: string) {
   return `/t/${encodeURIComponent(tenantId)}/library/meetings?entry=${encodeURIComponent(meetingId)}`;
 }
 
-export function useMeetings(tenantId: string) {
+/**
+ * Every meeting, refreshed every 15 seconds; a caller waiting for one
+ * meeting passes `until` to stop refreshing once it holds.
+ */
+export function useMeetings(
+  tenantId: string,
+  until?: (meetings: TeamHubMemoryEntry[]) => boolean,
+) {
   const { client } = useTeamHubRuntime();
   return useQuery({
     queryFn: () => listEveryMeetingPage(client, tenantId),
     queryKey: ["teamhub", tenantId, "personal-memory", "meetings"],
     staleTime: 15_000,
-    refetchInterval: 15_000,
+    refetchInterval: (query) =>
+      until && query.state.data && until(query.state.data) ? false : 15_000,
   });
 }
 

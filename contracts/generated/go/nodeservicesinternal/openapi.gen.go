@@ -886,13 +886,14 @@ func (e ModelCallEffort) Valid() bool {
 
 // Defines values for ModelCallKind.
 const (
-	ModelCallKindAgentMemory ModelCallKind = "agent_memory"
-	ModelCallKindApproval    ModelCallKind = "approval"
-	ModelCallKindInsight     ModelCallKind = "insight"
-	ModelCallKindMemory      ModelCallKind = "memory"
-	ModelCallKindProfile     ModelCallKind = "profile"
-	ModelCallKindVoiceAsk    ModelCallKind = "voice_ask"
-	ModelCallKindWiki        ModelCallKind = "wiki"
+	ModelCallKindAgentMemory  ModelCallKind = "agent_memory"
+	ModelCallKindApproval     ModelCallKind = "approval"
+	ModelCallKindInsight      ModelCallKind = "insight"
+	ModelCallKindMeetingNotes ModelCallKind = "meeting_notes"
+	ModelCallKindMemory       ModelCallKind = "memory"
+	ModelCallKindProfile      ModelCallKind = "profile"
+	ModelCallKindVoiceAsk     ModelCallKind = "voice_ask"
+	ModelCallKindWiki         ModelCallKind = "wiki"
 )
 
 // Valid indicates whether the value is a known member of the ModelCallKind enum.
@@ -903,6 +904,8 @@ func (e ModelCallKind) Valid() bool {
 	case ModelCallKindApproval:
 		return true
 	case ModelCallKindInsight:
+		return true
+	case ModelCallKindMeetingNotes:
 		return true
 	case ModelCallKindMemory:
 		return true
@@ -1866,7 +1869,7 @@ type MemoryRebuildStatusPhase string
 // ModelCallEffort Reasoning effort for the Runtime's default model; omitted, low.
 type ModelCallEffort string
 
-// ModelCallKind What the call is for. It sets the call's place in the queue of the Runtime it runs on, where an approval goes first and Runs come next; voice_ask never queues. approval and voice_ask have a person waiting, so they stop once the request is gone and never answer pending.
+// ModelCallKind What the call is for. It sets the call's place in the queue of the Runtime it runs on, where an approval goes first and Runs come next; voice_ask and meeting_notes never queue. approval, voice_ask and meeting_notes have someone waiting, so they stop once the request is gone and never answer pending.
 type ModelCallKind string
 
 // ModelCallRequest defines model for ModelCallRequest.
@@ -1883,7 +1886,7 @@ type ModelCallRequest struct {
 	// Key Names the work, for example profile:<generation_id>. A request with the same key and the same content joins the running execution or receives its cached result; the same key with other content is a new request.
 	Key string `json:"key"`
 
-	// Kind What the call is for. It sets the call's place in the queue of the Runtime it runs on, where an approval goes first and Runs come next; voice_ask never queues. approval and voice_ask have a person waiting, so they stop once the request is gone and never answer pending.
+	// Kind What the call is for. It sets the call's place in the queue of the Runtime it runs on, where an approval goes first and Runs come next; voice_ask and meeting_notes never queue. approval, voice_ask and meeting_notes have someone waiting, so they stop once the request is gone and never answer pending.
 	Kind ModelCallKind `json:"kind"`
 
 	// Output Asks for one JSON object; omitted, the answer is text.

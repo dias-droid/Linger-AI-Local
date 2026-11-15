@@ -1467,6 +1467,18 @@ export interface components {
       entry_document_id?: components["schemas"]["Id"];
       entry_document_version_id?: components["schemas"]["Id"];
     } & (unknown | unknown);
+    /** @description A finished recording's quick notes, which TeamHub writes from its transcript after posting the recording and transcript. Clients read them from the Capture's quick_notes. Only TeamHub creates it. */
+    MeetingNotesSegment: {
+      /**
+       * @description discriminator enum property added by openapi-typescript
+       * @enum {string}
+       */
+      type: "meeting_notes";
+      /** @description User-visible label included in raw_message. */
+      content: string;
+      /** @description The recording's Capture Session; its meeting in Library carries the full notes. */
+      capture_id: components["schemas"]["Id"];
+    };
     MessageSegment:
       | components["schemas"]["ReferenceSegment"]
       | components["schemas"]["TextSegment"]
@@ -1474,7 +1486,8 @@ export interface components {
       | components["schemas"]["HtmlFragmentSegment"]
       | components["schemas"]["DocumentSegment"]
       | components["schemas"]["SkillSegment"]
-      | components["schemas"]["ArtifactTreeSegment"];
+      | components["schemas"]["ArtifactTreeSegment"]
+      | components["schemas"]["MeetingNotesSegment"];
     AgentHistoryMessage: {
       message_id: string;
       inbox_id: string;

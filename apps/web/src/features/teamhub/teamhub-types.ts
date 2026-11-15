@@ -189,6 +189,8 @@ export type TeamHubMessageHtmlFragmentSegment =
   components["schemas"]["HtmlFragmentSegment"];
 export type TeamHubMessageDocumentSegment =
   components["schemas"]["DocumentSegment"];
+export type TeamHubMessageMeetingNotesSegment =
+  components["schemas"]["MeetingNotesSegment"];
 export type TeamHubMessageSegment = components["schemas"]["MessageSegment"];
 export type TeamHubMessagePage = components["schemas"]["MessagePage"];
 export type TeamHubMessageSearchHit = components["schemas"]["MessageSearchHit"];
