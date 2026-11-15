@@ -15,8 +15,10 @@ vi.mock("./instance.js", () => ({
   atomicPrivate: vi.fn(async () => {}),
   readPrivate: vi.fn(async () => "LINGER_POSTGRES_PASSWORD=secret\n"),
 }));
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   postgresProgram,
   prepareNativeDatabase,
@@ -144,6 +146,12 @@ describe("prepareNativeDatabase initdb", () => {
     expect(vi.mocked(renameRetrying)).toHaveBeenCalledWith(pending, data, {
       signal: options.signal,
     });
+    const initdb = run.mock.calls.findIndex(
+      ([command]) => path.basename(command) === "initdb",
+    );
+    expect(
+      vi.mocked(removeRetrying).mock.invocationCallOrder[1],
+    ).toBeGreaterThan(run.mock.invocationCallOrder[initdb]!);
   });
 
   // A killed initdb has already written PG_VERSION; publishing it would make
@@ -160,5 +168,41 @@ describe("prepareNativeDatabase initdb", () => {
     expect(vi.mocked(removeRetrying).mock.calls).toEqual([[pending]]);
     expect(renameRetrying).not.toHaveBeenCalled();
     expect(startNativeProcess).not.toHaveBeenCalled();
+  });
+
+  describe("with a PG_VERSION already present", () => {
+    let root: string;
+    beforeEach(async () => {
+      root = await mkdtemp(path.join(tmpdir(), "native-database-"));
+      await mkdir(path.join(root, "native/postgres-data"), { recursive: true });
+      await writeFile(
+        path.join(root, "native/postgres-data/PG_VERSION"),
+        "17\n",
+      );
+      run.mockResolvedValue(ok());
+    });
+    afterEach(() => rm(root, { recursive: true, force: true }));
+    const prepare = () =>
+      prepareNativeDatabase({ ...options, instance: { ...instance, root } });
+
+    it("keeps a cluster that has served", async () => {
+      await writeFile(
+        path.join(root, "native/postgres-data/postmaster.opts"),
+        "",
+      );
+      await prepare();
+      expect(pgdata()).toEqual([]);
+      expect(renameRetrying).not.toHaveBeenCalled();
+    });
+
+    // A cluster no postmaster ever started holds no data, and one left by a
+    // killed initdb would otherwise fail every start.
+    it("makes again one that never started", async () => {
+      await prepare();
+      expect(pgdata()).toEqual([
+        path.join(root, "native/postgres-data.partial"),
+      ]);
+      expect(renameRetrying).toHaveBeenCalled();
+    });
   });
 });

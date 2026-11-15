@@ -78,7 +78,17 @@ export async function prepareNativeDatabase(options: {
       throw new Error(
         "This native instance contains an unsupported PostgreSQL data directory.",
       );
-    initialized = true;
+    // Only a started postmaster writes postmaster.opts; initdb does not. A
+    // directory without it never served a connection and holds no data, as
+    // when an earlier initdb was killed after writing PG_VERSION, so it is
+    // made again rather than left to fail every start.
+    initialized = await lstat(path.join(data, "postmaster.opts")).then(
+      () => true,
+      (error: NodeJS.ErrnoException) => {
+        if (error.code !== "ENOENT") throw error;
+        return false;
+      },
+    );
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
@@ -97,10 +107,9 @@ export async function prepareNativeDatabase(options: {
     return result;
   };
   if (!initialized) {
-    // initdb writes PG_VERSION long before it finishes, and a forced kill
-    // (Windows ends the tree on timeout or cancel) leaves no cleanup: such a
-    // directory would pass the check above on every retry. It is built aside
-    // and becomes the data directory only once initdb succeeded.
+    // A forced kill (Windows ends the tree on timeout or cancel) leaves
+    // initdb no time to clean up, so it builds aside and its directory
+    // becomes the data directory only once it succeeded.
     const pending = `${data}.partial`;
     await removeRetrying(pending);
     await privateDirectory(pending);

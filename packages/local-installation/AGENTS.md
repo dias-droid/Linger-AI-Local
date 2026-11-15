@@ -43,6 +43,12 @@ error naming each failed instance, and the installer does not start. The
 cache markers `.simplex-files.json` and `.simplex-model-package.json` keep
 their names.
 
+Native PostgreSQL runs `initdb` in `native/postgres-data.partial` and moves
+it to `native/postgres-data` only once it succeeds, so a killed `initdb`
+never leaves a directory that later starts skip. A `postgres-data` with
+`PG_VERSION` but no `postmaster.opts` (which only a started server writes)
+never served a connection, holds no data, and is initialized again.
+
 Move a freshly downloaded or unpacked file or folder into place with
 `renameRetrying` from `fs-retry.ts`: on Windows antivirus and indexing hold
 new files for a moment, and a plain rename then fails with EPERM.
