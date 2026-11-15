@@ -4557,6 +4557,33 @@ button.question-choice:focus-visible {
   background: var(--app-hover);
   color: var(--app-ink);
 }
+.xs-nav-btn-label {
+  display: none;
+}
+/* The quick-access row names each entry; the header toolbar stays icons. */
+.xs-nav-quick .xs-nav-btn {
+  flex: 1 1 auto;
+  gap: 6px;
+  width: auto;
+  height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+  color: var(--app-ink);
+}
+.xs-nav-quick .xs-nav-btn:hover {
+  background: var(--app-hover);
+}
+.xs-nav-quick .xs-nav-btn-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 470;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .xs-nav-btn:disabled {
   cursor: default;
 }
