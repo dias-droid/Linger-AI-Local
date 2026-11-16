@@ -116,6 +116,26 @@ background as soon as it starts, so the stamp only saves the blocking fetch.
 API-key and signed-out homes have no account identity and are not seeded;
 Codex does not fetch the catalog for them.
 
+## Personal instructions
+
+An Agent run follows only the instructions the Daemon gives it, never the
+Computer user's own instruction files:
+
+- Claude loads the Context's Skills through the `project` setting source,
+  which would also load every `CLAUDE.md`, `AGENTS.md` and `.claude/rules`
+  from the workspace up to the root, including the user's home. The Claude
+  settings set `CLAUDE_CODE_DISABLE_CLAUDE_MDS`, so none is read.
+- A Codex Context home takes the user's provider configuration but not their
+  `AGENTS.md`, `AGENTS.override.md` or `instructions.md`; a copy an earlier
+  projection left is removed. `instructions`, `developer_instructions`,
+  `model_instructions_file` and `experimental_instructions_file` are dropped
+  from the projected `config.toml` and its profiles.
+- Pi runs with `--no-context-files` and an empty `--system-prompt`, so it keeps
+  its built-in prompt instead of the user's `SYSTEM.md`.
+
+The user's own Claude Skills and the Skills of plugins they installed are still
+offered to Agents (`internal/workspace/claude_skills.go`).
+
 ## Frozen source
 
 The daemon implementation is intentionally maintained as a frozen in-repository
