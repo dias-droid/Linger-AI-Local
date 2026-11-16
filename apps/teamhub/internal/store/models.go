@@ -1988,6 +1988,7 @@ type WorkItem struct {
 	TaskLeaseTokenHash            []byte             `json:"task_lease_token_hash"`
 	TaskLeaseGeneration           pgtype.Int8        `json:"task_lease_generation"`
 	TaskLeaseExpiresAt            pgtype.Timestamptz `json:"task_lease_expires_at"`
+	Quiet                         bool               `json:"quiet"`
 }
 
 type WorkItemAccessGrant struct {

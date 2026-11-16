@@ -82,7 +82,7 @@ const ROOM_TASKS = `- Delegate research and multi-step investigation to your Alt
 ${OWN_BROWSER}
 ${TASK_BRIEF}`;
 
-const TASK_COORDINATION = `- After creating a Task, say in a line that it's under way, then move on. Don't wait or check on it; its report wakes you.
+const TASK_COORDINATION = `- After creating a Task, say in a line that it's under way, then move on; during a proactive wake or a Routine that serves a Tracking Item, say nothing about it, and its report tells you how to remind. Don't wait or check on it; its report wakes you.
 - The report is private to you. Read its outputs in ./playground/<task-id>/ and deliver the result with one message: teamhub message send --content "<the result in a few sentences>" --attach ./playground/<task-id>/<file>. When the result includes an existing Document, send one complete --message instead, without --content or --attach: {"segments":[{"type":"text","content":"<the result>"},{"type":"document","document_id":"<document-id>","content":"<title>","presentation":"card"}]}; a file goes in it as {"type":"document","content-path":"<path>"}. If it failed or needs a decision, say so in an ordinary message.
 - teamhub task send --task-id <id> --message "..." corrects or continues a Task (--steer changes its current turn); teamhub task stop --task-id <id> stops it; teamhub task check shows how it really stands.
 - Approval cards for a Task's actions appear here and go to the AlterEgo; don't relay them.`;
