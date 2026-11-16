@@ -1,60 +1,75 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { TaskInputBubble } from "./task-input-bubble";
 
-const heights = Object.getOwnPropertyDescriptor(
-  HTMLElement.prototype,
-  "scrollHeight",
-);
-
 afterEach(() => {
-  if (heights)
-    Object.defineProperty(HTMLElement.prototype, "scrollHeight", heights);
-  else Reflect.deleteProperty(HTMLElement.prototype, "scrollHeight");
+  vi.unstubAllGlobals();
 });
 
-function contentOverflows() {
-  Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
-    configurable: true,
-    get: () => 400,
-  });
+/** jsdom has no layout; every observed element reports this height. */
+function measureContent(height: number) {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      #callback: ResizeObserverCallback;
+      constructor(callback: ResizeObserverCallback) {
+        this.#callback = callback;
+      }
+      observe(target: Element) {
+        this.#callback(
+          [
+            {
+              contentRect: { height, width: 320 },
+              target,
+            } as ResizeObserverEntry,
+          ],
+          this,
+        );
+      }
+      disconnect() {}
+      unobserve() {}
+    },
+  );
 }
 
 describe("TaskInputBubble", () => {
-  it("shows a short input whole, without a fold", () => {
+  it("shows an input that fits whole, without a fold", async () => {
+    measureContent(22);
     render(<TaskInputBubble authorKind="agent" body="Add a closing letter." />);
+    await act(() => new Promise(requestAnimationFrame));
 
     expect(screen.getByText("Add a closing letter.")).toBeVisible();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
-  it("folds a long input to its first lines and opens it in place", () => {
-    contentOverflows();
+  it("folds a long input to its first lines and opens it in place", async () => {
+    measureContent(400);
     render(
       <TaskInputBubble
         authorKind="agent"
         body={"Write the report.\n\n1. Opening\n2. Events\n3. Finances"}
       />,
     );
-    const content = screen
-      .getByText("Write the report.")
-      .closest(".message-markdown")!.parentElement!;
 
-    const more = screen.getByRole("button", { name: "Show more" });
+    const more = await screen.findByRole("button", { name: "Show more" });
     expect(more).toHaveAttribute("aria-expanded", "false");
-    expect(content).toHaveClass("max-h-[110px]", "overflow-hidden");
+    const region = document.getElementById(more.getAttribute("aria-controls")!);
+    expect(region).toHaveTextContent("Finances");
+    expect(region!.className).toContain("mask-image");
 
     fireEvent.click(more);
 
-    const less = screen.getByRole("button", { name: "Show less" });
-    expect(less).toHaveAttribute("aria-expanded", "true");
-    expect(content).not.toHaveClass("max-h-[110px]");
+    expect(screen.getByRole("button", { name: "Show less" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(region!.className).not.toContain("mask-image");
 
-    fireEvent.click(less);
+    fireEvent.click(screen.getByRole("button", { name: "Show less" }));
 
     expect(screen.getByRole("button", { name: "Show more" })).toBeVisible();
-    expect(content).toHaveClass("max-h-[110px]");
+    expect(region!.className).toContain("mask-image");
   });
 
   it("caps the width on a wrapper, since the bubble's own max-width outranks utilities", () => {
