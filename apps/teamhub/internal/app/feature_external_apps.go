@@ -88,6 +88,23 @@ func (a *App) connectedAppsConfigured() bool {
 	return a.externalSources != nil && a.externalSources.ProviderConfigured()
 }
 
+// agentConnectedAppKeys lists the keys of the apps with an account granted to
+// the Agent, so its instructions name only the sources it can query.
+func (a *App) agentConnectedAppKeys(ctx context.Context, tx pgx.Tx, agentActorID, tenantID string) ([]string, error) {
+	if a.externalSources == nil {
+		return nil, nil
+	}
+	granted, err := a.externalSources.ListGrantedAgentToolConnectionsInTx(ctx, tx, agentActorID, tenantID, "", "")
+	if err != nil {
+		return nil, err
+	}
+	keys := make([]string, 0, len(granted))
+	for _, connection := range granted {
+		keys = append(keys, connection.AppKey)
+	}
+	return keys, nil
+}
+
 // onboardingConnections reads the Connected App accounts granted to
 // AnotherMe for its onboarding status.
 func (a *App) onboardingConnections(ctx context.Context, tx pgx.Tx, agentActorID, tenantID string) ([]typedcard.OnboardingConnection, error) {

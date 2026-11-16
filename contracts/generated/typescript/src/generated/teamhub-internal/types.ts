@@ -2487,10 +2487,12 @@ export interface components {
       };
     };
     AgentEffectiveResources: {
-      /** @description Deterministic digest of the effective Skill set and connected_apps; Agent Service compares it at Run boundaries. */
+      /** @description Deterministic digest of the effective Skill set, connected_apps and connected_app_keys; Agent Service compares it at Run boundaries. */
       effective_sha256: string;
       /** @description TeamHub currently has a Composio API key, from the environment or saved on the Apps page, so the Agent is taught and allowed the connected app commands. */
       connected_apps: boolean;
+      /** @description Sorted keys of the apps with an account granted to this Agent, such as gmail or google_calendar, so its instructions name only sources it can query. Empty without connected_apps. Agent Service requires this field, so TeamHub ships before Agent Service. */
+      connected_app_keys: string[];
       skills: components["schemas"]["AgentEffectiveSkill"][];
     };
     ProactiveWindowMessage: {

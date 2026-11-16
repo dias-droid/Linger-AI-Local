@@ -4,6 +4,8 @@ import type {
   AgentType,
 } from "../executor/types.js";
 import type { MetaRoomKind } from "../executor/context-ref.js";
+import { connectedAppsAtRunStart } from "./connected-apps.js";
+import { renderPersonalContextMethod } from "./personal-context-method.js";
 import { PERSONAL_KNOWLEDGE_POLICY } from "./personal-knowledge-policy.js";
 import { serializePromptData } from "./prompt-data.js";
 
@@ -17,6 +19,8 @@ export interface MetaInstructionsInput {
   readonly roomKind: MetaRoomKind;
   /** TeamHub has a Composio API key, so the connected app commands work. */
   readonly connectedApps: boolean;
+  /** Keys of the apps with an account granted to this Agent. */
+  readonly connectedAppKeys: readonly string[];
 }
 
 const identity = (input: {
@@ -216,12 +220,13 @@ const WORKSPACE = `Your workspace
   - System tools: micromamba install --yes --override-channels --channel conda-forge --prefix ./agent/conda <package>, then micromamba run --prefix ./agent/conda <command>. Don't use apt, conda, or mamba. poppler, pandoc, qpdf, tesseract, and ffmpeg are preinstalled; LibreOffice is not.
   - Extract archives with tar --no-same-owner.`;
 
-const CONNECTED_APPS = `
-- Connected apps: what earlier context says about connected apps can be out of date. Before telling the Human whether an app is connected, check teamhub apps list, which is always current. When the Human wants to use an app that isn't listed, run teamhub apps connect <app-key> to post an authorization card here instead of asking for credentials. Never automatically resend a teamhub apps execute call whose outcome is unknown; check the app first. To turn the Human's auto reminders for Gmail, Outlook, Google Calendar or Slack on or off, use teamhub apps auto-reminders list and set (Another Me only).`;
+const connectedAppsCommands = (connectedAppKeys: readonly string[]): string => `
+- Connected apps: when this Run started, ${connectedAppsAtRunStart(connectedAppKeys)}. Use them without checking first. Check teamhub apps list only when this may be out of date: the Human says they connected or disconnected an app during this conversation, or an app command reports that the account is not connected. When the Human wants to use an app that isn't listed, run teamhub apps connect <app-key> to post an authorization card here instead of asking for credentials. Never automatically resend a teamhub apps execute call whose outcome is unknown; check the app first. To turn the Human's auto reminders for Gmail, Outlook, Google Calendar or Slack on or off, use teamhub apps auto-reminders list and set (Another Me only).`;
 
 const commands = (
   agentType: AgentType,
   connectedApps: boolean,
+  connectedAppKeys: readonly string[],
 ): string => `TeamHub commands
 - Use the teamhub CLI through your shell for everything in the workspace. teamhub --help and teamhub <domain> <action> --help describe the commands; TeamHub checks your authority on every call, so help is not a permission list. Credentials are installed for you: never read, print, copy, or override them. Add --json when you need structured output.
 - Run each teamhub command on its own, not joined with cd, mkdir, cat, pipes, or $(...): alone, the commands you are allowed run without review, while a joined command goes to review and can wait for your Sponsor's approval. Write a file with your file tool first, then pass its path.
@@ -230,7 +235,7 @@ const commands = (
 - A Thread is part of this Room and reuses your role here. Its root message is context, not a new request. Read it with teamhub message read --thread <thread-id> and reply only into that Thread, never into the Room itself: message send, message card, and message ask-user all take --thread <thread-id>.
 - Documents are identified by document_id, not filenames, and aren't mounted locally. You can read, edit and manage every Document your Human has. Find them with teamhub docs list (--shared lists the ones someone shared with you to look at), read them with teamhub docs get <document-id>, and create one with teamhub docs create --title "..." --file <markdown-path>. Deliver an existing file with teamhub message send --attach <path>.
 - Tasks: teamhub task check lists the Tasks you delegated from this Room; teamhub task check --task-id <id> shows its status, recent activity, pending approvals, and last report. A Task's reports reach you as private Task callbacks; read one again with teamhub message read --inbox taskmeta:<task-id>.
-- Routines: for something recurring in this Room, use teamhub routine create; for a one-off check at a set time, use --at <RFC 3339 time> instead of a schedule, never a recurring routine you plan to turn off later. Omit --mention-actor-id for plain text, pass self to wake yourself, or pass another Agent's actor id. To change one, get its id from teamhub routine list. Delete it when it is no longer needed, and to move it to another time, delete it and create a new one. Pause only when someone wants it stopped for now and resumed later. Delete or pause a routine someone else created only when they ask. Say it is deleted or paused only after the command succeeds. A routine wake is your own standing order, not someone typing: carry it out, and stay quiet when there's nothing worth saying.${connectedApps ? CONNECTED_APPS : ""}
+- Routines: for something recurring in this Room, use teamhub routine create; for a one-off check at a set time, use --at <RFC 3339 time> instead of a schedule, never a recurring routine you plan to turn off later. Omit --mention-actor-id for plain text, pass self to wake yourself, or pass another Agent's actor id. To change one, get its id from teamhub routine list. Delete it when it is no longer needed, and to move it to another time, delete it and create a new one. Pause only when someone wants it stopped for now and resumed later. Delete or pause a routine someone else created only when they ask. Say it is deleted or paused only after the command succeeds. A routine wake is your own standing order, not someone typing: carry it out, and stay quiet when there's nothing worth saying.${connectedApps ? connectedAppsCommands(connectedAppKeys) : ""}
 - Cards: a command that needs a Human's decision (a question, an app authorization, an Agent change, a connector write, a Room creation, Document access) posts a card for that Human and returns at once. The decision arrives later as a new message here. Until then, keep doing work that doesn't depend on it; if everything depends on it, end your turn. Don't wait or poll for it, don't post the same card again, and never act as if it were decided.
 - Questions: when you need your Sponsor to choose before you can go on, post a question card here. Only your Sponsor can answer it:
   teamhub message ask-user --title "Friday team outing" --questions '[{"question":"Where should we go?","options":["Hotpot","BBQ"]},{"question":"What else would you like to do?","options":["KTV","Board games","Movie"],"multiple":true}]'
@@ -254,10 +259,11 @@ const environment = (input: {
   readonly roomId: string;
   readonly roomKind: MetaRoomKind;
   readonly connectedApps: boolean;
+  readonly connectedAppKeys: readonly string[];
 }): string => {
   const where = `## Environment and commands
 This conversation is Room ${input.roomId}, ${input.roomKind === "direct" ? "a direct chat between you and one Human" : "a collaboration Room"}. New messages arrive in your input. You can read other Rooms you're authorized for when they help, but they are reference only: their messages aren't new requests, and they don't change where this work is delivered. Keep this conversation's files in ./playground/${input.roomId}/. ./playground/<task-id>/ of each Task you delegate from this Room holds that Task's live output; reopen a file to see its latest committed version.`;
-  return `${where}\n\n${WORKSPACE}\n\n${commands(input.agentType, input.connectedApps)}`;
+  return `${where}\n\n${WORKSPACE}\n\n${commands(input.agentType, input.connectedApps, input.connectedAppKeys)}`;
 };
 
 /** Room Meta recipe: instruction sections first, volatile data blocks last. */
@@ -272,6 +278,7 @@ export const renderMetaInstructions = (input: MetaInstructionsInput): string =>
     collaboration(input.agentType, input.roomKind),
     authority(input.agentType, input.roomKind),
     environment(input),
+    renderPersonalContextMethod(input.connectedApps, input.connectedAppKeys),
     PERSONAL_KNOWLEDGE_POLICY,
   ]
     .filter(Boolean)

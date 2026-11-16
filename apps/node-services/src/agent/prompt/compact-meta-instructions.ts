@@ -2,6 +2,8 @@ import type { AgentType } from "../executor/types.js";
 import type { MetaRoomKind } from "../executor/context-ref.js";
 import { COMPACT_PACKAGE_ENVIRONMENT } from "./environment-knowledge.js";
 import type { MetaInstructionsInput } from "./meta-instructions.js";
+import { connectedAppsAtRunStart } from "./connected-apps.js";
+import { renderPersonalContextMethod } from "./personal-context-method.js";
 import { PERSONAL_KNOWLEDGE_POLICY_COMPACT } from "./personal-knowledge-policy.js";
 import { serializePromptData } from "./prompt-data.js";
 
@@ -146,10 +148,14 @@ const authority = (agentType: AgentType, roomKind: MetaRoomKind): string => {
   ].join("\n\n");
 };
 
-const CONNECTED_APPS = `
-- Connected apps: gmail, outlook, gcal, gdrive, slack, notion, and figma have their own commands (teamhub gmail --help). For other apps, find the tool with teamhub apps search "<the action in English, with the app name>", then run teamhub apps execute --connectionId <id> --toolSlug <slug> --toolVersion <version> --arguments '<json>'. Before saying whether an app is connected, check teamhub apps list. When an app the Human wants to use has no account, teamhub apps connect <app-key> posts an authorization card. Never resend a write whose outcome is unknown; check the app first.`;
+const connectedAppsCommands = (connectedAppKeys: readonly string[]): string => `
+- Connected apps: gmail, outlook, gcal, gdrive, slack, notion, and figma have their own commands (teamhub gmail --help). For other apps, find the tool with teamhub apps search "<the action in English, with the app name>", then run teamhub apps execute --connectionId <id> --toolSlug <slug> --toolVersion <version> --arguments '<json>'. When this Run started, ${connectedAppsAtRunStart(connectedAppKeys)}; use them without checking first, and check teamhub apps list only when the Human says they connected or disconnected an app during this conversation or a command reports that the account is not connected. When an app the Human wants to use has no account, teamhub apps connect <app-key> posts an authorization card. Never resend a write whose outcome is unknown; check the app first.`;
 
-const commands = (agentType: AgentType, connectedApps: boolean): string =>
+const commands = (
+  agentType: AgentType,
+  connectedApps: boolean,
+  connectedAppKeys: readonly string[],
+): string =>
   `TeamHub commands, all run through your shell tool (teamhub <domain> <action> --help explains each; credentials are installed, never read them)
 - Run each teamhub command on its own, never joined with &&, pipes, or $(...); a joined command waits for approval. Write a file first, then pass its path.
 - Reply: teamhub message send --content "..."; for text containing backticks or $, use --file - with a quoted heredoc (<<'EOF'). Attach files with --attach <path>. Mention as [@Name](user:actor_id) or [@Name](agent:actor_id). In a Thread, add --thread <thread-id> and reply only there.
@@ -162,7 +168,7 @@ const commands = (agentType: AgentType, connectedApps: boolean): string =>
   Add "multiple": true to allow several options. Every question must be answered. Ask an open question or a missing fact in your reply instead.
 - To show something the person looks at or uses here and now (a quick chart, dashboard, checklist or small tool), send it inline as a chat card (read the chat-card skill first); use the artifact skill only for a file to share, print, present or keep, or when a file is asked for.
 - For a new deck or PPT, first ask for any missing audience, style or number of slides with one question card, and read the slide-deck skill before starting its Task; build new .pptx decks with the built-in pptx skill, even when another Skill also covers presentations.
-- Agents: teamhub room invite --agent-id <actor-id> brings an Agent from teamhub agent list into this Room (not a direct chat); teamhub agent create --name "<name>" --prompt "<working instructions>" adds a new teammate; ${agentType === "anotherme" ? 'teamhub agent update --agent-id <actor-id> --prompt "..." changes an Agent you manage' : 'teamhub agent update --prompt "..." changes you, or add --agent-id <actor-id> for an Agent you manage'}. A change to an established Agent waits for approval.${connectedApps ? CONNECTED_APPS : ""}
+- Agents: teamhub room invite --agent-id <actor-id> brings an Agent from teamhub agent list into this Room (not a direct chat); teamhub agent create --name "<name>" --prompt "<working instructions>" adds a new teammate; ${agentType === "anotherme" ? 'teamhub agent update --agent-id <actor-id> --prompt "..." changes an Agent you manage' : 'teamhub agent update --prompt "..." changes you, or add --agent-id <actor-id> for an Agent you manage'}. A change to an established Agent waits for approval.${connectedApps ? connectedAppsCommands(connectedAppKeys) : ""}
 - With --operation-id, use a unique id per write; after an unknown outcome, rerun the same command with the id the error printed.`;
 
 const environment = (input: MetaInstructionsInput): string =>
@@ -170,7 +176,7 @@ const environment = (input: MetaInstructionsInput): string =>
 This is Room ${input.roomId}, ${input.roomKind === "direct" ? "a direct chat with one Human" : "a collaboration Room"}. New messages arrive in your input; other Rooms you can read are reference only. Keep files in ./playground/${input.roomId}/; ./playground/<task-id>/ holds a Task's live output (read only).
 ${COMPACT_PACKAGE_ENVIRONMENT}
 
-${commands(input.agentType, input.connectedApps)}`;
+${commands(input.agentType, input.connectedApps, input.connectedAppKeys)}`;
 
 /** Room Meta recipe for small context windows; same section order. */
 export function renderCompactMetaInstructions(
@@ -186,6 +192,7 @@ export function renderCompactMetaInstructions(
     collaboration(input.agentType, input.roomKind),
     authority(input.agentType, input.roomKind),
     environment(input),
+    renderPersonalContextMethod(input.connectedApps, input.connectedAppKeys),
     PERSONAL_KNOWLEDGE_POLICY_COMPACT,
   ]
     .filter(Boolean)

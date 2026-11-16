@@ -1721,10 +1721,13 @@ type AgentActorRef struct {
 
 // AgentEffectiveResources defines model for AgentEffectiveResources.
 type AgentEffectiveResources struct {
+	// ConnectedAppKeys Sorted keys of the apps with an account granted to this Agent, such as gmail or google_calendar, so its instructions name only sources it can query. Empty without connected_apps. Agent Service requires this field, so TeamHub ships before Agent Service.
+	ConnectedAppKeys []string `json:"connected_app_keys"`
+
 	// ConnectedApps TeamHub currently has a Composio API key, from the environment or saved on the Apps page, so the Agent is taught and allowed the connected app commands.
 	ConnectedApps bool `json:"connected_apps"`
 
-	// EffectiveSha256 Deterministic digest of the effective Skill set and connected_apps; Agent Service compares it at Run boundaries.
+	// EffectiveSha256 Deterministic digest of the effective Skill set, connected_apps and connected_app_keys; Agent Service compares it at Run boundaries.
 	EffectiveSha256 string                `json:"effective_sha256"`
 	Skills          []AgentEffectiveSkill `json:"skills"`
 }
