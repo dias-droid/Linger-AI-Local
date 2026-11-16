@@ -35,6 +35,9 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
 
 ## Important Conventions
 
+- A Room permits 100 Routines: recurring ones count while they exist, and
+  one-shot ones count until they fire. There is no separate one-shot limit.
+
 - Room input acceptance: Runtime State validates canonical
   conversation/targeted agent_runtime inputs atomically with Local Run and cursor.
   Document reads are live-latest and mutations retain CAS. CLI business
