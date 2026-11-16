@@ -170,12 +170,13 @@ function Get-LingerCodexSandboxSids {
     }
     # Keep only the S-1-5-21 form with four 32-bit values that Codex generates,
     # so a corrupted file cannot make a well-known SID such as Everyone trusted.
+    # A last value below 1000 is a well-known domain RID such as Domain Users.
     foreach ($value in $values) {
         $parts = $value -split '-'
         if ($parts.Count -ne 8 -or ($parts[0..3] -join '-') -cne 'S-1-5-21') { continue }
         $valid = $true
         foreach ($part in $parts[4..7]) { $number = [uint32]0; if (-not [uint32]::TryParse($part, [Globalization.NumberStyles]::None, [Globalization.CultureInfo]::InvariantCulture, [ref]$number)) { $valid = $false } }
-        if ($valid) { $sids += $value }
+        if ($valid -and $number -ge 1000) { $sids += $value }
     }
     return $sids
 }

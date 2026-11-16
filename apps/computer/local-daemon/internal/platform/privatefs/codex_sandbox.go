@@ -8,7 +8,7 @@ import (
 
 // parseCodexCapSIDs returns the write capability SIDs in a Codex cap_sid file.
 // Only entries with the shape Codex generates are kept, so a corrupted file
-// cannot make a well-known or builtin SID such as Everyone trusted.
+// cannot make a well-known, builtin or well-known domain SID trusted.
 func parseCodexCapSIDs(data []byte) map[string]bool {
 	var caps struct {
 		Workspace          string            `json:"workspace"`
@@ -34,16 +34,21 @@ func parseCodexCapSIDs(data []byte) map[string]bool {
 }
 
 // isCodexCapabilitySID reports whether value is S-1-5-21 followed by four
-// 32-bit values, the form Codex draws at random for capability SIDs.
+// 32-bit values, the form Codex draws at random for capability SIDs. A last
+// value below 1000 is a well-known domain RID such as Domain Users (513), so it
+// is rejected; a random value lands there with negligible probability.
 func isCodexCapabilitySID(value string) bool {
 	parts := strings.Split(value, "-")
 	if len(parts) != 8 || strings.Join(parts[:4], "-") != "S-1-5-21" {
 		return false
 	}
+	var last uint64
 	for _, part := range parts[4:] {
-		if _, err := strconv.ParseUint(part, 10, 32); err != nil {
+		number, err := strconv.ParseUint(part, 10, 32)
+		if err != nil {
 			return false
 		}
+		last = number
 	}
-	return true
+	return last >= 1000
 }
