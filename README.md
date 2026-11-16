@@ -230,7 +230,7 @@ Choose the channel that best fits your question:
 
 Star Linger on GitHub to follow along, and choose **Watch → Custom → Releases** to hear about every new release.
 
-<a href="https://github.com/simplexai-labs/linger"><img src="assets/github-star.webp" width="100%" alt="Starring simplexai-labs/linger on GitHub: the camera zooms in on the Star button, which shows 350; a click turns it into Starred 351"></a>
+<a href="https://github.com/simplexai-labs/linger"><img src="assets/github-star.webp" width="100%" alt="Starring simplexai-labs/linger on GitHub: the camera zooms in on the Star button, which shows 349; a click turns it into Starred 350"></a>
 
 ## Acknowledgements
 
