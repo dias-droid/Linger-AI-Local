@@ -164,9 +164,18 @@ function Get-LingerCodexSandboxSids {
     try { $sids += (New-Object Security.Principal.NTAccount('CodexSandboxUsers')).Translate([Security.Principal.SecurityIdentifier]).Value } catch {}
     $capFile = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.codex\cap_sid'
     try { $caps = [IO.File]::ReadAllText($capFile) | ConvertFrom-Json } catch { return $sids }
-    if ($caps.workspace) { $sids += [string]$caps.workspace }
+    $values = @([string]$caps.workspace)
     foreach ($roots in @($caps.workspace_by_cwd, $caps.writable_root_by_path)) {
-        if ($roots) { $sids += @($roots.PSObject.Properties | ForEach-Object { [string]$_.Value }) }
+        if ($roots) { $values += @($roots.PSObject.Properties | ForEach-Object { [string]$_.Value }) }
+    }
+    # Keep only the S-1-5-21 form with four 32-bit values that Codex generates,
+    # so a corrupted file cannot make a well-known SID such as Everyone trusted.
+    foreach ($value in $values) {
+        $parts = $value -split '-'
+        if ($parts.Count -ne 8 -or ($parts[0..3] -join '-') -cne 'S-1-5-21') { continue }
+        $valid = $true
+        foreach ($part in $parts[4..7]) { $number = [uint32]0; if (-not [uint32]::TryParse($part, [Globalization.NumberStyles]::None, [Globalization.CultureInfo]::InvariantCulture, [ref]$number)) { $valid = $false } }
+        if ($valid) { $sids += $value }
     }
     return $sids
 }

@@ -3,7 +3,6 @@
 package privatefs
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -70,6 +69,15 @@ func pinParents(path string) (func(), error) {
 		parent = next
 	}
 	handles := []windows.Handle{}
+	// One walk reads the Codex sandbox principals at most once, and only when
+	// an ancestor grants replace rights to an otherwise untrusted SID.
+	var sandbox map[string]bool
+	sandboxSIDs := func() map[string]bool {
+		if sandbox == nil {
+			sandbox = codexSandboxSIDs()
+		}
+		return sandbox
+	}
 	closeAll := func() {
 		for i := len(handles) - 1; i >= 0; i-- {
 			_ = windows.CloseHandle(handles[i])
@@ -98,7 +106,7 @@ func pinParents(path string) (func(), error) {
 		}
 		sd, err := windows.GetSecurityInfo(handle, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
 		if err == nil {
-			err = validateAncestorDescriptor(sd, filepath.Dir(paths[i]) == paths[i])
+			err = validateAncestorDescriptor(sd, filepath.Dir(paths[i]) == paths[i], sandboxSIDs)
 		}
 		if err != nil {
 			closeAll()
@@ -194,12 +202,11 @@ func validateDescriptor(sd *windows.SECURITY_DESCRIPTOR, ownerOnly bool) error {
 // Ancestors need not be private, but another account must not be able to
 // replace an existing component. The default C:\ ACL allows creating new
 // directories; that does not grant removal or replacement of an owned child.
-func validateAncestorDescriptor(sd *windows.SECURITY_DESCRIPTOR, volumeRoot bool) error {
+func validateAncestorDescriptor(sd *windows.SECURITY_DESCRIPTOR, volumeRoot bool, sandboxSIDs func() map[string]bool) error {
 	user, err := CurrentSID()
 	if err != nil {
 		return err
 	}
-	var sandbox map[string]bool
 	trusted := func(sid *windows.SID) bool {
 		return sid != nil && (windows.EqualSid(sid, user) || sid.IsWellKnown(windows.WinLocalSystemSid) || sid.IsWellKnown(windows.WinBuiltinAdministratorsSid) ||
 			sid.String() == "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464") // Windows TrustedInstaller
@@ -235,10 +242,7 @@ func validateAncestorDescriptor(sd *windows.SECURITY_DESCRIPTOR, volumeRoot bool
 		if trusted(sid) || ace.Mask&replaceMask == 0 {
 			continue
 		}
-		if sandbox == nil {
-			sandbox = codexSandboxSIDs()
-		}
-		if !sandbox[sid.String()] {
+		if !sandboxSIDs()[sid.String()] {
 			return fmt.Errorf("ancestor permits another user (%s) to replace private paths", sid.String())
 		}
 	}
@@ -247,36 +251,19 @@ func validateAncestorDescriptor(sd *windows.SECURITY_DESCRIPTOR, volumeRoot bool
 
 // codexSandboxSIDs returns the principals the Codex Windows sandbox grants on
 // its writable roots: the sandbox users group and the capability SIDs Codex
-// records in its default home. Linger accepts that a sandboxed Codex
-// command may replace an ancestor such as AppData; private paths themselves
-// stay owner-only. The set is read on demand so grants Codex adds while the
-// Daemon runs are recognized.
+// records in its default home. Linger accepts that a sandboxed Codex command
+// may replace an ancestor such as AppData; private paths themselves stay
+// owner-only.
 func codexSandboxSIDs() map[string]bool {
 	sids := map[string]bool{}
+	profile, err := windows.GetCurrentProcessToken().GetUserProfileDirectory()
+	if err == nil {
+		if data, err := os.ReadFile(filepath.Join(profile, ".codex", "cap_sid")); err == nil {
+			sids = parseCodexCapSIDs(data)
+		}
+	}
 	if sid, _, _, err := windows.LookupSID("", "CodexSandboxUsers"); err == nil {
 		sids[sid.String()] = true
-	}
-	profile, err := windows.GetCurrentProcessToken().GetUserProfileDirectory()
-	if err != nil {
-		return sids
-	}
-	data, err := os.ReadFile(filepath.Join(profile, ".codex", "cap_sid"))
-	if err != nil {
-		return sids
-	}
-	var caps struct {
-		Workspace          string            `json:"workspace"`
-		WorkspaceByCWD     map[string]string `json:"workspace_by_cwd"`
-		WritableRootByPath map[string]string `json:"writable_root_by_path"`
-	}
-	if json.Unmarshal(data, &caps) != nil {
-		return sids
-	}
-	sids[caps.Workspace] = true
-	for _, roots := range []map[string]string{caps.WorkspaceByCWD, caps.WritableRootByPath} {
-		for _, sid := range roots {
-			sids[sid] = true
-		}
 	}
 	return sids
 }
