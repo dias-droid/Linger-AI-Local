@@ -1177,8 +1177,45 @@
         margin: 6px auto 0;
         font-size: 12px;
       }
-      .diagnostics[hidden] {
+      .diagnostics[hidden],
+      .diagnostics [hidden] {
         display: none;
+      }
+      /* Send Diagnostics: consent, progress and the report id. */
+      .send-modal .files {
+        max-height: 132px;
+        margin: 0 0 14px;
+        padding: 8px 10px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        list-style: none;
+        color: var(--muted);
+        font:
+          11px/1.6 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        overflow-wrap: anywhere;
+      }
+      .send-modal .track {
+        margin: 0 0 14px;
+      }
+      .send-modal .fill {
+        transition: width 200ms linear;
+      }
+      .send-modal .report strong {
+        display: block;
+        margin-top: 6px;
+        color: var(--ink);
+        font:
+          600 16px ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        letter-spacing: 0.06em;
+        user-select: all;
+        -webkit-user-select: all;
       }
       .diagnostics output {
         flex-basis: 100%;
@@ -1601,7 +1638,35 @@
           <button class="link quiet" id="save-diagnostics" type="button">
             Save Diagnostics
           </button>
+          <button class="link quiet" id="send-diagnostics" type="button" hidden>
+            Send Diagnostics
+          </button>
           <output id="diagnostics-note"></output>
+        </div>
+        <div
+          class="signin-modal send-modal"
+          id="send-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="send-title"
+          hidden
+        >
+          <div class="sheet">
+            <h2 id="send-title"></h2>
+            <p id="send-lead"></p>
+            <ul class="files" id="send-files" aria-label="Files to send"></ul>
+            <div class="track" id="send-track">
+              <div class="fill" id="send-fill"></div>
+            </div>
+            <p class="report" id="send-report">
+              Report ID <strong id="send-report-id"></strong>
+            </p>
+            <p class="problem" id="send-error" role="alert"></p>
+            <div class="actions">
+              <button class="primary" id="send-primary" type="button"></button>
+              <button class="link quiet" id="send-close" type="button"></button>
+            </div>
+          </div>
         </div>
         <footer class="actions" id="installing-actions">
           <button class="ghost" data-go="welcome" type="button">Back</button>
@@ -2517,6 +2582,7 @@
         shownDiagnostics = savedKey;
         $("installing-actions").hidden = !failed;
         renderSignIn(local, busy);
+        renderSend();
         // Each failure brings its message and actions into view once.
         if (failed && revealed !== local.attempt) {
           revealed = local.attempt;
@@ -2620,6 +2686,86 @@
         );
       };
 
+      // Send Diagnostics, while a diagnostics server is set up.
+      const fileSize = (bytes) =>
+        bytes < 1024 ** 2
+          ? Math.max(1, Math.ceil(bytes / 1024)) + " KB"
+          : (bytes / 1024 ** 2).toFixed(1) + " MB";
+      let copiedReport;
+      const renderSend = () => {
+        const send = state.diagnosticsSend;
+        $("send-diagnostics").hidden = !send;
+        const phase = send?.phase ?? "idle";
+        $("send-modal").hidden = phase === "idle";
+        if (phase === "idle") return;
+        const title = {
+          preparing: "Preparing diagnostics",
+          confirm: "Send diagnostics to " + send.host + "?",
+          sending: "Sending diagnostics",
+          sent: "Diagnostics sent",
+          failed: "Couldn't send diagnostics",
+        }[phase];
+        $("send-title").textContent = title;
+        const lead = $("send-lead");
+        if (phase === "preparing")
+          lead.innerHTML =
+            '<span class="spinner"></span>Collecting logs and settings…';
+        else
+          lead.textContent =
+            phase === "confirm"
+              ? send.files.length +
+                " files, " +
+                fileSize(send.bytes) +
+                ": logs and settings of this app and of Linger on this computer. Passwords, tokens, keys and your home folder path are removed first; credential files and your data are never included. Only the people who run " +
+                send.host +
+                " can read the report."
+              : phase === "sending"
+                ? "Uploading to " +
+                  send.host +
+                  "… " +
+                  Math.floor((send.sent / Math.max(1, send.total)) * 100) +
+                  "%"
+                : phase === "sent"
+                  ? "Give this report ID to Linger support so they can find your report."
+                  : send.retry
+                    ? ""
+                    : "You can still use Save Diagnostics and send the file by hand.";
+        const files = $("send-files");
+        files.hidden = phase !== "confirm";
+        if (
+          phase === "confirm" &&
+          files.dataset.shown !== send.files.join("\n")
+        ) {
+          files.replaceChildren(
+            ...send.files.map((file) => {
+              const item = document.createElement("li");
+              item.textContent = file;
+              return item;
+            }),
+          );
+          files.dataset.shown = send.files.join("\n");
+        }
+        $("send-track").hidden = phase !== "sending";
+        if (phase === "sending")
+          $("send-fill").style.width =
+            Math.min(100, (send.sent / Math.max(1, send.total)) * 100) + "%";
+        $("send-report").hidden = phase !== "sent";
+        $("send-report-id").textContent = phase === "sent" ? send.reportId : "";
+        $("send-error").textContent = phase === "failed" ? send.error : "";
+        const primary = {
+          confirm: "Send",
+          sent: copiedReport === send.reportId ? "Copied" : "Copy Report ID",
+          failed: send.retry ? "Try Again" : "",
+        }[phase];
+        $("send-primary").hidden = !primary;
+        $("send-primary").textContent = primary ?? "";
+        const close = { confirm: "Cancel", sent: "Done", failed: "Close" }[
+          phase
+        ];
+        $("send-close").hidden = !close;
+        $("send-close").textContent = close ?? "";
+      };
+
       // Runs one command at a time; errors land next to the step.
       const run = async (command, errorId) => {
         if (pending !== null) return;
@@ -2713,6 +2859,27 @@
       );
       $("save-diagnostics").addEventListener("click", () =>
         run({ op: "diagnostics.save" }, "diagnostics-note"),
+      );
+      $("send-diagnostics").addEventListener("click", () => {
+        copiedReport = undefined;
+        run({ op: "diagnostics.send", action: "start" }, "diagnostics-note");
+      });
+      $("send-primary").addEventListener("click", async () => {
+        const send = state.diagnosticsSend;
+        if (send?.phase === "confirm")
+          run({ op: "diagnostics.send", action: "confirm" }, "send-error");
+        else if (send?.phase === "failed")
+          run({ op: "diagnostics.send", action: "retry" }, "send-error");
+        else if (send?.phase === "sent") {
+          if (
+            await run({ op: "diagnostics.send", action: "copy" }, "send-error")
+          )
+            copiedReport = send.reportId;
+          render();
+        }
+      });
+      $("send-close").addEventListener("click", () =>
+        run({ op: "diagnostics.send", action: "cancel" }, "send-error"),
       );
       const clearKeys = () => {
         keys = {};

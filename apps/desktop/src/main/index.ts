@@ -308,6 +308,7 @@ async function main(): Promise<void> {
       output: () => app.getPath("downloads"),
       openFolder: (folder) => shell.openPath(folder),
       showFile: (file) => shell.showItemInFolder(file),
+      outbox: path.join(userData, "diagnostics-outbox"),
     }),
     setup,
     updater,

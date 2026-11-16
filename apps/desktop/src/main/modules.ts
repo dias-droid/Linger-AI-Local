@@ -19,6 +19,7 @@ export interface BusEvents {
   // Why the Computer service keeps exiting at start, or undefined once it ran.
   "computer.failed": [reason: string | undefined];
   "computer.renamed": [];
+  "diagnostics.changed": [];
   "grants.changed": [];
   "local-server.changed": [];
   // Forget the installation the window used and set this computer up again.

@@ -9,6 +9,7 @@ export type TrayAction =
   | "check-update"
   | "show-logs"
   | "save-diagnostics"
+  | "send-diagnostics"
   | "quit";
 
 export type TrayMenuItem =
@@ -28,6 +29,8 @@ export interface TrayMenuState {
   // The updater's progress; a failure says why, since it is otherwise only
   // in the log.
   readonly update?: UpdateState;
+  // A diagnostics server is set up, so reports can be sent from here.
+  readonly canSendDiagnostics?: boolean;
 }
 
 // The tray menu. Items for features that do not exist yet
@@ -56,6 +59,15 @@ export const trayMenu = (state: TrayMenuState): TrayMenuItem[] => [
   // What to send when something goes wrong.
   { kind: "action", action: "show-logs", label: "Show Logs" },
   { kind: "action", action: "save-diagnostics", label: "Save Diagnostics…" },
+  ...(state.canSendDiagnostics
+    ? [
+        {
+          kind: "action" as const,
+          action: "send-diagnostics" as const,
+          label: "Send Diagnostics…",
+        },
+      ]
+    : []),
   { kind: "separator" },
   // Tasks run in the app, so quitting takes the computer offline.
   { kind: "action", action: "quit", label: "Quit Linger" },

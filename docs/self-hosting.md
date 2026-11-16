@@ -42,6 +42,10 @@ develop on the code with hot reload instead, `pnpm dev` runs every service on
 your machine against a PostgreSQL you provide; see
 [CONTRIBUTING.md](../CONTRIBUTING.md).
 
+To collect the desktop app's diagnostics from your people, run a receiver
+for [Diagnostics upload](diagnostics-upload.md) and set its address as
+`diagnosticsUploadUrl` in each app's `config.json`.
+
 ## Troubleshooting
 
 | Problem                                            | What to try                                                                                                                                                      |

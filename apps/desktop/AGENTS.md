@@ -202,8 +202,19 @@ Gateway and runs Agents. The daemon exits with the app.
   `control.key`, `credential.json`, `launch.html`, `*.env`, `*.input.json`,
   keys, cookies, databases) never go in, every saved voice key is replaced
   wherever a log printed it, and every text passes through `redact` plus a
-  secret-key JSON filter. It imports no Electron API, so it is
-  tested with Windows paths on any platform.
+  secret-key JSON filter, and the person's home folder becomes `~`. It
+  imports no Electron API, so it is tested with Windows paths on any
+  platform.
+- `src/main/diagnostics-upload.ts`: "Send Diagnostics" on the same three
+  surfaces, shown only while a receiver is set up (`diagnosticsUploadUrl` in
+  `config.json`, else `HOSTED_DIAGNOSTICS_UPLOAD_URL`, a placeholder that is
+  unset until the hosted receiver runs). `DiagnosticsSender` builds the zip
+  into `<userData>/diagnostics-outbox`, waits for consent showing every file,
+  the size and the host, uploads it with the
+  [`linger.diagnostics-upload/v1`](../../docs/diagnostics-upload.md)
+  protocol and shows the receiver's report id; a retryable failure keeps the
+  zip for Try Again. The setup page draws the flow itself; the tray and the
+  start failure page use native dialogs (`diagnostics-dialogs.ts`).
 - `src/main/window-manager.ts`: one `BaseWindow` with two views, the title bar
   (`app://shell/titlebar`) and the SPA. macOS keeps native traffic lights,
   Windows uses `titleBarOverlay`, Linux draws its own controls. Closing hides

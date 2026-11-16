@@ -541,3 +541,130 @@ describe("setup page download progress", () => {
     );
   });
 });
+
+describe("setup page Send Diagnostics", () => {
+  // A failure scrolls its actions into view, which jsdom lacks.
+  beforeEach(() => {
+    Element.prototype.scrollIntoView = () => {};
+  });
+
+  const failed = (
+    diagnosticsSend?: SetupState["diagnosticsSend"],
+  ): SetupState => {
+    const base = state("failed");
+    return {
+      ...base,
+      localServer: { ...base.localServer, message: "Services did not start" },
+      ...(diagnosticsSend ? { diagnosticsSend } : {}),
+    };
+  };
+
+  it("hides Send Diagnostics while no receiver is set up", async () => {
+    await openPage(failed());
+    expect($("installing-diagnostics").hidden).toBe(false);
+    expect($("send-diagnostics").hidden).toBe(true);
+    expect($("send-modal").hidden).toBe(true);
+  });
+
+  it("asks before sending and lists every file", async () => {
+    const { run, push } = await openPage(failed({ phase: "idle" }));
+    expect($("send-diagnostics").hidden).toBe(false);
+    $("send-diagnostics").click();
+    await vi.waitFor(() =>
+      expect(run).toHaveBeenCalledWith({
+        op: "diagnostics.send",
+        action: "start",
+      }),
+    );
+    push(failed({ phase: "preparing" }));
+    expect($("send-modal").hidden).toBe(false);
+    expect($("send-title").textContent).toBe("Preparing diagnostics");
+    expect($("send-primary").hidden).toBe(true);
+    push(
+      failed({
+        phase: "confirm",
+        host: "diagnostics.example.com",
+        files: ["summary.json", "desktop/logs/main.log"],
+        bytes: 2048,
+      }),
+    );
+    expect($("send-title").textContent).toBe(
+      "Send diagnostics to diagnostics.example.com?",
+    );
+    expect($("send-lead").textContent).toContain("2 files, 2 KB");
+    expect($("send-lead").textContent).toContain("home folder path");
+    expect(
+      [...$("send-files").querySelectorAll("li")].map((li) => li.textContent),
+    ).toEqual(["summary.json", "desktop/logs/main.log"]);
+    expect($("send-primary").textContent).toBe("Send");
+    expect($("send-close").textContent).toBe("Cancel");
+    $("send-primary").click();
+    await vi.waitFor(() =>
+      expect(run).toHaveBeenLastCalledWith({
+        op: "diagnostics.send",
+        action: "confirm",
+      }),
+    );
+  });
+
+  it("shows progress, then the report id to copy", async () => {
+    const { run, push } = await openPage(failed({ phase: "idle" }));
+    push(
+      failed({
+        phase: "sending",
+        host: "diagnostics.example.com",
+        sent: 512,
+        total: 2048,
+      }),
+    );
+    expect($("send-title").textContent).toBe("Sending diagnostics");
+    expect($("send-lead").textContent).toBe(
+      "Uploading to diagnostics.example.com… 25%",
+    );
+    expect($("send-track").hidden).toBe(false);
+    expect($("send-fill").style.width).toBe("25%");
+    expect($("send-close").hidden).toBe(true);
+    push(
+      failed({
+        phase: "sent",
+        host: "diagnostics.example.com",
+        reportId: "LD-7K3Q9XPM",
+      }),
+    );
+    expect($("send-report").hidden).toBe(false);
+    expect($("send-report-id").textContent).toBe("LD-7K3Q9XPM");
+    $("send-primary").click();
+    await vi.waitFor(() =>
+      expect($("send-primary").textContent).toBe("Copied"),
+    );
+    expect(run).toHaveBeenCalledWith({
+      op: "diagnostics.send",
+      action: "copy",
+    });
+    $("send-close").click();
+    await vi.waitFor(() =>
+      expect(run).toHaveBeenLastCalledWith({
+        op: "diagnostics.send",
+        action: "cancel",
+      }),
+    );
+  });
+
+  it("offers Try Again only when it can help", async () => {
+    const { run, push } = await openPage(failed({ phase: "idle" }));
+    push(failed({ phase: "failed", error: "Couldn't reach it", retry: true }));
+    expect($("send-error").textContent).toBe("Couldn't reach it");
+    expect($("send-primary").textContent).toBe("Try Again");
+    $("send-primary").click();
+    await vi.waitFor(() =>
+      expect(run).toHaveBeenLastCalledWith({
+        op: "diagnostics.send",
+        action: "retry",
+      }),
+    );
+    push(failed({ phase: "failed", error: "Too large", retry: false }));
+    expect($("send-primary").hidden).toBe(true);
+    expect($("send-lead").textContent).toContain("Save Diagnostics");
+    expect($("send-close").textContent).toBe("Close");
+  });
+});

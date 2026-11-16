@@ -148,6 +148,31 @@ export interface SetupProviderKeys {
   readonly composio?: string;
 }
 
+// Send Diagnostics: the zip is built (preparing), shown for consent with
+// what it holds and where it goes (confirm), uploaded (sending), then the
+// receiver's report id (sent) or why it failed and whether Try Again can
+// help.
+export type SetupDiagnosticsSend =
+  | { readonly phase: "idle" | "preparing" }
+  | {
+      readonly phase: "confirm";
+      readonly host: string;
+      readonly files: readonly string[];
+      readonly bytes: number;
+    }
+  | {
+      readonly phase: "sending";
+      readonly host: string;
+      readonly sent: number;
+      readonly total: number;
+    }
+  | { readonly phase: "sent"; readonly host: string; readonly reportId: string }
+  | {
+      readonly phase: "failed";
+      readonly error: string;
+      readonly retry: boolean;
+    };
+
 export interface SetupState {
   readonly platform: "darwin" | "win32" | "linux";
   readonly version: string;
@@ -161,6 +186,8 @@ export interface SetupState {
   readonly localServer: SetupLocalServer;
   // The diagnostics zip last saved from this window, or why it failed.
   readonly diagnostics?: { readonly file?: string; readonly error?: string };
+  // Send Diagnostics, present only while a diagnostics server is set up.
+  readonly diagnosticsSend?: SetupDiagnosticsSend;
   // macOS privacy permissions; absent on other platforms or until checked.
   readonly permissions?: Readonly<
     Record<SetupPermission, SetupPermissionStatus>
@@ -209,7 +236,13 @@ export type SetupCommand =
   | { readonly op: "finish" }
   // Opens the log folder, or saves a redacted diagnostics zip and shows it.
   | { readonly op: "logs.open" }
-  | { readonly op: "diagnostics.save" };
+  | { readonly op: "diagnostics.save" }
+  // Send Diagnostics: build the zip and ask, send it, try again, cancel or
+  // close, or copy the report id.
+  | {
+      readonly op: "diagnostics.send";
+      readonly action: "start" | "confirm" | "retry" | "cancel" | "copy";
+    };
 
 export interface LingerSetupApi {
   getState(): Promise<SetupState>;

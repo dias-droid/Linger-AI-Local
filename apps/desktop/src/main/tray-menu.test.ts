@@ -27,6 +27,20 @@ describe("trayMenu", () => {
     ]);
   });
 
+  it("offers Send Diagnostics only while a receiver is set up", () => {
+    const actions = (canSendDiagnostics: boolean) =>
+      trayMenu({
+        status: { tone: "error", label: "Offline" },
+        preventSleep: false,
+        enrolled: true,
+        canSendDiagnostics,
+      }).flatMap((i) => (i.kind === "action" ? i.action : []));
+    expect(actions(false)).not.toContain("send-diagnostics");
+    expect(actions(true)).toEqual(
+      expect.arrayContaining(["save-diagnostics", "send-diagnostics"]),
+    );
+  });
+
   it("connects an unenrolled computer and reconnects an enrolled one", () => {
     const label = (enrolled: boolean) =>
       trayMenu({
