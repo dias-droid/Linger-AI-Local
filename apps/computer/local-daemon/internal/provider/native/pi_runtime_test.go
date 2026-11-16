@@ -546,7 +546,8 @@ func TestPiResourceArgsAreFresh(t *testing.T) {
 	first := PiRPCResourceArgs()
 	first[0] = "changed"
 	_ = append(first, "--extra")
-	if got := PiRPCResourceArgs(); len(got) != 6 || got[0] != "--no-extensions" || got[5] != "--no-approve" {
+	if got := PiRPCResourceArgs(); len(got) != 8 || got[0] != "--no-extensions" || got[5] != "--no-approve" ||
+		got[6] != "--system-prompt" || got[7] != "" {
 		t.Fatalf("args = %v", got)
 	}
 }

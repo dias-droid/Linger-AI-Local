@@ -14,8 +14,10 @@ var errPiNoModels = errors.New("Pi returned no available models")
 
 // PiRPCResourceArgs is the resource policy shared by managed execution,
 // managed catalog discovery and the protocol probe. It returns a new slice.
+// An empty --system-prompt keeps Pi's built-in prompt: without it, Pi
+// replaces that prompt with the user's own SYSTEM.md from its agent folder.
 func PiRPCResourceArgs() []string {
-	return []string{"--no-extensions", "--no-mcp", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve"}
+	return []string{"--no-extensions", "--no-mcp", "--no-skills", "--no-prompt-templates", "--no-context-files", "--no-approve", "--system-prompt", ""}
 }
 
 type piCatalogState struct {
