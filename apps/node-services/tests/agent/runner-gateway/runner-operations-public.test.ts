@@ -165,11 +165,7 @@ describe("RunnerGateway", () => {
       }),
     );
     await expect(operation.result).resolves.toMatchObject({ type: "run" });
-    expect(recordRunOperation).toHaveBeenLastCalledWith({
-      ...identity,
-      turnId: "turn-1",
-      usage,
-    });
+    expect(recordRunOperation).toHaveBeenLastCalledWith({ ...identity, usage });
     expect(recordRunOperation).toHaveBeenCalledTimes(3);
   });
 

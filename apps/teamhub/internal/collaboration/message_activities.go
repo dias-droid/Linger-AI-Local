@@ -197,17 +197,23 @@ func readMessageActivityRecords(
 	return records, false, nil
 }
 
+// messageActivityRecordMatches selects a Run's records: those of its turns,
+// and linked calls a Runtime wrote without a turn ID, as a Codex Daemon that
+// does not carry the turn forward does. A linked call stamped with another
+// turn stays out.
 func messageActivityRecordMatches(
 	record roomagent.RuntimeHistoryRecord,
 	callIDs map[string]struct{},
 	turnIDs map[string]struct{},
 ) bool {
-	if len(turnIDs) > 0 {
-		_, exact := turnIDs[record.TurnID]
-		return exact
+	if _, turn := turnIDs[record.TurnID]; turn && record.TurnID != "" {
+		return true
 	}
-	_, exact := callIDs[record.ToolCallID]
-	return exact
+	if len(turnIDs) > 0 && record.TurnID != "" {
+		return false
+	}
+	_, call := callIDs[record.ToolCallID]
+	return call
 }
 
 func messageActivityLogFromIdentity(

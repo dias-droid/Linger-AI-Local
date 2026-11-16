@@ -346,7 +346,9 @@ export class RunnerOperations {
       return;
     const usage = operation.terminal ? operation.usage : undefined;
     if (operation.terminal && !usage) return;
-    const turnId = operation.turnId;
+    // The turn goes with run.started and usage goes alone, so a TeamHub
+    // that rejects the turn field during a rolling deploy still lands usage.
+    const turnId = operation.terminal ? undefined : operation.turnId;
     void record({
       contextKey: operation.start.execution_context_key,
       epoch,

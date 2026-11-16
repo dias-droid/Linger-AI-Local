@@ -2,6 +2,7 @@ package collaboration
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/roomagent"
@@ -19,6 +20,8 @@ func TestMessageActivityRecordMatchesNativeTurn(t *testing.T) {
 		{name: "same turn tool", record: roomagent.RuntimeHistoryRecord{TurnID: "turn-target", ToolCallID: "call-target"}, want: true},
 		{name: "same call other turn", record: roomagent.RuntimeHistoryRecord{TurnID: "turn-other", ToolCallID: "call-target"}, want: false},
 		{name: "other turn", record: roomagent.RuntimeHistoryRecord{TurnID: "turn-other"}, want: false},
+		{name: "same call without turn", record: roomagent.RuntimeHistoryRecord{ToolCallID: "call-target"}, want: true},
+		{name: "other call without turn", record: roomagent.RuntimeHistoryRecord{ToolCallID: "call-other"}, want: false},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -144,6 +147,36 @@ func TestMessageActivityHistoryReadsRecordedTurnWithoutLinkedCall(t *testing.T) 
 	}
 	if len(records) != 4 || records[0].Ordinal != 2 || records[3].Ordinal != 5 {
 		t.Fatalf("records=%+v", records)
+	}
+}
+
+func TestMessageActivityHistoryKeepsLinkedCallsAnOlderDaemonLeftWithoutTurn(t *testing.T) {
+	// A Daemon that does not carry Codex turns forward stamps only the
+	// lifecycle records; its linked calls still belong to the Run.
+	inspector := &messageActivityInspectorStub{pages: map[string]roomagent.RuntimeHistory{
+		"": {Status: "available", ProviderKind: "codex", Records: []roomagent.RuntimeHistoryRecord{
+			{Ordinal: 1, TurnID: "turn-run", Category: "lifecycle"},
+			{Ordinal: 2, ToolCallID: "call-target", Category: "tool_call"},
+			{Ordinal: 3, ToolCallID: "call-target", Category: "tool_result"},
+			{Ordinal: 4, ToolCallID: "call-other", Category: "tool_call"},
+			{Ordinal: 5, TurnID: "turn-run", Category: "lifecycle"},
+		}},
+	}}
+	activities := map[string]struct{}{"call-target": {}}
+	identity, err := findMessageActivityIdentity(context.Background(), inspector, roomagent.RuntimeContextTarget{}, activities, []string{"turn-run"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records, _, err := readMessageActivityRecords(context.Background(), inspector, roomagent.RuntimeContextTarget{}, identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ordinals := make([]int, 0, len(records))
+	for _, record := range records {
+		ordinals = append(ordinals, record.Ordinal)
+	}
+	if want := []int{1, 2, 3, 5}; fmt.Sprint(ordinals) != fmt.Sprint(want) {
+		t.Fatalf("ordinals=%v want=%v", ordinals, want)
 	}
 }
 
