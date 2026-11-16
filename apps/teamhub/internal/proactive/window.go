@@ -146,7 +146,7 @@ func (s *Service) QueueWake(ctx context.Context, agentManagementID, roomID, body
 		return err
 	}
 	if err := reminder.EnqueueTx(ctx, tx, reminder.Wake{
-		Source: reminder.SourceReview, TenantID: room.TenantID, RoomID: roomID, Author: human, Agent: agent, Body: body,
+		Source: reminder.SourceReview, TenantID: room.TenantID, RoomID: roomID, Author: human, Agent: agent, Body: body + "\n" + reminder.Prompt(reminder.Arranging, nil),
 	}); err != nil {
 		return err
 	}
@@ -208,7 +208,7 @@ func (s *Service) QueuePlanWake(ctx context.Context, owner Owner, itemIDs []stri
 		}
 		lines = append(lines, line)
 	}
-	lines = append(lines, "</items>")
+	lines = append(lines, "</items>", reminder.Prompt(reminder.Arranging, nil))
 	if err := reminder.EnqueueTx(ctx, tx, reminder.Wake{
 		Source: reminder.SourcePlan, TenantID: owner.TenantID, RoomID: chat.RoomID.String, Author: human, Agent: agent,
 		Body: strings.Join(lines, "\n"),

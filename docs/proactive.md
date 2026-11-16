@@ -17,14 +17,15 @@ Another Me judges each window or event in a run of its own, with the general
 rules, the user's learned rules and the open follow-up items, and acts on the
 result.
 
-| Stage           | Behavior                                                                                                                                           |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Input           | The chat with Another Me in windows of 20 messages; Gmail and Outlook inboxes, Google Calendar changes and Slack mentions, polled every 10 minutes |
-| Apps            | From 22:00 to 08:00, or after five reminders that day, an app event is only recorded; one item in one state is judged once a day                   |
-| Delivery        | Waits until the chat has been quiet for 3 minutes                                                                                                  |
-| Tell now        | Another Me checks the facts that may have changed, then sends one short message: the point, the facts, the next step                               |
-| Follow up later | A follow-up item with scheduled checks, recorded without a message                                                                                 |
-| Stay silent     | The run ends without a reply                                                                                                                       |
+| Stage           | Behavior                                                                                                                                                                                                                                                                                     |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Input           | The chat with Another Me in windows of 20 messages; Gmail and Outlook inboxes, Google Calendar changes and Slack mentions, polled every 10 minutes                                                                                                                                           |
+| Apps            | From 22:00 to 08:00, or after five reminders that day, an app event is only recorded; one item in one state is judged once a day                                                                                                                                                             |
+| Delivery        | Waits until the chat has been quiet for 3 minutes                                                                                                                                                                                                                                            |
+| Tell now        | Another Me checks the facts that may have changed, then sends one short message: the point, the facts, the next step                                                                                                                                                                         |
+| Prepare         | For an interview, a first meeting, a talk or pitch, or one with an investor, client or partner, Another Me first looks through your notes, recordings, mail and the web; a few points go in the reminder, more go into a prep document it links, and a pitch without a deck gets a short one |
+| Follow up later | A follow-up item with scheduled checks, recorded without a message                                                                                                                                                                                                                           |
+| Stay silent     | The run ends without a reply                                                                                                                                                                                                                                                                 |
 
 ## Learning rules
 
