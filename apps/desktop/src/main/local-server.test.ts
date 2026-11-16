@@ -91,8 +91,9 @@ if (args.includes("--inspect")) {
     process.exit(1);
   }
   process.stderr.write("Checked this computer in 1.5s.\n");
-  const reasons = eligible ? [] : ["facts-unavailable"];
-  const reasonMessages = eligible ? [] : ["nvidia-smi was not found"];
+  const lowMemory = eligible && fs.existsSync(path.join(home, "low-memory"));
+  const reasons = eligible ? (lowMemory ? ["free-memory-required"] : []) : ["facts-unavailable"];
+  const reasonMessages = eligible ? (lowMemory ? ["Close other programs before installing."] : []) : ["nvidia-smi was not found"];
   const recommendation = eligible ? "local-models" : "codex";
   process.stdout.write(JSON.stringify({ hardware, localModels: { eligible, reasons, reasonMessages, estimate }, recommendation }) + "\n");
   process.exit(0);
@@ -1386,6 +1387,28 @@ describe("LocalServerModule", () => {
     info.mockRestore();
   });
 
+  it("keeps the tool's free-memory warning for an eligible computer", async () => {
+    const f = fixture({ checkout: "/src" }, {}, (home) => {
+      mkdirSync(home, { recursive: true });
+      writeFileSync(path.join(home, "low-memory"), "");
+    });
+    await f.host.start();
+    f.module.inspect();
+    await vi.waitFor(() =>
+      expect(f.module.status().localModels).toMatchObject({
+        state: "checked",
+        eligible: true,
+        reasons: [
+          {
+            code: "free-memory-required",
+            message: "Close other programs before installing.",
+          },
+        ],
+        recommendation: "local-models",
+      }),
+    );
+  });
+
   it("approves the deployment of the chosen local model", async () => {
     const api = installerApi([], {
       state: "waiting_user",
@@ -1425,6 +1448,23 @@ describe("LocalServerModule", () => {
     await f.host.stop("quit");
   });
 
+  it("asks to free memory only when no local model fits", async () => {
+    const f = fixture(
+      withCheckout,
+      {},
+      checkout,
+      installerApi([], {
+        state: "waiting_user",
+        errorCode: "LOCAL_MODELS_UNAVAILABLE",
+      }),
+    );
+    await f.host.start();
+    await expect(f.module.begin({ runtime: "local" })).rejects.toThrow(
+      "Close other programs to free memory",
+    );
+    await f.host.stop("quit");
+  });
+
   it("approves no local model the person did not choose", async () => {
     const f = fixture(
       withCheckout,
@@ -1437,9 +1477,9 @@ describe("LocalServerModule", () => {
       }),
     );
     await f.host.start();
-    await expect(f.module.begin({ runtime: "pi" })).rejects.toThrow(
-      "can't run the local model",
-    );
+    const failure = f.module.begin({ runtime: "pi" });
+    await expect(failure).rejects.toThrow("can't run the local model");
+    await expect(failure).rejects.not.toThrow("free memory");
     expect(f.api.retried).toEqual([]);
     expect(f.module.status().phase).toBe("failed");
     await f.host.stop("quit");
