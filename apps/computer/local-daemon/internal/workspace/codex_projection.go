@@ -63,14 +63,11 @@ func PrepareCodexHome(home string, opts CodexHomeOptions, logger *slog.Logger) (
 			return CodexProjection{}, fmt.Errorf("parse Codex configuration: %w", err)
 		}
 	}
-	// A reviewed Run trusts hooks by request, so a copied user hook would run
-	// untrusted beside the Daemon's own and could allow a call the review never
-	// saw.
-	delete(settings, "hooks")
+	stripCodexUserKeys(settings)
 	if profiles, ok := settings["profiles"].(map[string]any); ok {
 		for _, value := range profiles {
 			if profile, ok := value.(map[string]any); ok {
-				delete(profile, "hooks")
+				stripCodexUserKeys(profile)
 			}
 		}
 	}
@@ -90,14 +87,6 @@ func PrepareCodexHome(home string, opts CodexHomeOptions, logger *slog.Logger) (
 	// an earlier projection left there.
 	for _, name := range codexPersonalInstructionFiles {
 		files[name] = nil
-	}
-	stripCodexInstructionKeys(settings)
-	if profiles, ok := settings["profiles"].(map[string]any); ok {
-		for _, value := range profiles {
-			if profile, ok := value.(map[string]any); ok {
-				stripCodexInstructionKeys(profile)
-			}
-		}
 	}
 	// Parse and serialize the tree once. Desktop Skill entries are regenerated
 	// from discovered paths.
@@ -303,57 +292,56 @@ func codexConfigDigest(settings map[string]any, files, references map[string][]b
 // home; the user's copies never reach an Agent's home.
 var codexPersonalInstructionFiles = []string{"instructions.md", "AGENTS.md", "AGENTS.override.md"}
 
-// stripCodexInstructionKeys drops the configuration keys that give Codex
-// instructions, so the user's own cannot reach an Agent run.
-func stripCodexInstructionKeys(table map[string]any) {
-	for _, key := range []string{"instructions", "developer_instructions", "model_instructions_file", "experimental_instructions_file"} {
+// stripCodexUserKeys keeps personal instructions and hooks out of Agent runs.
+// The Daemon supplies instructions and owns the hooks used for reviewed runs.
+func stripCodexUserKeys(table map[string]any) {
+	for _, key := range []string{"hooks", "instructions", "developer_instructions", "model_instructions_file", "experimental_instructions_file"} {
 		delete(table, key)
 	}
 }
 
 func collectConfigAssets(table map[string]any, home string, opts CodexHomeOptions, files map[string][]byte, references map[string][]byte, scope string) error {
-	for _, key := range []string{"model_catalog_json"} {
-		value, exists := table[key]
-		if !exists {
-			continue
-		}
-		path, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("Codex %s must be a path string", key)
-		}
-		if path == "" {
-			continue
-		}
-		source := path
-		switch {
-		case strings.HasPrefix(path, "~/") || strings.HasPrefix(path, `~\`):
-			user := opts.UserHome
-			if user == "" {
-				user = filepath.Dir(opts.SharedHome)
-			}
-			source = filepath.Join(user, path[2:])
-		case filepath.IsAbs(path):
-		case filepath.IsLocal(path):
-			source = filepath.Join(opts.SharedHome, path)
-		default:
-			return fmt.Errorf("Codex %s cannot traverse outside its source home", key)
-		}
-		data, err := readProjectionSource(source)
-		if err != nil {
-			return err
-		}
-		if data == nil {
-			return fmt.Errorf("Codex %s references a missing file", key)
-		}
-		references[scope+"/"+key] = data
-		if filepath.IsAbs(path) || strings.HasPrefix(path, "~") {
-			continue
-		}
-		digest := sha256.Sum256([]byte(scope + "\x00" + key))
-		name := filepath.Join(projectionAssets, hex.EncodeToString(digest[:12]))
-		files[name] = data
-		table[key] = filepath.Join(home, name)
+	const key = "model_catalog_json"
+	value, exists := table[key]
+	if !exists {
+		return nil
 	}
+	path, ok := value.(string)
+	if !ok {
+		return fmt.Errorf("Codex %s must be a path string", key)
+	}
+	if path == "" {
+		return nil
+	}
+	source := path
+	switch {
+	case strings.HasPrefix(path, "~/") || strings.HasPrefix(path, `~\`):
+		user := opts.UserHome
+		if user == "" {
+			user = filepath.Dir(opts.SharedHome)
+		}
+		source = filepath.Join(user, path[2:])
+	case filepath.IsAbs(path):
+	case filepath.IsLocal(path):
+		source = filepath.Join(opts.SharedHome, path)
+	default:
+		return fmt.Errorf("Codex %s cannot traverse outside its source home", key)
+	}
+	data, err := readProjectionSource(source)
+	if err != nil {
+		return err
+	}
+	if data == nil {
+		return fmt.Errorf("Codex %s references a missing file", key)
+	}
+	references[scope+"/"+key] = data
+	if filepath.IsAbs(path) || strings.HasPrefix(path, "~") {
+		return nil
+	}
+	digest := sha256.Sum256([]byte(scope + "\x00" + key))
+	name := filepath.Join(projectionAssets, hex.EncodeToString(digest[:12]))
+	files[name] = data
+	table[key] = filepath.Join(home, name)
 	return nil
 }
 
