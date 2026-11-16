@@ -3,6 +3,7 @@
 package privatefs
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -198,6 +199,7 @@ func validateAncestorDescriptor(sd *windows.SECURITY_DESCRIPTOR, volumeRoot bool
 	if err != nil {
 		return err
 	}
+	var sandbox map[string]bool
 	trusted := func(sid *windows.SID) bool {
 		return sid != nil && (windows.EqualSid(sid, user) || sid.IsWellKnown(windows.WinLocalSystemSid) || sid.IsWellKnown(windows.WinBuiltinAdministratorsSid) ||
 			sid.String() == "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464") // Windows TrustedInstaller
@@ -230,11 +232,53 @@ func validateAncestorDescriptor(sd *windows.SECURITY_DESCRIPTOR, volumeRoot bool
 		if volumeRoot {
 			replaceMask &^= windows.DELETE
 		}
-		if !trusted(sid) && ace.Mask&replaceMask != 0 {
-			return errors.New("ancestor permits another user to replace private paths")
+		if trusted(sid) || ace.Mask&replaceMask == 0 {
+			continue
+		}
+		if sandbox == nil {
+			sandbox = codexSandboxSIDs()
+		}
+		if !sandbox[sid.String()] {
+			return fmt.Errorf("ancestor permits another user (%s) to replace private paths", sid.String())
 		}
 	}
 	return nil
+}
+
+// codexSandboxSIDs returns the principals the Codex Windows sandbox grants on
+// its writable roots: the sandbox users group and the capability SIDs Codex
+// records in its default home. Linger accepts that a sandboxed Codex
+// command may replace an ancestor such as AppData; private paths themselves
+// stay owner-only. The set is read on demand so grants Codex adds while the
+// Daemon runs are recognized.
+func codexSandboxSIDs() map[string]bool {
+	sids := map[string]bool{}
+	if sid, _, _, err := windows.LookupSID("", "CodexSandboxUsers"); err == nil {
+		sids[sid.String()] = true
+	}
+	profile, err := windows.GetCurrentProcessToken().GetUserProfileDirectory()
+	if err != nil {
+		return sids
+	}
+	data, err := os.ReadFile(filepath.Join(profile, ".codex", "cap_sid"))
+	if err != nil {
+		return sids
+	}
+	var caps struct {
+		Workspace          string            `json:"workspace"`
+		WorkspaceByCWD     map[string]string `json:"workspace_by_cwd"`
+		WritableRootByPath map[string]string `json:"writable_root_by_path"`
+	}
+	if json.Unmarshal(data, &caps) != nil {
+		return sids
+	}
+	sids[caps.Workspace] = true
+	for _, roots := range []map[string]string{caps.WorkspaceByCWD, caps.WritableRootByPath} {
+		for _, sid := range roots {
+			sids[sid] = true
+		}
+	}
+	return sids
 }
 
 func CheckPath(path, kind string, ownerOnly bool) error {

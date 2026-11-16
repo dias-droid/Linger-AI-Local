@@ -130,6 +130,14 @@ forward slashes, as a lowercase SHA-256 digest. Private files are checked agains
 the current SID and ACL, not POSIX permission bits. Writing a separate credential
 does not change the permissions of an existing parent directory.
 
+The installer and the Daemon refuse a private path when another account can
+replace one of its parent directories. One exception applies: the Codex Windows
+sandbox may hold that right on a parent, such as AppData. The sandbox acts
+through the `CodexSandboxUsers` group and the capability SIDs in
+`%USERPROFILE%\.codex\cap_sid`. A sandboxed Codex command can therefore replace
+such a parent; Linger accepts this so it installs beside Codex. Private paths
+themselves still grant access only to the current user and SYSTEM.
+
 Process recovery uses the creation time and a held process handle, so a reused
 process ID is never mistaken for the original. Ordinary tasks are held by a Job
 Object; managed services are held by a separate supervisor process. An upgrade

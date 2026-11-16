@@ -155,6 +155,23 @@ function Write-LingerNote([string]$Text) {
 # seconds. Only a fully successful walk is remembered.
 $LingerTrustedDirectories = @{}
 
+# The Codex Windows sandbox grants its sandbox users group and the capability
+# SIDs recorded in its default home write access to its writable roots, which
+# can include AppData. Linger accepts that a sandboxed Codex command may replace
+# such an ancestor; product paths themselves stay private to the user.
+function Get-LingerCodexSandboxSids {
+    $sids = @()
+    try { $sids += (New-Object Security.Principal.NTAccount('CodexSandboxUsers')).Translate([Security.Principal.SecurityIdentifier]).Value } catch {}
+    $capFile = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.codex\cap_sid'
+    try { $caps = [IO.File]::ReadAllText($capFile) | ConvertFrom-Json } catch { return $sids }
+    if ($caps.workspace) { $sids += [string]$caps.workspace }
+    foreach ($roots in @($caps.workspace_by_cwd, $caps.writable_root_by_path)) {
+        if ($roots) { $sids += @($roots.PSObject.Properties | ForEach-Object { [string]$_.Value }) }
+    }
+    return $sids
+}
+$LingerCodexSandboxSids = @(Get-LingerCodexSandboxSids)
+
 function Assert-LingerAncestors([string]$Path) {
     $cursor = Get-LingerFullPath $Path
     $walked = @()
@@ -176,8 +193,9 @@ function Assert-LingerAncestors([string]$Path) {
             # remain protected by the FILE_DELETE_CHILD and ACL-change checks.
             if ($cursor -eq [IO.Path]::GetPathRoot($cursor)) { $replaceRights = $replaceRights -band (-bnot 0x00010000) }
             if (-not $inheritOnly -and $access.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow -and
-                $access.IdentityReference.Value -notin $trustedOwners -and ([int]$access.FileSystemRights -band $replaceRights) -ne 0) {
-                throw "Install ancestor can be replaced by another user: $cursor"
+                $access.IdentityReference.Value -notin $trustedOwners -and $access.IdentityReference.Value -notin $LingerCodexSandboxSids -and
+                ([int]$access.FileSystemRights -band $replaceRights) -ne 0) {
+                throw "Install ancestor can be replaced by another user ($($access.IdentityReference.Value)): $cursor"
             }
         }
         $parent = [IO.Path]::GetDirectoryName($cursor)
