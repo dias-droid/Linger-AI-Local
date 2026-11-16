@@ -309,6 +309,9 @@ export interface LocalServerOptions {
   readonly sessionCookie?: (origin: string) => Promise<string | undefined>;
   readonly platform?: NodeJS.Platform;
   readonly arch?: string;
+  // This Mac's macOS version (Electron's process.getSystemVersion); not
+  // checked without it.
+  readonly macosVersion?: () => string | undefined;
   readonly fetch?: typeof fetch;
   readonly pollMs?: number;
   // The free space a picked folder needs; LOCATION_FREE_BYTES by default.
@@ -1225,6 +1228,12 @@ export class LocalServerModule implements Module {
     return this.#options.freeBytes ?? LOCATION_FREE_BYTES;
   }
 
+  #macos(): string | undefined {
+    if ((this.#options.platform ?? process.platform) !== "darwin")
+      return undefined;
+    return this.#options.macosVersion?.();
+  }
+
   #target(): string {
     return `${this.#options.platform ?? process.platform}-${this.#options.arch ?? process.arch}`;
   }
@@ -1291,6 +1300,15 @@ export class LocalServerModule implements Module {
 
   // Checking this computer and installing may both need Node at once.
   #ensureNode(signal: AbortSignal): Promise<string> {
+    // The pinned Node.js and the native services do not start on an older
+    // macOS; say so instead of running the installer.
+    const macos = this.#macos();
+    if (macos && !atLeast(macos, MIN_MACOS))
+      return Promise.reject(
+        new Error(
+          `Linger needs macOS ${MIN_MACOS} or later. This Mac runs macOS ${macos}. Update macOS in System Settings > General > Software Update, then try again.`,
+        ),
+      );
     this.#node ??= this.#fetchNode(signal).catch((error: unknown) => {
       this.#node = undefined;
       throw error;
@@ -2238,6 +2256,12 @@ interface BundledRuntime {
 // The bundled services' native packages need this glibc or newer, like the
 // PostgreSQL build: Ubuntu 22.04, Debian 12.
 const MIN_GLIBC = "2.35";
+
+// The oldest macOS every binary Linger runs on a Mac starts on: the bundled
+// PostgreSQL and LiveKit's ffmpeg are built for 14.0 (Node.js 26 for 13.5,
+// Electron for 13.0). packaging/mac/package.py writes the same value as
+// LSMinimumSystemVersion.
+export const MIN_MACOS = "14.0";
 
 const atLeast = (version: string, minimum: string): boolean => {
   const [major = 0, minor = 0] = version.split(".").map(Number);

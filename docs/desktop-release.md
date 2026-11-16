@@ -113,7 +113,7 @@ gh release upload native-deps <archive> --repo simplexai-labs/linger
 
 | File                                           | Contents                                                        |
 | ---------------------------------------------- | --------------------------------------------------------------- |
-| `Linger-<version>-macos-arm64.dmg`             | macOS, Apple silicon                                            |
+| `Linger-<version>-macos-arm64.dmg`             | macOS 14.0 or later, Apple silicon                              |
 | `Linger-<version>-linux-x64.tar.gz`            | Linux x64 (glibc 2.35 or newer for the bundled Native services) |
 | `Linger-<version>-windows-x64-setup.exe`       | Windows x64 per-user installer                                  |
 | `Linger-<version>-windows-x64-portable.zip`    | Windows x64 folder to run without installing                    |
@@ -245,6 +245,18 @@ linger GitHub Release with `SHA256SUMS.txt`; see
 [How the workflow runs](#how-the-workflow-runs). The workflow
 fetches the bundled archives from the assets of the `native-deps` prerelease
 there, so upload a new pinned archive to it before tagging.
+
+The Mac app needs macOS 14.0 or later: the bundled PostgreSQL and the
+`@livekit/av-darwin-arm64` ffmpeg are built for 14.0 (their Mach-O
+`LC_BUILD_VERSION` minimum), the pinned Node.js 26 for 13.5 and Electron for
+13.0. `packaging/mac/package.py` writes it as `LSMinimumSystemVersion`, so an
+older macOS refuses to open the app, and `MIN_MACOS` in
+`apps/desktop/src/main/local-server.ts` keeps the same value: LocalServer
+refuses to fetch Node.js or run the installer on an older macOS and says
+"Linger needs macOS 14.0 or later" instead. `prepare-native-postgres.mjs`
+sets no `MACOSX_DEPLOYMENT_TARGET`, so PostgreSQL's minimum is the macOS of
+the host that built it. Check every Mach-O file of a new pinned binary
+(`otool -l`, `minos`) before raising or lowering the value in both places.
 
 Windows, Linux x64 and Apple silicon bundle PostgreSQL in the app instead
 (`file` in `distribution/<target>.json`; 35 MB on Windows, 10–12 MB

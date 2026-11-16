@@ -185,6 +185,7 @@ async function main(): Promise<void> {
   const home = lingerHome();
   const localServer = new LocalServerModule({
     home,
+    macosVersion: () => process.getSystemVersion(),
     installerDirectory: path.join(here, "../installer"),
     ...(__SOURCE_ARCHIVE__ ? { sourceArchive: __SOURCE_ARCHIVE__ } : {}),
     ...(__SOURCE_DEPENDENCIES__

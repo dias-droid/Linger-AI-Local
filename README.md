@@ -146,11 +146,11 @@ For one person on one computer. Download the package for your platform from
 opens Linger, connects this computer and runs its agents. **Quick Install** on its
 setup screen sets up a Linger server on this computer too.
 
-| Platform             | Package                                                                                            |
-| -------------------- | -------------------------------------------------------------------------------------------------- |
-| macOS, Apple silicon | `Linger-<version>-macos-arm64.dmg`                                                                 |
-| Windows x64          | `Linger-<version>-windows-x64-setup.exe`, or `-windows-x64-portable.zip` to run without installing |
-| Linux x64            | `Linger-<version>-linux-x64.tar.gz` (glibc 2.35 or newer)                                          |
+| Platform                           | Package                                                                                            |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------- |
+| macOS 14.0 or later, Apple silicon | `Linger-<version>-macos-arm64.dmg`                                                                 |
+| Windows x64                        | `Linger-<version>-windows-x64-setup.exe`, or `-windows-x64-portable.zip` to run without installing |
+| Linux x64                          | `Linger-<version>-linux-x64.tar.gz` (glibc 2.35 or newer)                                          |
 
 There is no package for Intel Macs; use Docker Compose there. Check each
 download against `SHA256SUMS.txt` from the same release.

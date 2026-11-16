@@ -120,6 +120,14 @@ Gateway and runs Agents. The daemon exits with the app.
   TeamHub and a relay forwards it the same way; a fix needs a check that
   the web port belongs to the web process the installer started. Every
   existing session cookie for the origin has the same exposure.
+  On a Mac older than `MIN_MACOS` (14.0, the `LSMinimumSystemVersion`
+  `packaging/mac/package.py` writes), read with Electron's
+  `process.getSystemVersion()`, it neither fetches Node.js nor runs the
+  installer, and the failed step says "Linger needs macOS 14.0 or later.
+  This Mac runs macOS <version>. Update macOS in System Settings > General >
+  Software Update, then try again."; see
+  [Packaging Details](../../docs/desktop-release.md#packaging-details) for
+  where the minimum comes from.
   Quick Install installs the `recommendation` of the localmodels setup
   report (`installer.js --inspect`, run once as the setup window opens):
   `local-models` is the planned model served by Pi, shown with the model,

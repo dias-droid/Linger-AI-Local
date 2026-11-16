@@ -24,6 +24,7 @@ import {
   LOCAL_INSTANCE,
   LOCAL_STEPS,
   LocalServerModule,
+  MIN_MACOS,
   anotherMeMissing,
   checkLocation,
   followHttps,
@@ -393,6 +394,19 @@ const checkout = (home: string) => {
   writeFileSync(path.join(home, "src", "scripts/source-native.mjs"), "");
 };
 
+// A Mac checkout install; the fixture's distribution is for Linux.
+const macCheckout = (home: string) => {
+  checkout(home);
+  writeFileSync(
+    path.join(path.dirname(home), "installer", "distribution.json"),
+    JSON.stringify({
+      platform: "darwin",
+      arch: "arm64",
+      nativeSources: [{ target: "darwin-arm64" }],
+    }),
+  );
+};
+
 describe("LocalServerModule", () => {
   it("is offered only where native source mode runs", () => {
     const { module } = fixture({
@@ -477,6 +491,54 @@ describe("LocalServerModule", () => {
     await expect(f.module.begin()).rejects.toThrow(/not supported/);
     expect(existsSync(path.join(f.home, "installer", "args.json"))).toBe(false);
     await f.host.stop("quit");
+  });
+
+  it("refuses an older macOS before it runs the installer", async () => {
+    const f = fixture(
+      (home) => ({
+        ...withCheckout(home),
+        platform: "darwin",
+        arch: "arm64",
+        macosVersion: () => "13.2",
+      }),
+      {},
+      macCheckout,
+    );
+    await f.host.start();
+    expect(f.module.status().available).toBe(true);
+    await expect(f.module.begin()).rejects.toThrow(
+      "Linger needs macOS 14.0 or later. This Mac runs macOS 13.2. Update macOS in System Settings > General > Software Update, then try again.",
+    );
+    expect(f.module.status()).toMatchObject({
+      phase: "failed",
+      step: "prepare",
+    });
+    expect(existsSync(path.join(f.home, "installer", "args.json"))).toBe(false);
+    await f.host.stop("quit");
+    // From the minimum on, the installer runs.
+    const current = fixture(
+      (home) => ({
+        ...withCheckout(home),
+        platform: "darwin",
+        arch: "arm64",
+        macosVersion: () => "14.0",
+      }),
+      {},
+      macCheckout,
+    );
+    await current.host.start();
+    await current.module.begin().catch(() => undefined);
+    expect(existsSync(path.join(current.home, "installer", "args.json"))).toBe(
+      true,
+    );
+    await current.host.stop("quit");
+    // macOS refuses to open the app on an older system too.
+    const packaging = readFileSync(
+      path.join(import.meta.dirname, "../../packaging/mac/package.py"),
+      "utf8",
+    );
+    expect(packaging).toContain(`MINIMUM_MACOS = "${MIN_MACOS}"`);
+    expect(packaging).toContain("LSMinimumSystemVersion=MINIMUM_MACOS");
   });
 
   it("installs from the pinned source, signs in and connects this computer", async () => {

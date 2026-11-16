@@ -61,6 +61,10 @@ PRIVACY_USAGE = {
     "NSDocumentsFolderUsageDescription": "Tasks you send to Linger can read and edit your documents.",
     "NSDesktopFolderUsageDescription": "Tasks you send to Linger can read and edit files on your desktop.",
 }
+# macOS refuses to open the app on an older system. The bundled PostgreSQL and
+# LiveKit's ffmpeg are built for 14.0; keep in step with MIN_MACOS in
+# src/main/local-server.ts.
+MINIMUM_MACOS = "14.0"
 # Targets build.mjs bundles the Native services for; Intel Macs install them
 # from the network.
 NATIVE_TARGETS = {"darwin-arm64"}
@@ -173,7 +177,8 @@ def stage_app(arch, version, electron_version, workdir, cache):
     update_plist(os.path.join(contents, "Info.plist"), CFBundleName="Linger",
                  CFBundleDisplayName="Linger", CFBundleExecutable="Linger",
                  CFBundleIdentifier=BUNDLE_ID, CFBundleShortVersionString=version,
-                 CFBundleVersion=version, **PRIVACY_USAGE)
+                 CFBundleVersion=version, LSMinimumSystemVersion=MINIMUM_MACOS,
+                 **PRIVACY_USAGE)
     frameworks = os.path.join(contents, "Frameworks")
     for name in sorted(os.listdir(frameworks)):
         if not (name.startswith("Electron Helper") and name.endswith(".app")):
