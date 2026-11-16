@@ -292,7 +292,7 @@ export class RunnerConnections {
     try {
       await this.send(connection, this.#welcome(connection, pending));
       const commandId = `registration-snapshot-${this.context.createId()}`;
-      connection.registrationSnapshotCommandId = commandId;
+      (connection.pendingRegistrationSnapshots ??= new Set()).add(commandId);
       await this.send(connection, {
         type: "runtime.registration.snapshot",
         protocol_version: hello.protocol_version,
@@ -591,7 +591,7 @@ export class RunnerConnections {
           };
         });
       const commandId = `registration-snapshot-${this.context.createId()}`;
-      connection.registrationSnapshotCommandId = commandId;
+      (connection.pendingRegistrationSnapshots ??= new Set()).add(commandId);
       await this.send(connection, {
         type: "runtime.registration.snapshot",
         protocol_version: connection.hello.protocol_version,
@@ -611,7 +611,7 @@ export class RunnerConnections {
     if (envelope.type === "runtime.registration.observed") {
       if (
         envelope.connection_epoch !== connection.connectionEpoch ||
-        envelope.command_id !== connection.registrationSnapshotCommandId
+        !connection.pendingRegistrationSnapshots?.delete(envelope.command_id)
       ) {
         throw new RunnerGatewayProtocolError(
           "Local Runtime Registration receipt identity mismatch",

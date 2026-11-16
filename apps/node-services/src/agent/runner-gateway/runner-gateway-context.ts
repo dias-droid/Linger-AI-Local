@@ -221,7 +221,12 @@ export interface ConnectedRunner {
   phase: "reconciling" | "ready";
   operationReconciled: boolean;
   runtimeDiagnosticsRevision: number;
-  registrationSnapshotCommandId?: string;
+  /**
+   * Registration snapshots sent on this connection whose receipt has not
+   * arrived. A diagnostics change can send a new snapshot before the Daemon
+   * acknowledges the previous one, so every unacknowledged one is valid.
+   */
+  pendingRegistrationSnapshots?: Set<string>;
 }
 
 export interface AgentRunnerStateWaiter {
