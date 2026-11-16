@@ -15,8 +15,9 @@ menu shortcut and an entry under Installed apps. The zip holds the same
 folder for running without installing.
 
 Neither is Authenticode-signed yet, so SmartScreen asks the user to confirm
-the first start. There is no self-update on Windows; a new setup program
-replaces the installed version.
+the first start. The desktop updater runs a newer setup program with
+/S /relaunch: it stops Linger, replaces the installed version and starts it
+again. The zip has no self-update.
 
 The Go daemon goes to resources/computer/. With a bundled source package, the
 TeamHub binaries and the Native runtime build.mjs built from it must be there

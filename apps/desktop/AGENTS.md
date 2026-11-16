@@ -31,7 +31,8 @@ Gateway and runs Agents. The daemon exits with the app.
   `out/Linger-<version>-x64.zip` on Linux after `node build.mjs` with the
   `win32-x64` daemon target. Needs the
   `wintool` image from `packaging/win/Dockerfile`. Neither is
-  Authenticode-signed and Windows has no self-update yet.
+  Authenticode-signed. The updater runs the setup program with
+  `/S /relaunch`; the portable folder only links to the release page.
 - `python3 packaging/linux/package.py`: build
   `out/Linger-<version>-linux-x64.tar.gz` (one folder with the `linger`
   executable) after `node build.mjs` with the `linux-x64` daemon target.

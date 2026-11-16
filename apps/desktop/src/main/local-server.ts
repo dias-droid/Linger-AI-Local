@@ -2082,11 +2082,6 @@ export class LocalServerModule implements Module {
     return answers(this.#options.fetch ?? fetch, origin);
   }
 
-  // Whether the window's server is the one this app runs.
-  serving(serverUrl: string): boolean {
-    return this.#origin === serverUrl;
-  }
-
   // Whether this app brings a source package the running services do not
   // use yet.
   sourceUpdateAvailable(): boolean {

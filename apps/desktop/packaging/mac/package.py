@@ -8,7 +8,7 @@ Tools: the `dmgtool` image from ./Dockerfile (hfsplus, dmg, ImageMagick) and
 rcodesign for the signature Apple silicon requires.
 
     python3 packaging/mac/package.py [--arch arm64 --arch x64]
-        [--rcodesign PATH] [--out DIR] [--update-key PEM]
+        [--rcodesign PATH] [--out DIR] [--update-archive]
         [--developer-id P12 --developer-id-password FILE [--notary-key JSON]]
 
 Without --developer-id the app gets an ad-hoc signature and macOS asks the
@@ -27,13 +27,11 @@ JIT and, as it keeps the hardened runtime of its release signature, for the
 native modules it loads; their manifests then record the signed bytes before a shallow signature
 seals them. The desktop copies them out of the app as they are.
 
---update-key also writes the self-update feed to <out>/update/:
-Linger-<version>-<arch>.tar.gz per arch, manifest.json and manifest.json.sig,
-an Ed25519 signature made with openssl. Upload the three files to the server's
-install/desktop/stable/. The key file is only passed to openssl.
+--update-archive also writes <out>/Linger-<version>-<arch>.app.tar.gz, the
+signed app the installed app replaces itself with. The release's signed
+manifest lists it (scripts/ci/desktop-release.sh manifest).
 """
 import argparse
-import base64
 import hashlib
 import json
 import os
@@ -321,20 +319,7 @@ def update_archive(app, output):
         archive.add(app, arcname="Linger.app")
     with open(output, "rb") as source:
         digest = hashlib.sha256(source.read()).hexdigest()
-    return {"file": os.path.basename(output), "sha256": digest, "size": os.path.getsize(output)}
-
-
-def write_feed(directory, version, packages, key):
-    manifest = os.path.join(directory, "manifest.json")
-    with open(manifest, "wb") as out:
-        out.write(json.dumps({"schema": 1, "version": version, "packages": packages},
-                             indent=2, sort_keys=True).encode() + b"\n")
-    signature = subprocess.run(
-        ["openssl", "pkeyutl", "-sign", "-rawin", "-inkey", key, "-in", manifest],
-        check=True, capture_output=True).stdout
-    with open(manifest + ".sig", "w") as out:
-        out.write(base64.b64encode(signature).decode() + "\n")
-    print(f"{manifest} version={version} arches={','.join(sorted(packages))}")
+    print(f"{output} {os.path.getsize(output)} sha256={digest}")
 
 
 def main():
@@ -343,7 +328,8 @@ def main():
     parser.add_argument("--rcodesign", default=shutil.which("rcodesign") or "rcodesign")
     parser.add_argument("--out", default=os.path.join(DESKTOP, "out"))
     parser.add_argument("--cache", default=os.path.expanduser("~/.cache/linger-desktop"))
-    parser.add_argument("--update-key", help="Ed25519 private key (PEM) that signs the update feed")
+    parser.add_argument("--update-archive", action="store_true",
+                        help="also write the app archive installed apps update from")
     parser.add_argument("--developer-id", help="Developer ID Application certificate and key (.p12)")
     parser.add_argument("--developer-id-password", help="file holding the .p12 password")
     parser.add_argument("--notary-key", help="App Store Connect API key (JSON) for notarization")
@@ -363,10 +349,6 @@ def main():
             check_teamhub(f"darwin-{arch}")
             check_runtime(f"darwin-{arch}")
     os.makedirs(args.out, exist_ok=True)
-    feed = os.path.join(args.out, "update")
-    if args.update_key:
-        os.makedirs(feed, exist_ok=True)
-    packages = {}
     for arch in arches:
         workdir = tempfile.mkdtemp(prefix=f"linger-dmg-{arch}-")
         try:
@@ -381,14 +363,10 @@ def main():
             with open(output, "rb") as dmg:
                 digest = hashlib.sha256(dmg.read()).hexdigest()
             print(f"{output} {os.path.getsize(output)} sha256={digest}")
-            if args.update_key:
-                package_info = update_archive(app, os.path.join(feed, f"Linger-{version}-{arch}.tar.gz"))
-                packages[f"darwin-{arch}"] = package_info
-                print(f"{package_info['file']} {package_info['size']} sha256={package_info['sha256']}")
+            if args.update_archive:
+                update_archive(app, os.path.join(args.out, f"Linger-{version}-{arch}.app.tar.gz"))
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
-    if args.update_key:
-        write_feed(feed, version, packages, args.update_key)
 
 
 if __name__ == "__main__":

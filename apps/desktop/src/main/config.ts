@@ -37,6 +37,10 @@ const desktopConfig = z.object({
   // The backup of the earlier Simplex app's data that the local server
   // already told about and enrolled this computer again for.
   legacyBackup: z.string().optional(),
+  // Releases URL of the update feed, for a deployment that publishes its own
+  // releases (update-manifest.ts); GitHub's simplexai-labs/linger when unset.
+  // A value that is not a URL is dropped rather than resetting the file.
+  updateFeedUrl: z.string().url().optional().catch(undefined),
   window: z
     .object({
       x: z.number().int(),
