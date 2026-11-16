@@ -80,12 +80,24 @@ func PrepareCodexHome(home string, opts CodexHomeOptions, logger *slog.Logger) (
 	args := []string{"-c", `sandbox_mode="danger-full-access"`}
 	files := make(map[string][]byte)
 	references := make(map[string][]byte)
-	for _, name := range []string{"config.json", "instructions.md", "AGENTS.md", "AGENTS.override.md"} {
-		data, err := readProjectionSource(filepath.Join(opts.SharedHome, name))
-		if err != nil {
-			return CodexProjection{}, err
+	jsonConfig, err := readProjectionSource(filepath.Join(opts.SharedHome, "config.json"))
+	if err != nil {
+		return CodexProjection{}, err
+	}
+	files["config.json"] = jsonConfig
+	// Agent instructions come only from the Daemon. The user's personal
+	// instruction files stay out of the home, and a nil entry removes a copy
+	// an earlier projection left there.
+	for _, name := range codexPersonalInstructionFiles {
+		files[name] = nil
+	}
+	stripCodexInstructionKeys(settings)
+	if profiles, ok := settings["profiles"].(map[string]any); ok {
+		for _, value := range profiles {
+			if profile, ok := value.(map[string]any); ok {
+				stripCodexInstructionKeys(profile)
+			}
 		}
-		files[name] = data
 	}
 	// Parse and serialize the tree once. Desktop Skill entries are regenerated
 	// from discovered paths.
@@ -287,8 +299,20 @@ func codexConfigDigest(settings map[string]any, files, references map[string][]b
 	return hex.EncodeToString(sum[:]), nil
 }
 
+// codexPersonalInstructionFiles are the instruction files Codex reads from its
+// home; the user's copies never reach an Agent's home.
+var codexPersonalInstructionFiles = []string{"instructions.md", "AGENTS.md", "AGENTS.override.md"}
+
+// stripCodexInstructionKeys drops the configuration keys that give Codex
+// instructions, so the user's own cannot reach an Agent run.
+func stripCodexInstructionKeys(table map[string]any) {
+	for _, key := range []string{"instructions", "developer_instructions", "model_instructions_file", "experimental_instructions_file"} {
+		delete(table, key)
+	}
+}
+
 func collectConfigAssets(table map[string]any, home string, opts CodexHomeOptions, files map[string][]byte, references map[string][]byte, scope string) error {
-	for _, key := range []string{"model_catalog_json", "model_instructions_file", "experimental_instructions_file"} {
+	for _, key := range []string{"model_catalog_json"} {
 		value, exists := table[key]
 		if !exists {
 			continue
