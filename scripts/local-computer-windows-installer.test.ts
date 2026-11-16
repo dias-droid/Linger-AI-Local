@@ -597,7 +597,7 @@ describe("Windows installer trust boundary", () => {
       extractWindowsBundle([bad], path.join(f.root, "extra"), privatePlatform),
     ).rejects.toThrow("outside its CLI manifest");
   });
-  it.each(["valid", "corrupt", "unlisted"])(
+  it.each(["valid", "corrupt", "unlisted", "metadata"])(
     "checks Computer tools including USTAR prefixes and empty assets: %s",
     async (variant) => {
       const f = await fixture();
@@ -641,6 +641,9 @@ describe("Windows installer trust boundary", () => {
           name: "cli/computer-tools/node_modules/unlisted.js",
           content: "unexpected",
         });
+      // A release archive must match its manifest even for Explorer files.
+      if (variant === "metadata")
+        toolEntries.push({ name: "cli/computer-tools/Thumbs.db", content: "" });
       const target = path.join(f.root, `tools-${variant}.tar.gz`);
       await writeFile(
         target,
@@ -666,9 +669,23 @@ describe("Windows installer trust boundary", () => {
             "utf8",
           ),
         ).toBe("");
-        await expect(bundleChecksum(staged, privatePlatform)).resolves.toMatch(
-          /^[0-9a-f]{64}$/u,
+        const checksum = await bundleChecksum(staged, privatePlatform);
+        expect(checksum).toMatch(/^[0-9a-f]{64}$/u);
+        // Explorer metadata in an installed bundle is not a tool asset.
+        await writeFile(path.join(staged, "cli/computer-tools/Thumbs.db"), "");
+        await writeFile(
+          path.join(staged, "cli/computer-tools/extensions/desktop.ini"),
+          "",
         );
+        await expect(bundleChecksum(staged, privatePlatform)).resolves.toBe(
+          checksum,
+        );
+        const extra = path.join(staged, "cli/computer-tools/extensions/x.js");
+        await writeFile(extra, "");
+        await expect(bundleChecksum(staged, privatePlatform)).rejects.toThrow(
+          "Unlisted or unsafe Computer tool asset: extensions/x.js",
+        );
+        await rm(extra);
         await writeFile(
           path.join(staged, "cli/computer-tools", files[0]!.path),
           "changed",

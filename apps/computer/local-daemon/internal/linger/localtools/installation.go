@@ -3,6 +3,7 @@ package localtools
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -16,6 +17,12 @@ func cuaEntry(executable string) string {
 		return "cua/cua-driver.exe"
 	}
 	return "cua/cua-driver"
+}
+
+// osMetadataFile reports a file that a file manager writes into any directory it
+// opens, such as Finder's .DS_Store. It names no tool, so it is not an asset.
+func osMetadataFile(name string) bool {
+	return (strings.HasPrefix(name, "._") && len(name) > 2) || strings.EqualFold(name, ".DS_Store") || strings.EqualFold(name, "Thumbs.db") || strings.EqualFold(name, "desktop.ini")
 }
 
 // Installed resolves only sibling release assets and verifies their frozen
@@ -87,10 +94,14 @@ func Installed(executable string) (*Installation, error) {
 			return nil
 		}
 		relative, err := filepath.Rel(tools, path)
-		if err != nil || entry.Type()&os.ModeSymlink != 0 || (!seen[filepath.ToSlash(relative)] && relative != "manifest.json") {
-			return errors.New("managed Computer tools contain an unlisted asset")
+		if err != nil {
+			return err
 		}
-		return nil
+		relative = filepath.ToSlash(relative)
+		if entry.Type().IsRegular() && (seen[relative] || relative == "manifest.json" || osMetadataFile(entry.Name())) {
+			return nil
+		}
+		return fmt.Errorf("managed Computer tools contain an unlisted asset: %s", relative)
 	}); err != nil {
 		return nil, err
 	}
