@@ -53,6 +53,11 @@ Move a freshly downloaded or unpacked file or folder into place with
 `renameRetrying` from `fs-retry.ts`: on Windows antivirus and indexing hold
 new files for a moment, and a plain rename then fails with EPERM.
 
+Setting `LINGER_LOCALMODELS_DEV_PYTHON` and `LINGER_LOCALMODELS_DEV_MODULE_DIR`
+to absolute paths runs a local `localmodels` checkout instead of fetching the
+published kit, and `LOCALMODELS_DEBUG` (`simulate` or `tiny`, or
+`~/.config/localmodels/debug.json`) passes straight through to `localmodels`.
+
 Run `pnpm --filter @linger/local-installation check`; `make check-installer`
 also runs its consumer, the installer, and applies to changes that affect its
 public behavior.

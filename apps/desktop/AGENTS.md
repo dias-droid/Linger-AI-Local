@@ -315,5 +315,11 @@ building a package.
   `runtimeEnvironment` (the local server's runtime: these paths plus
   `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, `PI_CODING_AGENT_DIR`) replaces them,
   names compared case-insensitively for Windows.
+- `LINGER_LOCALMODELS_DEV_PYTHON`, `LINGER_LOCALMODELS_DEV_MODULE_DIR`:
+  absolute Python and module directory for running a local `localmodels`
+  checkout in Quick Install and the Desktop Computer without fetching the
+  published kit. `LOCALMODELS_DEBUG` (`simulate` or `tiny`) or
+  `~/.config/localmodels/debug.json` enables fast local-model testing in both
+  source and packaged builds.
 - Without a display, run with `--ozone-platform=headless --disable-gpu`. The
   tray and native menus are skipped in that mode; use Xvfb to check them.
