@@ -72,13 +72,22 @@ func (s *Service) loadMessageActivityIDs(ctx context.Context, localRunID string,
 	return activityIDs, false, nil
 }
 
+// findMessageActivityIdentity finds the native records of a Run: the tool
+// calls behind its published activities, and the turns those calls or the
+// Run's own recorded turns belong to. A recorded turn links only when the
+// Runtime stamps its native records with the same ID.
 func findMessageActivityIdentity(
 	ctx context.Context,
 	historyReader messageActivityHistoryReader,
 	target roomagent.RuntimeContextTarget,
 	activityIDs map[string]struct{},
-	operationIDs ...string,
+	runTurnIDs []string,
+	operationIDs []string,
 ) (messageActivityIdentity, error) {
+	recordedTurns := make(map[string]struct{}, len(runTurnIDs))
+	for _, turnID := range runTurnIDs {
+		recordedTurns[turnID] = struct{}{}
+	}
 	identity := messageActivityIdentity{
 		callIDs: map[string]struct{}{}, status: httpapi.MessageActivityLogStatusAvailable, turnIDs: map[string]struct{}{},
 	}
@@ -118,6 +127,9 @@ func findMessageActivityIdentity(
 				}
 			}
 			if _, exact := identity.callIDs[record.ToolCallID]; exact && record.TurnID != "" {
+				identity.turnIDs[record.TurnID] = struct{}{}
+			}
+			if _, recorded := recordedTurns[record.TurnID]; recorded && record.TurnID != "" {
 				identity.turnIDs[record.TurnID] = struct{}{}
 			}
 		}
@@ -373,14 +385,18 @@ func (s *Service) runtimeActivityLog(ctx context.Context, run runActivitySource,
 	if err != nil {
 		return httpapi.MessageActivityLog{}, internal("load Message activity identities", err)
 	}
-	if len(activityIDs) == 0 {
+	turnIDs, err := s.queries.ListAgentRuntimeNativeTurnIDs(ctx, run.runID)
+	if err != nil {
+		return httpapi.MessageActivityLog{}, internal("load Message activity native turns", err)
+	}
+	if len(activityIDs) == 0 && len(turnIDs) == 0 {
 		return unavailableMessageActivityLog("This Runtime run has no Activity identity for native History"), nil
 	}
 	operationIDs, err := s.queries.ListAgentRuntimeNativeOperationIDs(ctx, run.runID)
 	if err != nil {
 		return httpapi.MessageActivityLog{}, internal("load Message activity native operations", err)
 	}
-	identity, err := findMessageActivityIdentity(ctx, historyReader, target, activityIDs, operationIDs...)
+	identity, err := findMessageActivityIdentity(ctx, historyReader, target, activityIDs, turnIDs, operationIDs)
 	if err != nil {
 		return httpapi.MessageActivityLog{}, ErrMessageActivitiesUnavailable
 	}

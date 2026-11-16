@@ -152,6 +152,8 @@ export interface RunnerRunOperationRecord {
   readonly runId: string;
   readonly operationId: string;
   readonly runtimeType: "codex" | "claude" | "pi";
+  /** The Runtime turn the Operation started, once the Daemon reported it. */
+  readonly turnId?: string;
   readonly usage?: readonly Record<string, unknown>[];
 }
 

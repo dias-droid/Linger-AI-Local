@@ -188,6 +188,7 @@ type AgentLocalRun struct {
 	Usage                      []byte             `json:"usage"`
 	StatusRoomID               pgtype.Text        `json:"status_room_id"`
 	ClaimProfileRevision       pgtype.Int8        `json:"claim_profile_revision"`
+	TurnIds                    []string           `json:"turn_ids"`
 }
 
 type AgentLocalRunInput struct {

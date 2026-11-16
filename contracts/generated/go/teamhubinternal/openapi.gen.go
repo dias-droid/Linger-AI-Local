@@ -3037,6 +3037,9 @@ type RecordAgentLocalRunOperationRequest struct {
 	RunId       string            `json:"run_id"`
 	RuntimeType LocalRuntimeType  `json:"runtime_type"`
 
+	// TurnId The Runtime turn the Operation started. Message activities read the native records stamped with it, so a turn that a Runtime records under the same ID links even when no tool call does.
+	TurnId *string `json:"turn_id,omitempty"`
+
 	// Usage The usage the Operation's terminal reported; absent when the Operation starts.
 	Usage *[]map[string]interface{} `json:"usage,omitempty"`
 }

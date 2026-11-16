@@ -789,6 +789,13 @@ CROSS JOIN LATERAL jsonb_object_keys(coalesce(run.usage,'{}'::jsonb)) AS operati
 WHERE run.run_id=sqlc.arg(local_run_id)::text
 ORDER BY operation.operation_id;
 
+-- name: ListAgentRuntimeNativeTurnIDs :many
+SELECT turn.turn_id::text AS turn_id
+FROM agent_local_runs run
+CROSS JOIN LATERAL unnest(run.turn_ids) AS turn(turn_id)
+WHERE run.run_id=sqlc.arg(local_run_id)::text
+ORDER BY turn.turn_id;
+
 -- name: GetAgentRuntimeTaskInboxRoom :one
 SELECT link.room_id
 FROM work_items item

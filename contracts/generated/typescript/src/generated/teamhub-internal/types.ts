@@ -2152,6 +2152,8 @@ export interface components {
       run_id: string;
       operation_id: string;
       runtime_type: components["schemas"]["LocalRuntimeType"];
+      /** @description The Runtime turn the Operation started. Message activities read the native records stamped with it, so a turn that a Runtime records under the same ID links even when no tool call does. */
+      turn_id?: string;
       /** @description The usage the Operation's terminal reported; absent when the Operation starts. */
       usage?: {
         [key: string]: unknown;
