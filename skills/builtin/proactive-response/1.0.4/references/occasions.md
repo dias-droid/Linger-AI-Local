@@ -23,7 +23,7 @@ Decide from what the occasion needs, not from a fixed lead time:
 
 ## Preparing
 
-When the occasion is worth preparing for (a gift, a booking, a trip home), the Routine gets `Look up first:` naming what to look up: what the person likes or said they want, and what the Human did or planned before, from the Human's knowledge; current prices from the web when you will suggest options. Then prepare what fits what you found: ideas or options, a draft message, a time for a dinner. A greeting on the day needs no preparation.
+When the occasion is worth preparing for (a gift, a booking, a trip home), the Routine gets `Look up first:` naming what to look up: what the person likes or said they want, and what the Human did or planned before, from the Human's knowledge; current prices from the web when you will suggest options. When the Routine fires, look up only what that line names; a plain reminder looks up nothing. Then prepare what fits what you found: ideas or options, a draft message, a time for a dinner. A greeting on the day needs no preparation.
 
 ## Special cases
 

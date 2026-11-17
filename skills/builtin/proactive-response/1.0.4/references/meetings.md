@@ -25,6 +25,8 @@ The special cases below say which meetings are worth preparing and what to look 
 
 Where to look: the Human's knowledge, recordings and mail for history and promises; the web for anything outside the Human's own material. When a meeting needs both, the `Look up first:` line names both.
 
+Write the line so it can be searched as written: the meeting's topics as their own search (what the Human said, decided or promised about them), and the people or organisation as another. A search for the names alone finds who they are, not what the Human knows about the topics the meeting is about.
+
 What to make is your call:
 
 - Little turned up, or little is known about the meeting: a few lines in the reminder.

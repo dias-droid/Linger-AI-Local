@@ -1,12 +1,16 @@
 package reminder
 
 import (
+	"io/fs"
+	"path"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/store"
 	builtinskills "github.com/simplexai-labs/linger/skills"
+	"gopkg.in/yaml.v3"
 )
 
 func TestTrackingRoutineWakePutsItsNoteBeforeTheInstruction(t *testing.T) {
@@ -33,10 +37,21 @@ func TestArrangingTellsHowToAskForALookUp(t *testing.T) {
 	if !strings.Contains(arranging, "--content") || !strings.Contains(arranging, `"Look up first: `) {
 		t.Fatalf("arranging=%q", arranging)
 	}
-	// It points at every scenario guide, so the Agent knows which one to read.
-	for _, guide := range []string{"meetings", "occasions", "travel", "commitments"} {
-		if !strings.Contains(arranging, "references/"+guide+".md") {
-			t.Fatalf("arranging misses the %s guide: %q", guide, arranging)
+	// It names exactly the guides of the package new Agents get, so every
+	// guide is reachable and none it names is missing.
+	pkg := proactiveSkillPackage(t)
+	guides, err := fs.Glob(builtinskills.FS, path.Join(pkg, "references", "*.md"))
+	if err != nil || len(guides) == 0 {
+		t.Fatalf("guides of %s: %v %v", pkg, guides, err)
+	}
+	for _, guide := range guides {
+		if !strings.Contains(arranging, "references/"+path.Base(guide)) {
+			t.Fatalf("arranging misses %s: %q", guide, arranging)
+		}
+	}
+	for _, named := range regexp.MustCompile(`references/[a-z-]+\.md`).FindAllString(arranging, -1) {
+		if _, err := fs.Stat(builtinskills.FS, path.Join(pkg, named)); err != nil {
+			t.Fatalf("arranging names %s, which %s lacks: %v", named, pkg, err)
 		}
 	}
 }
@@ -46,10 +61,45 @@ func TestRoutineWakeAllowsAPreparedDocumentOrDeck(t *testing.T) {
 	if !strings.Contains(note, "links to the document or deck") {
 		t.Fatalf("tracking note=%q", note)
 	}
-	meetings, err := builtinskills.FS.ReadFile("builtin/proactive-response/1.0.4/references/meetings.md")
+	meetings, err := builtinskills.FS.ReadFile(path.Join(proactiveSkillPackage(t), "references", "meetings.md"))
 	for _, want := range []string{"teamhub docs create", "teamhub task create", "from the web", "earlier meetings with the same people"} {
 		if err != nil || !strings.Contains(string(meetings), want) {
 			t.Fatalf("meetings guide misses %q: %v", want, err)
 		}
 	}
+}
+
+// proactiveSkillPackage is the proactive-response package the catalog
+// bootstraps, the one new Agents read.
+func proactiveSkillPackage(t *testing.T) string {
+	t.Helper()
+	raw, err := builtinskills.FS.ReadFile("builtin/catalog.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var catalog struct {
+		Skills []struct {
+			SkillID             string `yaml:"skill_id"`
+			BootstrapManifestID string `yaml:"bootstrap_manifest_id"`
+			Manifests           []struct {
+				ManifestID  string `yaml:"manifest_id"`
+				PackagePath string `yaml:"package_path"`
+			} `yaml:"manifests"`
+		} `yaml:"skills"`
+	}
+	if err := yaml.Unmarshal(raw, &catalog); err != nil {
+		t.Fatal(err)
+	}
+	for _, skill := range catalog.Skills {
+		if skill.SkillID != "simplexai_proactive_response" {
+			continue
+		}
+		for _, manifest := range skill.Manifests {
+			if manifest.ManifestID == skill.BootstrapManifestID {
+				return manifest.PackagePath
+			}
+		}
+	}
+	t.Fatal("catalog has no bootstrap package for proactive-response")
+	return ""
 }
