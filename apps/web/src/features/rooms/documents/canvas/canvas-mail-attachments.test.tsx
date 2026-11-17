@@ -68,9 +68,7 @@ function setup(initialFiles: RoomDocumentPartialBlock[] = [], size = 1024) {
     }),
     resolveFileUrl: vi.fn(async () => "blob:attachment"),
   };
-  const portal = document.createElement("span");
   const host = document.createElement("div");
-  host.append(portal);
   document.body.append(host);
   const view = (editable = true) => (
     <QueryClientProvider client={queryClient}>
@@ -79,7 +77,6 @@ function setup(initialFiles: RoomDocumentPartialBlock[] = [], size = 1024) {
         documentId="document_1"
         editor={editor as unknown as RoomDocumentEditor}
         editable={editable}
-        portalTarget={portal}
         scope="test"
       />
     </QueryClientProvider>
@@ -91,7 +88,6 @@ function setup(initialFiles: RoomDocumentPartialBlock[] = [], size = 1024) {
   return {
     ...result,
     editor,
-    portal,
     view,
     remote: (files: RoomDocumentPartialBlock[]) =>
       act(() => {
@@ -119,27 +115,23 @@ function storedFile(
 function choose(
   file = new File(["brief"], "brief.pdf", { type: "application/pdf" }),
 ) {
-  fireEvent.change(
-    screen.getByLabelText("Email attachments", { selector: "input" }),
-    { target: { files: [file] } },
-  );
+  fireEvent.change(screen.getByLabelText("Choose attachments"), {
+    target: { files: [file] },
+  });
 }
 
 describe("Mail attachments", () => {
-  it("uploads durable file blocks, counts them in the header, and removes them without changing the body", async () => {
+  it("adds files from the + tile as durable file blocks and removes them without changing the body", async () => {
     vi.mocked(uploadRoomDocumentAsset).mockResolvedValue(
       "document-asset:asset_new",
     );
-    const { editor, portal } = setup();
-    const input = screen.getByLabelText("Email attachments", {
-      selector: "input",
-    });
+    const { editor } = setup();
+    const input = screen.getByLabelText("Choose attachments");
     const pick = vi.spyOn(input as HTMLInputElement, "click");
     fireEvent.click(screen.getByRole("button", { name: "Add attachments" }));
     expect(pick).toHaveBeenCalledOnce();
     choose();
     await screen.findByRole("button", { name: "Remove brief.pdf" });
-    expect(portal).toHaveTextContent("1");
     expect(editor.document.at(-1)).toMatchObject({
       type: "file",
       props: { name: "brief.pdf", url: "document-asset:asset_new" },
@@ -147,7 +139,7 @@ describe("Mail attachments", () => {
     expect(await screen.findByText("1 KB")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Remove brief.pdf" }));
     expect(editor.document.map((block) => block.id)).toEqual(["body"]);
-    expect(portal).not.toHaveTextContent("1");
+    expect(screen.queryByRole("button", { name: "brief.pdf" })).toBeNull();
   });
 
   it("keeps an image chosen as an attachment in a file block", async () => {
@@ -184,10 +176,9 @@ describe("Mail attachments", () => {
   });
 
   it("reflects collaborative file changes and hides mutations in read-only mode", async () => {
-    const { remote, portal, rerender, view } = setup();
+    const { remote, rerender, view } = setup();
     remote([storedFile()]);
     await screen.findByRole("button", { name: "Remove brief.pdf" });
-    expect(portal).toHaveTextContent("1");
     rerender(view(false));
     expect(
       screen.queryByRole("button", { name: "Add attachments" }),

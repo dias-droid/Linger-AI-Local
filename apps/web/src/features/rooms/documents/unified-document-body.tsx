@@ -135,7 +135,6 @@ function UnifiedDocumentEditorLayout({
     client,
     commentsOpen,
     commentsPortalTarget,
-    mailAttachmentsPortalTarget,
     consumeAutoFocusTitle,
     editorRef,
     isEditing,
@@ -196,7 +195,6 @@ function UnifiedDocumentEditorLayout({
         client={client}
         commentsOpen={commentsOpen}
         commentsPortalTarget={commentsPortalTarget}
-        mailAttachmentsPortalTarget={mailAttachmentsPortalTarget}
         currentActorId={actorId}
         documentId={document.id}
         editorRef={editorRef}
@@ -384,7 +382,6 @@ function ActiveRoomDocumentEditor({
   client,
   commentsOpen,
   commentsPortalTarget,
-  mailAttachmentsPortalTarget,
   currentActorId,
   documentId,
   isEditing,
@@ -403,7 +400,6 @@ function ActiveRoomDocumentEditor({
   client: ReturnType<typeof useTeamHubRuntime>["client"];
   commentsOpen: boolean;
   commentsPortalTarget: HTMLDivElement | null;
-  mailAttachmentsPortalTarget: HTMLSpanElement | null;
   currentActorId: string;
   documentId: string;
   isEditing: boolean;
@@ -429,7 +425,6 @@ function ActiveRoomDocumentEditor({
       client={client}
       commentsOpen={commentsOpen}
       commentsPortalTarget={commentsPortalTarget}
-      mailAttachmentsPortalTarget={mailAttachmentsPortalTarget}
       currentActorId={currentActorId}
       documentId={documentId}
       editable={isEditing && save.canEdit}

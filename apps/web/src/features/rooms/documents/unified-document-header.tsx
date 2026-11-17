@@ -43,7 +43,7 @@ import { RoomDocumentPresence } from "./room-document-presence";
 import { collaborationColor } from "./room-document-presence-model";
 import { DocumentActionsMenu } from "./room-document-actions-menu";
 import type { UnifiedDocumentPageModel } from "./use-unified-document-page-model";
-import { RoomDocumentSaveIndicator } from "./unified-document-body";
+import { MailCanvasStatus } from "./canvas/canvas-mail-status";
 
 interface UnifiedDocumentPageHeaderProps {
   documentContentRef: MutableRefObject<HTMLDivElement | null>;
@@ -97,7 +97,6 @@ export function UnifiedDocumentPageHeader({
       exportPending={exportPending}
       canvasSent={canvasSent}
       mailCanvas={model.canvasTarget === "gmail"}
-      setMailAttachmentsPortalTarget={model.setMailAttachmentsPortalTarget}
       isEditing={isEditing}
       onComments={() => setCommentsOpen((value) => !value)}
       onCopyLink={() =>
@@ -175,7 +174,6 @@ function UnifiedDocumentHeader({
   exportPending,
   canvasSent,
   mailCanvas,
-  setMailAttachmentsPortalTarget,
   isEditing,
   onComments,
   onCopyLink,
@@ -204,7 +202,6 @@ function UnifiedDocumentHeader({
   exportPending: boolean;
   canvasSent: boolean;
   mailCanvas: boolean;
-  setMailAttachmentsPortalTarget: (element: HTMLSpanElement | null) => void;
   isEditing: boolean;
   onComments: () => void;
   onCopyLink: () => void;
@@ -297,20 +294,14 @@ function UnifiedDocumentHeader({
       <div className="room-document-header-actions">
         {mailCanvas && session ? (
           <span className="mr-2 text-xs text-app-muted">
-            <RoomDocumentSaveIndicator
-              alwaysVisible
+            <MailCanvasStatus
               isEditing={isEditing}
+              sent={canvasSent}
               session={session}
             />
           </span>
         ) : !isWikiPage ? (
           presence
-        ) : null}
-        {mailCanvas ? (
-          <span
-            className="inline-flex items-center"
-            ref={setMailAttachmentsPortalTarget}
-          />
         ) : null}
         {document && !isWikiPage ? (
           <Button

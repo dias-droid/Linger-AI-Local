@@ -153,9 +153,6 @@ function MailCanvasEditor({
           session={model.session}
         />
       ) : null}
-      <div className="flex justify-end">
-        <span ref={model.setMailAttachmentsPortalTarget} />
-      </div>
       <div className="room-document-main flex max-h-[520px] min-h-0 flex-col [&_.room-document-content-lane]:px-1 [&_.room-document-layout]:pb-2">
         <UnifiedDocumentBody
           documentContentRef={contentRef}

@@ -1,5 +1,5 @@
 import {
-  Attachment01Icon,
+  Add01Icon,
   Cancel01Icon,
   File01Icon,
 } from "@hugeicons/core-free-icons";
@@ -10,11 +10,11 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 
 import { AutoHeight } from "@/components/ui/auto-height";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { Spinner } from "@/components/ui/spinner";
 import { teamHubData } from "@/features/teamhub/teamhub-api";
 import type { TeamHubClient } from "@/features/teamhub/teamhub-client";
 import { formatBytes } from "@/lib/format-bytes";
@@ -59,14 +59,12 @@ export function CanvasMailAttachments({
   documentId,
   editable,
   editor,
-  portalTarget,
   scope,
 }: {
   client: TeamHubClient;
   documentId: string;
   editable: boolean;
   editor: RoomDocumentEditor;
-  portalTarget?: HTMLElement | null;
   scope: string;
 }) {
   const queryClient = useQueryClient();
@@ -174,85 +172,88 @@ export function CanvasMailAttachments({
             .join("\n")}
         </style>
       ) : null}
-      {editable && portalTarget
-        ? createPortal(
-            <>
-              <input
-                ref={input}
-                aria-label="Email attachments"
-                className="hidden"
-                type="file"
-                multiple
-                onChange={(event) => {
-                  const files = Array.from(event.currentTarget.files ?? []);
-                  event.currentTarget.value = "";
-                  void add(files);
-                }}
-              />
-              <Button
-                aria-label="Add attachments"
-                title="Add attachments"
-                tone="ghost"
-                size={attachments.length ? "compact" : "compactIcon"}
-                loading={uploading}
-                onClick={() => input.current?.click()}
-              >
-                {!uploading ? <Icon icon={Attachment01Icon} size={16} /> : null}
-                {attachments.length > 0 ? (
-                  <span>{attachments.length}</span>
-                ) : null}
-              </Button>
-            </>,
-            portalTarget,
-          )
-        : null}
       <AutoHeight>
-        {attachments.length > 0 || uploading || error ? (
-          <section aria-label="Email attachments" className="space-y-2 pt-5">
-            {attachments.map((file, index) => (
-              <div
-                key={file.id}
-                className="flex min-w-0 items-center gap-2 rounded-md bg-app-surface-soft px-3 py-2 text-sm"
-              >
-                <Icon
-                  icon={File01Icon}
-                  size={16}
-                  className="shrink-0 text-app-muted"
-                />
+        {attachments.length > 0 || editable ? (
+          <section aria-label="Email attachments" className="pt-5">
+            <input
+              ref={input}
+              aria-label="Choose attachments"
+              className="hidden"
+              type="file"
+              multiple
+              onChange={(event) => {
+                const files = Array.from(event.currentTarget.files ?? []);
+                event.currentTarget.value = "";
+                void add(files);
+              }}
+            />
+            <div className="flex flex-wrap gap-2">
+              {attachments.map((file, index) => (
+                <div
+                  key={file.id}
+                  className="flex h-16 min-w-0 max-w-60 items-center gap-2 rounded-lg border border-app-border bg-app-surface-soft py-2 pr-1 pl-3 text-sm"
+                >
+                  <Icon
+                    icon={File01Icon}
+                    size={18}
+                    className="shrink-0 text-app-muted"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <button
+                      type="button"
+                      className="block w-full truncate text-left text-app-ink hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      onClick={() => void download(file)}
+                      title={file.name || undefined}
+                    >
+                      {file.name ||
+                        metadata[index]?.data?.filename ||
+                        "Attachment"}
+                    </button>
+                    {metadata[index]?.data ? (
+                      <span className="block text-xs text-app-muted">
+                        {formatBytes(metadata[index].data.size_bytes)}
+                      </span>
+                    ) : null}
+                  </span>
+                  {editable ? (
+                    <Button
+                      aria-label={`Remove ${file.name || "attachment"}`}
+                      tone="ghost"
+                      size="compactIcon"
+                      onClick={() => {
+                        if (canEdit.current && editor.getBlock(file.id))
+                          editor.removeBlocks([file.id]);
+                      }}
+                    >
+                      <Icon icon={Cancel01Icon} size={14} />
+                    </Button>
+                  ) : null}
+                </div>
+              ))}
+              {editable ? (
                 <button
                   type="button"
-                  className="min-w-0 flex-1 text-left [overflow-wrap:anywhere] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={() => void download(file)}
+                  aria-label="Add attachments"
+                  title="Add attachments"
+                  disabled={uploading}
+                  onClick={() => input.current?.click()}
+                  className="flex size-16 shrink-0 items-center justify-center rounded-lg border border-dashed border-app-border text-app-muted transition-colors duration-150 hover:border-app-muted hover:bg-accent hover:text-app-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60 motion-reduce:transition-none"
                 >
-                  {file.name || metadata[index]?.data?.filename || "Attachment"}
+                  {uploading ? (
+                    <Spinner size={16} />
+                  ) : (
+                    <Icon icon={Add01Icon} size={20} />
+                  )}
                 </button>
-                {metadata[index]?.data ? (
-                  <span className="shrink-0 text-xs text-app-muted">
-                    {formatBytes(metadata[index].data.size_bytes)}
-                  </span>
-                ) : null}
-                {editable ? (
-                  <Button
-                    aria-label={`Remove ${file.name || "attachment"}`}
-                    tone="ghost"
-                    size="compactIcon"
-                    onClick={() => {
-                      if (canEdit.current && editor.getBlock(file.id))
-                        editor.removeBlocks([file.id]);
-                    }}
-                  >
-                    <Icon icon={Cancel01Icon} size={14} />
-                  </Button>
-                ) : null}
-              </div>
-            ))}
+              ) : null}
+            </div>
             {uploading ? (
-              <p role="status" className="text-xs text-app-muted">
+              <p role="status" className="pt-2 text-xs text-app-muted">
                 Uploading attachments…
               </p>
             ) : null}
             {error ? (
-              <p role="alert" className="text-xs text-destructive">
+              <p role="alert" className="pt-2 text-xs text-destructive">
                 {error}
               </p>
             ) : null}

@@ -52,8 +52,6 @@ export function useUnifiedDocumentPageModel(sidebar?: {
     documentId: string;
     target?: string;
   }>();
-  const [mailAttachmentsPortalTarget, setMailAttachmentsPortalTarget] =
-    useState<HTMLSpanElement | null>(null);
   const canvasTarget =
     canvasIdentity?.documentId === documentId
       ? canvasIdentity.target
@@ -75,8 +73,6 @@ export function useUnifiedDocumentPageModel(sidebar?: {
     autoFocusTitle: route.autoFocusTitle,
     canvasSent,
     canvasTarget,
-    mailAttachmentsPortalTarget,
-    setMailAttachmentsPortalTarget,
     client,
     commentsOpen: panels.commentsOpen,
     commentsPortalTarget: panels.commentsPortalTarget,

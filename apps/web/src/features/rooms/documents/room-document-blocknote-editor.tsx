@@ -96,7 +96,6 @@ export interface RoomDocumentBlockNoteEditorProps {
   client: TeamHubClient;
   commentsOpen?: boolean;
   commentsPortalTarget?: HTMLElement | null;
-  mailAttachmentsPortalTarget?: HTMLElement | null;
   canComment: boolean;
   currentActorId: string;
   documentId: string;
@@ -127,7 +126,6 @@ export function RoomDocumentBlockNoteEditor({
   canComment,
   commentsOpen,
   commentsPortalTarget,
-  mailAttachmentsPortalTarget,
   currentActorId,
   documentId,
   editable,
@@ -566,7 +564,6 @@ export function RoomDocumentBlockNoteEditor({
           documentId={documentId}
           editable={editable && !canvasSent}
           editor={editor}
-          portalTarget={mailAttachmentsPortalTarget}
           scope={knowledge.scope}
         />
       ) : null}
