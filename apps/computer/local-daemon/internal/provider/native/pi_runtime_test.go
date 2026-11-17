@@ -617,6 +617,29 @@ func TestPiCatalogCarriesTheDeclaredContextWindow(t *testing.T) {
 	}
 }
 
+func TestPiCatalogLabelsAModelByItsName(t *testing.T) {
+	list, err := piCatalogList(piCatalogState{}, []json.RawMessage{
+		json.RawMessage(`{"id":"localmodels-agent","name":"ling-3.0-tiny","provider":"localmodels"}`),
+		json.RawMessage(`{"id":"same","name":"same","provider":"local"}`),
+		json.RawMessage(`{"id":"blank","name":" ","provider":"local"}`),
+		json.RawMessage(`{"id":"unnamed","provider":"local"}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids, labels []string
+	for _, model := range list.Models {
+		ids = append(ids, model.ID)
+		labels = append(labels, model.Label)
+	}
+	if !slices.Equal(ids, []string{"localmodels/localmodels-agent", "local/same", "local/blank", "local/unnamed"}) {
+		t.Fatalf("ids = %v", ids)
+	}
+	if !slices.Equal(labels, []string{"ling-3.0-tiny (localmodels/localmodels-agent)", "local/same", "local/blank", "local/unnamed"}) {
+		t.Fatalf("labels = %v", labels)
+	}
+}
+
 func TestPiEffortSupportDefaults(t *testing.T) {
 	support := piEffortSupport(map[string]json.RawMessage{"xhigh": json.RawMessage(`"x"`)}, "off")
 	var values []string
