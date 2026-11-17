@@ -34,6 +34,9 @@ const desktopConfig = z.object({
   // The runtime the person chose in that installation; the daemon marks it
   // so TeamHub places Another Me on it.
   preferredRuntime: z.enum(["codex", "claude", "pi"]).optional(),
+  // The backup of the earlier Simplex app's data that the local server
+  // already told about and enrolled this computer again for.
+  legacyBackup: z.string().optional(),
   window: z
     .object({
       x: z.number().int(),

@@ -1510,6 +1510,43 @@ describe("LocalServerModule", () => {
     await f.host.stop("quit");
   });
 
+  it("enrolls this computer again, once, after the installer set the earlier Simplex data aside", async () => {
+    const backup = (home: string) =>
+      path.join(
+        home,
+        "instances",
+        LOCAL_INSTANCE,
+        "simplex-backup-2026-11-17T03-04-05-678Z",
+      );
+    const prepare = (home: string) => {
+      checkout(home);
+      mkdirSync(backup(home), { recursive: true });
+    };
+    const f = fixture(withCheckout, {}, prepare);
+    await f.host.start();
+    await f.module.begin();
+    expect(f.unenroll).toHaveBeenCalledOnce();
+    expect(f.unenroll.mock.invocationCallOrder[0]).toBeLessThan(
+      f.enroll.mock.invocationCallOrder[0]!,
+    );
+    expect(f.config().legacyBackup).toBe(backup(f.home));
+    expect(f.module.status()).toMatchObject({
+      phase: "ready",
+      legacyBackup: backup(f.home),
+    });
+    await f.host.stop("quit");
+
+    // Told about already: the enrollment of the fresh database stays.
+    const again = fixture(withCheckout, {}, prepare);
+    again.host.ctx.config.update({ legacyBackup: backup(again.home) });
+    await again.host.start();
+    await again.module.begin();
+    expect(again.unenroll).not.toHaveBeenCalled();
+    expect(again.enroll).toHaveBeenCalled();
+    expect(again.module.status().legacyBackup).toBeUndefined();
+    await again.host.stop("quit");
+  });
+
   it("shows no download step when nothing is downloaded", async () => {
     const f = fixture(withCheckout, {}, checkout);
     await f.host.start();

@@ -31,6 +31,7 @@ import {
   readLocalLogin,
 } from "@linger/local-installation/account";
 import { downloadVerified } from "@linger/local-installation/download";
+import { latestLegacyBackup } from "@linger/local-installation/legacy-database";
 import { legacyMigrationPending } from "@linger/local-installation/home";
 import {
   type SetupChoice,
@@ -263,6 +264,9 @@ export interface LocalServerStatus {
   readonly origin?: string;
   // While the "signin" step waits for the person.
   readonly signIn?: RuntimeSignIn;
+  // Where this installation moved the data of the earlier Simplex app,
+  // which it could not upgrade.
+  readonly legacyBackup?: string;
 }
 
 export interface LocalServerOptions {
@@ -367,6 +371,7 @@ export class LocalServerModule implements Module {
   #offDaemon: (() => void) | undefined;
   #daemonFailure: string | undefined;
   #signIn: RuntimeSignIn | undefined;
+  #legacyBackup: string | undefined;
   // The installer that runs the sign-in, and what the person asked for
   // while the step waits.
   #signInInstaller: InstallerApi | undefined;
@@ -464,6 +469,7 @@ export class LocalServerModule implements Module {
       },
       ...(this.#origin ? { origin: this.#origin } : {}),
       ...(this.#signIn ? { signIn: this.#signIn } : {}),
+      ...(this.#legacyBackup ? { legacyBackup: this.#legacyBackup } : {}),
     };
   }
 
@@ -774,6 +780,23 @@ export class LocalServerModule implements Module {
         runtime: runtime.setupChoice,
         keys: Object.keys(runtime.environment),
       });
+      // The installer set a database from before Linger aside for a fresh
+      // one; this computer's enrollment belongs to the old one, so it
+      // enrolls again. Noted in the config so that happens once.
+      const legacyBackup = await latestLegacyBackup(
+        path.join(home, "instances", LOCAL_INSTANCE),
+      );
+      if (
+        legacyBackup &&
+        legacyBackup !== this.#ctx?.config.get().legacyBackup
+      ) {
+        this.#ctx?.log.warn("local_server.legacy_data_set_aside", {
+          backup: legacyBackup,
+        });
+        await this.#ctx?.get<EnrollmentModule>("Enrollment").unenroll();
+        this.#ctx?.config.update({ legacyBackup });
+        this.#legacyBackup = legacyBackup;
+      }
       this.#advance("connect", 0, "Connecting this computer…");
       const login = await installer.login();
       await this.#signInAs(home, job.origin, login.email, login.password);

@@ -1315,6 +1315,16 @@
       section.active .account {
         animation: enter 420ms 160ms var(--ease) both;
       }
+      /* The earlier Simplex app's data this install could not upgrade. */
+      .legacy-note {
+        width: 100%;
+        max-width: 420px;
+        margin: 12px auto 0;
+        color: var(--muted);
+        font-size: 12px;
+        text-align: left;
+        overflow-wrap: anywhere;
+      }
       /* Confetti for a finished install, drawn over the whole window. */
       #confetti {
         position: fixed;
@@ -1619,6 +1629,7 @@
           </p>
           <p class="account-error" id="account-error" role="alert"></p>
         </div>
+        <p class="legacy-note" id="legacy-note" hidden></p>
         <div class="start">
           <button class="primary large" id="open" type="button">
             <span>Open Linger</span
@@ -2448,6 +2459,12 @@
         }
         $("ready-lead").textContent = "Running on this computer, just for you.";
         renderAccount(local.account);
+        $("legacy-note").hidden = !local.legacyBackup;
+        $("legacy-note").textContent = local.legacyBackup
+          ? "Your data from the earlier Simplex app can't be upgraded to Linger, so this is a fresh workspace. The earlier data was moved, not deleted, to " +
+            local.legacyBackup +
+            "."
+          : "";
       };
 
       // The password stays masked until Show; the main process copies it.

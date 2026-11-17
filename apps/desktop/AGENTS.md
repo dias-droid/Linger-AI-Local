@@ -82,7 +82,13 @@ Gateway and runs Agents. The daemon exits with the app.
   and clears it after 60 s if it still holds the password) and "Open account
   file location" (`shell.showItemInFolder`); an unreadable file shows why
   instead. Only the email and file are kept; Show and Copy read the file
-  again, and closing the setup window hides the password. After a logout
+  again, and closing the setup window hides the password. When the
+  installer set a database from the earlier Simplex app aside
+  (`simplex-backup-*` in the instance, see the local-installation package),
+  the desktop logs `local_server.legacy_data_set_aside`, clears its
+  enrollment so it enrolls this computer again in the fresh database, keeps
+  that folder as `legacyBackup` in its config so this happens once, and the
+  ready screen says where the earlier data went. After a logout
   the SPA's login page asks `window.lingerDesktop.localAccount.available()`
   on load, every 15 s and when the window comes back into view; it is true
   only while the window shows the origin in `local-server.json`, the

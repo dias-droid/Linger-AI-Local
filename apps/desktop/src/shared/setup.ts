@@ -49,6 +49,9 @@ export interface SetupLocalServer {
   // Once installed: the owner account, for signing in again after logging
   // out.
   readonly account?: SetupLocalAccount;
+  // Where the installation moved the earlier Simplex app's data it could
+  // not upgrade (~ for the home folder).
+  readonly legacyBackup?: string;
 }
 
 // The owner account in the installation's local-account.json. The password

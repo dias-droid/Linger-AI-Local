@@ -49,6 +49,22 @@ never leaves a directory that later attempts treat as initialized. A `postgres-d
 `PG_VERSION` but no `postmaster.opts` (which only a started server writes)
 never served a connection, holds no data, and is initialized again.
 
+Every Linger release creates TeamHub's schema from the 852 baseline
+migration, which refuses a database that already holds one. A database from
+the desktop app before the rename has `public.accounts` but no applied 852
+row in `goose_db_version`, so it can never migrate (`legacy-database.ts`).
+Once the database is up, Native checks for that; for such a database it
+stops PostgreSQL, marks `local-account.json` as not provisioned (so the
+account step creates the owner again with the same email and password) and
+moves `data/agent`, `data/artifacts`, `computer-enrollment.token` and, last,
+`native/postgres-data` into `simplex-backup-<UTC time>` in the instance,
+deleting nothing. The database moves last so that a run stopped partway
+still finds it and finishes the move, into the same folder when nothing
+there would be overwritten. It then opens a
+fresh cluster and logs where the data went. The desktop finds the newest backup folder
+after the job, enrolls its Computer again once (the old Computer ID is
+unknown to the fresh database) and shows the folder on its ready screen.
+
 Move a freshly downloaded or unpacked file or folder into place with
 `renameRetrying` from `fs-retry.ts`: on Windows antivirus and indexing hold
 new files for a moment, and a plain rename then fails with EPERM.

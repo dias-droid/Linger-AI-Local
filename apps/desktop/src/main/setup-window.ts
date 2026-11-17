@@ -422,8 +422,13 @@ const localServerState = (
     location,
     keys,
     signIn,
+    legacyBackup,
   } = local.status();
   const home = os.homedir();
+  const shown = (folder: string) =>
+    folder === home || folder.startsWith(home + path.sep)
+      ? "~" + folder.slice(home.length)
+      : folder;
   return {
     available,
     phase,
@@ -436,13 +441,11 @@ const localServerState = (
     localModels,
     location: {
       ...location,
-      path:
-        location.path === home || location.path.startsWith(home + path.sep)
-          ? "~" + location.path.slice(home.length)
-          : location.path,
+      path: shown(location.path),
     },
     keys,
     ...(signIn ? { signIn } : {}),
+    ...(legacyBackup ? { legacyBackup: shown(legacyBackup) } : {}),
     ...(account ? { account } : {}),
   };
 };
