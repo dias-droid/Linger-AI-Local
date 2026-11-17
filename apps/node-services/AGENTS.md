@@ -23,7 +23,11 @@
   and must not install process globals.
 - `NODE_SERVICES_ROLES` selects roles as a comma-separated list. An unset or
   empty value starts every role; an unknown role fails startup. Selected roles
-  always start in the order `memory`, `llm-wiki`, `agent`, `voice`, `document`. Shutdown starts media draining immediately while other roles stop in reverse. The shared listener starts only when an HTTP role is selected.
+  always start in the order `memory`, `llm-wiki`, `agent`, `voice`, `document`. Shutdown starts media draining immediately while other roles stop in reverse.
+  Background work that uses a later role's seam starts from the role's
+  `started()`, which the host calls once every selected role has started, and
+  stops from `stopping()`, called before the first role stops: Memory's
+  scheduler runs only while the agent role's model call can be there. The shared listener starts only when an HTTP role is selected.
 - `src/main.ts` is the only process entrypoint. It owns SIGINT/SIGTERM through
   `src/process-lifecycle.ts`: the first signal aborts startup or starts
   ordered shutdown under the fixed 95-second `SHUTDOWN_TIMEOUT_MS`, later
