@@ -3092,6 +3092,45 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v0/documents/{documentId}/mail": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        documentId: components["parameters"]["DocumentId"];
+      };
+      cookie?: never;
+    };
+    /** Read the local email and its delivery status without contacting Gmail. */
+    get: operations["getMailCanvas"];
+    put?: never;
+    /** Upload and send the exact local email the Human reviewed. */
+    post: operations["sendMailCanvas"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/documents/{documentId}/mail/decline": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        documentId: components["parameters"]["DocumentId"];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Record that the Human chose not to send this email. */
+    post: operations["declineMailCanvas"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v0/documents/{documentId}/open": {
     parameters: {
       query?: never;
@@ -7288,6 +7327,31 @@ export interface components {
       /** @enum {string} */
       status: "restored" | "already_current";
       history_entry: components["schemas"]["DocumentHistoryEntry"];
+    };
+    MailCanvasState: {
+      /** @enum {string} */
+      status:
+        | "draft"
+        | "queued"
+        | "uploading"
+        | "sending"
+        | "sent"
+        | "failed"
+        | "unknown"
+        | "declined";
+      subject: string;
+      to: string;
+      error?: string;
+      message_id?: string;
+      /** @description Whether the caller may send or decline this email. */
+      can_edit: boolean;
+      /** @description Fingerprint of the saved email; Send must echo it so only the reviewed version goes out. */
+      source_digest: string;
+    };
+    SendMailCanvasRequest: {
+      connection_id: components["schemas"]["Id"];
+      request_id: string;
+      source_digest: string;
     };
     RoomDocumentCollaborationCredential: {
       document_id: components["schemas"]["Id"];
@@ -13243,6 +13307,90 @@ export interface operations {
       401: components["responses"]["Unauthenticated"];
       404: components["responses"]["NotFound"];
       409: components["responses"]["Conflict"];
+    };
+  };
+  getMailCanvas: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        documentId: components["parameters"]["DocumentId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Local draft or delivery receipt. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MailCanvasState"];
+        };
+      };
+      401: components["responses"]["Unauthenticated"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["ServiceUnavailable"];
+    };
+  };
+  sendMailCanvas: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        documentId: components["parameters"]["DocumentId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SendMailCanvasRequest"];
+      };
+    };
+    responses: {
+      /** @description Delivery accepted. Editing alone never creates a Gmail draft. */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MailCanvasState"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthenticated"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["ServiceUnavailable"];
+    };
+  };
+  declineMailCanvas: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        documentId: components["parameters"]["DocumentId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The email is marked as not sent; Send is no longer offered. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MailCanvasState"];
+        };
+      };
+      401: components["responses"]["Unauthenticated"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["ServiceUnavailable"];
     };
   };
   openDocument: {

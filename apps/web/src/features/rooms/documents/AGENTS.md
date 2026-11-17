@@ -28,3 +28,14 @@
 - Test state invariants through the collaboration-session interface and test
   the real browser workflow with Playwright. Do not inspect provider or
   IndexedDB internals from component tests.
+- Gmail canvases use the Mail sidebar header, an editable 15px semibold Subject above
+  the From/To/Cc fields and collaborative body, without the generic Document title or
+  author row. Save status still comes from the durable session snapshot.
+  Formatting uses the existing editor controls. The Mail header paperclip uploads
+  file attachments (15 MiB total) through the existing Document Asset flow.
+  File blocks stay authoritative; the client presents them below the body with
+  sizes and remove controls, and reports their count in the header. Canvas has no
+  sending toolbar; the email's chat card sends it, and once its delivery
+  reports sent the editor writes `status: sent` into the header. Sent canvases stay read-only, suppress the editing indicator, and show
+  empty recipient fields as None. Attachment list spacing stays inside the
+  measured height so its resize animation cannot clip the last file.

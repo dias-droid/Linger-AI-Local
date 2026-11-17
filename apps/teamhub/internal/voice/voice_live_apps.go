@@ -276,7 +276,13 @@ func (s *Service) voiceLiveMailCanvas(ctx context.Context, session voicelive.Ses
 	if err != nil {
 		return app, canvas, agentconnectedapps.CanvasDraft{}, "", err
 	}
-	if canvas.fields["status"] == "sent" {
+	held, err := s.queries.MailCanvasDeliveryHolds(ctx, args.DocumentID)
+	if err != nil {
+		return app, canvas, agentconnectedapps.CanvasDraft{}, "", err
+	}
+	// The card's delivery is the record of a Human send, whether or not an
+	// editor has written it into the header yet.
+	if canvas.fields["status"] == "sent" || held {
 		// Named, so the model can tell this canvas from the one it meant.
 		return app, canvas, agentconnectedapps.CanvasDraft{}, voicelive.Output(map[string]string{
 			"error": "already_sent", "document_id": canvas.documentID, "subject": canvas.fields["subject"], "to": canvas.fields["to"],

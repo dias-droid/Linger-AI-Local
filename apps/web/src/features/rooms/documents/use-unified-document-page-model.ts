@@ -48,6 +48,20 @@ export function useUnifiedDocumentPageModel(sidebar?: {
   // A sent mail canvas is final: editing it no longer changes what went out.
   const [sentCanvasDocumentId, setSentCanvasDocumentId] = useState<string>();
   const canvasSent = sentCanvasDocumentId === documentId;
+  const [canvasIdentity, setCanvasIdentity] = useState<{
+    documentId: string;
+    target?: string;
+  }>();
+  const [mailAttachmentsPortalTarget, setMailAttachmentsPortalTarget] =
+    useState<HTMLSpanElement | null>(null);
+  const canvasTarget =
+    canvasIdentity?.documentId === documentId
+      ? canvasIdentity.target
+      : undefined;
+  const onCanvasTargetChange = useCallback(
+    (target?: string) => setCanvasIdentity({ documentId, target }),
+    [documentId],
+  );
   const onCanvasSentChange = useCallback(
     (sent: boolean) => setSentCanvasDocumentId(sent ? documentId : undefined),
     [documentId],
@@ -60,6 +74,9 @@ export function useUnifiedDocumentPageModel(sidebar?: {
     actor: data.actor,
     autoFocusTitle: route.autoFocusTitle,
     canvasSent,
+    canvasTarget,
+    mailAttachmentsPortalTarget,
+    setMailAttachmentsPortalTarget,
     client,
     commentsOpen: panels.commentsOpen,
     commentsPortalTarget: panels.commentsPortalTarget,
@@ -78,6 +95,7 @@ export function useUnifiedDocumentPageModel(sidebar?: {
     headings: panels.headings,
     historyOpen: panels.historyOpen,
     onCanvasSentChange,
+    onCanvasTargetChange,
     isEditing: isEditing && !session?.readOnly,
     isSharedDocument: data.isSharedDocument,
     queryClient,

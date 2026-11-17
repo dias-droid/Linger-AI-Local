@@ -52,11 +52,12 @@ type ToolProvider interface {
 }
 
 type Service struct {
-	pool        *pgxpool.Pool
-	contexts    *agentauth.Service
-	connections connectionAuthority
-	provider    ToolProvider
-	logger      *slog.Logger
+	canvasSource CanvasSourceReader
+	pool         *pgxpool.Pool
+	contexts     *agentauth.Service
+	connections  connectionAuthority
+	provider     ToolProvider
+	logger       *slog.Logger
 	// pinnedTools keeps fetched tool versions for pinnedToolTTL; every call
 	// otherwise waits on the same Composio lookup before it runs.
 	pinnedTools sync.Map

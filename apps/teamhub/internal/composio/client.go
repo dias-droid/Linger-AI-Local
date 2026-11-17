@@ -187,6 +187,12 @@ type proxyRequest struct {
 	Method             string           `json:"method"`
 	Parameters         []proxyParameter `json:"parameters,omitempty"`
 	Body               json.RawMessage  `json:"body,omitempty"`
+	BinaryBody         *proxyBinaryBody `json:"binary_body,omitempty"`
+}
+
+type proxyBinaryBody struct {
+	Base64      string `json:"base64"`
+	ContentType string `json:"content_type"`
 }
 
 type proxyResponse struct {

@@ -36,6 +36,24 @@ build:assets` to check the initial JS budget.
 
 ## Important Conventions
 
+- Gmail and Outlook message approvals show the subject and recipients once.
+  The subject row toggles the preview and owns its hover highlight; the
+  recipient line stays outside the control. The shared AutoHeight transition
+  and chevron rotation use the chat resize timing and reduced-motion setting.
+  Expanding replaces the compact recipient line with read-only
+  From/To/Cc/Bcc headers, followed by the full body and attachments. An empty
+  Cc row reads None; Bcc appears only when populated. Email
+  actions are Send and Don't send; declining does not request a reason.
+- A gmail canvas message segment renders as its email card
+  (`rooms/chat/message-mail-canvas.tsx`), laid out like a message approval:
+  subject row with open-in-panel and expand controls, recipient line, then
+  Send and Don't send, or one receipt line once decided; an unknown result
+  keeps Send again and Don't send. Only members who can edit see the actions,
+  and with several Gmail accounts a Send from picker chooses the sender.
+  Expanding mounts the same collaborative editor as the side panel; Send waits
+  until it is saved and posts the digest the card last loaded, refreshed after
+  each durable save. Clicking Send is what uploads to Gmail; the side-panel
+  canvas has no Send.
 - Active product data comes from TeamHub, never retired Workspace APIs. Web has
   no fixture backend and no build mode that swaps TeamHub out.
 - Unit tests that need TeamHub use `createTestTeamHubRuntime`

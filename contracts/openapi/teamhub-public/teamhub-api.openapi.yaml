@@ -3961,6 +3961,79 @@ paths:
           $ref: '../components/common.yaml#/components/responses/NotFound'
         '409':
           $ref: '../components/common.yaml#/components/responses/Conflict'
+  /v0/documents/{documentId}/mail:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    get:
+      tags: [Documents]
+      operationId: getMailCanvas
+      summary: Read the local email and its delivery status without contacting Gmail.
+      responses:
+        '200':
+          description: Local draft or delivery receipt.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/mail-canvas.yaml#/components/schemas/MailCanvasState'
+        '401':
+          $ref: '../components/common.yaml#/components/responses/Unauthenticated'
+        '404':
+          $ref: '../components/common.yaml#/components/responses/NotFound'
+        '503':
+          $ref: '../components/common.yaml#/components/responses/ServiceUnavailable'
+    post:
+      tags: [Documents]
+      operationId: sendMailCanvas
+      summary: Upload and send the exact local email the Human reviewed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../components/mail-canvas.yaml#/components/schemas/SendMailCanvasRequest'
+      responses:
+        '202':
+          description: Delivery accepted. Editing alone never creates a Gmail draft.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/mail-canvas.yaml#/components/schemas/MailCanvasState'
+        '400':
+          $ref: '../components/common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '../components/common.yaml#/components/responses/Unauthenticated'
+        '403':
+          $ref: '../components/common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../components/common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: '../components/common.yaml#/components/responses/Conflict'
+        '503':
+          $ref: '../components/common.yaml#/components/responses/ServiceUnavailable'
+  /v0/documents/{documentId}/mail/decline:
+    parameters:
+      - $ref: '#/components/parameters/DocumentId'
+    post:
+      tags: [Documents]
+      operationId: declineMailCanvas
+      summary: Record that the Human chose not to send this email.
+      responses:
+        '200':
+          description: The email is marked as not sent; Send is no longer offered.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/mail-canvas.yaml#/components/schemas/MailCanvasState'
+        '401':
+          $ref: '../components/common.yaml#/components/responses/Unauthenticated'
+        '403':
+          $ref: '../components/common.yaml#/components/responses/Forbidden'
+        '404':
+          $ref: '../components/common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: '../components/common.yaml#/components/responses/Conflict'
+        '503':
+          $ref: '../components/common.yaml#/components/responses/ServiceUnavailable'
   /v0/documents/{documentId}/open:
     parameters:
       - $ref: '#/components/parameters/DocumentId'

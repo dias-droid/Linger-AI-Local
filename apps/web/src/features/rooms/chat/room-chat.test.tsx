@@ -1076,6 +1076,138 @@ describe("Room Chat", () => {
     );
   });
 
+  it("shows a gmail canvas as the email, with subject, recipients and Send", async () => {
+    const runtime = createTestTeamHubRuntime();
+    const document = seedRoomDocument(runtime, "room-chat-mail-canvas");
+    runtime.server.on("GET", "/v0/documents/{documentId}/mail", () => ({
+      source_digest: `sha256:${"0".repeat(64)}`,
+      can_edit: true,
+      status: "draft" as const,
+      subject: "Updated invitation",
+      to: "lisa@acme.com",
+    }));
+    // A second Gmail account: Send says which one it sends from.
+    const [gmail] = runtime.seed.externalSources.connections.filter(
+      (connection) => connection.provider === "gmail",
+    );
+    runtime.seed.externalSources.connections.push({
+      ...gmail!,
+      id: "external-connection-gmail-work",
+      identity_label: "jenny@work.test",
+    });
+    let sentFrom: unknown;
+    runtime.server.on("POST", "/v0/documents/{documentId}/mail", ({ body }) => {
+      sentFrom = body;
+      return {
+        can_edit: true,
+        source_digest: `sha256:${"0".repeat(64)}`,
+        status: "queued" as const,
+        subject: "Updated invitation",
+        to: "lisa@acme.com",
+      };
+    });
+    const queryClient = testQueryClient();
+    renderRoomChat(runtime, queryClient);
+    await screen.findByText(/Reviewed the checklist/);
+    appendCommittedMessage(queryClient, {
+      ...message("message-mail-canvas", "Invitation"),
+      segments: [
+        {
+          content: "Invitation",
+          document_id: document.id,
+          presentation: "canvas",
+          type: "document",
+        },
+      ],
+    });
+
+    const email = await screen.findByRole("region", { name: "Email" });
+    expect(email).toHaveTextContent("Updated invitation");
+    expect(email).toHaveTextContent("To lisa@acme.com");
+    expect(within(email).getByRole("button", { name: "Send" })).toBeVisible();
+    expect(
+      within(email).getByRole("button", { name: "Don't send" }),
+    ).toBeVisible();
+    expect(
+      await within(email).findByRole("combobox", { name: "Send from" }),
+    ).toHaveTextContent("jenny@linger.test");
+    fireEvent.click(screen.getByRole("button", { name: "Open in side panel" }));
+    await waitFor(() =>
+      expect(openPanelTab).toHaveBeenCalledWith(
+        expect.objectContaining({ documentId: document.id, kind: "file" }),
+      ),
+    );
+
+    runtime.server.on(
+      "POST",
+      "/v0/documents/{documentId}/mail/decline",
+      () => ({
+        can_edit: true,
+        source_digest: `sha256:${"0".repeat(64)}`,
+        status: "declined" as const,
+        subject: "Updated invitation",
+        to: "lisa@acme.com",
+      }),
+    );
+    fireEvent.click(within(email).getByRole("button", { name: "Don't send" }));
+    expect(await within(email).findByText("Not sent")).toBeVisible();
+    expect(within(email).queryByRole("button", { name: "Send" })).toBeNull();
+    expect(sentFrom).toBeUndefined();
+  });
+
+  it("sends the digest the card showed, and hides the actions from members who cannot edit", async () => {
+    const runtime = createTestTeamHubRuntime();
+    const document = seedRoomDocument(runtime, "room-chat-mail-readonly");
+    const shown = `sha256:${"1".repeat(64)}`;
+    let canEdit = true;
+    runtime.server.on("GET", "/v0/documents/{documentId}/mail", () => ({
+      can_edit: canEdit,
+      source_digest: shown,
+      status: "draft" as const,
+      subject: "Pricing",
+      to: "lisa@acme.com",
+    }));
+    let posted: { source_digest?: string } | undefined;
+    runtime.server.on("POST", "/v0/documents/{documentId}/mail", ({ body }) => {
+      posted = body as { source_digest?: string };
+      return {
+        can_edit: true,
+        source_digest: shown,
+        status: "sent" as const,
+        subject: "Pricing",
+        to: "lisa@acme.com",
+      };
+    });
+    const queryClient = testQueryClient();
+    renderRoomChat(runtime, queryClient);
+    await screen.findByText(/Reviewed the checklist/);
+    appendCommittedMessage(queryClient, {
+      ...message("message-mail-readonly", "Pricing"),
+      segments: [
+        {
+          content: "Pricing",
+          document_id: document.id,
+          presentation: "canvas",
+          type: "document",
+        },
+      ],
+    });
+    const email = await screen.findByRole("region", { name: "Email" });
+    const send = await within(email).findByRole("button", { name: "Send" });
+    await waitFor(() => expect(send).toBeEnabled());
+    fireEvent.click(send);
+    expect(await within(email).findByText("Sent")).toBeVisible();
+    expect(posted?.source_digest).toBe(shown);
+
+    canEdit = false;
+    await queryClient.resetQueries({ queryKey: ["mail-canvas", document.id] });
+    await waitFor(() =>
+      expect(
+        within(email).queryByRole("button", { name: "Don't send" }),
+      ).toBeNull(),
+    );
+  });
+
   it("warms only the Document surface chunk once a Document card is shown", async () => {
     const preload = vi
       .spyOn(documentRoutePreload, "preloadUnifiedDocumentPage")

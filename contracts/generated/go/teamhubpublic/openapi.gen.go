@@ -2576,6 +2576,42 @@ func (e LocalSkillScanRequestRuntimeType) Valid() bool {
 	}
 }
 
+// Defines values for MailCanvasStateStatus.
+const (
+	MailCanvasStateStatusDeclined  MailCanvasStateStatus = "declined"
+	MailCanvasStateStatusDraft     MailCanvasStateStatus = "draft"
+	MailCanvasStateStatusFailed    MailCanvasStateStatus = "failed"
+	MailCanvasStateStatusQueued    MailCanvasStateStatus = "queued"
+	MailCanvasStateStatusSending   MailCanvasStateStatus = "sending"
+	MailCanvasStateStatusSent      MailCanvasStateStatus = "sent"
+	MailCanvasStateStatusUnknown   MailCanvasStateStatus = "unknown"
+	MailCanvasStateStatusUploading MailCanvasStateStatus = "uploading"
+)
+
+// Valid indicates whether the value is a known member of the MailCanvasStateStatus enum.
+func (e MailCanvasStateStatus) Valid() bool {
+	switch e {
+	case MailCanvasStateStatusDeclined:
+		return true
+	case MailCanvasStateStatusDraft:
+		return true
+	case MailCanvasStateStatusFailed:
+		return true
+	case MailCanvasStateStatusQueued:
+		return true
+	case MailCanvasStateStatusSending:
+		return true
+	case MailCanvasStateStatusSent:
+		return true
+	case MailCanvasStateStatusUnknown:
+		return true
+	case MailCanvasStateStatusUploading:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MemoryEntryKind.
 const (
 	MemoryEntryKindDaily   MemoryEntryKind = "daily"
@@ -3910,22 +3946,22 @@ func (e WorkItemPriority) Valid() bool {
 
 // Defines values for WorkItemResolution.
 const (
-	WorkItemResolutionCompleted  WorkItemResolution = "completed"
-	WorkItemResolutionDuplicate  WorkItemResolution = "duplicate"
-	WorkItemResolutionFailed     WorkItemResolution = "failed"
-	WorkItemResolutionNotPlanned WorkItemResolution = "not_planned"
+	Completed  WorkItemResolution = "completed"
+	Duplicate  WorkItemResolution = "duplicate"
+	Failed     WorkItemResolution = "failed"
+	NotPlanned WorkItemResolution = "not_planned"
 )
 
 // Valid indicates whether the value is a known member of the WorkItemResolution enum.
 func (e WorkItemResolution) Valid() bool {
 	switch e {
-	case WorkItemResolutionCompleted:
+	case Completed:
 		return true
-	case WorkItemResolutionDuplicate:
+	case Duplicate:
 		return true
-	case WorkItemResolutionFailed:
+	case Failed:
 		return true
-	case WorkItemResolutionNotPlanned:
+	case NotPlanned:
 		return true
 	default:
 		return false
@@ -6564,6 +6600,23 @@ type LoginRequest struct {
 	Password   *string `json:"password,omitempty"`
 }
 
+// MailCanvasState defines model for MailCanvasState.
+type MailCanvasState struct {
+	// CanEdit Whether the caller may send or decline this email.
+	CanEdit   bool    `json:"can_edit"`
+	Error     *string `json:"error,omitempty"`
+	MessageId *string `json:"message_id,omitempty"`
+
+	// SourceDigest Fingerprint of the saved email; Send must echo it so only the reviewed version goes out.
+	SourceDigest string                `json:"source_digest"`
+	Status       MailCanvasStateStatus `json:"status"`
+	Subject      string                `json:"subject"`
+	To           string                `json:"to"`
+}
+
+// MailCanvasStateStatus defines model for MailCanvasState.Status.
+type MailCanvasStateStatus string
+
 // ManifestVersion Immutable strict Semantic Version for a Skill Manifest.
 type ManifestVersion = string
 
@@ -7972,6 +8025,14 @@ type SaveExternalProviderKeyRequest struct {
 // SaveVoiceProviderKeyRequest defines model for SaveVoiceProviderKeyRequest.
 type SaveVoiceProviderKeyRequest struct {
 	ApiKey string `json:"api_key"`
+}
+
+// SendMailCanvasRequest defines model for SendMailCanvasRequest.
+type SendMailCanvasRequest struct {
+	// ConnectionId Opaque, case-sensitive identifier. Clients must not infer type or time from it.
+	ConnectionId Id     `json:"connection_id"`
+	RequestId    string `json:"request_id"`
+	SourceDigest string `json:"source_digest"`
 }
 
 // Session defines model for Session.
@@ -9671,6 +9732,9 @@ type RevokeDocumentLinkShareJSONRequestBody = RevokeDocumentLinkShare
 
 // SetDocumentLinkShareJSONRequestBody defines body for SetDocumentLinkShare for application/json ContentType.
 type SetDocumentLinkShareJSONRequestBody = SetDocumentLinkShare
+
+// SendMailCanvasJSONRequestBody defines body for SendMailCanvas for application/json ContentType.
+type SendMailCanvasJSONRequestBody = SendMailCanvasRequest
 
 // RemoveDocumentFromRoomJSONRequestBody defines body for RemoveDocumentFromRoom for application/json ContentType.
 type RemoveDocumentFromRoomJSONRequestBody = DocumentRoomBindingRemoveRequest

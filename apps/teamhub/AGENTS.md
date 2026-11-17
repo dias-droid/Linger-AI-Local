@@ -35,6 +35,40 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
 
 ## Important Conventions
 
+- Gmail canvas drafts persist their source digest alongside the provider draft ID.
+  Preparing and executing a send confirmation both check the current authorized
+  canvas against that source; changed recipients, body, or attachments require a
+  refreshed draft and a new confirmation. Delivery status and link bookkeeping
+  do not change the source digest. Draft saves run one at a time per connection under a
+  `gmail_canvas_draft_leases` lease that holds no database connection during
+  the upload; a save whose lease expired leaves its draft unbound. A save
+  waits at most 30 seconds for the lease, then fails as retryable; a lease a
+  crashed process left blocks that connection's saves until it expires
+  (10 minutes).
+  Large MIME drafts use Gmail resumable uploads in bounded chunks through the
+  authenticated proxy, avoiding its request-body limit. Each chunk must be fully
+  acknowledged; transport failures do not replay a possibly completed write.
+- A Human sends a Gmail canvas from its chat card (`internal/mailcanvas`):
+  editing only saves the Document; `POST /v0/documents/{id}/mail` carries the
+  source digest of the email the card last showed and queues one River
+  delivery that uploads the draft and sends it, refusing a canvas that changed
+  since. Each canvas has one `mail_canvas_deliveries` row: a `failed` or
+  `unknown` delivery may be sent again or declined (an unknown one only after
+  the Human checked Gmail), while `declined` (Don't send) and `sent` are final.
+  A rejected or interrupted upload is `failed` (it sent nothing); only an
+  interrupted or unconfirmed send becomes `unknown`, which is never replayed
+  on its own. Sending an `unknown` delivery again whose earlier Gmail draft
+  is gone (404; Gmail deletes a draft once it is sent) fails with a
+  may-have-been-sent message and starts a new draft next time; other upload
+  errors keep the draft. A delivery that is in flight, `sent` or `unknown`
+  blocks Voice Live and Agent sends of that canvas, and an Agent's confirmed
+  send of a canvas-bound draft records a `sent` (or `unknown`) row, so the
+  card cannot send it again. `GET` reports `sent` whenever the header says so, and
+  `can_edit`; only editors may send or decline. While the latest content is
+  still rendering these routes answer 503 with `Retry-After`.
+- Live voice write tools that finish a send return a `next` asking the model
+  to say it was sent; a result without one can leave the voice silent.
+
 - A Room permits 100 Routines: recurring ones count while they exist, and
   one-shot ones count until they fire. There is no separate one-shot limit.
 
