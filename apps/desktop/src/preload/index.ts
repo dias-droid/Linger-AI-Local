@@ -52,6 +52,15 @@ const api: LingerDesktopApi = {
     install: () => ipcRenderer.invoke(IPC.updateInstall),
     check: () => ipcRenderer.invoke(IPC.updateCheck),
   },
+  connectorOAuth: {
+    prepare: () => ipcRenderer.invoke(IPC.connectorOAuthPrepare),
+    onReturn: (callback) => {
+      const listener = (_event: unknown, account?: string): void =>
+        callback(account);
+      ipcRenderer.on(IPC.connectorOAuthReturn, listener);
+      return () => ipcRenderer.off(IPC.connectorOAuthReturn, listener);
+    },
+  },
   ...(process.platform === "darwin"
     ? {
         permissions: {

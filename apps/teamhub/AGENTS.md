@@ -21,6 +21,9 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
 
 - `internal/app`: routing, authentication, request decoding, response encoding,
   and error mapping. `app.go` and `feature*.go` build the domain services.
+- Connector authorization defaults to the public Web callback. For a desktop
+  request, pass only a validated one-time loopback address to Composio.
+  TeamHub verifies connection status independently under the signed-in Account.
 - `internal/<feature>`: business behavior, transactions and data access with
   package tests: `collaboration` (Human Rooms and Messages),
   `agentregistry` (Agents, templates, Skill bindings, Another Me),

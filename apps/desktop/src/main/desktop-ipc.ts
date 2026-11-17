@@ -1,4 +1,4 @@
-import { ipcMain, type IpcMainInvokeEvent } from "electron";
+import { app, ipcMain, type IpcMainInvokeEvent } from "electron";
 import { z } from "zod";
 
 import {
@@ -11,6 +11,7 @@ import {
 } from "../shared/api.js";
 import type { ComputerDaemonModule } from "./computer-daemon.js";
 import type { WorkspaceGrant } from "./config.js";
+import { ConnectorOAuth } from "./connector-oauth.js";
 import type { EnrollmentModule } from "./enrollment.js";
 import type { LocalServerModule } from "./local-server.js";
 import type { Module, ModuleContext } from "./modules.js";
@@ -95,6 +96,36 @@ export class DesktopIpcModule implements Module {
     const power = ctx.get<PowerGuardModule>("PowerGuard");
     const localServer = ctx.get<LocalServerModule>("LocalServer");
     const updater = ctx.get<UpdaterModule>("Updater");
+
+    const oauth = new ConnectorOAuth();
+    ipcMain.handle(IPC.connectorOAuthPrepare, (event: IpcMainInvokeEvent) => {
+      const contents = windows.webContents();
+      const origin = ctx.config.get().serverUrl;
+      if (
+        !contents ||
+        !origin ||
+        event.sender !== contents ||
+        event.senderFrame !== contents.mainFrame ||
+        !sameOrigin(contents.getURL(), origin)
+      ) {
+        throw new Error("Not allowed");
+      }
+      return oauth.prepare((account) => {
+        if (
+          contents.isDestroyed() ||
+          !sameOrigin(contents.getURL(), origin) ||
+          contents !== windows.webContents()
+        )
+          return;
+        windows.show();
+        if (process.platform === "darwin") app.focus({ steal: true });
+        contents.send(IPC.connectorOAuthReturn, account);
+      });
+    });
+    this.#unsubscribe.push(() => {
+      ipcMain.removeHandler(IPC.connectorOAuthPrepare);
+      oauth.stop();
+    });
 
     const status = (): ComputerStatus => {
       const computerId = ctx.config.get().computerId;

@@ -39,6 +39,11 @@ Gateway and runs Agents. The daemon exits with the app.
 
 ## Structure
 
+- Connector OAuth opens in the system browser. The desktop prepares an
+  expiring, one-time IPv4 loopback callback before TeamHub creates the link.
+  The callback restores the originating window and forwards the return to its
+  signed-in SPA, which requests TeamHub verification.
+
 - `src/main/modules.ts`: `Module` interface, typed bus and the host that starts
   modules in dependency layers and stops them in reverse.
 - `src/main/*.ts`: one file per module (Enrollment, WorkspaceGrants,

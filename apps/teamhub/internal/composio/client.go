@@ -303,8 +303,12 @@ func (c *Client) CreateConnectionLink(ctx context.Context, authConfigID, account
 		return Link{}, errors.New("Composio auth config ID is required")
 	}
 	body := map[string]string{"auth_config_id": authConfigID, "user_id": c.UserIDForAccount(accountID)}
-	if c.callbackURL != "" {
-		body["callback_url"] = c.callbackURL
+	callback := c.callbackURL
+	if desktop, ok := ctx.Value(desktopCallbackKey{}).(string); ok {
+		callback = desktop
+	}
+	if callback != "" {
+		body["callback_url"] = callback
 	}
 	var response struct {
 		ConnectedAccountID string `json:"connected_account_id"`

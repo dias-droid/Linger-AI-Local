@@ -16,6 +16,10 @@ build:assets` to check the initial JS budget.
 
 ## Structure
 
+- Connector authorization uses the Web completion route or, when the desktop
+  bridge is available, its one-time browser callback. The signed-in desktop
+  page asks TeamHub to verify the return and refreshes its connector queries.
+
 - `src/app`: routes, providers, route error boundaries, and global CSS.
 - `src/features/teamhub`: Human API, Session, error, and realtime adapters.
 - `src/features/rooms`: Room routes, Chat, Timeline, the right sidebar (Agent Info, Activity, Thread, Document) and membership UI.

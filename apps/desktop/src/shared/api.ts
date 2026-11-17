@@ -102,6 +102,10 @@ export interface LingerDesktopApi {
     // Try Again after a failure.
     check(): Promise<void>;
   };
+  readonly connectorOAuth: {
+    prepare(): Promise<string>;
+    onReturn(callback: (connectedAccountId?: string) => void): () => void;
+  };
   // macOS only.
   readonly permissions?: {
     act(step: DesktopPermissionStep): Promise<void>;
@@ -125,4 +129,6 @@ export const IPC = {
   updateStateEvent: "update.state.event",
   updateInstall: "update.install",
   updateCheck: "update.check",
+  connectorOAuthPrepare: "connector-oauth.prepare",
+  connectorOAuthReturn: "connector-oauth.return",
 } as const;

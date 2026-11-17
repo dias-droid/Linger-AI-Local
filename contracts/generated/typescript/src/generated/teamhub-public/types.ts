@@ -6690,8 +6690,11 @@ export interface components {
     ExternalConnectionList: {
       connections: components["schemas"]["ExternalConnection"][];
     };
+    /** @description One-time OAuth return address on the desktop client's IPv4 loopback listener. */
+    ExternalConnectionDesktopCallbackURL: string;
     CreateExternalConnectionRequest: {
       app_key: components["schemas"]["ExternalAppKey"];
+      desktop_callback_url?: components["schemas"]["ExternalConnectionDesktopCallbackURL"];
     };
     CompleteExternalConnectionAuthorizationRequest: {
       /** @description The connected account the Composio callback named, when it named one. */
@@ -6726,6 +6729,7 @@ export interface components {
     CreateExternalConnectionReauthorizationRequest: {
       /** Format: int64 */
       expected_revision: number;
+      desktop_callback_url?: components["schemas"]["ExternalConnectionDesktopCallbackURL"];
     };
     SlackConversation: {
       id: string;

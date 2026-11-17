@@ -4811,13 +4811,18 @@ type CreatableAgentType string
 
 // CreateExternalConnectionReauthorizationRequest defines model for CreateExternalConnectionReauthorizationRequest.
 type CreateExternalConnectionReauthorizationRequest struct {
-	ExpectedRevision int64 `json:"expected_revision"`
+	// DesktopCallbackUrl One-time OAuth return address on the desktop client's IPv4 loopback listener.
+	DesktopCallbackUrl *ExternalConnectionDesktopCallbackURL `json:"desktop_callback_url,omitempty"`
+	ExpectedRevision   int64                                 `json:"expected_revision"`
 }
 
 // CreateExternalConnectionRequest defines model for CreateExternalConnectionRequest.
 type CreateExternalConnectionRequest struct {
 	// AppKey Stable catalog key. TeamHub validates app availability and capabilities.
 	AppKey ExternalAppKey `json:"app_key"`
+
+	// DesktopCallbackUrl One-time OAuth return address on the desktop client's IPv4 loopback listener.
+	DesktopCallbackUrl *ExternalConnectionDesktopCallbackURL `json:"desktop_callback_url,omitempty"`
 }
 
 // CreateRoomHistoryShare defines model for CreateRoomHistoryShare.
@@ -5965,6 +5970,9 @@ type ExternalConnectionAgentAccess struct {
 type ExternalConnectionAgentAccessList struct {
 	Agents []ExternalConnectionAgentAccess `json:"agents"`
 }
+
+// ExternalConnectionDesktopCallbackURL One-time OAuth return address on the desktop client's IPv4 loopback listener.
+type ExternalConnectionDesktopCallbackURL = string
 
 // ExternalConnectionList defines model for ExternalConnectionList.
 type ExternalConnectionList struct {
