@@ -256,8 +256,10 @@ export function useRoomTimelineScroll({
     if (!timeline) {
       return;
     }
+    // An instant jump: a smooth scroll's intermediate scroll events would
+    // switch following off and aim at a bottom that streaming has moved.
     shouldAutoFollowRef.current = true;
-    timeline.scrollTo({ top: timeline.scrollHeight, behavior: "smooth" });
+    timeline.scrollTop = timeline.scrollHeight;
   }
 
   /** Whether the reader follows the newest Message rather than history. */

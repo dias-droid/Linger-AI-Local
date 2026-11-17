@@ -2,6 +2,8 @@ import { ArrowDown02Icon } from "@hugeicons/core-free-icons";
 
 import { Icon } from "@/components/ui/icon";
 
+import { RunningDots } from "../task-sidebar/running-dots";
+
 /**
  * Floats above the composer while the reader is away from the newest Message.
  * Typing dots replace the arrow while an Agent in the Room is still working, so
@@ -23,11 +25,7 @@ export function JumpToLatestButton({
       type="button"
     >
       {agentWorking ? (
-        <span aria-hidden="true" className="town-dots">
-          <span />
-          <span />
-          <span />
-        </span>
+        <RunningDots size={5} />
       ) : (
         <Icon icon={ArrowDown02Icon} size={16} />
       )}

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { useRoomTimelineScroll } from "./use-room-timeline-scroll";
 
 function Timeline({
@@ -234,18 +234,6 @@ describe("Jump to latest", () => {
       () => height,
     );
     vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(200);
-    // jsdom does not implement element scrolling.
-    const scrollTo = vi.fn(function (this: Element, options: ScrollToOptions) {
-      this.scrollTop = options.top!;
-      fireEvent.scroll(this);
-    });
-    Object.defineProperty(Element.prototype, "scrollTo", {
-      configurable: true,
-      value: scrollTo,
-    });
-    onTestFinished(() => {
-      delete (Element.prototype as Partial<Element>).scrollTo;
-    });
     const view = render(<Timeline visible />);
     const timeline = screen.getByLabelText("Room timeline");
     expect(screen.queryByText("Jump to latest")).toBeNull();
@@ -253,8 +241,9 @@ describe("Jump to latest", () => {
     timeline.scrollTop = 150;
     fireEvent.scroll(timeline);
     fireEvent.click(screen.getByText("Jump to latest"));
+    fireEvent.scroll(timeline);
 
-    expect(scrollTo).toHaveBeenCalledWith({ top: 1000, behavior: "smooth" });
+    expect(timeline.scrollTop).toBe(1000);
     expect(screen.queryByText("Jump to latest")).toBeNull();
     height = 1200;
     view.rerender(<Timeline visible messageCount={11} />);
