@@ -317,12 +317,12 @@ async function harness(
         return {
           async pushPCM(frame: Int16Array) {
             through += 512;
-            // 1 is the user's speech, 3 someone speaking farther away.
+            // 1 is loud speech; 3 is speech 15 dB quieter.
             return [
               {
                 throughSample: through,
                 speech: frame[0] === 1 || frame[0] === 3,
-                levelDb: frame[0] === 3 ? -45 : -20,
+                levelDb: frame[0] === 3 ? -35 : -20,
               },
             ];
           },
@@ -1064,6 +1064,31 @@ describe("LiveVoiceWorker", () => {
     ).toBe(true);
     await test.shutdown();
   });
+
+  it.each([false, true])(
+    "passes quieter user speech on the first window outside playback (after reply: %s)",
+    async (afterReply) => {
+      const test = await harness();
+      for (let index = 0; index < 5; index++) test.track.frame(1);
+      for (let index = 0; index < 10; index++) test.track.frame(0);
+      await vi.waitFor(() => expect(test.session().audio).toHaveLength(15));
+      if (afterReply) {
+        await answeredTurn(test);
+        await vi.waitFor(() => expect(test.source().frames).toHaveLength(2));
+        test.source().queued = 400;
+        for (let index = 0; index < 12; index++) test.track.frame(3);
+        await vi.waitFor(() => expect(test.session().audio).toHaveLength(27));
+        expect(test.session().audio.at(-1)).toEqual(new Int16Array(320));
+        test.session().emit({ type: "response_finished", canceled: false });
+        test.source().queued = 0;
+      }
+      // A stale loud level must not mute a normal turn, even after it gated speech.
+      test.track.frame(3);
+      await vi.waitFor(() => expect(test.session().audio.at(-1)?.[0]).toBe(3));
+      expect(test.source().clears).toBe(0);
+      await test.shutdown();
+    },
+  );
 
   it("sends silence after a moment of local quiet and the held onset when speech resumes", async () => {
     const test = await harness();

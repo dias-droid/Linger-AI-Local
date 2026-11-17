@@ -112,7 +112,7 @@ const pauseSpeechSamples = 16_000 * 0.2;
  * windows and this gate in none.
  */
 const otherSpeakerDb = 10;
-/** Speech fainter than this is never the user's, before their level is known. */
+/** Playback's minimum speech level before the user's level is known. */
 const faintestSpeechDb = -50;
 /** An open gate stays open this much below its threshold, for word tails. */
 const levelHysteresisDb = 6;
@@ -2263,8 +2263,8 @@ export class LiveVoiceWorker {
   }
 
   /**
-   * Speech near the user's own level. Quieter speech is someone else in the
-   * room and counts as quiet: it is gated and pauses nothing.
+   * During playback, quieter speech counts as quiet and pauses nothing.
+   * Otherwise Silero alone gates input, so a stale level cannot mute a turn.
    */
   private isUserSpeech({ speech, levelDb }: SpeechActivity) {
     const learned = this.userLevelDb;
@@ -2273,7 +2273,7 @@ export class LiveVoiceWorker {
         faintestSpeechDb,
         learned === undefined ? faintestSpeechDb : learned - otherSpeakerDb,
       ) - (this.userSpeaking ? levelHysteresisDb : 0);
-    this.userSpeaking = speech && levelDb >= threshold;
+    this.userSpeaking = speech && (!this.isPlaying() || levelDb >= threshold);
     if (this.userSpeaking)
       this.userLevelDb =
         learned === undefined
