@@ -36,10 +36,10 @@ function testLogger() {
   return { logger, log };
 }
 
-// The Document Runtime binds every interface, so only a wildcard listener
-// makes its port busy.
+// The Document Runtime binds its configured host, so the blocker holds that
+// exact address: macOS lets a specific bind share a port with a wildcard one.
 async function occupyPort(server: Server): Promise<number> {
-  await new Promise<void>((resolve) => server.listen(0, resolve));
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   if (address === null || typeof address === "string") {
     throw new Error("expected a TCP address");
