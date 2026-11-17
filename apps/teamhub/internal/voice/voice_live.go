@@ -386,7 +386,7 @@ func (s *Service) sendVoiceLiveMessage(ctx context.Context, session voicelive.Se
 	case err != nil:
 		return "", err
 	}
-	return voicelive.Output(map[string]string{"status": "sent", "room": label}), nil
+	return voicelive.Output(map[string]string{"status": "sent", "room": label, "next": voicelive.SentNext}), nil
 }
 
 // appendVoiceLivePocketNote adds one line to the session Human's own Pocket

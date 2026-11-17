@@ -341,6 +341,10 @@ func Output(value any) string {
 	return string(encoded)
 }
 
+// SentNext tells the live model to report a completed send: without it the
+// model can take the result as context and stay silent.
+const SentNext = "Tell the user now in one short sentence, in their language, that it was sent and to whom."
+
 // ErrorOutput encodes a structured tool error for the live model.
 func ErrorOutput(code string) string {
 	return Output(map[string]string{"error": code})
@@ -352,7 +356,7 @@ func ErrorOutput(code string) string {
 func NeedsConfirmation(summary string) string {
 	return Output(map[string]string{
 		"status": "needs_confirmation", "summary": summary,
-		"next": "Ask the user this now, once, and end your turn; never answer it for them. If the user already said yes to it while this call ran, do not ask again: call again with confirmed=true now. Otherwise call again with confirmed=true only after they say yes in their own next turn. As you call, say a few words in their language that you are doing it, since the action can take a few seconds.",
+		"next": "Ask the user this now, once, and end your turn; never answer it for them. If the user already said yes to it while this call ran, do not ask again: call again with confirmed=true now. Otherwise call again with confirmed=true only after they say yes in their own next turn. As you call, say one short complete sentence in their language that you are doing it now, never a single word, since the action can take a few seconds.",
 	})
 }
 

@@ -378,9 +378,9 @@ func (s *Service) storeVoiceLiveCanvasDraft(ctx context.Context, session voiceli
 	if known, ok := s.knownVoiceLiveDraft(key, canvas); ok && draftID == "" {
 		draftID = known.draftID
 	}
-	draft, err := s.agentConnectedApps.SaveGmailDraft(
+	draft, err := s.agentConnectedApps.SaveGmailCanvasDraft(
 		agentconnectedapps.WithOperationID(ctx, voiceLiveInvocationID(session, request)+step),
-		app.token, app.connection.ConnectionID, draftID, built.Raw)
+		app.token, app.connection.ConnectionID, draftID, built)
 	var domain *agentconnectedapps.Error
 	if errors.As(err, &domain) {
 		return savedCanvasDraft{}, voicelive.Output(map[string]string{"error": domain.Code, "detail": voicelive.Snippet(domain.Message)}), nil
@@ -529,7 +529,7 @@ func (s *Service) sendVoiceLiveEmailCanvas(ctx context.Context, session voiceliv
 		if latest, err := s.voiceLiveCanvas(ctx, app.principal, args.DocumentID); err == nil {
 			s.recordVoiceLiveCanvasHeader(ctx, session, request, app.principal, latest, fields, "sent")
 		}
-		return voicelive.Output(map[string]string{"status": "sent", "to": canvas.fields["to"], "subject": canvas.fields["subject"]}), nil
+		return voicelive.Output(map[string]string{"status": "sent", "to": canvas.fields["to"], "subject": canvas.fields["subject"], "next": voicelive.SentNext}), nil
 	case "failed":
 		return voicelive.Output(map[string]string{"error": "send_failed", "detail": voicelive.Snippet(outcome)}), nil
 	}
