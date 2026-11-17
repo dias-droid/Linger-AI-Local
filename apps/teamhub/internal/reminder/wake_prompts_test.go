@@ -61,8 +61,17 @@ func TestRoutineWakeAllowsAPreparedDocumentOrDeck(t *testing.T) {
 	if !strings.Contains(note, "links to the document or deck") {
 		t.Fatalf("tracking note=%q", note)
 	}
-	meetings, err := builtinskills.FS.ReadFile(path.Join(proactiveSkillPackage(t), "references", "meetings.md"))
-	for _, want := range []string{"teamhub docs create", "teamhub task create", "from the web", "earlier meetings with the same people"} {
+	// The Skill says how to make a document or deck; the meetings guide says
+	// which meetings deserve one and where to look.
+	pkg := proactiveSkillPackage(t)
+	skill, err := builtinskills.FS.ReadFile(path.Join(pkg, "SKILL.md"))
+	for _, want := range []string{"teamhub docs create", "slide-deck Skill", "who will read it"} {
+		if err != nil || !strings.Contains(string(skill), want) {
+			t.Fatalf("SKILL.md misses %q: %v", want, err)
+		}
+	}
+	meetings, err := builtinskills.FS.ReadFile(path.Join(pkg, "references", "meetings.md"))
+	for _, want := range []string{"prep document", "a deck when the Human presents", "from the web", "earlier meetings with the same people"} {
 		if err != nil || !strings.Contains(string(meetings), want) {
 			t.Fatalf("meetings guide misses %q: %v", want, err)
 		}
