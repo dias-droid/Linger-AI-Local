@@ -1326,3 +1326,124 @@ esac
     expect(calls).toContain("remove --purge --yes");
   });
 });
+
+describe("scripts/install/install.ps1 and release pin parity", () => {
+  it("keeps scripts/install/install.ps1 free of CJK and aligned with CLI flags and helpers", async () => {
+    const ps1 = await readFile(
+      path.join(repositoryRoot, "scripts", "install", "install.ps1"),
+      "utf8",
+    );
+    expect(ps1.startsWith("#requires -Version 5.1")).toBe(true);
+    expect(/[\u3400-\u9fff\uf900-\ufaff]/.test(ps1)).toBe(false);
+
+    for (const flag of [
+      "--web-url",
+      "--with-search",
+      "--update",
+      "--connect",
+      "--up",
+      "--status",
+      "--remove",
+      "--purge",
+      "-y",
+      "--yes",
+      "-h",
+      "--help",
+    ]) {
+      expect(ps1).toContain(flag);
+    }
+
+    expect(ps1).toContain("SetAccessRuleProtection($true, $false)");
+    expect(ps1).toContain("[IO.Path]::PathSeparator");
+    expect(ps1).toContain(
+      "Set-DotEnvKey $EnvPath 'COMPOSE_FILE' \"docker-compose.yml$sep$overrideRel\"",
+    );
+    expect(ps1).toContain("--rtc.tcp_port");
+    expect(ps1).toContain("Docker Compose 2.24.4 or later");
+    expect(ps1).toContain(
+      "Reminder: change the default password in Settings -> Security.",
+    );
+    expect(ps1).toContain("Test-IsElevated");
+    expect(ps1).toContain("PI_CODING_AGENT_DIR");
+    expect(ps1).toContain("SystemRoot");
+    expect(ps1).toContain("PATHEXT");
+    expect(ps1).toContain("pi.cmd");
+    expect(ps1).toContain(
+      "Invoke-Stack @('apply', $planFile, '--approve', $planId)",
+    );
+    expect(ps1).not.toContain("@('apply', '--plan'");
+    expect(ps1).not.toContain("LINGER_STACK_SCRIPT_URL");
+    expect(ps1).not.toContain("Test-IsAclBootstrapFailure");
+    expect(ps1).toContain("@('auth', 'status', '--json')");
+    expect(ps1).toContain("Get-StackInvokePath");
+    expect(ps1).toContain("Format-SanitizedLine");
+    expect(ps1).toContain("gateway-home");
+    expect(ps1).toContain("localmodels");
+  });
+
+  // Linux CI has no PowerShell runtime; scripts/install/install.tests.ps1 runs
+  // natively on Windows (PS 5.1 & PS 7) and via this Windows-gated case.
+  it.runIf(process.platform === "win32")(
+    "runs the PowerShell behavioral branch suite for scripts/install/install.ps1",
+    async () => {
+      const ps1 = path.join(
+        repositoryRoot,
+        "scripts",
+        "install",
+        "install.ps1",
+      );
+      const suite = path.join(
+        repositoryRoot,
+        "scripts",
+        "install",
+        "install.tests.ps1",
+      );
+      const { stdout } = await execFileAsync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          suite,
+          "-InstallScriptPath",
+          ps1,
+        ],
+        { cwd: repositoryRoot, encoding: "utf8", timeout: 120_000 },
+      );
+      expect(stdout).toContain("ASSERTIONS PASSED");
+    },
+  );
+
+  it("documents the Windows guided installer command in README.md", async () => {
+    const readme = await readFile(
+      path.join(repositoryRoot, "README.md"),
+      "utf8",
+    );
+    expect(readme).toContain(
+      "powershell -ExecutionPolicy Bypass -File .\\scripts\\install\\install.ps1",
+    );
+  });
+
+  it("keeps stack.ps1 release pins aligned with stack.sh", async () => {
+    const [stackSh, stackPs1] = await Promise.all([
+      readFile(
+        path.join(repositoryRoot, "scripts", "installs", "stack.sh"),
+        "utf8",
+      ),
+      readFile(
+        path.join(repositoryRoot, "scripts", "installs", "stack.ps1"),
+        "utf8",
+      ),
+    ]);
+    const shVersion = stackSh.match(/^STACK_VERSION='([^']+)'/m)?.[1];
+    const shCommit = stackSh.match(/^STACK_SOURCE_COMMIT='([^']+)'/m)?.[1];
+    const shNpm = stackSh.match(/^STACK_NPM_VERSION='([^']+)'/m)?.[1];
+    expect(shVersion).toBeTruthy();
+    expect(shCommit).toBeTruthy();
+    expect(shNpm).toBeTruthy();
+    expect(stackPs1).toContain(`$StackVersion = '${shVersion}'`);
+    expect(stackPs1).toContain(`$StackSourceCommit = '${shCommit}'`);
+    expect(stackPs1).toContain(`$StackNpmVersion = '${shNpm}'`);
+  });
+});

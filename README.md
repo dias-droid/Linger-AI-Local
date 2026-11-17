@@ -194,18 +194,22 @@ to serve other computers on your network and to turn on voice.
 #### Local models
 
 The Compose containers run only the Linger server; models and agents run on the
-computer you connect. On that macOS (Apple silicon) or Linux computer, run the
-guided installer:
+computer you connect. Run the guided installer on that computer:
 
 ```bash
+# macOS (Apple silicon) or Linux
 ./scripts/install/install.sh
 ```
 
+```powershell
+# Windows (x64, ordinary non-elevated PowerShell)
+powershell -ExecutionPolicy Bypass -File .\scripts\install\install.ps1
+```
+
 It checks your hardware, installs and verifies a local model after your
-approval, and connects `linger-computer` to your Linger server. Run
-`./scripts/install/install.sh --help` for day-2 commands (`--status`, `--up`,
-`--remove`), or see [Bring your own runtime](docs/local-inference.md) for other
-model setups.
+approval, and connects `linger-computer` to your Linger server. Pass `--help`
+for day-2 commands (`--status`, `--up`, `--remove`), or see
+[Bring your own runtime](docs/local-inference.md) for other model setups.
 
 If Compose ports are busy, the installer offers to select free ports. It saves
 LiveKit's port mappings and matching RTC startup arguments in
