@@ -198,13 +198,14 @@ computer you connect. On that macOS (Apple silicon) or Linux computer, run the
 guided installer:
 
 ```bash
-./install.sh
+./scripts/install/install.sh
 ```
 
 It checks your hardware, installs and verifies a local model after your
 approval, and connects `linger-computer` to your Linger server. Run
-`./install.sh --help` for day-2 commands (`--status`, `--up`, `--remove`), or
-see [Bring your own runtime](docs/local-inference.md) for other model setups.
+`./scripts/install/install.sh --help` for day-2 commands (`--status`, `--up`,
+`--remove`), or see [Bring your own runtime](docs/local-inference.md) for other
+model setups.
 
 ## Learn more
 

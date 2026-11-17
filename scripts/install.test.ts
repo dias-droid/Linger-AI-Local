@@ -1,10 +1,13 @@
 import { execFile, spawn } from "node:child_process";
 import {
   chmod,
+  copyFile,
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rm,
+  stat,
   writeFile,
 } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
@@ -20,7 +23,10 @@ const execFileAsync = promisify(execFile);
 const repositoryRoot = path.resolve(
   fileURLToPath(new URL("../", import.meta.url)),
 );
-const installScriptPath = path.join(repositoryRoot, "install.sh");
+const installScriptPath = path.join(
+  repositoryRoot,
+  "scripts/install/install.sh",
+);
 
 const temporaryDirectories: string[] = [];
 const cleanups: Array<() => Promise<void>> = [];
@@ -40,6 +46,7 @@ interface ComputerInvocation {
 interface FakeEngineScenario {
   acceptedStack?: boolean;
   lastRunState?: string;
+  enforcePrivateRoot?: boolean;
   picks?: Array<{
     role: string;
     id: string;
@@ -87,10 +94,12 @@ async function createFakeStackScript(
 ): Promise<{
   scriptPath: string;
   logPath: string;
+  kitHomeLogPath: string;
 }> {
   const pythonBin = await resolvePythonExecutable();
   const scriptPath = path.join(root, "fake-stack.sh");
   const logPath = path.join(root, "stack-calls.log");
+  const kitHomeLogPath = path.join(root, "kit-homes.log");
   const statusJsonPath = path.join(root, "fixture-status.json");
   const hardwareJsonPath = path.join(root, "fixture-hardware.json");
   const gatewayPiDir = path.join(
@@ -211,9 +220,25 @@ async function createFakeStackScript(
   await writeFile(planTemplatePath, JSON.stringify(planTemplate));
 
   const createPiOnApply = scenario.createGatewayPiOnApply !== false;
+  const enforcePrivateRoot = scenario.enforcePrivateRoot ? "1" : "0";
   const content = `#!/bin/sh
 set -eu
 printf '%s\n' "$*" >> ${JSON.stringify(logPath)}
+if [ "${enforcePrivateRoot}" = "1" ] && [ "\${1:-}" = "--bootstrap-json" ]; then
+  kit_root="\${LOCALMODELS_KIT_HOME:-\${XDG_CACHE_HOME:-\${HOME}/.cache}/simplex-localmodels/kits}"
+  printf '%s\n' "$kit_root" >> ${JSON.stringify(kitHomeLogPath)}
+  owner="$(id -u)"
+  ancestor="$(dirname "$kit_root")"
+  while :; do
+    [ ! -L "$ancestor" ] || { printf 'stack.sh: cache root must be a private owned directory\n' >&2; exit 2; }
+    if [ -e "$ancestor" ]; then
+      bad_parent="$(find "$ancestor" -prune \\( \\( ! -user "$owner" ! -user 0 \\) -o \\( \\( -perm -0020 -o -perm -0002 \\) ! -perm -1000 \\) \\) -print || true)"
+      [ -z "$bad_parent" ] || { printf 'stack.sh: cache root must be a private owned directory\n' >&2; exit 2; }
+    fi
+    [ "$ancestor" != / ] || break
+    ancestor="$(dirname "$ancestor")"
+  done
+fi
 case "\${1:-}" in
   --bootstrap-json)
     printf '{"schema":"localmodels.kit-location/v1","kitRoot":%s,"python":%s,"moduleDir":"modules"}\n' \
@@ -268,7 +293,7 @@ PIEOF
 esac
 `;
   await writeFile(scriptPath, content, { mode: 0o755 });
-  return { scriptPath, logPath };
+  return { scriptPath, logPath, kitHomeLogPath };
 }
 
 async function startMockLingerServer(
@@ -358,14 +383,20 @@ async function runInstallScript(
   options: {
     env: NodeJS.ProcessEnv;
     input?: string;
+    scriptPath?: string;
+    cwd?: string;
   },
 ): Promise<ScriptRunResult> {
   return await new Promise<ScriptRunResult>((resolve, reject) => {
-    const child = spawn("bash", [installScriptPath, ...args], {
-      cwd: repositoryRoot,
-      env: options.env,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    const child = spawn(
+      "bash",
+      [options.scriptPath ?? installScriptPath, ...args],
+      {
+        cwd: options.cwd ?? repositoryRoot,
+        env: options.env,
+        stdio: ["pipe", "pipe", "pipe"],
+      },
+    );
     let stdout = "";
     let stderr = "";
     child.stdout.setEncoding("utf8");
@@ -593,7 +624,7 @@ describe("root install.sh", () => {
       env: buildTestEnv(root, scriptPath),
     });
     expect(statusResult.code).toBe(0);
-    expect(statusResult.stdout).toContain("./install.sh --up");
+    expect(statusResult.stdout).toContain("./scripts/install/install.sh --up");
     expect(statusResult.stdout).not.toContain("stack up");
     expect(statusResult.stdout).not.toContain("localmodels");
 
@@ -604,11 +635,190 @@ describe("root install.sh", () => {
       },
     );
     expect(removeResult.code).toBe(0);
-    expect(removeResult.stdout).toContain("./install.sh --remove --purge");
+    expect(removeResult.stdout).toContain(
+      "./scripts/install/install.sh --remove --purge",
+    );
     expect(removeResult.stdout).not.toContain("stack remove");
 
     const stackCalls = (await readFile(logPath, "utf8")).trim().split("\n");
     expect(stackCalls).toContain("status");
     expect(stackCalls).toContain("remove --purge --yes");
+  });
+
+  it("falls back from group-writable XDG cache to a private kit root and temp fallback", async () => {
+    const root = await createTempRoot();
+    const homeDir = path.join(root, "home");
+    const xdgCache = path.join(root, "shared-cache");
+    const privateTmp = path.join(root, "private-tmp");
+    await mkdir(homeDir, { recursive: true });
+    await mkdir(xdgCache, { recursive: true });
+    await mkdir(privateTmp, { recursive: true });
+    await chmod(root, 0o755);
+    await chmod(homeDir, 0o700);
+    await chmod(xdgCache, 0o775);
+    await chmod(privateTmp, 0o700);
+
+    const { scriptPath, kitHomeLogPath } = await createFakeStackScript(root, {
+      enforcePrivateRoot: true,
+    });
+
+    const first = await runInstallScript(["--status"], {
+      env: {
+        ...buildTestEnv(root, scriptPath),
+        XDG_CACHE_HOME: xdgCache,
+        TMPDIR: privateTmp,
+      },
+    });
+    expect(first.code).toBe(0);
+    const firstLogged = (await readFile(kitHomeLogPath, "utf8"))
+      .trim()
+      .split("\n");
+    expect(firstLogged[0]).toBe(path.join(homeDir, ".linger/localmodels/kits"));
+    const homeKitStat = await stat(firstLogged[0] ?? "");
+    expect(homeKitStat.mode & 0o777).toBe(0o700);
+
+    await chmod(homeDir, 0o775);
+    const second = await runInstallScript(["--status"], {
+      env: {
+        ...buildTestEnv(root, scriptPath),
+        XDG_CACHE_HOME: xdgCache,
+        TMPDIR: privateTmp,
+      },
+    });
+    expect(second.code).toBe(0);
+    const secondLogged = (await readFile(kitHomeLogPath, "utf8"))
+      .trim()
+      .split("\n");
+    expect(
+      secondLogged[1]?.startsWith(path.join(privateTmp, "linger-kit.")),
+    ).toBe(true);
+    expect(await readdir(privateTmp)).toEqual([]);
+  });
+
+  it("reassigns colliding Docker Compose ports and configures LiveKit override", async () => {
+    const root = await createTempRoot();
+    const fakeRepo = path.join(root, "fake-repo");
+    const fakeBin = path.join(root, "fake-bin");
+    const homeDir = path.join(root, "home");
+    const xdgCache = path.join(root, "cache");
+    const dockerLogPath = path.join(root, "docker-calls.log");
+    await mkdir(path.join(fakeRepo, "scripts/install"), { recursive: true });
+    await mkdir(path.join(fakeRepo, "scripts/installs"), { recursive: true });
+    await mkdir(fakeBin, { recursive: true });
+    await mkdir(homeDir, { recursive: true });
+    await mkdir(xdgCache, { recursive: true });
+    await chmod(homeDir, 0o700);
+    await chmod(xdgCache, 0o700);
+
+    const copiedInstallPath = path.join(fakeRepo, "scripts/install/install.sh");
+    await copyFile(installScriptPath, copiedInstallPath);
+    await chmod(copiedInstallPath, 0o755);
+
+    const { scriptPath: fakeStackPath } = await createFakeStackScript(root, {});
+    await copyFile(
+      fakeStackPath,
+      path.join(fakeRepo, "scripts/installs/stack.sh"),
+    );
+    await chmod(path.join(fakeRepo, "scripts/installs/stack.sh"), 0o755);
+
+    await writeFile(fakeRepo + "/docker-compose.yml", "services:\n  web:\n");
+    await writeFile(
+      path.join(fakeRepo, ".env.example"),
+      [
+        "WEB_PUBLIC_ORIGIN=http://localhost:3000",
+        "AGENT_RUNNER_PUBLIC_GATEWAY_URL=ws://127.0.0.1:4319/v1/runner-gateway",
+        "LIVEKIT_URL=ws://127.0.0.1:17880",
+        "# POSTGRES_PORT=5432",
+        "# TEAMHUB_HTTP_PORT=8080",
+        "# WEB_HTTP_PORT=3000",
+      ].join("\n") + "\n",
+    );
+
+    await writeFile(
+      path.join(fakeBin, "docker"),
+      `#!/bin/sh
+set -eu
+printf '%s\n' "$*" >> ${JSON.stringify(dockerLogPath)}
+if [ "\${1:-}" = "compose" ] && [ "\${2:-}" = "version" ]; then
+  printf 'Docker Compose version v2.40.2\n'
+  exit 0
+fi
+if [ "\${1:-}" = "compose" ] && [ "\${2:-}" = "ps" ]; then
+  printf '127.0.0.1:5432->5432/tcp\n'
+  exit 0
+fi
+exit 0
+`,
+      { mode: 0o755 },
+    );
+
+    await writeFile(
+      path.join(fakeBin, "curl"),
+      `#!/bin/sh
+set -eu
+out=""
+url=""
+prev=""
+for a in "$@"; do
+  case "$prev" in
+    -o|--output) out="$a" ;;
+  esac
+  case "$a" in
+    http://*|https://*) url="$a" ;;
+  esac
+  prev="$a"
+done
+case "$url" in
+  "http://localhost:3001/install/linger-computer.sh")
+    body="# linger-computer-launcher-v2"
+    if [ -n "$out" ]; then printf '%s\n' "$body" > "$out"; else printf '%s\n' "$body"; fi
+    exit 0
+    ;;
+  *)
+    exit 22
+    ;;
+esac
+`,
+      { mode: 0o755 },
+    );
+
+    const result = await runInstallScript([], {
+      scriptPath: copiedInstallPath,
+      cwd: fakeRepo,
+      env: {
+        HOME: homeDir,
+        XDG_CACHE_HOME: xdgCache,
+        PATH: `${fakeBin}:/usr/local/bin:/usr/bin:/bin`,
+        LINGER_INSTALL_BUSY_PORTS: "3000,17880,7881,7882",
+      },
+      input: ["1", "y", "n", "n", "n"].join("\n") + "\n",
+    });
+
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain(
+      "Port(s) already in use: 3000, 17880, 7881, 7882",
+    );
+    expect(result.stdout).toContain("Nothing was downloaded or changed.");
+
+    const updatedEnv = await readFile(path.join(fakeRepo, ".env"), "utf8");
+    expect(updatedEnv).toContain("WEB_HTTP_PORT=3001");
+    expect(updatedEnv).toContain("WEB_PUBLIC_ORIGIN=http://localhost:3001");
+    expect(updatedEnv).toContain("LIVEKIT_URL=ws://127.0.0.1:17881");
+    expect(updatedEnv).toContain(
+      "COMPOSE_FILE=docker-compose.yml:.linger-runtime/compose.ports.yml",
+    );
+    expect(updatedEnv).not.toContain("POSTGRES_PORT=5433");
+
+    const portsOverride = await readFile(
+      path.join(fakeRepo, ".linger-runtime/compose.ports.yml"),
+      "utf8",
+    );
+    expect(portsOverride).toContain("ports: !override");
+    expect(portsOverride).toContain("127.0.0.1:17881:7880");
+    expect(portsOverride).toContain("7883:7881");
+    expect(portsOverride).toContain("7884:7882/udp");
+
+    const dockerCalls = await readFile(dockerLogPath, "utf8");
+    expect(dockerCalls).toContain("compose up --build --detach --wait");
   });
 });

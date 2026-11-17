@@ -5,15 +5,27 @@ set -Eeuo pipefail
 # Local Computer connection on macOS (Apple silicon) and Linux.
 
 SCRIPT_PATH="${BASH_SOURCE[0]:-}"
+SCRIPT_DIR=""
 REPO_ROOT=""
+SELF_CMD="./scripts/install/install.sh"
 if [[ -n "$SCRIPT_PATH" && -e "$SCRIPT_PATH" ]]; then
-  REPO_ROOT="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd -P)"
+  SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd -P)"
+  if [[ -f "$SCRIPT_DIR/../../docker-compose.yml" || -r "$SCRIPT_DIR/../installs/stack.sh" ]]; then
+    REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd -P)"
+  else
+    SELF_CMD="./$(basename -- "$SCRIPT_PATH")"
+  fi
 fi
 
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/linger-install.XXXXXX")"
 chmod 0700 "$WORK_DIR"
+TEMP_KIT_DIR=""
 cleanup() {
   rm -rf "$WORK_DIR"
+  if [[ -n "$TEMP_KIT_DIR" ]]; then
+    chmod -R u+w "$TEMP_KIT_DIR" 2>/dev/null || true
+    rm -rf "$TEMP_KIT_DIR"
+  fi
 }
 trap cleanup EXIT
 
@@ -29,8 +41,8 @@ KIT_PYTHON=""
 PROMPT_VALUE=""
 
 usage() {
-  cat <<'EOF'
-Usage: ./install.sh [options]
+  cat <<EOF
+Usage: $SELF_CMD [options]
 
 Guided setup for Linger local models and connecting this computer to Linger.
 
@@ -140,24 +152,52 @@ read_env_value() {
   ' "$env_file"
 }
 
+set_env_value() {
+  local env_file="$1"
+  local key="$2"
+  local val="$3"
+  local tmp_file="$WORK_DIR/env.tmp.$$"
+  awk -v k="$key" -v v="$val" '
+    BEGIN { replaced = 0 }
+    {
+      if ($0 ~ "^[[:space:]]*(#[[:space:]]*)?" k "=") {
+        if (!replaced) {
+          print k "=" v
+          replaced = 1
+        }
+        next
+      }
+      print $0
+    }
+    END {
+      if (!replaced) {
+        print k "=" v
+      }
+    }
+  ' "$env_file" > "$tmp_file"
+  cat "$tmp_file" > "$env_file"
+  rm -f "$tmp_file"
+}
+
 sanitize_engine_stream() {
+  local escaped_self="${SELF_CMD//|/\\|}"
   sed -E \
     -e 's/stack\.sh:/install.sh:/g' \
     -e 's/on Windows use stack\.ps1/on Windows use the Linger desktop app/g' \
     -e 's/stack\.ps1/the Linger desktop app/g' \
-    -e 's/(python3 -m )?localmodels stack remove --purge/.\/install.sh --remove --purge/g' \
-    -e 's/stack remove --purge/.\/install.sh --remove --purge/g' \
-    -e 's/(python3 -m )?localmodels stack remove/.\/install.sh --remove/g' \
-    -e 's/stack remove/.\/install.sh --remove/g' \
-    -e 's/(python3 -m )?localmodels stack up/.\/install.sh --up/g' \
-    -e 's/stack up/.\/install.sh --up/g' \
-    -e 's/(python3 -m )?localmodels stack status/.\/install.sh --status/g' \
-    -e 's/stack status/.\/install.sh --status/g' \
-    -e 's/(python3 -m )?localmodels stack plan( --update)?/.\/install.sh/g' \
-    -e 's/stack plan( --update)?/.\/install.sh/g' \
-    -e 's/(python3 -m )?localmodels stack apply[^[:cntrl:]]*/.\/install.sh/g' \
-    -e 's/stack apply[^[:cntrl:]]*/.\/install.sh/g' \
-    -e 's/(python3 -m )?localmodels install/.\/install.sh/g' \
+    -e "s|(python3 -m )?localmodels stack remove --purge|${escaped_self} --remove --purge|g" \
+    -e "s|stack remove --purge|${escaped_self} --remove --purge|g" \
+    -e "s|(python3 -m )?localmodels stack remove|${escaped_self} --remove|g" \
+    -e "s|stack remove|${escaped_self} --remove|g" \
+    -e "s|(python3 -m )?localmodels stack up|${escaped_self} --up|g" \
+    -e "s|stack up|${escaped_self} --up|g" \
+    -e "s|(python3 -m )?localmodels stack status|${escaped_self} --status|g" \
+    -e "s|stack status|${escaped_self} --status|g" \
+    -e "s|(python3 -m )?localmodels stack plan( --update)?|${escaped_self}|g" \
+    -e "s|stack plan( --update)?|${escaped_self}|g" \
+    -e "s|(python3 -m )?localmodels stack apply[^[:cntrl:]]*|${escaped_self}|g" \
+    -e "s|stack apply[^[:cntrl:]]*|${escaped_self}|g" \
+    -e "s|(python3 -m )?localmodels install|${escaped_self}|g" \
     -e 's/stack\.sh/install.sh/g'
 }
 
@@ -209,7 +249,7 @@ check_supported_platform() {
     Linux) ;;
     Darwin)
       if [[ "$arch" != arm64 ]]; then
-        die "macOS local models require Apple silicon (arm64); Intel Macs can use ./install.sh --connect against a remote server or another AI provider."
+        die "macOS local models require Apple silicon (arm64); Intel Macs can use $SELF_CMD --connect against a remote server or another AI provider."
       fi
       ;;
     *)
@@ -219,8 +259,103 @@ check_supported_platform() {
   command -v curl >/dev/null 2>&1 || die "curl is required."
 }
 
+canonical_existing_parent() {
+  local target="$1"
+  if [[ -d "$target" ]]; then
+    (cd -- "$target" 2>/dev/null && pwd -P)
+    return $?
+  fi
+  local parent base resolved_parent
+  parent="$(dirname -- "$target")"
+  base="$(basename -- "$target")"
+  if [[ "$parent" == "$target" ]]; then
+    printf '%s\n' "$target"
+    return 0
+  fi
+  resolved_parent="$(canonical_existing_parent "$parent")" || return 1
+  if [[ "$resolved_parent" == "/" ]]; then
+    printf '/%s\n' "$base"
+  else
+    printf '%s/%s\n' "$resolved_parent" "$base"
+  fi
+}
+
+ancestors_are_private() {
+  local ancestor="$1"
+  local owner bad_parent=""
+  owner="$(id -u)"
+  while :; do
+    [[ ! -L "$ancestor" ]] || return 1
+    if [[ -e "$ancestor" ]]; then
+      bad_parent="$(find "$ancestor" -prune \( \( ! -user "$owner" ! -user 0 \) -o \( \( -perm -0020 -o -perm -0002 \) ! -perm -1000 \) \) -print 2>/dev/null || printf 'error')"
+      [[ -z "$bad_parent" ]] || return 1
+    fi
+    [[ "$ancestor" != "/" ]] || break
+    ancestor="$(dirname -- "$ancestor")"
+  done
+  return 0
+}
+
+ensure_private_subdir() {
+  local dir="$1"
+  local owner
+  owner="$(id -u)"
+  if [[ -L "$dir" ]]; then
+    return 1
+  fi
+  if [[ -e "$dir" ]]; then
+    [[ -d "$dir" ]] || return 1
+    local owned
+    owned="$(find "$dir" -prune -user "$owner" -print 2>/dev/null || true)"
+    [[ -n "$owned" ]] || return 1
+    chmod 0700 "$dir" 2>/dev/null || return 1
+  else
+    (umask 077 && mkdir -p "$dir") 2>/dev/null || return 1
+  fi
+  ancestors_are_private "$dir"
+}
+
+ensure_kit_home() {
+  if [[ -n "${LOCALMODELS_KIT_HOME:-}" ]]; then
+    export LOCALMODELS_KIT_HOME
+    return 0
+  fi
+
+  local raw_cache="${XDG_CACHE_HOME:-$HOME/.cache}"
+  local canon_cache=""
+  canon_cache="$(canonical_existing_parent "$raw_cache" 2>/dev/null || true)"
+  if [[ -n "$canon_cache" ]] && ancestors_are_private "$canon_cache"; then
+    if ensure_private_subdir "$canon_cache/simplex-localmodels" &&
+       ensure_private_subdir "$canon_cache/simplex-localmodels/kits"; then
+      export LOCALMODELS_KIT_HOME="$canon_cache/simplex-localmodels/kits"
+      return 0
+    fi
+  fi
+
+  local real_home=""
+  real_home="$(canonical_existing_parent "$HOME" 2>/dev/null || true)"
+  if [[ -n "$real_home" ]] && ancestors_are_private "$real_home"; then
+    if ensure_private_subdir "$real_home/.linger" &&
+       ensure_private_subdir "$real_home/.linger/localmodels" &&
+       ensure_private_subdir "$real_home/.linger/localmodels/kits"; then
+      export LOCALMODELS_KIT_HOME="$real_home/.linger/localmodels/kits"
+      return 0
+    fi
+  fi
+
+  local real_tmp=""
+  real_tmp="$(canonical_existing_parent "${TMPDIR:-/tmp}" 2>/dev/null || true)"
+  if [[ -n "$real_tmp" ]] && ancestors_are_private "$real_tmp"; then
+    TEMP_KIT_DIR="$(mktemp -d "$real_tmp/linger-kit.XXXXXX")"
+    chmod 0700 "$TEMP_KIT_DIR"
+    export LOCALMODELS_KIT_HOME="$TEMP_KIT_DIR"
+    return 0
+  fi
+}
+
 ensure_engine() {
   check_supported_platform
+  ensure_kit_home
   if [[ -n "${LINGER_STACK_SCRIPT:-}" ]]; then
     [[ -r "$LINGER_STACK_SCRIPT" ]] || die "Configured engine helper is not readable: $LINGER_STACK_SCRIPT"
     STACK_SCRIPT="$LINGER_STACK_SCRIPT"
@@ -281,12 +416,290 @@ compose_available() {
     docker compose version >/dev/null 2>&1
 }
 
+collect_docker_host_ports() {
+  tr ', ' '\n' | sed -nE 's/.*:([0-9]+)->[0-9]+\/(tcp|udp).*/\1\/\2/p' | sort -u
+}
+
+parse_port_from_url() {
+  local url="$1"
+  local fallback="$2"
+  local rest="${url#*://}"
+  rest="${rest%%/*}"
+  if [[ "$rest" == *:* ]]; then
+    local p="${rest##*:}"
+    if [[ "$p" =~ ^[0-9]+$ ]]; then
+      printf '%s\n' "$p"
+      return 0
+    fi
+  fi
+  printf '%s\n' "$fallback"
+}
+
+read_livekit_override_port() {
+  local file="$1"
+  local container_port="$2"
+  local fallback="$3"
+  [[ -f "$file" ]] || { printf '%s\n' "$fallback"; return 0; }
+  local match=""
+  match="$(sed -nE "s/.*:([0-9]+):${container_port}(\/udp)?\"?[[:space:]]*$/\1/p" "$file" | head -n 1)"
+  if [[ -n "$match" ]]; then
+    printf '%s\n' "$match"
+  else
+    printf '%s\n' "$fallback"
+  fi
+}
+
+is_port_busy() {
+  local port="$1"
+  local proto="$2"
+  local own_ports="$3"
+  local docker_ports="$4"
+
+  if [[ -n "$own_ports" ]] && printf '%s\n' "$own_ports" | grep -Fxq "$port/$proto"; then
+    return 1
+  fi
+
+  if [[ -n "${LINGER_INSTALL_BUSY_PORTS+set}" ]]; then
+    local spec=",${LINGER_INSTALL_BUSY_PORTS// /},"
+    if [[ "$spec" == *",$port,"* || "$spec" == *",$port/$proto,"* ]]; then
+      return 0
+    fi
+    return 1
+  fi
+
+  if [[ -n "$docker_ports" ]] && printf '%s\n' "$docker_ports" | grep -Fxq "$port/$proto"; then
+    return 0
+  fi
+
+  if command -v ss >/dev/null 2>&1; then
+    if [[ "$proto" == "udp" ]]; then
+      ss -Huan "sport = :$port" 2>/dev/null | grep -q . && return 0
+    else
+      ss -Htan "sport = :$port" 2>/dev/null | grep -q . && return 0
+    fi
+    return 1
+  fi
+
+  if command -v lsof >/dev/null 2>&1; then
+    if [[ "$proto" == "udp" ]]; then
+      lsof -nP -iUDP:"$port" >/dev/null 2>&1 && return 0
+    else
+      lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1 && return 0
+    fi
+  fi
+
+  return 1
+}
+
+pick_free_port() {
+  local candidate=$(( $1 + 1 ))
+  local proto="$2"
+  local own_ports="$3"
+  local reserved="$4"
+  local docker_ports="$5"
+  local tries=0
+  while (( tries < 200 )); do
+    if [[ " $reserved " != *" $candidate "* ]] &&
+       ! is_port_busy "$candidate" "$proto" "$own_ports" "$docker_ports"; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+    candidate=$((candidate + 1))
+    tries=$((tries + 1))
+  done
+  return 1
+}
+
+ensure_compose_ports() {
+  local env_file="$REPO_ROOT/.env"
+  local override_file="$REPO_ROOT/.linger-runtime/compose.ports.yml"
+
+  local own_raw=""
+  own_raw="$(cd "$REPO_ROOT" && docker compose ps --format '{{.Ports}}' 2>/dev/null || true)"
+  local own_ports=""
+  if [[ -n "$own_raw" ]]; then
+    own_ports="$(printf '%s\n' "$own_raw" | collect_docker_host_ports)"
+  fi
+
+  local docker_ports=""
+  if [[ -z "${LINGER_INSTALL_BUSY_PORTS+set}" ]]; then
+    local all_raw=""
+    all_raw="$(docker ps --format '{{.Ports}}' 2>/dev/null || true)"
+    if [[ -n "$all_raw" ]]; then
+      docker_ports="$(printf '%s\n' "$all_raw" | collect_docker_host_ports)"
+    fi
+  fi
+
+  local cur_pg cur_th cur_web cur_node cur_doc cur_lk_url cur_lk_http cur_lk_tcp cur_lk_udp
+  cur_pg="$(read_env_value "$env_file" "POSTGRES_PORT" || printf '5432')"
+  cur_th="$(read_env_value "$env_file" "TEAMHUB_HTTP_PORT" || printf '8080')"
+  cur_web="$(read_env_value "$env_file" "WEB_HTTP_PORT" || printf '3000')"
+  cur_node="$(read_env_value "$env_file" "NODE_SERVICES_HTTP_PORT" || printf '4319')"
+  cur_doc="$(read_env_value "$env_file" "DOCUMENT_RUNTIME_HTTP_PORT" || printf '4321')"
+  cur_lk_url="$(read_env_value "$env_file" "LIVEKIT_URL" || printf 'ws://127.0.0.1:17880')"
+  cur_lk_http="$(parse_port_from_url "$cur_lk_url" "17880")"
+  cur_lk_tcp="$(read_livekit_override_port "$override_file" "7881" "7881")"
+  cur_lk_udp="$(read_livekit_override_port "$override_file" "7882" "7882")"
+
+  local reserved=" $cur_pg $cur_th $cur_web $cur_node $cur_doc $cur_lk_http $cur_lk_tcp $cur_lk_udp "
+  local new_pg="$cur_pg"
+  local new_th="$cur_th"
+  local new_web="$cur_web"
+  local new_node="$cur_node"
+  local new_doc="$cur_doc"
+  local new_lk_http="$cur_lk_http"
+  local new_lk_tcp="$cur_lk_tcp"
+  local new_lk_udp="$cur_lk_udp"
+
+  local conflicts=()
+  local changes=()
+
+  if is_port_busy "$cur_pg" "tcp" "$own_ports" "$docker_ports"; then
+    conflicts+=("$cur_pg")
+    new_pg="$(pick_free_port "$cur_pg" "tcp" "$own_ports" "$reserved" "$docker_ports")" ||
+      die "Could not find a free port for Postgres."
+    reserved="$reserved$new_pg "
+    changes+=("Postgres $cur_pg -> $new_pg")
+  fi
+  if is_port_busy "$cur_th" "tcp" "$own_ports" "$docker_ports"; then
+    conflicts+=("$cur_th")
+    new_th="$(pick_free_port "$cur_th" "tcp" "$own_ports" "$reserved" "$docker_ports")" ||
+      die "Could not find a free port for TeamHub."
+    reserved="$reserved$new_th "
+    changes+=("TeamHub $cur_th -> $new_th")
+  fi
+  if is_port_busy "$cur_web" "tcp" "$own_ports" "$docker_ports"; then
+    conflicts+=("$cur_web")
+    new_web="$(pick_free_port "$cur_web" "tcp" "$own_ports" "$reserved" "$docker_ports")" ||
+      die "Could not find a free port for Web."
+    reserved="$reserved$new_web "
+    changes+=("Web $cur_web -> $new_web")
+  fi
+  if is_port_busy "$cur_node" "tcp" "$own_ports" "$docker_ports"; then
+    conflicts+=("$cur_node")
+    new_node="$(pick_free_port "$cur_node" "tcp" "$own_ports" "$reserved" "$docker_ports")" ||
+      die "Could not find a free port for Node Services."
+    reserved="$reserved$new_node "
+    changes+=("Node Services $cur_node -> $new_node")
+  fi
+  if is_port_busy "$cur_doc" "tcp" "$own_ports" "$docker_ports"; then
+    conflicts+=("$cur_doc")
+    new_doc="$(pick_free_port "$cur_doc" "tcp" "$own_ports" "$reserved" "$docker_ports")" ||
+      die "Could not find a free port for Document Runtime."
+    reserved="$reserved$new_doc "
+    changes+=("Document Runtime $cur_doc -> $new_doc")
+  fi
+  if is_port_busy "$cur_lk_http" "tcp" "$own_ports" "$docker_ports"; then
+    conflicts+=("$cur_lk_http")
+    new_lk_http="$(pick_free_port "$cur_lk_http" "tcp" "$own_ports" "$reserved" "$docker_ports")" ||
+      die "Could not find a free port for LiveKit HTTP."
+    reserved="$reserved$new_lk_http "
+    changes+=("LiveKit HTTP $cur_lk_http -> $new_lk_http")
+  fi
+  if is_port_busy "$cur_lk_tcp" "tcp" "$own_ports" "$docker_ports"; then
+    conflicts+=("$cur_lk_tcp")
+    new_lk_tcp="$(pick_free_port "$cur_lk_tcp" "tcp" "$own_ports" "$reserved" "$docker_ports")" ||
+      die "Could not find a free port for LiveKit RTC TCP."
+    reserved="$reserved$new_lk_tcp "
+    changes+=("LiveKit RTC TCP $cur_lk_tcp -> $new_lk_tcp")
+  fi
+  if is_port_busy "$cur_lk_udp" "udp" "$own_ports" "$docker_ports"; then
+    conflicts+=("$cur_lk_udp")
+    new_lk_udp="$(pick_free_port "$cur_lk_udp" "udp" "$own_ports" "$reserved" "$docker_ports")" ||
+      die "Could not find a free port for LiveKit RTC UDP."
+    reserved="$reserved$new_lk_udp "
+    changes+=("LiveKit RTC UDP $cur_lk_udp -> $new_lk_udp")
+  fi
+
+  if (( ${#conflicts[@]} == 0 )); then
+    return 0
+  fi
+
+  local conflict_list=""
+  local idx=0
+  while (( idx < ${#conflicts[@]} )); do
+    if (( idx > 0 )); then
+      conflict_list="$conflict_list, "
+    fi
+    conflict_list="$conflict_list${conflicts[$idx]}"
+    idx=$((idx + 1))
+  done
+
+  printf '  Port(s) already in use: %s\n' "$conflict_list"
+  idx=0
+  while (( idx < ${#changes[@]} )); do
+    printf '    %s\n' "${changes[$idx]}"
+    idx=$((idx + 1))
+  done
+  prompt_line "  Port(s) $conflict_list are already in use. Reassign to free local ports automatically (Web -> http://localhost:$new_web)? [Y/n]: "
+  local port_ans=""
+  port_ans="$(lowercase "$PROMPT_VALUE")"
+  if [[ -n "$port_ans" && "$port_ans" != "y" && "$port_ans" != "yes" ]]; then
+    die "Free those ports or update $env_file, then rerun $SELF_CMD."
+  fi
+
+  if [[ "$new_pg" != "$cur_pg" ]]; then
+    set_env_value "$env_file" "POSTGRES_PORT" "$new_pg"
+  fi
+  if [[ "$new_th" != "$cur_th" ]]; then
+    set_env_value "$env_file" "TEAMHUB_HTTP_PORT" "$new_th"
+  fi
+  if [[ "$new_web" != "$cur_web" ]]; then
+    set_env_value "$env_file" "WEB_HTTP_PORT" "$new_web"
+    local cur_origin=""
+    cur_origin="$(read_env_value "$env_file" "WEB_PUBLIC_ORIGIN" || true)"
+    if [[ -z "$EXPLICIT_WEB_URL" || "$EXPLICIT_WEB_URL" =~ ^http://(localhost|127\.0\.0\.1):${cur_web}$ ]] &&
+       [[ -z "$cur_origin" || "$cur_origin" =~ ^http://(localhost|127\.0\.0\.1)(:[0-9]+)?$ ]]; then
+      set_env_value "$env_file" "WEB_PUBLIC_ORIGIN" "http://localhost:$new_web"
+      EXPLICIT_WEB_URL=""
+      WEB_URL="http://localhost:$new_web"
+    fi
+  fi
+  if [[ "$new_node" != "$cur_node" ]]; then
+    set_env_value "$env_file" "NODE_SERVICES_HTTP_PORT" "$new_node"
+    local cur_gw=""
+    cur_gw="$(read_env_value "$env_file" "AGENT_RUNNER_PUBLIC_GATEWAY_URL" || true)"
+    if [[ -z "$cur_gw" || "$cur_gw" =~ ^ws://(127\.0\.0\.1|localhost): ]]; then
+      set_env_value "$env_file" "AGENT_RUNNER_PUBLIC_GATEWAY_URL" "ws://127.0.0.1:$new_node/v1/runner-gateway"
+    fi
+  fi
+  if [[ "$new_doc" != "$cur_doc" ]]; then
+    set_env_value "$env_file" "DOCUMENT_RUNTIME_HTTP_PORT" "$new_doc"
+  fi
+
+  if [[ "$new_lk_http" != "17880" || "$new_lk_tcp" != "7881" || "$new_lk_udp" != "7882" ]]; then
+    if [[ "$new_lk_http" != "$cur_lk_http" ]]; then
+      if [[ -z "$cur_lk_url" || "$cur_lk_url" =~ ^ws://(127\.0\.0\.1|localhost): ]]; then
+        set_env_value "$env_file" "LIVEKIT_URL" "ws://127.0.0.1:$new_lk_http"
+      fi
+    fi
+    mkdir -p "$REPO_ROOT/.linger-runtime"
+    cat <<EOF > "$override_file"
+services:
+  livekit:
+    ports: !override
+      - "127.0.0.1:$new_lk_http:7880"
+      - "\${LIVEKIT_RTC_BIND_ADDRESS:-127.0.0.1}:$new_lk_tcp:7881"
+      - "\${LIVEKIT_RTC_BIND_ADDRESS:-127.0.0.1}:$new_lk_udp:7882/udp"
+EOF
+    local cur_compose_file=""
+    cur_compose_file="$(read_env_value "$env_file" "COMPOSE_FILE" || true)"
+    if [[ -z "$cur_compose_file" ]]; then
+      set_env_value "$env_file" "COMPOSE_FILE" "docker-compose.yml:.linger-runtime/compose.ports.yml"
+    elif [[ ":$cur_compose_file:" != *":.linger-runtime/compose.ports.yml:"* ]]; then
+      set_env_value "$env_file" "COMPOSE_FILE" "$cur_compose_file:.linger-runtime/compose.ports.yml"
+    fi
+  fi
+}
+
 start_compose_server() {
   if [[ ! -f "$REPO_ROOT/.env" ]]; then
     [[ -f "$REPO_ROOT/.env.example" ]] || die "Missing $REPO_ROOT/.env.example."
     cp "$REPO_ROOT/.env.example" "$REPO_ROOT/.env"
     printf '  Created .env from .env.example.\n'
   fi
+
+  ensure_compose_ports
 
   printf '  Starting Linger with Docker Compose...\n'
   (cd "$REPO_ROOT" && docker compose up --build --detach --wait) || die "Docker Compose failed to start Linger."
@@ -455,7 +868,7 @@ run_connect_step() {
   if [[ ":${PATH}:" != *":${bin_dir}:"* ]]; then
     printf '  Note: add %s to PATH if you want to invoke linger-computer-%s directly.\n' "$bin_dir" "$env_name"
   fi
-  printf '  Day-2 commands: ./install.sh --status | ./install.sh --up | ./install.sh --remove\n'
+  printf '  Day-2 commands: %s --status | %s --up | %s --remove\n' "$SELF_CMD" "$SELF_CMD" "$SELF_CMD"
 }
 
 step_check_server() {
@@ -822,7 +1235,7 @@ with open(meta_out, "w", encoding="utf-8") as fh:
   IFS=$'\t' read -r plan_id fail_count < "$WORK_DIR/plan_meta.tsv"
   [[ -n "$plan_id" ]] || die "Generated plan did not include a plan identifier."
   if (( fail_count > 0 )); then
-    die "Preflight checks failed; fix the issues above and rerun ./install.sh."
+    die "Preflight checks failed; fix the issues above and rerun $SELF_CMD."
   fi
 
   prompt_line "  Approve download and installation? [y/N]: "
@@ -834,14 +1247,14 @@ with open(meta_out, "w", encoding="utf-8") as fh:
   fi
 
   sh "$STACK_SCRIPT" apply "$WORK_DIR/plan.json" --approve "$plan_id" ||
-    die "Local model installation did not finish; fix the issue above and rerun ./install.sh."
+    die "Local model installation did not finish; fix the issue above and rerun $SELF_CMD."
 }
 
 step_connect_linger() {
   printf '\n[4/4] Connecting this computer to Linger\n'
   if (( CONNECT_LINGER == 0 )); then
     printf '  Local model is ready. When your Linger server is running, connect with:\n'
-    printf '    ./install.sh --connect --web-url http://localhost:3000\n'
+    printf '    %s --connect --web-url http://localhost:3000\n' "$SELF_CMD"
     return 0
   fi
   run_connect_step
@@ -1004,7 +1417,7 @@ while (( $# > 0 )); do
       exit 0
       ;;
     *)
-      die "Unknown option: $1 (run ./install.sh --help for usage)."
+      die "Unknown option: $1 (run $SELF_CMD --help for usage)."
       ;;
   esac
 done
