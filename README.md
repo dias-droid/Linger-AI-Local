@@ -160,7 +160,7 @@ The macOS package is not yet signed with a certificate Apple recognizes, so
 macOS blocks the first launch. Allow it once:
 
 <details>
-<summary>Show macOS first-launch steps</summary>
+<summary><b>Show macOS first-launch steps</b></summary>
 
 1. Open Linger from Applications. In the **“Linger” Not Opened** dialog, click
    **Done**. Do not click **Move to Trash**, the highlighted button.
