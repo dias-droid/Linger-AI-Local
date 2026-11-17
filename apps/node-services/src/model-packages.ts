@@ -13,7 +13,7 @@ import { mirrorHome, packageRoot } from "./paths.js";
 // the images, they come from node_modules like any other package.
 export const MODEL_PACKAGES_FILE = "models.json";
 
-export type ModelPackageGroup = "ocr" | "voice";
+export type ModelPackageGroup = "voice";
 
 export interface ModelPackage {
   group: ModelPackageGroup;

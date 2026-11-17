@@ -441,13 +441,13 @@ export interface paths {
      *     disconnects leaves the line and stops its conversion. Supported
      *     sources include UTF-8 Markdown, plain text, HTML, CSV/TSV, JSON, XML,
      *     YAML and other text, plus PDF, DOC, DOCX, XLSX, PPTX, ZIP/gzip
-     *     archives of those types, SVG, and raster images. ZIP and gzip unwrap
-     *     at most one archive layer; nested ZIP or gzip is unsupported. ZIP
-     *     members of supported non-archive types are extracted within
-     *     archive-safety limits. PDF pages keep their text layer, and pages
-     *     with raster images are also recognized with English and Simplified
-     *     Chinese OCR; raster images are recognized the same way. Audio, video,
-     *     RAR/7z/tar, and legacy Excel/PowerPoint binaries remain unsupported.
+     *     archives of those types, and SVG. ZIP and gzip unwrap at most one
+     *     archive layer; nested ZIP or gzip is unsupported. ZIP members of
+     *     supported non-archive types are extracted within archive-safety
+     *     limits. PDF pages give only their text layer; no text is recognized
+     *     from images, so a PDF without one has no text. Raster images, audio,
+     *     video, RAR/7z/tar, and legacy Excel/PowerPoint binaries are
+     *     unsupported.
      *     The media type picks the extractor first; when it is generic, the
      *     filename and then the representation format do. Both the
      *     request and response are bounded raw byte streams; source bytes are

@@ -150,12 +150,7 @@ export async function main(
     const http = selected.some((name) => HTTP_ROLES.has(name))
       ? await startHttpHost(readHttpAddress(process.env))
       : undefined;
-    const normalizer = new WorkerDocumentNormalizer({
-      onModelsUnavailable: (error) =>
-        logger.log("warn", "document_normalizer.models_unavailable", {
-          error,
-        }),
-    });
+    const normalizer = new WorkerDocumentNormalizer();
     const seams: RoleHost["seams"] = {};
     const running: { name: RoleName; role: RunningRole }[] = [];
     const stopRoles = async (): Promise<void> => {

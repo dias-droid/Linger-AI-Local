@@ -1,15 +1,9 @@
 import { Worker } from "node:worker_threads";
 
-import {
-  installModelPackages,
-  modelPackageNames,
-  modelPackagesInstalled,
-} from "../model-packages.js";
 import { serviceModule } from "../paths.js";
 
 export const DOCUMENT_NORMALIZER_NAME = "llm-wiki-document-markdown";
 export const DOCUMENT_NORMALIZER_VERSION = "2";
-export const MAX_OCR_PIXELS = 16_000_000;
 export const MAX_DOCUMENT_PAGES = 100;
 export const MAX_DOCUMENT_SOURCE_BYTES = 50 * 1024 * 1024;
 export const MAX_DOCUMENT_MARKDOWN_BYTES = 32 * 1024 * 1024;
@@ -160,26 +154,20 @@ type DocumentNormalizationExecutor = (
 
 interface WorkerDocumentNormalizerOptions {
   execute?: DocumentNormalizationExecutor;
-  /** OCR's language data, when the runtime ships it separately. */
-  installModels?: () => Promise<void>;
   maxAdmittedBytes?: number;
   maxQueued?: number;
-  /** A failed model install; conversions that need OCR fail as unavailable. */
-  onModelsUnavailable?: (error: unknown) => void;
   timeoutMs?: number;
 }
 
 /**
  * The process's one normalizer. Text formats convert in process; the rest
- * convert in an isolated worker, one at a time, because OCR memory (WASM,
- * canvas and image decoding) sits outside the worker heap limit. A request
+ * convert in an isolated worker, one at a time, so a PDF, Office or archive
+ * parser that exhausts memory or hangs is stopped without the process. A request
  * waits for the worker at most one timeout and fails as unavailable; the
  * conversion itself then has its own timeout, which is terminal.
  */
 export class WorkerDocumentNormalizer implements DocumentNormalizer {
   readonly #execute: DocumentNormalizationExecutor;
-  readonly #installModels: () => Promise<void>;
-  readonly #onModelsUnavailable: (error: unknown) => void;
   readonly #maxAdmittedBytes: number;
   readonly #maxQueued: number;
   readonly #timeoutMs: number;
@@ -189,8 +177,6 @@ export class WorkerDocumentNormalizer implements DocumentNormalizer {
 
   constructor(options: WorkerDocumentNormalizerOptions = {}) {
     this.#execute = options.execute ?? executeInWorker;
-    this.#installModels = options.installModels ?? installOcrModels;
-    this.#onModelsUnavailable = options.onModelsUnavailable ?? (() => {});
     this.#maxQueued = options.maxQueued ?? MAX_QUEUED_DOCUMENT_NORMALIZATIONS;
     this.#timeoutMs =
       options.timeoutMs ?? DEFAULT_DOCUMENT_NORMALIZATION_TIMEOUT_MS;
@@ -229,8 +215,6 @@ export class WorkerDocumentNormalizer implements DocumentNormalizer {
       if (core.isInProcessDocumentSource(request)) {
         return await core.normalizeDocumentContent(request);
       }
-      // Outside the conversion's deadline: the first install downloads.
-      await this.#installModels().catch(this.#onModelsUnavailable);
       const release = await this.#acquireWorker(signal);
       try {
         return await this.#convert(request, signal);
@@ -309,11 +293,6 @@ export class WorkerDocumentNormalizer implements DocumentNormalizer {
       signal?.removeEventListener("abort", abort);
     }
   }
-}
-
-async function installOcrModels(): Promise<void> {
-  const names = modelPackageNames("ocr");
-  if (!modelPackagesInstalled(names)) await installModelPackages(names);
 }
 
 function unavailable(): DocumentNormalizationError {

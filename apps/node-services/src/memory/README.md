@@ -368,8 +368,10 @@ because it is also in My Pages. On the next reconciliation My Pages deletes sour
 list, cascading their versions, chunks and Session facts; a new version replaces only that source's chunks. The Daily/Weekly reports are derived
 summaries, indexed as their own `period_summary` sources and never as Raw again. When a current safe Wiki page
 references an exact historical Version of a Document, that Version enters Raw/Chunk ahead of the Document's current
-head, so a Wiki reference never points at the uploaded original while the Chunk indexes a later export. Archives and
-audio or video without a transcript do not enter the index.
+head, so a Wiki reference never points at the uploaded original while the Chunk indexes a later export. My Pages
+and imported mail enter only when the Wiki whitelist would admit them (TeamHub's `source_rejection_reason` is empty):
+images, scanned PDFs, spreadsheets, data, log and code files, archives, and audio or video stay out of the index,
+because the Wiki never records them.
 Memory does not normalize Documents: it reads My pages and imported mail as the Markdown TeamHub stored in
 `document_texts` (one River job per version), through `memory_source.personal_documents` and, for
 Documents whose indexed hash differs, `personal_document_markdown`. A My pages Document is dated by its Version; an
@@ -377,17 +379,15 @@ imported mail message by the send time in its `- Timestamp:` header and named by
 stores every message at the time of the import (the Version time and file name are used only when the header has no
 readable time or subject). The normalizer TeamHub's job calls is
 `apps/node-services/src/document-normalizer`, served by LLM Wiki in a restricted worker thread of this process. It
-converts PDF, DOC/DOCX, PPTX, XLSX, ODT/ODS/ODP, EPUB, EML/MHTML, Office templates and images into canonical Markdown.
-Scanned PDFs and raster images use the Chinese and English OCR bundled with the dependencies; conversion needs no
-network, Docling, system OCR, LibreOffice, extra API key or separate service. After installing the repository's locked
-dependencies, `pnpm dev` uses this path; CI and the production image carry the same parsers, WASM and language models.
+converts PDF, DOC/DOCX, PPTX, XLSX, ODT/ODS/ODP, EPUB, EML/MHTML, Office templates and SVG into canonical Markdown.
+There is no OCR: a PDF gives only its text layer, so a scanned PDF has no text, and raster images are unsupported.
+Conversion needs no network, Docling, LibreOffice, extra API key or separate service. After installing the
+repository's locked dependencies, `pnpm dev` uses this path; CI and the production image carry the same parsers.
 The index excludes generic ZIP/gzip, audio/video and legacy XLS/PPT through `document_wiki_source_heads`, without mistaking ZIP-based Office/EPUB for archives.
 There are no backends for macro-enabled Office (PPTM/XLSM/XLTM), Box Notes, Outlook MSG, Apple Pages, AFP/EBCDIC or
 DocLang. AsciiDoc and LaTeX uploaded as UTF-8 `text/*` can be read as text but have no dedicated parser; `.adoc` with
-`application/octet-stream` and `.tex` with `application/x-tex` are refused. Local OCR may still return no text for a
-skewed scanned page, and complex layouts and scan quality need their own acceptance. A raster image with no
-recognized text is retried once with the sparse-text layout; with still no text it yields only the file name heading
-and format line, without reporting an empty source.
+`application/octet-stream` and `.tex` with `application/x-tex` are refused. Complex PDF layouts need their own
+acceptance.
 A version the normalizer cannot read has no ready text in TeamHub and is simply not indexed; Memory keeps no failure record of its own, and the next version is indexed once its text is ready.
 Markdown is split into Chunks by heading level and paragraph boundaries; consecutive timestamped turns merge into a
 conversation Chunk with context, so one sentence never takes a whole result. Ordinary blocks do not overlap; only

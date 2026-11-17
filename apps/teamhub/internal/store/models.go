@@ -660,7 +660,6 @@ type DocumentText struct {
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 	Markdown         string             `json:"markdown"`
 	MarkdownSha256   pgtype.Text        `json:"markdown_sha256"`
-	Scanned          bool               `json:"scanned"`
 	LongestLineBytes int64              `json:"longest_line_bytes"`
 }
 

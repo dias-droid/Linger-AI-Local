@@ -49,7 +49,7 @@
   desktop's offline runtime bundles each entry into one file
   (`apps/desktop/scripts/bundle-node-services.mjs`), where every module shares
   the entry's URL and relative paths resolve against the directory it runs in.
-- Packages that hold model data (OCR language data, the Voice VAD binding)
+- Packages that hold model data (the Voice VAD binding)
   resolve through `src/model-packages.ts`: from node_modules in development
   and images, downloaded on first use where the offline runtime lists them in
   `models.json`. The `voice` role starts its download when the role starts,
