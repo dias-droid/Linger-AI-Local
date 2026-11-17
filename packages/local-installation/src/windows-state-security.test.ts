@@ -51,15 +51,22 @@ it("uses Windows SID/DACL validation for existing local account reads and reuse"
     }),
     { mode: 0o644 },
   );
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(null, { status: 200 })),
+  );
+  const provisionOwner = vi.fn<() => Promise<void>>();
   expect((await readLocalLogin(instance)).email).toBe("owner@linger.local");
   expect(
     (
       await ensureLocalAccount(instance, new AbortController().signal, {
-        provisionOwner: async () => {},
+        provisionOwner,
       })
     ).email,
   ).toBe("owner@linger.local");
   expect(windowsPrivatePath).toHaveBeenCalledWith(file, "file");
+  expect(fetch).toHaveBeenCalledOnce();
+  expect(provisionOwner).not.toHaveBeenCalled();
 });
 it("checks the ACL before reusing a saved enrollment token", async () => {
   const instance = await fixture();

@@ -172,7 +172,6 @@ export async function ensureLocalAccount(
   }
   const email = account.email;
   signal.throwIfAborted();
-  if (account.provisioned) return { email, file, password: account.password };
   async function post(route: string, body: unknown, cookie?: string) {
     let response: Response;
     try {

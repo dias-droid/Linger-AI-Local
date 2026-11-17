@@ -11,6 +11,13 @@ stop unrelated processes, pull mutable images, or delete volumes as recovery.
 Every installation runs natively from a Linger source checkout; Docker is not
 used.
 
+The account file records provisioning history, not current database readiness.
+Every installation verifies the saved credentials before reporting the account
+ready. On HTTP 401, use the existing idempotent owner command and confirm login:
+it can recreate a missing owner after a database replacement, but never resets
+an existing password or replaces saved credentials. Other login failures stop
+without provisioning.
+
 Each instance directory holds `user.env` (0600), the only file a person edits:
 `COMPOSIO_API_KEY`, `SONIOX_API_KEY`, `XAI_API_KEY` and `TZ`
 (`user-environment.ts`). Every mode merges it into the generated

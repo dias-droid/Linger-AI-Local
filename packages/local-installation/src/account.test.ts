@@ -69,7 +69,13 @@ it("creates the owner through stdin, confirms login and logs out before reusing 
   vi.mocked(fetch).mockClear();
   provisionOwner.mockClear();
   await ensureLocalAccount(f.instance, f.signal, owner);
-  expect(fetch).not.toHaveBeenCalled();
+  expect(
+    vi
+      .mocked(fetch)
+      .mock.calls.map(
+        ([url]) => new URL(url instanceof Request ? url.url : url).pathname,
+      ),
+  ).toEqual(["/v0/auth/login", "/v0/auth/logout"]);
   expect(provisionOwner).not.toHaveBeenCalled();
   expect(
     JSON.parse(await readFile(f.file, "utf8")).password === saved.password,
@@ -285,4 +291,105 @@ it("reads the server identity from the private instance files", async () => {
   const { chmod } = await import("node:fs/promises");
   await chmod(keyFile, 0o644);
   await expect(readLocalIdentity(f.instance)).rejects.toThrow(/private/);
+});
+
+it("recreates a missing owner when the private file is already marked provisioned", async () => {
+  const f = await fixture();
+  const saved =
+    JSON.stringify(
+      {
+        email: "owner@linger.local",
+        password: "saved-private-password",
+        provisioned: true,
+      },
+      null,
+      2,
+    ) + "\n";
+  await writeFile(f.file, saved, { mode: 0o600 });
+  let created = false;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async (url: string) =>
+        new Response(null, {
+          status: url.endsWith("/logout") ? 204 : created ? 200 : 401,
+          headers: created ? { "set-cookie": "session=test; HttpOnly" } : {},
+        }),
+    ),
+  );
+  provisionOwner.mockImplementation(async (email, password) => {
+    expect(email).toBe("owner@linger.local");
+    expect(password).toBe("saved-private-password");
+    created = true;
+  });
+  const result = await ensureLocalAccount(f.instance, f.signal, owner);
+  expect(created).toBe(true);
+  expect(provisionOwner).toHaveBeenCalledOnce();
+  expect(result.email).toBe("owner@linger.local");
+  expect(await readFile(f.file, "utf8")).toBe(saved);
+  expect(
+    vi
+      .mocked(fetch)
+      .mock.calls.map(
+        ([url]) => new URL(url instanceof Request ? url.url : url).pathname,
+      ),
+  ).toEqual(["/v0/auth/login", "/v0/auth/login", "/v0/auth/logout"]);
+});
+it("rejects a provisioned account with a stale password without replacing credentials", async () => {
+  const f = await fixture();
+  const saved = JSON.stringify({
+    email: "owner@linger.local",
+    password: "saved-private-password",
+    provisioned: true,
+  });
+  await writeFile(f.file, saved, { mode: 0o600 });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("server-private-secret", { status: 401 })),
+  );
+  provisionOwner.mockResolvedValue(undefined);
+  await expect(ensureLocalAccount(f.instance, f.signal, owner)).rejects.toThrow(
+    "Local account sign-in failed after creation (HTTP 401). Credentials are preserved; existing accounts will not be reset.",
+  );
+  expect(provisionOwner).toHaveBeenCalledOnce();
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(await readFile(f.file, "utf8")).toBe(saved);
+});
+it("does not provision an already marked account when its login service fails", async () => {
+  const f = await fixture();
+  const saved = JSON.stringify({
+    email: "owner@linger.local",
+    password: "saved-private-password",
+    provisioned: true,
+  });
+  await writeFile(f.file, saved, { mode: 0o600 });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("server-private-secret", { status: 503 })),
+  );
+  await expect(ensureLocalAccount(f.instance, f.signal, owner)).rejects.toThrow(
+    "Local account login check failed (HTTP 503)",
+  );
+  expect(provisionOwner).not.toHaveBeenCalled();
+  expect(await readFile(f.file, "utf8")).toBe(saved);
+});
+it("preserves a provisioned account and hides details on a network failure", async () => {
+  const f = await fixture();
+  const saved = JSON.stringify({
+    email: "owner@linger.local",
+    password: "saved-private-password",
+    provisioned: true,
+  });
+  await writeFile(f.file, saved, { mode: 0o600 });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => {
+      throw new Error("server-private-secret");
+    }),
+  );
+  await expect(ensureLocalAccount(f.instance, f.signal, owner)).rejects.toThrow(
+    "The local account service is unavailable. Reopen Linger to retry; account credentials are preserved.",
+  );
+  expect(provisionOwner).not.toHaveBeenCalled();
+  expect(await readFile(f.file, "utf8")).toBe(saved);
 });
