@@ -435,6 +435,17 @@ export async function stopComputer(
     throw new Error(
       "Instance busy: active operations are running or operation state is unavailable",
     );
+  await stopIdleComputer(instance, options);
+}
+/**
+ * Asks an instance's daemon to stop, for a caller that already found it
+ * idle; the daemon itself still refuses while it runs work.
+ */
+export async function stopIdleComputer(
+  instance: Instance,
+  options: { signal?: AbortSignal } = {},
+): Promise<void> {
+  if (!(await configured(instance))) return;
   const stopped = await invoke(
     instance,
     ["daemon", "stop", "--if-idle"],

@@ -32,7 +32,12 @@ setup can run it from a copy on an earlier release's `Linger.exe`.
 
 Every other mode first converts an install from before the rename to Linger
 (`migrateLegacyInstallation`); `--migrate` does only that and exits, for the
-desktop client.
+desktop client. An instance it could not convert never stops the
+installer, and the next start tries again. Only `--migrate` reports them: a
+warning naming each and why on stderr, and one JSON line
+`{"skipped":[{instance,reason}]}` on stdout. Other modes stay silent, so a
+warning is never taken for the reason a start failed, and refuse a skipped
+instance when they open it.
 
 Run `make check-installer`; verify UI process behavior with an isolated
 browser context and retain masked evidence. Never stop a user's existing stack

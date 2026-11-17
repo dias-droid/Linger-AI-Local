@@ -37,9 +37,18 @@ it stops the instance's Computer and native services, renames `SIMPLEX_*`
 keys in the generated env files, and gives the instance its
 `linger-<name>-<hash>` project name. The legacy project name in
 `instance.json` marks an instance as not yet converted, so it is written last
-and a rerun after a crash converges. A damaged record is skipped, and a
-failing instance does not stop the others; the migration then throws one
-error naming each failed instance, and the installer does not start. The
+and a rerun after a crash converges. A damaged record is skipped. An
+instance that fails keeps its legacy names and is returned with its reason;
+it does not stop the others or the installer, and the next start tries it
+again. `loadInstance` refuses such an instance with an error that says so.
+Only something still running keeps an instance unconverted: work its
+Computer reports, or a native service that will not stop. A stop that fails
+because its program or runtime left with the earlier app (an unreadable
+Computer status, a failed idle stop, a recorded PID now owned by another
+program, an old gateway's tools) counts as stopped. A Docker-mode record
+(`mode` "source" or "release") is never converted or counted as pending:
+`loadInstance` refuses it, and its compose project name removes its
+containers. The
 cache markers `.simplex-files.json` and `.simplex-model-package.json` keep
 their names.
 

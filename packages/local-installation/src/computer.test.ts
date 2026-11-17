@@ -11,6 +11,7 @@ import {
   inspectComputer,
   startComputer,
   stopComputer,
+  stopIdleComputer,
 } from "./computer.js";
 const roots: string[] = [];
 function managedNativeRuntimePath(
@@ -269,6 +270,17 @@ it("refuses to stop busy Computer and only stops this config when idle", async (
       (args) => args.slice(0, 2).join(" ") === "daemon stop",
     ),
   ).toContain("--if-idle");
+});
+
+it("stops an instance already found idle without reading its status again", async () => {
+  const f = await fixture();
+  await writeFile(f.instance.computerConfig, "{}");
+  await stopIdleComputer(f.instance);
+  const calls = await f.readCalls();
+  expect(calls.map((args) => args.slice(0, 2).join(" "))).toEqual([
+    "daemon stop",
+  ]);
+  expect(calls[0]).toContain("--if-idle");
 });
 
 it("treats an already stopped instance as idle for repeated down", async () => {

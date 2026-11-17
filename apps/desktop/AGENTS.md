@@ -215,9 +215,12 @@ Gateway and runs Agents. The daemon exits with the app.
   LocalServer runs `installer.js --migrate` when an instance record still
   carries a `simplex-` project name, before it reads
   `desktop/local-server.json`
-  (`packages/local-installation/src/legacy-migration.ts`). A failed migration
-  puts LocalServer in the failed state with the installer's error, which names
-  each instance that is still legacy; Retry runs the migration again. There is
+  (`packages/local-installation/src/legacy-migration.ts`). Instances the
+  installer left unconverted are logged as
+  `local_server.legacy_instance_skipped` with their reason and do not hold
+  the app back; only when `desktop` itself stayed unconverted, or the
+  installer could not run, LocalServer enters the failed state with that
+  reason, and Retry runs the migration again. There is
   no downgrade path: an older build reads neither the converted instances nor
   the moved data folder. The bundle ID and
   Windows AppUserModelID are `com.simplexai.linger.desktop.preview`. The

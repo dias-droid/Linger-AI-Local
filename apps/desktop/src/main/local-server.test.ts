@@ -29,6 +29,7 @@ import {
   followHttps,
   hasNativePostgres,
   installLocation,
+  legacyMigrationResult,
   parseSetCookie,
   LocalServerUnverifiedError,
   localIdentityProof,
@@ -2864,4 +2865,50 @@ describe("LocalServerModule owner account", () => {
       await f.host.stop("quit");
     },
   );
+});
+
+describe("legacyMigrationResult", () => {
+  const skipped = [
+    { instance: "default", reason: "Its Computer is running 2 task(s)." },
+  ];
+
+  it("only logs instances this app does not use", () => {
+    expect(
+      legacyMigrationResult(
+        { code: 0, output: `${JSON.stringify({ skipped })}\n`, error: "" },
+        LOCAL_INSTANCE,
+      ),
+    ).toEqual({ skipped });
+  });
+
+  it("fails with the reason when this app's instance stayed unconverted", () => {
+    const own = [
+      {
+        instance: LOCAL_INSTANCE,
+        reason: "Another Linger installer is using it.",
+      },
+    ];
+    expect(
+      legacyMigrationResult(
+        { code: 0, output: JSON.stringify({ skipped: own }), error: "" },
+        LOCAL_INSTANCE,
+      ),
+    ).toEqual({
+      skipped: own,
+      failure:
+        "Linger could not convert this computer's installation from the earlier Simplex app. Another Linger installer is using it.",
+    });
+  });
+
+  it("shows every line of an installer that could not start", () => {
+    expect(
+      legacyMigrationResult(
+        { code: 1, output: "", error: "Installer could not start: a\nb: c\n" },
+        LOCAL_INSTANCE,
+      ),
+    ).toEqual({ skipped: [], failure: "Installer could not start: a\nb: c" });
+    expect(
+      legacyMigrationResult({ code: 0, output: "", error: "" }, LOCAL_INSTANCE),
+    ).toEqual({ skipped: [] });
+  });
 });

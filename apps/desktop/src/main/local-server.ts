@@ -32,6 +32,7 @@ import {
 } from "@linger/local-installation/account";
 import { downloadVerified } from "@linger/local-installation/download";
 import { legacyMigrationPending } from "@linger/local-installation/home";
+import type { LegacyInstanceSkipped } from "@linger/local-installation/legacy-migration";
 import {
   type SetupChoice,
   setupChoices,
@@ -323,6 +324,50 @@ const SERVER_CHECK_TTL_MS = 2_000;
 
 // The instance the desktop installs.
 export const LOCAL_INSTANCE = "desktop";
+
+export interface LegacyMigrationRun {
+  code: number | null;
+  output: string;
+  error: string;
+}
+
+/**
+ * Reads `installer.js --migrate`: the instances it left unconverted, and why
+ * `instance`, the one this app uses, could not be converted, if so.
+ */
+export function legacyMigrationResult(
+  run: LegacyMigrationRun,
+  instance: string,
+): { failure?: string; skipped: LegacyInstanceSkipped[] } {
+  if (run.code !== 0)
+    return {
+      failure:
+        run.error.trim().slice(-1500) ||
+        `The installer exited with code ${run.code}.`,
+      skipped: [],
+    };
+  let skipped: LegacyInstanceSkipped[] = [];
+  try {
+    const parsed = JSON.parse(run.output.trim().split("\n").at(-1) ?? "") as {
+      skipped?: unknown;
+    };
+    if (Array.isArray(parsed.skipped))
+      skipped = parsed.skipped.filter(
+        (entry): entry is LegacyInstanceSkipped =>
+          typeof (entry as LegacyInstanceSkipped)?.instance === "string" &&
+          typeof (entry as LegacyInstanceSkipped)?.reason === "string",
+      );
+  } catch {
+    // An installer that answers no list converted everything it could.
+  }
+  const own = skipped.find((entry) => entry.instance === instance);
+  return {
+    skipped,
+    ...(own && {
+      failure: `Linger could not convert this computer's installation from the earlier Simplex app. ${own.reason}`,
+    }),
+  };
+}
 const NATIVE_TARGETS = new Set(["darwin-arm64", "linux-x64", "win32-x64"]);
 const MiB = 1024 * 1024;
 const GiB = 1024 * MiB;
@@ -1119,47 +1164,53 @@ export class LocalServerModule implements Module {
 
   // An install from before the rename keeps legacy names in its instance
   // records; the bundled installer converts them once, before a record is
-  // read. Returns why it failed, for the person to see.
+  // read. Returns why this computer's instance stayed unconverted, for the
+  // person to see; other instances it left behind are only logged.
   async #migrateLegacyHome(ctx: ModuleContext): Promise<string | undefined> {
     if (
       !(await legacyMigrationPending(this.#options.home)) ||
       !existsSync(this.#installerScript())
     )
       return undefined;
-    const outcome = await new Promise<{ code: number | null; error: string }>(
-      (resolve) => {
-        const child = spawn(
-          process.execPath,
-          [this.#installerScript(), "--home", this.#options.home, "--migrate"],
-          {
-            stdio: ["ignore", "ignore", "pipe"],
-            windowsHide: true,
-            env: {
-              ...process.env,
-              ELECTRON_RUN_AS_NODE: "1",
-              LINGER_HOME: this.#options.home,
-            },
+    const outcome = await new Promise<LegacyMigrationRun>((resolve) => {
+      const child = spawn(
+        process.execPath,
+        [this.#installerScript(), "--home", this.#options.home, "--migrate"],
+        {
+          stdio: ["ignore", "pipe", "pipe"],
+          windowsHide: true,
+          env: {
+            ...process.env,
+            ELECTRON_RUN_AS_NODE: "1",
+            LINGER_HOME: this.#options.home,
           },
-        );
-        let error = "";
-        child.stderr.on("data", (chunk: Buffer) => {
-          error = (error + chunk.toString("utf8")).slice(-2000);
-        });
-        child.once("error", (failure) =>
-          resolve({ code: null, error: failure.message }),
-        );
-        child.once("close", (code) => resolve({ code, error }));
-      },
-    );
-    if (outcome.code === 0) {
-      ctx.log.info("local_server.home_migrated", {});
-      return undefined;
+        },
+      );
+      let output = "";
+      let error = "";
+      child.stdout.on("data", (chunk: Buffer) => {
+        output = (output + chunk.toString("utf8")).slice(-20_000);
+      });
+      child.stderr.on("data", (chunk: Buffer) => {
+        error = (error + chunk.toString("utf8")).slice(-2000);
+      });
+      child.once("error", (failure) =>
+        resolve({ code: null, output, error: failure.message }),
+      );
+      child.once("close", (code) => resolve({ code, output, error }));
+    });
+    const { failure, skipped } = legacyMigrationResult(outcome, LOCAL_INSTANCE);
+    for (const entry of skipped)
+      ctx.log.warn("local_server.legacy_instance_skipped", {
+        instance: entry.instance,
+        reason: entry.reason,
+      });
+    if (failure) {
+      ctx.log.warn("local_server.home_migration_failed", { error: failure });
+      return failure;
     }
-    const error =
-      outcome.error.trim().slice(-500) ||
-      `The installer exited with code ${outcome.code}.`;
-    ctx.log.warn("local_server.home_migration_failed", { error });
-    return error;
+    ctx.log.info("local_server.home_migrated", {});
+    return undefined;
   }
 
   #installerScript(): string {
@@ -1756,12 +1807,13 @@ export class LocalServerModule implements Module {
       },
     );
     const log = this.#ctx?.log;
-    // The installer explains a failed start on stderr; keep its last line.
+    // The installer explains a failed start on stderr in one write, which
+    // can span lines (one reason per instance); keep the last one whole.
     let reason = "";
     child.stderr.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf8");
-      reason = text.trim().split("\n").at(-1)?.slice(0, 500) || reason;
-      log?.warn("local_server.installer_stderr", { line: text.slice(0, 500) });
+      reason = text.trim().slice(0, 1500) || reason;
+      log?.warn("local_server.installer_stderr", { line: text.slice(0, 1500) });
     });
     const origin = await new Promise<string>((resolve, reject) => {
       let output = "";

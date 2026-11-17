@@ -1,5 +1,6 @@
 import path from "node:path";
 import { lingerHome } from "@linger/local-installation/home";
+import type { LegacyInstanceSkipped } from "@linger/local-installation/legacy-migration";
 import { fileURLToPath } from "node:url";
 import { launchInstaller } from "./server/launch.js";
 export { startInstallerServer } from "./server/server.js";
@@ -90,11 +91,17 @@ export function parseInstallerArguments(args: string[]) {
 // access error points at permissions.
 export function startFailure(error: unknown) {
   const code = (error as { code?: unknown } | undefined)?.code;
+  // Every line: a cause can list one reason per line.
   const reason =
-    error instanceof Error ? error.message.split("\n")[0]!.slice(0, 300) : "";
+    error instanceof Error ? error.message.trim().slice(0, 1500) : "";
   if (code === "EACCES" || code === "EPERM")
     return `Installer could not start: ${reason} Check the installation package and home directory permissions.`;
   return `Installer could not start${typeof code === "string" && code ? ` (${code})` : ""}: ${reason || "unknown error."}`;
+}
+// A leftover instance does not hold Linger back; the person still learns
+// which one stayed behind and why.
+export function legacySkippedWarning(skipped: LegacyInstanceSkipped): string {
+  return `Linger could not convert the instance "${skipped.instance}" from the earlier Simplex app and left it as it was; it tries again at the next start. ${skipped.reason}`;
 }
 const failedToStart = (error: unknown) => {
   process.stderr.write(`${startFailure(error)}\n`);
@@ -283,17 +290,28 @@ if (
   // Installs from before the rename move to the Linger home once, before
   // any mode opens it; --migrate does only that, for the desktop client.
   // Stopping for an uninstall changes nothing.
+  // Only --migrate reports the instances it skipped, as warnings and as one
+  // JSON line on stdout: the desktop runs it first, and in the other modes a
+  // warning on stderr would read as the reason a start failed. A skipped
+  // instance is refused with its own error when a mode opens it.
+  let skipped: LegacyInstanceSkipped[] = [];
   if (options && !options.stop)
     await import("@linger/local-installation/legacy-migration")
-      .then(({ migrateLegacyInstallation }) =>
-        migrateLegacyInstallation({ home: options!.home }),
-      )
+      .then(async ({ migrateLegacyInstallation }) => {
+        skipped = await migrateLegacyInstallation({ home: options!.home });
+        if (options?.migrate)
+          for (const entry of skipped)
+            process.stderr.write(`${legacySkippedWarning(entry)}\n`);
+      })
       .catch((error: unknown) => {
         failedToStart(error);
         options = undefined;
       });
   if (options?.stop) await stopInstallation(options);
-  else if (options?.migrate) process.exit(0);
+  else if (options?.migrate)
+    process.stdout.write(`${JSON.stringify({ skipped })}\n`, () =>
+      process.exit(0),
+    );
   else if (options?.userKeys) await userKeys(options);
   else if (options?.inspect) await inspect(options);
   else if (options?.resume) await resume(options);
