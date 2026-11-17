@@ -2313,6 +2313,7 @@ components:
       required:
         - scheduler
         - raw_chunk_sources
+        - session_facts
       properties:
         scheduler:
           type: object
@@ -2344,6 +2345,64 @@ components:
             - $ref: "#/components/schemas/MemoryFailureSectionNotConfigured"
             - $ref: "#/components/schemas/MemoryFailureSectionUnavailable"
             - $ref: "#/components/schemas/RawChunkSourceFailures"
+        session_facts:
+          oneOf:
+            - $ref: "#/components/schemas/MemoryFailureSectionNotConfigured"
+            - $ref: "#/components/schemas/MemoryFailureSectionUnavailable"
+            - $ref: "#/components/schemas/SessionFactFailures"
+    SessionFactFailures:
+      type: object
+      additionalProperties: false
+      description: >-
+        Latest failed Session fact sync per Agent observed by this process. A successful sync clears
+        only that Agent. Resets on restart; zero does not establish that all persisted sources have facts.
+      required:
+        - configured
+        - scope
+        - observed_since
+        - total
+        - items
+      properties:
+        configured:
+          type: boolean
+          const: true
+        scope:
+          type: string
+          const: process
+        observed_since:
+          type: string
+          format: date-time
+        total:
+          type: integer
+          minimum: 0
+          description: Number of Agents whose latest observed sync failed, before the list limit.
+        items:
+          type: array
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/SessionFactFailure"
+    SessionFactFailure:
+      type: object
+      additionalProperties: false
+      required:
+        - agent_id
+        - failed_windows
+        - last_failure_at
+        - last_error_kind
+      properties:
+        agent_id:
+          type: string
+        failed_windows:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: Windows not extracted in the latest sync, or null if the sync aborted before a complete count.
+        last_failure_at:
+          type: string
+          format: date-time
+        last_error_kind:
+          type: string
+          description: Last structured ModelCallError kind, invalid_output for omitted windows, or unknown; never inferred from error prose.
     RawChunkSourceFailures:
       type: object
       additionalProperties: false

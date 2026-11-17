@@ -578,6 +578,20 @@ describe("failure health", () => {
     const chunkFailures = {
       failedSources: vi.fn().mockRejectedValue(new Error("pg down")),
     };
+    const factSummary = {
+      scope: "process" as const,
+      observed_since: "2026-09-29T00:00:00.000Z",
+      total: 1,
+      items: [
+        {
+          agent_id: "agent_a",
+          failed_windows: 2,
+          last_failure_at: "2026-09-29T01:00:00.000Z",
+          last_error_kind: "invalid_output",
+        },
+      ],
+    };
+    const factFailures = { failures: vi.fn().mockReturnValue(factSummary) };
     const server = await startMemoryServer({
       dataRoot,
       host: "127.0.0.1",
@@ -585,6 +599,7 @@ describe("failure health", () => {
       scheduler,
       serviceToken: "test",
       chunkFailures,
+      factFailures,
     });
     const headers = {
       authorization: "Bearer test",
@@ -600,6 +615,7 @@ describe("failure health", () => {
       expect(
         (await fetch(`${server.url}/internal/v1/health/failures`)).status,
       ).toBe(401);
+      expect(factFailures.failures).not.toHaveBeenCalled();
       expect((await retry({}, { ...headers, authorization: "" })).status).toBe(
         401,
       );
@@ -615,6 +631,20 @@ describe("failure health", () => {
           pending_retries: [],
         },
         raw_chunk_sources: { error: "unavailable" },
+        session_facts: { configured: true, ...factSummary },
+      });
+      expect(factFailures.failures).toHaveBeenCalledExactlyOnceWith(200);
+      factFailures.failures.mockImplementationOnce(() => {
+        throw new Error("Unavailable");
+      });
+      const degraded = await fetch(
+        `${server.url}/internal/v1/health/failures`,
+        { headers },
+      );
+      expect(degraded.status).toBe(200);
+      expect(await degraded.json()).toMatchObject({
+        scheduler: { exhausted_total: 0 },
+        session_facts: { error: "unavailable" },
       });
       for (const invalid of [
         { extra: {} },
@@ -623,6 +653,7 @@ describe("failure health", () => {
         { scheduler: { task_keys: ["init:rebuild:agent_a:2026-09-30"] } },
         { scheduler: { task_keys: [] } },
         { openwiki_jobs: { owner_id: "owner_a" } },
+        { session_facts: {} },
         [],
       ]) {
         expect((await retry(invalid)).status).toBe(400);
@@ -822,6 +853,7 @@ describe("failure health", () => {
         total: 1,
       });
       expect(summary).not.toHaveProperty("openwiki_jobs");
+      expect(summary.session_facts).toEqual({ configured: false });
       expect(failedSources).toHaveBeenCalledWith(200);
     } finally {
       await server.close();

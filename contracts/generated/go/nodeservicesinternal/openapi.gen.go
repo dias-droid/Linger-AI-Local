@@ -1801,10 +1801,16 @@ type MemoryFailureSummaryResponse struct {
 		PendingRetries      []MemoryCalendarFailure `json:"pending_retries"`
 		PendingRetriesTotal int                     `json:"pending_retries_total"`
 	} `json:"scheduler"`
+	SessionFacts MemoryFailureSummaryResponse_SessionFacts `json:"session_facts"`
 }
 
 // MemoryFailureSummaryResponse_RawChunkSources defines model for MemoryFailureSummaryResponse.RawChunkSources.
 type MemoryFailureSummaryResponse_RawChunkSources struct {
+	union json.RawMessage
+}
+
+// MemoryFailureSummaryResponse_SessionFacts defines model for MemoryFailureSummaryResponse.SessionFacts.
+type MemoryFailureSummaryResponse_SessionFacts struct {
 	union json.RawMessage
 }
 
@@ -2246,6 +2252,29 @@ type ServiceTokenErrorResponse struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
+}
+
+// SessionFactFailure defines model for SessionFactFailure.
+type SessionFactFailure struct {
+	AgentId string `json:"agent_id"`
+
+	// FailedWindows Windows not extracted in the latest sync, or null if the sync aborted before a complete count.
+	FailedWindows *int `json:"failed_windows"`
+
+	// LastErrorKind Last structured ModelCallError kind, invalid_output for omitted windows, or unknown; never inferred from error prose.
+	LastErrorKind string    `json:"last_error_kind"`
+	LastFailureAt time.Time `json:"last_failure_at"`
+}
+
+// SessionFactFailures Latest failed Session fact sync per Agent observed by this process. A successful sync clears only that Agent. Resets on restart; zero does not establish that all persisted sources have facts.
+type SessionFactFailures struct {
+	Configured    bool                 `json:"configured"`
+	Items         []SessionFactFailure `json:"items"`
+	ObservedSince time.Time            `json:"observed_since"`
+	Scope         string               `json:"scope"`
+
+	// Total Number of Agents whose latest observed sync failed, before the list limit.
+	Total int `json:"total"`
 }
 
 // SetDocumentTitleSemanticOperation defines model for SetDocumentTitleSemanticOperation.
@@ -3274,6 +3303,94 @@ func (t MemoryFailureSummaryResponse_RawChunkSources) MarshalJSON() ([]byte, err
 }
 
 func (t *MemoryFailureSummaryResponse_RawChunkSources) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsMemoryFailureSectionNotConfigured returns the union data inside the MemoryFailureSummaryResponse_SessionFacts as a MemoryFailureSectionNotConfigured
+func (t MemoryFailureSummaryResponse_SessionFacts) AsMemoryFailureSectionNotConfigured() (MemoryFailureSectionNotConfigured, error) {
+	var body MemoryFailureSectionNotConfigured
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromMemoryFailureSectionNotConfigured overwrites any union data inside the MemoryFailureSummaryResponse_SessionFacts as the provided MemoryFailureSectionNotConfigured
+func (t *MemoryFailureSummaryResponse_SessionFacts) FromMemoryFailureSectionNotConfigured(v MemoryFailureSectionNotConfigured) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeMemoryFailureSectionNotConfigured performs a merge with any union data inside the MemoryFailureSummaryResponse_SessionFacts, using the provided MemoryFailureSectionNotConfigured
+func (t *MemoryFailureSummaryResponse_SessionFacts) MergeMemoryFailureSectionNotConfigured(v MemoryFailureSectionNotConfigured) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsMemoryFailureSectionUnavailable returns the union data inside the MemoryFailureSummaryResponse_SessionFacts as a MemoryFailureSectionUnavailable
+func (t MemoryFailureSummaryResponse_SessionFacts) AsMemoryFailureSectionUnavailable() (MemoryFailureSectionUnavailable, error) {
+	var body MemoryFailureSectionUnavailable
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromMemoryFailureSectionUnavailable overwrites any union data inside the MemoryFailureSummaryResponse_SessionFacts as the provided MemoryFailureSectionUnavailable
+func (t *MemoryFailureSummaryResponse_SessionFacts) FromMemoryFailureSectionUnavailable(v MemoryFailureSectionUnavailable) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeMemoryFailureSectionUnavailable performs a merge with any union data inside the MemoryFailureSummaryResponse_SessionFacts, using the provided MemoryFailureSectionUnavailable
+func (t *MemoryFailureSummaryResponse_SessionFacts) MergeMemoryFailureSectionUnavailable(v MemoryFailureSectionUnavailable) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSessionFactFailures returns the union data inside the MemoryFailureSummaryResponse_SessionFacts as a SessionFactFailures
+func (t MemoryFailureSummaryResponse_SessionFacts) AsSessionFactFailures() (SessionFactFailures, error) {
+	var body SessionFactFailures
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSessionFactFailures overwrites any union data inside the MemoryFailureSummaryResponse_SessionFacts as the provided SessionFactFailures
+func (t *MemoryFailureSummaryResponse_SessionFacts) FromSessionFactFailures(v SessionFactFailures) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSessionFactFailures performs a merge with any union data inside the MemoryFailureSummaryResponse_SessionFacts, using the provided SessionFactFailures
+func (t *MemoryFailureSummaryResponse_SessionFacts) MergeSessionFactFailures(v SessionFactFailures) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t MemoryFailureSummaryResponse_SessionFacts) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *MemoryFailureSummaryResponse_SessionFacts) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }

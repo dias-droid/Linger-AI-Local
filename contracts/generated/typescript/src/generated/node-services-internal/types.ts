@@ -1041,6 +1041,31 @@ export interface components {
         | components["schemas"]["MemoryFailureSectionNotConfigured"]
         | components["schemas"]["MemoryFailureSectionUnavailable"]
         | components["schemas"]["RawChunkSourceFailures"];
+      session_facts:
+        | components["schemas"]["MemoryFailureSectionNotConfigured"]
+        | components["schemas"]["MemoryFailureSectionUnavailable"]
+        | components["schemas"]["SessionFactFailures"];
+    };
+    /** @description Latest failed Session fact sync per Agent observed by this process. A successful sync clears only that Agent. Resets on restart; zero does not establish that all persisted sources have facts. */
+    SessionFactFailures: {
+      /** @constant */
+      configured: true;
+      /** @constant */
+      scope: "process";
+      /** Format: date-time */
+      observed_since: string;
+      /** @description Number of Agents whose latest observed sync failed, before the list limit. */
+      total: number;
+      items: components["schemas"]["SessionFactFailure"][];
+    };
+    SessionFactFailure: {
+      agent_id: string;
+      /** @description Windows not extracted in the latest sync, or null if the sync aborted before a complete count. */
+      failed_windows: number | null;
+      /** Format: date-time */
+      last_failure_at: string;
+      /** @description Last structured ModelCallError kind, invalid_output for omitted windows, or unknown; never inferred from error prose. */
+      last_error_kind: string;
     };
     RawChunkSourceFailures: {
       /** @constant */

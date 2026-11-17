@@ -774,10 +774,20 @@ The two kinds of automatic retry each have a final or persistent failure state, 
 Wiki indexing has no Memory queue: TeamHub's publication job retries until Memory indexes the published Wiki,
 and the Memory scheduler reconciles Daily and Weekly reports every minute.
 
-`GET /internal/v1/health/failures` returns `scheduler` (`exhausted`, `pending_retries` and their totals) and
-`raw_chunk_sources` (failed sources and counts per owner). Each list holds at most 200 items, error summaries are cut
+`GET /internal/v1/health/failures` returns `scheduler` (`exhausted`, `pending_retries` and their totals),
+`raw_chunk_sources` (failed sources and counts per owner), and `session_facts` (latest failed fact sync per Agent).
+Each list holds at most 200 items, error summaries are cut
 to 300 characters, and no text is included. An unconfigured store returns `{"configured": false}`, a failed query
 returns `{"error": "unavailable"}`, and the other parts still return 200.
+
+Session fact diagnostics are process-local (`scope: "process"`, `observed_since`) and reset on restart;
+zero means no observed failed syncs, not that all persisted sources have facts. Each failed Agent reports
+`failed_windows`, `last_failure_at`, and `last_error_kind` from its latest finished sync. A sync that aborts
+before a complete count reports `failed_windows: null`. Only a successful sync for the same Agent clears
+its failure; partial extraction keeps it visible. Existing sync triggers retry the unfinished windows.
+The `memory.session_fact_extraction_failed` log includes `error_kind`, `agent_id`, `tenant_id`, `owner_id`,
+and the batch's `windows` count. Error kinds use structured model-call errors (or `unknown`), never text
+matching; these added fields contain no source text or model output.
 
 `POST /internal/v1/health/failures:retry` accepts only `scheduler.task_keys` (all tasks when omitted);
 any other field returns 400. Calendar tasks and the dependents they stopped go back to pending with

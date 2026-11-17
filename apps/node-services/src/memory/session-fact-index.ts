@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { PersonalKnowledgeQueryResponse } from "@linger/wire-contracts/node-services-internal/client";
+import type { components as NodeServicesInternal } from "@linger/wire-contracts/node-services-internal/types";
 import type postgres from "postgres";
 import { tokenizeSearchText } from "../bm25.js";
 import { chunkSource, type SourceChunk } from "./search/chunks.js";
@@ -20,7 +21,7 @@ import {
   type FactBatchWindow,
   type FactWindow,
 } from "./session-fact-extraction.js";
-import { isComputerOffline } from "../runtime-model-call.js";
+import { isComputerOffline, ModelCallError } from "../runtime-model-call.js";
 import { memoryDatabase } from "./database.js";
 import { localDateWindow } from "./date.js";
 import { memoryLogger } from "./run-telemetry.js";
@@ -64,6 +65,10 @@ export interface FactSyncResult {
   facts: number;
   failed: number;
 }
+
+type SessionFactFailure = NodeServicesInternal["schemas"]["SessionFactFailure"];
+type SessionFactFailures =
+  NodeServicesInternal["schemas"]["SessionFactFailures"];
 
 export interface FactSearchInput extends ChunkSearchInput {
   /** When the asked event happened: a window that votes, never a filter. */
@@ -181,6 +186,9 @@ export class SessionFactIndex {
   readonly #concurrency: number;
   // One sync per Agent at a time, so repeated triggers never extract twice.
   readonly #agents = new Map<string, Promise<unknown>>();
+  // Process-local observations, not a persisted inventory of pending windows.
+  readonly #observedSince = new Date().toISOString();
+  readonly #failures = new Map<string, SessionFactFailure>();
 
   constructor(options: {
     /** Memory's shared pool; the role ends it, not the index. */
@@ -198,9 +206,31 @@ export class SessionFactIndex {
   syncAgent(agentId: string): Promise<FactSyncResult> {
     const run = (this.#agents.get(agentId) ?? Promise.resolve())
       .catch(() => undefined)
-      .then(() => this.#syncAgent(agentId));
+      .then(() => this.#syncAgent(agentId))
+      .catch((error: unknown) => {
+        this.#failures.set(agentId, {
+          agent_id: agentId,
+          failed_windows: null,
+          last_failure_at: new Date().toISOString(),
+          last_error_kind:
+            error instanceof ModelCallError ? error.kind : "unknown",
+        });
+        throw error;
+      });
     this.#agents.set(agentId, run);
     return run;
+  }
+
+  /** Latest failed syncs observed by this process; success clears only that Agent. */
+  failures(limit = 200): Omit<SessionFactFailures, "configured"> {
+    return {
+      scope: "process",
+      observed_since: this.#observedSince,
+      total: this.#failures.size,
+      items: [...this.#failures.values()]
+        .slice(0, limit)
+        .map((item) => ({ ...item })),
+    };
   }
 
   async #syncAgent(agentId: string): Promise<FactSyncResult> {
@@ -310,6 +340,7 @@ export class SessionFactIndex {
     // An offline Computer fails every later batch too; they wait for the
     // next sync instead.
     let offline = false;
+    let lastErrorKind = "unknown";
     const runBatch = async (batch: readonly PendingWindow[]) => {
       if (offline) {
         result.failed += batch.length;
@@ -326,8 +357,14 @@ export class SessionFactIndex {
         // Not recorded as done, so the next sync retries the windows.
         result.failed += batch.length;
         offline ||= isComputerOffline(error);
+        lastErrorKind =
+          error instanceof ModelCallError ? error.kind : "unknown";
         memoryLogger().log("error", "memory.session_fact_extraction_failed", {
           error,
+          error_kind: lastErrorKind,
+          agent_id: agentId,
+          tenant_id: tenantId,
+          owner_id: ownerActorId,
           windows: batch.length,
         });
         return;
@@ -336,6 +373,7 @@ export class SessionFactIndex {
         const facts = extracted.get(item.window.sha256);
         if (!facts) {
           result.failed += 1;
+          lastErrorKind = "invalid_output";
           continue;
         }
         await this.#store(source, item.window, facts);
@@ -352,6 +390,16 @@ export class SessionFactIndex {
         },
       ),
     );
+    if (result.failed) {
+      this.#failures.set(agentId, {
+        agent_id: agentId,
+        failed_windows: result.failed,
+        last_failure_at: new Date().toISOString(),
+        last_error_kind: lastErrorKind,
+      });
+    } else {
+      this.#failures.delete(agentId);
+    }
     return result;
   }
 
