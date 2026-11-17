@@ -191,6 +191,48 @@ connect your computer. See
 [Install with Docker Compose](https://docs.heylinger.com/install/docker-compose)
 to serve other computers on your network and to turn on voice.
 
+#### Local models
+
+The Compose containers run only the Linger server; models and agents run on the
+computer you connect. On that computer, run the local model stack script from
+this checkout (or download `https://simplexai.com/stack.sh` or
+`https://simplexai.com/stack.ps1` first if it does not have this repository):
+
+```bash
+# macOS (Apple silicon) and Linux
+./scripts/installs/stack.sh install
+```
+
+```powershell
+# Windows x64 (PowerShell)
+powershell -ExecutionPolicy Bypass -File scripts\installs\stack.ps1 install
+```
+
+It checks your GPU and memory, shows the recommended model plan, and asks before
+downloading anything. Once approved, it starts the model and local gateway and
+installs `pi` with a private profile so your existing settings stay untouched.
+
+Point `linger-computer` at that profile when you connect the computer (or run
+`linger-computer daemon restart` if it is already connected):
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+export PI_CODING_AGENT_DIR="$HOME/.local/share/localmodels/tools/gateway-home/.pi/agent"
+linger-computer login
+```
+
+```powershell
+$env:Path = "$HOME\.local\bin;$env:Path"
+$env:PI_CODING_AGENT_DIR = "$HOME\.local\share\localmodels\tools\gateway-home\.pi\agent"
+linger-computer login
+```
+
+To point Claude Code or Codex at the same local gateway (including for Memory
+and the personal wiki on macOS and Linux), run
+`./scripts/installs/stack.sh clients` (`--json` prints the full configuration).
+See [scripts/installs/README.md](scripts/installs/README.md) for mirror options
+and day-2 commands (`up`, `status`, `remove`).
+
 ## Learn more
 
 The full documentation lives at **[docs.heylinger.com](https://docs.heylinger.com/)**.
