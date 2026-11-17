@@ -630,6 +630,17 @@ ensure_compose_ports() {
     die "Free those ports or update $env_file, then rerun $SELF_CMD."
   fi
 
+  if [[ "$new_lk_http" != "$cur_lk_http" || "$new_lk_tcp" != "$cur_lk_tcp" || "$new_lk_udp" != "$cur_lk_udp" ]]; then
+    local compose_version=""
+    compose_version="$(docker compose version --short 2>/dev/null || true)"
+    if [[ ! "$compose_version" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+) ]] ||
+       ! (( BASH_REMATCH[1] > 2 ||
+            (BASH_REMATCH[1] == 2 && (BASH_REMATCH[2] > 24 ||
+             (BASH_REMATCH[2] == 24 && BASH_REMATCH[3] >= 4))) )); then
+      die "Automatic LiveKit port reassignment requires Docker Compose 2.24.4 or later. Update Docker Compose and rerun $SELF_CMD."
+    fi
+  fi
+
   if [[ "$new_pg" != "$cur_pg" ]]; then
     set_env_value "$env_file" "POSTGRES_PORT" "$new_pg"
   fi
@@ -665,14 +676,6 @@ ensure_compose_ports() {
     fi
   fi
   if [[ "$new_lk_http" != "$cur_lk_http" || "$new_lk_tcp" != "$cur_lk_tcp" || "$new_lk_udp" != "$cur_lk_udp" ]]; then
-    local compose_version=""
-    compose_version="$(docker compose version --short 2>/dev/null || true)"
-    if [[ ! "$compose_version" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+) ]] ||
-       ! (( BASH_REMATCH[1] > 2 ||
-            (BASH_REMATCH[1] == 2 && (BASH_REMATCH[2] > 24 ||
-             (BASH_REMATCH[2] == 24 && BASH_REMATCH[3] >= 4))) )); then
-      die "Automatic LiveKit port reassignment requires Docker Compose 2.24.4 or later. Update Docker Compose and rerun $SELF_CMD."
-    fi
     mkdir -p "$(dirname "$override_file")"
     cat > "$override_file" <<EOF
 services:

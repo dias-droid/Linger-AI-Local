@@ -930,13 +930,16 @@ esac
         HOME: homeDir,
         XDG_CACHE_HOME: xdgCache,
         PATH: `${fakeBin}:/usr/local/bin:/usr/bin:/bin`,
-        LINGER_INSTALL_BUSY_PORTS: "7883/tcp",
+        LINGER_INSTALL_BUSY_PORTS: "3001,17881,7883",
       },
       input: ["1", "y"].join("\n") + "\n",
     });
     expect(unsupported.code).toBe(1);
     expect(unsupported.stderr).toContain(
       "requires Docker Compose 2.24.4 or later",
+    );
+    expect(await readFile(path.join(fakeRepo, ".env"), "utf8")).toBe(
+      updatedEnv,
     );
     expect(await readFile(overridePath, "utf8")).toBe(override);
   });
