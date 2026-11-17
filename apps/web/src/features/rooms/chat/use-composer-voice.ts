@@ -132,18 +132,19 @@ export function useComposerVoiceTurn({
     };
     let snapshot: MessageComposition | undefined;
     return async (voiceLiveTurn?: TeamHubVoiceLiveTurnMarker) => {
-      if (references.pendingAvailability)
-        throw new Error(
-          "Message references are still loading. Exit to review the draft.",
-        );
-      if (references.unavailableMentions.length)
-        throw new Error(
-          unavailableMentionsError(
-            references.unavailableMentions,
-            () => "Exit to review the draft.",
-          ),
-        );
       try {
+        // Inside the try so a rejected turn releases its claimed materials.
+        if (references.pendingAvailability)
+          throw new Error(
+            "Message references are still loading. Exit to review the draft.",
+          );
+        if (references.unavailableMentions.length)
+          throw new Error(
+            unavailableMentionsError(
+              references.unavailableMentions,
+              () => "Exit to review the draft.",
+            ),
+          );
         snapshot ??= withVoiceMaterials(
           {
             ...value,
