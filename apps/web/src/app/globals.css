@@ -1665,14 +1665,10 @@ a[href][aria-disabled="true"],
     font-weight: 300;
   }
 
-  /* The chat title sits at the left of the bar, level with the list title. */
+  /* The chat title stays centred over the conversation as on the web; even
+     side padding keeps the header's centre column on the pane's centre. */
   :root[data-desktop-shell] .app-room-surface > .room-header {
-    grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 4px;
-    padding-inline: 8px;
-  }
-  :root[data-desktop-shell] .app-room-surface > .room-header > :nth-child(2) {
-    justify-content: flex-start;
     padding-inline: 8px;
   }
   :root[data-desktop-shell] .app-room-surface > .room-header h1 {
