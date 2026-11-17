@@ -1662,7 +1662,7 @@ function batchTask(pages: readonly PagePlan[]): AgentTask {
     instructions: `Write the durable Wiki pages this task names, each from the evidence routed to it.
 
 - Pages lists each page with its type, path, canonical name and object. Propose each listed page once, with \`target\` set to its path and that object; never another page. Propose several pages in one step.
-- An existing page is shown under Current page, without the parts the application writes (its source list and Change Log). Update it under the shared entity rules below: keep what the new evidence does not change, and change only what it supports.
+- An existing page is shown under Current page, without the parts the application writes (its source list and Change Log). Preserve supported facts. Keep a section with \`{"keep": true}\` when this run's evidence adds or changes nothing it describes; a section you write follows the current section rules, reorganizing its existing facts as needed.
 - Write in the main language of the evidence messages; the routing notes are only pointers.
 - On a new page write every summary section as \`{"text": ..., "reason": ...}\`; \`{"keep": true}\` only keeps text an existing page already has.
 - The evidence shows the routed messages or passages with their citations. Use \`read_source\` when a passage needs more context, and \`read_page\` to check an existing related page before linking it. Pages marked new in this run are being written now: link them by path without reading them.
