@@ -27,7 +27,6 @@ Before you create or move the Routines of a Tracking Item, read the scenario gui
 - Meetings, interviews and appointments: `references/meetings.md`
 - Birthdays, anniversaries and other occasions: `references/occasions.md`
 - Flights, trains and trips: `references/travel.md`
-- Deadlines, todos and promises: `references/deadlines.md`
-- Replies someone is waiting for, or the Human is waiting on: `references/replies.md`
+- Todos, deadlines, promises and replies: `references/commitments.md`
 
 In each Routine's `--content`, write what it must check when it fires and, only when the guide says preparing helps, one line "Look up first: <what exactly to look up>". Most reminders need no preparation.
