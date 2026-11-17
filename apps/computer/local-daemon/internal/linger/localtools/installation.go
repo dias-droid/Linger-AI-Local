@@ -25,13 +25,20 @@ func osMetadataFile(name string) bool {
 	return (strings.HasPrefix(name, "._") && len(name) > 2) || strings.EqualFold(name, ".DS_Store") || strings.EqualFold(name, "Thumbs.db") || strings.EqualFold(name, "desktop.ini")
 }
 
+// ToolsDirectory is where Installed looks for the tools: cli/computer-tools
+// two folders above the executable. The Desktop app's daemon runs from
+// resources/computer/, so its tools are resources/cli/computer-tools.
+func ToolsDirectory(executable string) string {
+	return filepath.Join(filepath.Dir(filepath.Dir(executable)), "cli", "computer-tools")
+}
+
 // Installed resolves only sibling release assets and verifies their frozen
 // manifest. An unbundled development daemon has no implicit PATH fallback.
 func Installed(executable string) (*Installation, error) {
 	root := filepath.Dir(filepath.Dir(executable))
 	// An installed bundle links cli/computer-tools to its verified deps
 	// directory; the checks below apply to the files it points at.
-	tools, err := filepath.EvalSymlinks(filepath.Join(root, "cli", "computer-tools"))
+	tools, err := filepath.EvalSymlinks(ToolsDirectory(executable))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}

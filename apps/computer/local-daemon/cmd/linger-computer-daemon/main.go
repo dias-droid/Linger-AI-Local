@@ -228,6 +228,11 @@ func run(args []string) (resultErr error) {
 	if err != nil {
 		return err
 	}
+	if toolInstallation == nil {
+		// Agents on this computer then have no browser or computer-control
+		// tools; say so instead of leaving them silently missing.
+		slog.Warn("computer_tools.missing: browser and computer-control tools are disabled", "expected", localtools.ToolsDirectory(executable))
+	}
 	var toolManager *localtools.Manager
 	var toolBinder daemon.LocalToolBinder
 	var piExtension string

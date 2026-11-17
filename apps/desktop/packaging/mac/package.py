@@ -20,7 +20,14 @@ app and the DMG and staples both tickets, so Gatekeeper opens the DMG
 directly. Key and password files are only passed to rcodesign.
 
 The Go daemon goes to Contents/Resources/computer/ and is signed with the
-app like every other Mach-O file. So are the Native services, Node.js and
+app like every other Mach-O file. The browser and computer-control tools it
+loads go to Contents/Resources/cli/ and runtime/ (../computer_tools.py); their
+Node.js gets node-entitlements.plist like the Native one, and their manifest
+records the signed bytes of the Mach-O files signing rewrote. Cua's driver
+keeps the Developer ID signature Cua shipped it with: CuaDriver.app is
+excluded from signing and the standalone cua-driver is put back after it, as
+macOS grants it Accessibility and Screen Recording by that identity. The
+signed app is checked for the tools. So are the Native services, Node.js and
 TeamHub binaries build.mjs bundles for Apple silicon (dist/installer/native/,
 checked by ../native_bundle.py): Node.js gets node-entitlements.plist for its
 JIT and, as it keeps the hardened runtime of its release signature, for the
@@ -49,6 +56,7 @@ import zipfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 DESKTOP = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.dirname(HERE))
+import computer_tools  # noqa: E402
 from native_bundle import check_runtime, check_teamhub, refresh  # noqa: E402
 BUNDLE_ID = "com.simplexai.linger.desktop.preview"
 # Prompt text for the privacy permissions tasks need. Without
@@ -67,6 +75,13 @@ MINIMUM_MACOS = "14.0"
 # from the network.
 NATIVE_TARGETS = {"darwin-arm64"}
 NATIVE = os.path.join("Contents", "Resources", "app", "dist", "installer", "native")
+RESOURCES = os.path.join("Contents", "Resources")
+TOOLS_NODE = "Contents/Resources/runtime/bin/node"
+CUA = "Contents/Resources/cli/computer-tools/cua"
+# Signed by Cua with its own entitlements; signing leaves the app bundle alone
+# and package.py puts the standalone driver back after it.
+CUA_APP = f"{CUA}/CuaDriver.app"
+CUA_VENDOR_SIGNED = ["cua/cua-driver"]
 
 
 def run(*args, **kwargs):
@@ -155,7 +170,7 @@ def stage_app(arch, version, electron_version, workdir, cache):
     target = f"darwin-{arch}"
 
     def ignore(directory, names):
-        ignored = set(shutil.ignore_patterns("*.map", "computer")(directory, names))
+        ignored = set(shutil.ignore_patterns("*.map", "computer", "computer-tools")(directory, names))
         # The other arch's Native services.
         if os.path.basename(directory) == "native":
             ignored |= {name for name in names if name.startswith(("runtime-", "teamhub-"))
@@ -169,6 +184,7 @@ def stage_app(arch, version, electron_version, workdir, cache):
     computer = os.path.join(resources, "computer")
     os.makedirs(computer)
     shutil.copy2(daemon_binary(arch), computer)
+    computer_tools.copy(resources, target)
     write_icon(resources)
 
     os.rename(os.path.join(contents, "MacOS", "Electron"), os.path.join(contents, "MacOS", "Linger"))
@@ -201,9 +217,10 @@ def daemon_binary(arch):
 
 
 def bundled_node(path):
-    """Whether the bundle-relative path is the Node.js of a Native runtime."""
+    """Whether the bundle-relative path is the Node.js of a Native runtime or
+    of the Computer tools."""
     parts = path.split("/")
-    return (path.startswith(NATIVE + "/") and len(parts) == 10
+    return path == TOOLS_NODE or (path.startswith(NATIVE + "/") and len(parts) == 10
             and parts[6].startswith("runtime-") and parts[7:] == ["node", "bin", "node"])
 
 
@@ -264,7 +281,8 @@ class Signing:
                 scoped += ["--entitlements-xml-file", f"{path}:{entitlements}"]
         check = ["--for-notarization"] if self.notary_key else []
         depth = ["--shallow"] if shallow else []
-        return [self.rcodesign, "sign", *self._identity(), *check, *depth, *scoped, app]
+        return [self.rcodesign, "sign", *self._identity(), *check, *depth, *scoped,
+                "--exclude", CUA_APP, app]
 
     def dmg_args(self, dmg):
         return [self.rcodesign, "sign", *self._identity(), dmg]
@@ -272,11 +290,19 @@ class Signing:
     def sign_app(self, app, target):
         run(*self.app_args(app))
         # Signing rewrote the bundled Mach-O files; their manifests are
-        # resources, which a shallow signature seals again.
+        # resources, which a shallow signature seals again. It signs no
+        # Mach-O file, so the vendor-signed driver put back stays as it is.
         native = os.path.join(app, NATIVE)
         if os.path.isdir(native):
             refresh(native, target)
-            run(*self.app_args(app, shallow=True))
+        resources = os.path.join(app, RESOURCES)
+        staged = os.path.join(computer_tools.STAGED, target, computer_tools.TOOLS)
+        for relative in CUA_VENDOR_SIGNED:
+            shutil.copy2(os.path.join(staged, relative),
+                         os.path.join(resources, computer_tools.TOOLS, relative))
+        computer_tools.refresh_signed(resources, kept=CUA_VENDOR_SIGNED)
+        run(*self.app_args(app, shallow=True))
+        computer_tools.check(resources, target)
 
     def sign_dmg(self, dmg):
         # An ad-hoc DMG signature adds nothing; Gatekeeper needs a Developer ID.
@@ -356,6 +382,7 @@ def main():
             signing.sign_app(app, f"darwin-{arch}")
             # The stapled app carries its ticket into the DMG and the update.
             signing.notarize(app)
+            computer_tools.check(os.path.join(app, RESOURCES), f"darwin-{arch}")
             output = os.path.join(args.out, f"Linger-{version}-{arch}.dmg")
             build_dmg(stage, workdir, output, f"Linger {version}")
             signing.sign_dmg(output)
@@ -364,7 +391,9 @@ def main():
                 digest = hashlib.sha256(dmg.read()).hexdigest()
             print(f"{output} {os.path.getsize(output)} sha256={digest}")
             if args.update_archive:
-                update_archive(app, os.path.join(args.out, f"Linger-{version}-{arch}.app.tar.gz"))
+                archive = os.path.join(args.out, f"Linger-{version}-{arch}.app.tar.gz")
+                update_archive(app, archive)
+                computer_tools.check_archive(archive, "Linger.app/Contents/Resources/", f"darwin-{arch}")
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
 

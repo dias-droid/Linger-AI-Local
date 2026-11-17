@@ -290,6 +290,37 @@ the setup page does not offer installing on this computer. `src/main/distributio
 target's PostgreSQL and the localmodels release `scripts/installs/stack.sh`
 pins.
 
+### Computer Tools
+
+The daemon offers Agents browser and computer-control tools only when it
+finds `cli/computer-tools/` (with its frozen `manifest.json`) and
+`runtime/bin/node` two folders above its executable
+(`localtools.Installed` in `apps/computer/local-daemon`). The app runs the
+daemon from `resources/computer/`, so every package carries them as
+`resources/cli/computer-tools/` and `resources/runtime/` (on macOS under
+`Contents/Resources/`). Without them the daemon still starts and logs
+`computer_tools.missing` in `computer-daemon.log`.
+
+`build.mjs` stages them for each daemon target into
+`dist/computer-tools/<target>/` (`scripts/stage-computer-tools.mjs`) with
+`scripts/computer-tool-bundle.mjs`, the code and pins of the Local Computer
+dependency package: the Node.js archive checksums in
+`scripts/local-computer-node-distributions.mjs`, the Cua driver checksums in
+`apps/computer/scripts/bundle-computer-tools.mjs` and the frozen pnpm
+lockfile. A source build keeps staged tools that still validate against the
+manifest and the Node.js pin recorded beside them, and links
+`dist/computer/cli` and `dist/computer/runtime` to this machine's tools; delete
+`dist/computer-tools/` to stage them again. `packaging/computer_tools.py`
+copies them into the app, checks them with the same validator and checks the
+finished `.tar.gz`, `.zip` or update archive for them; a package without them
+fails.
+On macOS the tools' Node.js is signed with `node-entitlements.plist`, and Cua's
+driver (`CuaDriver.app` and the standalone `cua-driver`) keeps Cua's own
+Developer ID signature, which macOS grants Accessibility and Screen Recording
+to. Compressed, they add about 66 MB to the Linux archive, 73 MB to the
+Windows zip, 46 MB to the Windows setup program and 115 MB to the macOS disk
+image, most of it Node.js and the universal Cua driver.
+
 ### Release
 
 Each desktop target (`darwin-arm64`, `linux-x64`) gets its own distribution

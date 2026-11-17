@@ -119,6 +119,7 @@ check-desktop:
 	pnpm --filter @linger/desktop typecheck
 	pnpm --filter @linger/desktop lint
 	pnpm --filter @linger/desktop test
+	python3 -m unittest discover -s apps/desktop/packaging -p '*_test.py'
 	# The Go daemon that packaging bundles, for every platform the app ships on.
 	cd apps/desktop && node scripts/build-daemon.mjs --all
 

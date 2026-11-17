@@ -303,6 +303,12 @@ Gateway and runs Agents. The daemon exits with the app.
   handshake that this needs; the bridge itself was deleted.
 - `scripts/build-daemon.mjs`: cross-compiles the daemon, stamped with the
   `apps/computer` release the Gateway checks.
+- `scripts/stage-computer-tools.mjs`: stages the browser and computer-control
+  tools and their Node.js for each daemon target into
+  `dist/computer-tools/<target>/` with the root
+  `scripts/computer-tool-bundle.mjs`; `packaging/computer_tools.py` puts them in
+  `resources/cli/` and `resources/runtime/` and checks every package for them
+  (see [Computer Tools](../../docs/desktop-release.md#computer-tools)).
 
 ## Important Conventions
 

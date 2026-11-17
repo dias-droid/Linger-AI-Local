@@ -225,3 +225,47 @@ func TestWindowsInstalledToolsUseExtractedBundle(t *testing.T) {
 		t.Fatal("unlisted tool asset accepted")
 	}
 }
+
+// The Desktop app runs the daemon from resources/computer/ and packages the
+// tools as resources/cli/computer-tools and resources/runtime.
+func TestInstalledToolsInTheDesktopLayout(t *testing.T) {
+	resources := t.TempDir()
+	executable := filepath.Join(resources, "computer", "linger-computer-daemon")
+	if got := ToolsDirectory(executable); got != filepath.Join(resources, "cli", "computer-tools") {
+		t.Fatalf("tools directory = %s", got)
+	}
+	if result, err := Installed(executable); result != nil || err != nil {
+		t.Fatalf("desktop without tools: %+v %v", result, err)
+	}
+	tools := ToolsDirectory(executable)
+	entries := []string{"node_modules/@playwright/mcp/cli.js", "extensions/pi-mcp.mjs"}
+	assets := make([]map[string]any, 0, len(entries))
+	for _, name := range entries {
+		file := filepath.Join(tools, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(file, []byte("fixture"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		assets = append(assets, map[string]any{"path": name, "size_bytes": 7})
+	}
+	manifest, err := json.Marshal(map[string]any{"schema_version": 1, "versions": map[string]string{"playwright": "0.0.83", "pi": "1.2.0", "cua": "0.35.4"}, "playwright_entry": entries[0], "pi_extension": entries[1], "assets": assets})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tools, "manifest.json"), manifest, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	node := filepath.Join(resources, "runtime", "bin", "node")
+	if err := os.MkdirAll(filepath.Dir(node), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(node, []byte("fixture"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Installed(executable)
+	if err != nil || result == nil || result.NodePath != node || result.PlaywrightEntry != filepath.Join(tools, filepath.FromSlash(entries[0])) {
+		t.Fatalf("desktop installation: %+v %v", result, err)
+	}
+}
