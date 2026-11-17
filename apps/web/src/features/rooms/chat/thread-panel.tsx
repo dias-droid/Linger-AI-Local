@@ -13,6 +13,7 @@ import {
   useSyncExternalStore,
 } from "react";
 
+import { isRunWorking } from "@/features/teamhub/run-status";
 import { teamHubData } from "@/features/teamhub/teamhub-api";
 import { type TeamHubClient } from "@/features/teamhub/teamhub-client";
 import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
@@ -325,6 +326,7 @@ function ThreadPanelContent({
         Thread
       </h2>
       <ThreadTimeline
+        agentWorking={conversation.streamingRunStatuses.some(isRunWorking)}
         canLoadEarlier={messagesQuery.hasNextPage}
         hasPending={conversation.pendingMessages.length > 0}
         loadingEarlier={messagesQuery.isFetchingNextPage}
