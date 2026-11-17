@@ -60,6 +60,7 @@ export function useRoomTimelineScroll({
   );
   const previousTimelineRef = useRef<HTMLDivElement | null>(null);
   const [initialScrollReady, setInitialScrollReady] = useState(false);
+  const [awayFromLatest, setAwayFromLatest] = useState(false);
   const shouldAutoFollowRef = useRef(true);
   const pendingPrependRef = useRef<PendingPrepend | null>(null);
   const readingAnchorRef = useRef<ReadingAnchor | null>(null);
@@ -226,6 +227,7 @@ export function useRoomTimelineScroll({
   function recordTimelineScroll(timeline: HTMLDivElement) {
     const corrected = correctedScrollTopRef.current === timeline.scrollTop;
     correctedScrollTopRef.current = null;
+    setAwayFromLatest(!isNearTimelineBottom(timeline));
     if (!corrected) {
       shouldAutoFollowRef.current = isNearTimelineBottom(timeline);
       readingAnchorRef.current = shouldAutoFollowRef.current
@@ -249,6 +251,15 @@ export function useRoomTimelineScroll({
     shouldAutoFollowRef.current = true;
   }
 
+  function scrollToLatest() {
+    const timeline = timelineElement;
+    if (!timeline) {
+      return;
+    }
+    shouldAutoFollowRef.current = true;
+    timeline.scrollTo({ top: timeline.scrollHeight, behavior: "smooth" });
+  }
+
   /** Whether the reader follows the newest Message rather than history. */
   function isFollowingLatest() {
     return (
@@ -259,12 +270,14 @@ export function useRoomTimelineScroll({
   }
 
   return {
+    awayFromLatest,
     cancelOlderMessagesIfUnchanged,
     initialScrollReady,
     isFollowingLatest,
     pinToLatest,
     prepareForOlderMessages,
     recordTimelineScroll,
+    scrollToLatest,
     timelineElement,
     timelineRef: setTimelineElement,
   };

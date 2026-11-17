@@ -1,5 +1,8 @@
 import type { ComponentProps } from "react";
 
+import { isRunWorking } from "@/features/teamhub/run-status";
+
+import { JumpToLatestButton } from "./jump-to-latest-button";
 import { MessageTimeline } from "./message-timeline";
 import type { RoomChatData } from "./use-room-chat-data";
 import type { RoomChatConversationState } from "./use-room-chat-conversation-state";
@@ -45,6 +48,9 @@ export function RoomChatTimelineSection({
   } = state;
   return (
     <RoomTimelineViewport
+      agentWorking={conversation.streamingRunStatuses.some(isRunWorking)}
+      awayFromLatest={timeline.awayFromLatest}
+      onJumpToLatest={timeline.scrollToLatest}
       actorDisplayNames={actions.actorDisplayNames}
       canLoadOlder={messages.hasNextPage}
       currentActorId={currentActorId}
@@ -122,29 +128,43 @@ export function RoomChatTimelineSection({
 }
 
 type RoomTimelineViewportProps = ComponentProps<typeof MessageTimeline> & {
+  agentWorking: boolean;
+  awayFromLatest: boolean;
   initialScrollReady: boolean;
+  onJumpToLatest: () => void;
   viewportOnScroll: NonNullable<ComponentProps<"div">["onScroll"]>;
   viewportRef: ComponentProps<"div">["ref"];
 };
 
 function RoomTimelineViewport({
+  agentWorking,
+  awayFromLatest,
   initialScrollReady,
+  onJumpToLatest,
   viewportOnScroll,
   viewportRef,
   ...timelineProps
 }: RoomTimelineViewportProps) {
   return (
-    <div
-      aria-label="Room timeline"
-      data-voice-scroll="main"
-      className={`room-timeline workspace-scrollbar flex flex-1 flex-col overflow-y-scroll [overflow-anchor:none] ${
-        initialScrollReady ? "" : "invisible"
-      }`}
-      data-initial-scroll-ready={initialScrollReady}
-      onScroll={viewportOnScroll}
-      ref={viewportRef}
-    >
-      <MessageTimeline {...timelineProps} />
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        aria-label="Room timeline"
+        data-voice-scroll="main"
+        className={`room-timeline workspace-scrollbar flex flex-1 flex-col overflow-y-scroll [overflow-anchor:none] ${
+          initialScrollReady ? "" : "invisible"
+        }`}
+        data-initial-scroll-ready={initialScrollReady}
+        onScroll={viewportOnScroll}
+        ref={viewportRef}
+      >
+        <MessageTimeline {...timelineProps} />
+      </div>
+      {awayFromLatest ? (
+        <JumpToLatestButton
+          agentWorking={agentWorking}
+          onClick={onJumpToLatest}
+        />
+      ) : null}
     </div>
   );
 }
