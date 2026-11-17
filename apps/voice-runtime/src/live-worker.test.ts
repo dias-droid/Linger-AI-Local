@@ -317,7 +317,14 @@ async function harness(
         return {
           async pushPCM(frame: Int16Array) {
             through += 512;
-            return [{ throughSample: through, speech: frame[0] === 1 }];
+            // 1 is the user's speech, 3 someone speaking farther away.
+            return [
+              {
+                throughSample: through,
+                speech: frame[0] === 1 || frame[0] === 3,
+                levelDb: frame[0] === 3 ? -45 : -20,
+              },
+            ];
           },
           close: () => undefined,
         };
@@ -1030,6 +1037,31 @@ describe("LiveVoiceWorker", () => {
     expect(test.source().clears).toBe(1);
     expect(test.ofType("reply_interrupted")).toHaveLength(0);
     expect(test.session().cancel).not.toHaveBeenCalled();
+    await test.shutdown();
+  });
+
+  it("hears quieter speech than the user's own as someone else in the room", async () => {
+    const test = await harness();
+    await answeredTurn(test);
+    await vi.waitFor(() => expect(test.source().frames).toHaveLength(2));
+    test.source().queued = 400;
+    const start = test.session().audio.length;
+    // The user's level is learned from their own words.
+    for (let index = 0; index < 5; index++) test.track.frame(1);
+    for (let index = 0; index < 10; index++) test.track.frame(0);
+    // Someone farther away talks over the reply, longer than a pause needs.
+    for (let index = 0; index < 12; index++) test.track.frame(3);
+    await vi.waitFor(() =>
+      expect(test.session().audio.length).toBe(start + 27),
+    );
+    expect(test.source().clears).toBe(0);
+    // It is gated like quiet: the provider hears silence.
+    expect(
+      test
+        .session()
+        .audio.slice(start + 15)
+        .every((frame) => frame.every((sample) => sample === 0)),
+    ).toBe(true);
     await test.shutdown();
   });
 
