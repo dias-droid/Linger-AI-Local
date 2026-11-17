@@ -426,6 +426,21 @@ collect_docker_host_ports() {
   tr ', ' '\n' | sed -nE 's/.*:([0-9]+)->[0-9]+\/(tcp|udp).*/\1\/\2/p' | sort -u
 }
 
+read_livekit_override_port() {
+  local file="$1"
+  local key="$2"
+  local fallback="$3"
+  local port=""
+  if [[ -f "$file" ]]; then
+    if [[ "$key" == "http" ]]; then
+      port="$(sed -nE 's/.*:([0-9]+):7880"[[:space:]]*$/\1/p' "$file")"
+    else
+      port="$(sed -nE "s/^[[:space:]]*${key}:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p" "$file")"
+    fi
+  fi
+  printf '%s\n' "${port:-$fallback}"
+}
+
 is_port_busy() {
   local port="$1"
   local proto="$2"
@@ -489,6 +504,7 @@ pick_free_port() {
 
 ensure_compose_ports() {
   local env_file="$REPO_ROOT/.env"
+  local override_file="$REPO_ROOT/.local/compose.ports.yml"
 
   local own_raw=""
   own_raw="$(cd "$REPO_ROOT" && docker compose ps --format '{{.Ports}}' 2>/dev/null || true)"
@@ -513,9 +529,9 @@ ensure_compose_ports() {
   cur_node="$(read_env_value "$env_file" "NODE_SERVICES_HTTP_PORT" || printf '4319')"
   cur_doc="$(read_env_value "$env_file" "DOCUMENT_RUNTIME_HTTP_PORT" || printf '4321')"
   cur_lk_url="$(read_env_value "$env_file" "LIVEKIT_URL" || printf 'ws://127.0.0.1:17880')"
-  cur_lk_http="$(read_env_value "$env_file" "LIVEKIT_HTTP_PORT" || printf '17880')"
-  cur_lk_tcp="$(read_env_value "$env_file" "LIVEKIT_RTC_TCP_PORT" || printf '7881')"
-  cur_lk_udp="$(read_env_value "$env_file" "LIVEKIT_RTC_UDP_PORT" || printf '7882')"
+  cur_lk_http="$(read_livekit_override_port "$override_file" "http" "17880")"
+  cur_lk_tcp="$(read_livekit_override_port "$override_file" "tcp_port" "7881")"
+  cur_lk_udp="$(read_livekit_override_port "$override_file" "udp_port" "7882")"
 
   local reserved=" $cur_pg $cur_th $cur_web $cur_node $cur_doc $cur_lk_http $cur_lk_tcp $cur_lk_udp "
   local new_pg="$cur_pg"
@@ -644,16 +660,35 @@ ensure_compose_ports() {
   fi
 
   if [[ "$new_lk_http" != "$cur_lk_http" ]]; then
-    set_env_value "$env_file" "LIVEKIT_HTTP_PORT" "$new_lk_http"
     if [[ -z "$cur_lk_url" || "$cur_lk_url" =~ ^ws://(127\.0\.0\.1|localhost): ]]; then
       set_env_value "$env_file" "LIVEKIT_URL" "ws://127.0.0.1:$new_lk_http"
     fi
   fi
-  if [[ "$new_lk_tcp" != "$cur_lk_tcp" ]]; then
-    set_env_value "$env_file" "LIVEKIT_RTC_TCP_PORT" "$new_lk_tcp"
-  fi
-  if [[ "$new_lk_udp" != "$cur_lk_udp" ]]; then
-    set_env_value "$env_file" "LIVEKIT_RTC_UDP_PORT" "$new_lk_udp"
+  if [[ "$new_lk_http" != "$cur_lk_http" || "$new_lk_tcp" != "$cur_lk_tcp" || "$new_lk_udp" != "$cur_lk_udp" ]]; then
+    mkdir -p "$(dirname "$override_file")"
+    cat > "$override_file" <<EOF
+services:
+  livekit:
+    command:
+      - --config-body
+      - |
+        port: 7880
+        rtc:
+          tcp_port: $new_lk_tcp
+          udp_port: $new_lk_udp
+          use_external_ip: false
+        logging:
+          level: info
+    ports: !override
+      - "127.0.0.1:$new_lk_http:7880"
+      - "\${LIVEKIT_RTC_BIND_ADDRESS:-127.0.0.1}:$new_lk_tcp:$new_lk_tcp"
+      - "\${LIVEKIT_RTC_BIND_ADDRESS:-127.0.0.1}:$new_lk_udp:$new_lk_udp/udp"
+EOF
+    local compose_files=""
+    compose_files="$(read_env_value "$env_file" "COMPOSE_FILE" || printf 'docker-compose.yml')"
+    if [[ ":$compose_files:" != *":.local/compose.ports.yml:"* ]]; then
+      set_env_value "$env_file" "COMPOSE_FILE" "$compose_files:.local/compose.ports.yml"
+    fi
   fi
 }
 

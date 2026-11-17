@@ -867,14 +867,26 @@ esac
     expect(updatedEnv).toContain("WEB_HTTP_PORT=3001");
     expect(updatedEnv).toContain("WEB_PUBLIC_ORIGIN=http://localhost:3001");
     expect(updatedEnv).toContain("LIVEKIT_URL=ws://127.0.0.1:17881");
-    expect(updatedEnv).toContain("LIVEKIT_HTTP_PORT=17881");
-    expect(updatedEnv).toContain("LIVEKIT_RTC_TCP_PORT=7883");
-    expect(updatedEnv).toContain("LIVEKIT_RTC_UDP_PORT=7884");
-    expect(updatedEnv).not.toContain("COMPOSE_FILE=");
+    expect(updatedEnv).not.toMatch(
+      /^LIVEKIT_(HTTP_PORT|RTC_TCP_PORT|RTC_UDP_PORT)=/m,
+    );
+    expect(updatedEnv).toContain(
+      "COMPOSE_FILE=docker-compose.yml:.local/compose.ports.yml",
+    );
     expect(updatedEnv).not.toContain("POSTGRES_PORT=5433");
-    await expect(
-      stat(path.join(fakeRepo, ".local/compose.ports.yml")),
-    ).rejects.toMatchObject({ code: "ENOENT" });
+    const overridePath = path.join(fakeRepo, ".local/compose.ports.yml");
+    const override = await readFile(overridePath, "utf8");
+    expect(override).toContain("tcp_port: 7883");
+    expect(override).toContain("udp_port: 7884");
+    expect(override).toContain("use_external_ip: false");
+    expect(override).toContain("ports: !override");
+    expect(override).toContain('"127.0.0.1:17881:7880"');
+    expect(override).toContain(
+      '"${LIVEKIT_RTC_BIND_ADDRESS:-127.0.0.1}:7883:7883"',
+    );
+    expect(override).toContain(
+      '"${LIVEKIT_RTC_BIND_ADDRESS:-127.0.0.1}:7884:7884/udp"',
+    );
 
     const dockerCalls = await readFile(dockerLogPath, "utf8");
     expect(dockerCalls).toContain("compose up --build --detach --wait");
@@ -895,6 +907,7 @@ esac
     expect(await readFile(path.join(fakeRepo, ".env"), "utf8")).toBe(
       updatedEnv,
     );
+    expect(await readFile(overridePath, "utf8")).toBe(override);
   });
 
   it("validates CLI flags, conflicting modes, and standalone menu outside repo", async () => {

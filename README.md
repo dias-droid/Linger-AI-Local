@@ -207,9 +207,10 @@ approval, and connects `linger-computer` to your Linger server. Run
 `--remove`), or see [Bring your own runtime](docs/local-inference.md) for other
 model setups.
 
-If Compose ports are busy, the installer offers to save free ports in `.env`.
-LiveKit uses the selected RTC ports both inside its container and on the host,
-so browsers connect to the ports it advertises.
+If Compose ports are busy, the installer offers to select free ports. It saves
+LiveKit's port mappings and matching RTC configuration in
+`.local/compose.ports.yml` and enables the override through `.env`. Rerunning the
+installer reuses those ports.
 
 ## Learn more
 
