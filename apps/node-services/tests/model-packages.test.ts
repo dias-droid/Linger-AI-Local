@@ -227,6 +227,38 @@ describe("model packages", () => {
     ).toThrow("Unsafe path in model package: package/../escape");
   });
 
+  it("removes downloaded packages the runtime no longer lists", async () => {
+    const models = await load();
+    const packagesRoot = models.modelPackagesRoot(environment);
+    for (const name of [
+      "@tesseract.js-data/eng",
+      "@livekit/local-inference-linux-x64-gnu",
+      "@livekit/local-inference-darwin-arm64.partial-1",
+      "retired-model",
+    ])
+      await mkdir(path.join(packagesRoot, name), { recursive: true });
+    expect((await models.pruneModelPackages(environment)).sort()).toEqual([
+      "@tesseract.js-data/eng",
+      "retired-model",
+    ]);
+    expect(existsSync(path.join(packagesRoot, "@tesseract.js-data"))).toBe(
+      false,
+    );
+    expect(
+      existsSync(
+        path.join(packagesRoot, "@livekit/local-inference-linux-x64-gnu"),
+      ),
+    ).toBe(true);
+    expect(
+      existsSync(
+        path.join(
+          packagesRoot,
+          "@livekit/local-inference-darwin-arm64.partial-1",
+        ),
+      ),
+    ).toBe(true);
+  });
+
   it("installs nothing when the runtime lists no packages", async () => {
     await rm(path.join(runtime.packageRoot, "models.json"));
     const models = await load();

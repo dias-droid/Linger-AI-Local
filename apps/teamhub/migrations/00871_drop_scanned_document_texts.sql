@@ -1,8 +1,27 @@
 -- +goose Up
 -- Document texts come only from text layers, never from OCR, so a ready PDF
 -- text always has one and the scanned flag goes away; a PDF without text is
--- still rejected from the Wiki as scanned. Texts already stored are kept as
--- they are.
+-- still rejected from the Wiki as scanned. Texts OCR wrote are converted once
+-- to what the normalizer gives now: a PDF read by OCR alone has no text and a
+-- raster image is unsupported. Memory's hourly reconciliation then drops any
+-- of them it indexed.
+UPDATE document_texts
+SET status = 'no_text', markdown = '', markdown_sha256 = NULL,
+    search_text = '', longest_line_bytes = 0, updated_at = clock_timestamp()
+WHERE status = 'ready' AND scanned;
+
+UPDATE document_texts text
+SET status = 'unsupported', markdown = '', markdown_sha256 = NULL,
+    search_text = '', longest_line_bytes = 0, updated_at = clock_timestamp()
+FROM document_versions version
+WHERE text.source_kind = 'file_version' AND text.status = 'ready'
+  AND version.id = text.source_id AND version.document_id = text.document_id
+  AND lower(trim(split_part(version.media_type, ';', 1))) <> 'image/svg+xml'
+  AND (lower(trim(split_part(version.media_type, ';', 1))) LIKE 'image/%'
+       OR (lower(trim(split_part(version.media_type, ';', 1))) IN ('', 'application/octet-stream')
+           AND lower(substring(version.filename FROM '\.([^.]+)$')) IN
+               ('avif', 'bmp', 'gif', 'heic', 'heif', 'ico', 'jpeg', 'jpg', 'png', 'tif', 'tiff', 'webp')));
+
 DROP VIEW public.wiki_current_sources;
 DROP VIEW public.wiki_document_verdicts;
 DROP FUNCTION public.source_rejection_reason(text, text, text, text, text, text, boolean, bigint, bigint);
@@ -75,6 +94,8 @@ UNION ALL
    FROM public.wiki_session_sources;
 
 -- +goose Down
+-- The converted texts stay converted; their Documents keep the texts the
+-- current normalizer gives.
 DROP VIEW public.wiki_current_sources;
 DROP VIEW public.wiki_document_verdicts;
 DROP FUNCTION public.source_rejection_reason(text, text, text, text, text, text, bigint, bigint);

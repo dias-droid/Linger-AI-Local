@@ -138,6 +138,40 @@ export async function installModelPackages(
   }
 }
 
+/**
+ * Deletes downloaded packages the runtime no longer lists, so model data of
+ * a retired feature does not stay on the machine. Downloads in progress
+ * (`.partial-` folders) are left to their own installer.
+ */
+export async function pruneModelPackages(
+  environment: NodeJS.ProcessEnv = process.env,
+): Promise<string[]> {
+  const root = modelPackagesRoot(environment);
+  const listed = modelPackages();
+  const removed: string[] = [];
+  const entries = async (directory: string) =>
+    readdir(directory, { withFileTypes: true }).catch(() => []);
+  for (const entry of await entries(root)) {
+    if (!entry.isDirectory()) continue;
+    const names = entry.name.startsWith("@")
+      ? (await entries(path.join(root, entry.name)))
+          .filter((child) => child.isDirectory())
+          .map((child) => `${entry.name}/${child.name}`)
+      : [entry.name];
+    for (const name of names) {
+      if (name.includes(".partial-") || listed[name]) continue;
+      await rm(path.join(root, name), { recursive: true, force: true });
+      removed.push(name);
+    }
+    if (
+      entry.name.startsWith("@") &&
+      (await entries(path.join(root, entry.name))).length === 0
+    )
+      await rm(path.join(root, entry.name), { recursive: true, force: true });
+  }
+  return removed;
+}
+
 async function install(
   name: string,
   item: ModelPackage,

@@ -54,6 +54,8 @@
   and images, downloaded on first use where the offline runtime lists them in
   `models.json`. The `voice` role starts its download when the role starts,
   before any provider key exists, so the first worker start does not wait for it.
+  At process start, downloaded packages `models.json` no longer lists are
+  deleted, so a retired feature's model data leaves the machine.
 - Roles log through the `JsonLogger` the host passes to `start*Service`
   (`createJsonLogger` from `@linger/service-kit/node`); the `document` role
   creates its own inside its worker thread, and the `agent` role keeps its own
