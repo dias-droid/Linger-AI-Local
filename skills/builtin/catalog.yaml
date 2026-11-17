@@ -103,11 +103,14 @@ skills:
         version: 1.0.0
         package_path: builtin/canvas/1.0.0
   - skill_id: simplexai_artifact
-    bootstrap_manifest_id: skill_manifest_simplexai_artifact_1_0_2
+    bootstrap_manifest_id: skill_manifest_simplexai_artifact_1_0_3
     default_agent_types:
       - anotherme
       - general
     manifests:
+      - manifest_id: skill_manifest_simplexai_artifact_1_0_3
+        version: 1.0.3
+        package_path: builtin/artifact/1.0.3
       - manifest_id: skill_manifest_simplexai_artifact_1_0_2
         version: 1.0.2
         package_path: builtin/artifact/1.0.2
@@ -169,7 +172,7 @@ skills:
         version: 1.0.0
         package_path: builtin/pdf/1.0.0
   - skill_id: simplexai_builtin_pptx
-    bootstrap_manifest_id: skill_manifest_simplexai_builtin_pptx_1_0_3
+    bootstrap_manifest_id: skill_manifest_simplexai_builtin_pptx_1_0_4
     default_agent_types:
       - anotherme
       - general
@@ -186,6 +189,9 @@ skills:
       - manifest_id: skill_manifest_simplexai_builtin_pptx_1_0_3
         version: 1.0.3
         package_path: builtin/pptx/1.0.3
+      - manifest_id: skill_manifest_simplexai_builtin_pptx_1_0_4
+        version: 1.0.4
+        package_path: builtin/pptx/1.0.4
   - skill_id: simplexai_builtin_skill_installer
     bootstrap_manifest_id: skill_manifest_simplexai_builtin_skill_installer_1_0_0
     default_agent_types:
