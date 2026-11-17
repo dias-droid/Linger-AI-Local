@@ -753,7 +753,7 @@ describe("root install.sh", () => {
     expect(await readdir(privateTmp)).toEqual([]);
   });
 
-  it("reassigns colliding Docker Compose ports and configures LiveKit override", async () => {
+  it("reassigns colliding Compose ports and preserves LiveKit RTC ports on rerun", async () => {
     const root = await createTempRoot();
     const fakeRepo = path.join(root, "fake-repo");
     const fakeBin = path.join(root, "fake-bin");
@@ -867,22 +867,34 @@ esac
     expect(updatedEnv).toContain("WEB_HTTP_PORT=3001");
     expect(updatedEnv).toContain("WEB_PUBLIC_ORIGIN=http://localhost:3001");
     expect(updatedEnv).toContain("LIVEKIT_URL=ws://127.0.0.1:17881");
-    expect(updatedEnv).toContain(
-      "COMPOSE_FILE=docker-compose.yml:.local/compose.ports.yml",
-    );
+    expect(updatedEnv).toContain("LIVEKIT_HTTP_PORT=17881");
+    expect(updatedEnv).toContain("LIVEKIT_RTC_TCP_PORT=7883");
+    expect(updatedEnv).toContain("LIVEKIT_RTC_UDP_PORT=7884");
+    expect(updatedEnv).not.toContain("COMPOSE_FILE=");
     expect(updatedEnv).not.toContain("POSTGRES_PORT=5433");
-
-    const portsOverride = await readFile(
-      path.join(fakeRepo, ".local/compose.ports.yml"),
-      "utf8",
-    );
-    expect(portsOverride).toContain("ports: !override");
-    expect(portsOverride).toContain("127.0.0.1:17881:7880");
-    expect(portsOverride).toContain("7883:7881");
-    expect(portsOverride).toContain("7884:7882/udp");
+    await expect(
+      stat(path.join(fakeRepo, ".local/compose.ports.yml")),
+    ).rejects.toMatchObject({ code: "ENOENT" });
 
     const dockerCalls = await readFile(dockerLogPath, "utf8");
     expect(dockerCalls).toContain("compose up --build --detach --wait");
+
+    const repeated = await runInstallScript([], {
+      scriptPath: copiedInstallPath,
+      cwd: fakeRepo,
+      env: {
+        HOME: homeDir,
+        XDG_CACHE_HOME: xdgCache,
+        PATH: `${fakeBin}:/usr/local/bin:/usr/bin:/bin`,
+        LINGER_INSTALL_BUSY_PORTS: "3000,17880,7881,7882",
+      },
+      input: ["1", "n", "n", "n"].join("\n") + "\n",
+    });
+    expect(repeated.code).toBe(0);
+    expect(repeated.stdout).not.toContain("Port(s) already in use:");
+    expect(await readFile(path.join(fakeRepo, ".env"), "utf8")).toBe(
+      updatedEnv,
+    );
   });
 
   it("validates CLI flags, conflicting modes, and standalone menu outside repo", async () => {

@@ -207,6 +207,10 @@ approval, and connects `linger-computer` to your Linger server. Run
 `--remove`), or see [Bring your own runtime](docs/local-inference.md) for other
 model setups.
 
+If Compose ports are busy, the installer offers to save free ports in `.env`.
+LiveKit uses the selected RTC ports both inside its container and on the host,
+so browsers connect to the ports it advertises.
+
 ## Learn more
 
 The full documentation lives at **[docs.heylinger.com](https://docs.heylinger.com/)**.

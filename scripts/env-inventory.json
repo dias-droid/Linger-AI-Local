@@ -9,6 +9,9 @@
     "WEB_BIND_ADDRESS": "docker compose host-address interpolation of the Web port in the root docker-compose.yml (pnpm stack:up)",
     "NODE_SERVICES_HTTP_PORT": "docker compose host-port interpolation in the root docker-compose.yml (pnpm stack:up)",
     "DOCUMENT_RUNTIME_HTTP_PORT": "docker compose host-port interpolation in the root docker-compose.yml (pnpm stack:up)",
+    "LIVEKIT_HTTP_PORT": "docker compose host-port interpolation of the LiveKit HTTP endpoint in the root docker-compose.yml",
+    "LIVEKIT_RTC_TCP_PORT": "docker compose interpolation of both the published TCP port and LiveKit RTC TCP listener in the root docker-compose.yml",
+    "LIVEKIT_RTC_UDP_PORT": "docker compose interpolation of both the published UDP port and LiveKit RTC UDP listener in the root docker-compose.yml",
     "LIVEKIT_NODE_IP": "docker compose interpolation of the LiveKit advertised media address (NODE_IP) in the root docker-compose.yml",
     "LIVEKIT_RTC_BIND_ADDRESS": "docker compose host-address interpolation of the LiveKit media ports in the root docker-compose.yml"
   },
