@@ -158,6 +158,9 @@ download against `SHA256SUMS.txt` from the same release.
 The macOS package is not yet signed with a certificate Apple recognizes, so
 macOS blocks the first launch. Allow it once:
 
+<details>
+<summary>Show macOS first-launch steps</summary>
+
 1. Open Linger from Applications. In the **“Linger” Not Opened** dialog, click
    **Done**. Do not click **Move to Trash**, the highlighted button.
 
@@ -176,6 +179,8 @@ not appear, run this in Terminal and open Linger again:
 ```bash
 xattr -dr com.apple.quarantine /Applications/Linger.app
 ```
+
+</details>
 
 See [Install the desktop app](https://docs.heylinger.com/install/desktop-app)
 for the Windows and Linux steps and for help when setup fails.
