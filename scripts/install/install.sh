@@ -435,7 +435,7 @@ read_livekit_override_port() {
     if [[ "$key" == "http" ]]; then
       port="$(sed -nE 's/.*:([0-9]+):7880"[[:space:]]*$/\1/p' "$file")"
     else
-      port="$(sed -nE "s/^[[:space:]]*${key}:[[:space:]]*([0-9]+)[[:space:]]*$/\1/p" "$file")"
+      port="$(sed -nE "s/.*--${key}[[:space:]]+([0-9]+).*/\1/p" "$file")"
     fi
   fi
   printf '%s\n' "${port:-$fallback}"
@@ -530,8 +530,8 @@ ensure_compose_ports() {
   cur_doc="$(read_env_value "$env_file" "DOCUMENT_RUNTIME_HTTP_PORT" || printf '4321')"
   cur_lk_url="$(read_env_value "$env_file" "LIVEKIT_URL" || printf 'ws://127.0.0.1:17880')"
   cur_lk_http="$(read_livekit_override_port "$override_file" "http" "17880")"
-  cur_lk_tcp="$(read_livekit_override_port "$override_file" "tcp_port" "7881")"
-  cur_lk_udp="$(read_livekit_override_port "$override_file" "udp_port" "7882")"
+  cur_lk_tcp="$(read_livekit_override_port "$override_file" "rtc[.]tcp_port" "7881")"
+  cur_lk_udp="$(read_livekit_override_port "$override_file" "udp-port" "7882")"
 
   local reserved=" $cur_pg $cur_th $cur_web $cur_node $cur_doc $cur_lk_http $cur_lk_tcp $cur_lk_udp "
   local new_pg="$cur_pg"
@@ -665,20 +665,19 @@ ensure_compose_ports() {
     fi
   fi
   if [[ "$new_lk_http" != "$cur_lk_http" || "$new_lk_tcp" != "$cur_lk_tcp" || "$new_lk_udp" != "$cur_lk_udp" ]]; then
+    local compose_version=""
+    compose_version="$(docker compose version --short 2>/dev/null || true)"
+    if [[ ! "$compose_version" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+) ]] ||
+       ! (( BASH_REMATCH[1] > 2 ||
+            (BASH_REMATCH[1] == 2 && (BASH_REMATCH[2] > 24 ||
+             (BASH_REMATCH[2] == 24 && BASH_REMATCH[3] >= 4))) )); then
+      die "Automatic LiveKit port reassignment requires Docker Compose 2.24.4 or later. Update Docker Compose and rerun $SELF_CMD."
+    fi
     mkdir -p "$(dirname "$override_file")"
     cat > "$override_file" <<EOF
 services:
   livekit:
-    command:
-      - --config-body
-      - |
-        port: 7880
-        rtc:
-          tcp_port: $new_lk_tcp
-          udp_port: $new_lk_udp
-          use_external_ip: false
-        logging:
-          level: info
+    entrypoint: /livekit-server --rtc.tcp_port $new_lk_tcp --udp-port $new_lk_udp
     ports: !override
       - "127.0.0.1:$new_lk_http:7880"
       - "\${LIVEKIT_RTC_BIND_ADDRESS:-127.0.0.1}:$new_lk_tcp:$new_lk_tcp"

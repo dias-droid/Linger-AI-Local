@@ -208,9 +208,9 @@ approval, and connects `linger-computer` to your Linger server. Run
 model setups.
 
 If Compose ports are busy, the installer offers to select free ports. It saves
-LiveKit's port mappings and matching RTC configuration in
-`.local/compose.ports.yml` and enables the override through `.env`. Rerunning the
-installer reuses those ports.
+LiveKit's port mappings and matching RTC startup arguments in
+`.local/compose.ports.yml` and enables the override through `.env`. This requires
+Docker Compose 2.24.4 or later. Rerunning the installer reuses those ports.
 
 ## Learn more
 

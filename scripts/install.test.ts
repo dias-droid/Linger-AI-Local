@@ -760,6 +760,7 @@ describe("root install.sh", () => {
     const homeDir = path.join(root, "home");
     const xdgCache = path.join(root, "cache");
     const dockerLogPath = path.join(root, "docker-calls.log");
+    const serverStartedPath = path.join(root, "server-started");
     await mkdir(path.join(fakeRepo, "scripts/install"), { recursive: true });
     await mkdir(path.join(fakeRepo, "scripts/installs"), { recursive: true });
     await mkdir(path.join(fakeRepo, ".linger-runtime"), { recursive: true });
@@ -803,12 +804,15 @@ describe("root install.sh", () => {
 set -eu
 printf '%s\n' "$*" >> ${JSON.stringify(dockerLogPath)}
 if [ "\${1:-}" = "compose" ] && [ "\${2:-}" = "version" ]; then
-  printf 'Docker Compose version v2.40.2\n'
+  printf '2.24.4\n'
   exit 0
 fi
 if [ "\${1:-}" = "compose" ] && [ "\${2:-}" = "ps" ]; then
   printf '127.0.0.1:5432->5432/tcp\n'
   exit 0
+fi
+if [ "\${1:-}" = "compose" ] && [ "\${2:-}" = "up" ]; then
+  touch ${JSON.stringify(serverStartedPath)}
 fi
 exit 0
 `,
@@ -833,6 +837,7 @@ for a in "$@"; do
 done
 case "$url" in
   "http://localhost:3001/install/linger-computer.sh")
+    if [ ! -f ${JSON.stringify(serverStartedPath)} ]; then exit 22; fi
     body="# linger-computer-launcher-v2"
     if [ -n "$out" ]; then printf '%s\n' "$body" > "$out"; else printf '%s\n' "$body"; fi
     exit 0
@@ -876,9 +881,10 @@ esac
     expect(updatedEnv).not.toContain("POSTGRES_PORT=5433");
     const overridePath = path.join(fakeRepo, ".local/compose.ports.yml");
     const override = await readFile(overridePath, "utf8");
-    expect(override).toContain("tcp_port: 7883");
-    expect(override).toContain("udp_port: 7884");
-    expect(override).toContain("use_external_ip: false");
+    expect(override).toContain(
+      "entrypoint: /livekit-server --rtc.tcp_port 7883 --udp-port 7884",
+    );
+    expect(override).not.toContain("command:");
     expect(override).toContain("ports: !override");
     expect(override).toContain('"127.0.0.1:17881:7880"');
     expect(override).toContain(
@@ -891,6 +897,7 @@ esac
     const dockerCalls = await readFile(dockerLogPath, "utf8");
     expect(dockerCalls).toContain("compose up --build --detach --wait");
 
+    await rm(serverStartedPath);
     const repeated = await runInstallScript([], {
       scriptPath: copiedInstallPath,
       cwd: fakeRepo,
@@ -903,9 +910,33 @@ esac
       input: ["1", "n", "n", "n"].join("\n") + "\n",
     });
     expect(repeated.code).toBe(0);
+    expect(repeated.stdout).toContain("Starting Linger with Docker Compose...");
     expect(repeated.stdout).not.toContain("Port(s) already in use:");
     expect(await readFile(path.join(fakeRepo, ".env"), "utf8")).toBe(
       updatedEnv,
+    );
+    expect(await readFile(overridePath, "utf8")).toBe(override);
+
+    const dockerPath = path.join(fakeBin, "docker");
+    await writeFile(
+      dockerPath,
+      (await readFile(dockerPath, "utf8")).replace("2.24.4", "2.24.3"),
+    );
+    await rm(serverStartedPath);
+    const unsupported = await runInstallScript([], {
+      scriptPath: copiedInstallPath,
+      cwd: fakeRepo,
+      env: {
+        HOME: homeDir,
+        XDG_CACHE_HOME: xdgCache,
+        PATH: `${fakeBin}:/usr/local/bin:/usr/bin:/bin`,
+        LINGER_INSTALL_BUSY_PORTS: "7883/tcp",
+      },
+      input: ["1", "y"].join("\n") + "\n",
+    });
+    expect(unsupported.code).toBe(1);
+    expect(unsupported.stderr).toContain(
+      "requires Docker Compose 2.24.4 or later",
     );
     expect(await readFile(overridePath, "utf8")).toBe(override);
   });
