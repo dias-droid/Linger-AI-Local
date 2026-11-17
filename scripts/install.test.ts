@@ -47,6 +47,10 @@ interface FakeEngineScenario {
   acceptedStack?: boolean;
   lastRunState?: string;
   enforcePrivateRoot?: boolean;
+  bootstrapError?: string;
+  applyOutputLines?: string[];
+  upFailsWithoutShareGpu?: boolean;
+  preflightFail?: boolean;
   picks?: Array<{
     role: string;
     id: string;
@@ -167,7 +171,12 @@ async function createFakeStackScript(
   };
   await writeFile(hardwareJsonPath, JSON.stringify(hardwarePayload));
 
-  const warnFinding = scenario.planPreflightWarn
+  const warnFinding: Array<{
+    check: string;
+    level: string;
+    detail: string;
+    fix?: string;
+  }> = scenario.planPreflightWarn
     ? [
         {
           check: "preflight.gpu",
@@ -190,6 +199,14 @@ async function createFakeStackScript(
         },
       ]
     : [];
+  if (scenario.preflightFail) {
+    warnFinding.push({
+      check: "preflight.disk",
+      level: "fail",
+      detail: "Not enough free disk space; see stack.sh docs",
+      fix: "Free 20 GiB and retry stack plan",
+    });
+  }
   const planTemplate = {
     plan_id: "plan-abcdef123456",
     llm: {
@@ -225,7 +242,11 @@ async function createFakeStackScript(
       ram_available_bytes: 96 * 1024 ** 3,
     },
     preflight: {
-      counts: { pass: 3, warn: warnFinding.length, fail: 0 },
+      counts: {
+        pass: 3,
+        warn: warnFinding.filter((f) => f.level === "warn").length,
+        fail: warnFinding.filter((f) => f.level === "fail").length,
+      },
       findings: warnFinding,
     },
   };
@@ -234,6 +255,17 @@ async function createFakeStackScript(
 
   const createPiOnApply = scenario.createGatewayPiOnApply !== false;
   const enforcePrivateRoot = scenario.enforcePrivateRoot ? "1" : "0";
+  const applyLines = scenario.applyOutputLines
+    ? scenario.applyOutputLines
+        .map((line) => `    printf '%s\\n' ${JSON.stringify(line)}`)
+        .join("\n")
+    : `    printf 'Applied plan %s\\n' "\${4:-}"`;
+  const bootstrapFailure = scenario.bootstrapError
+    ? `  printf '%s\\n' ${JSON.stringify(scenario.bootstrapError)} >&2\n  exit 2\n`
+    : "";
+  const upShareGuard = scenario.upFailsWithoutShareGpu
+    ? `    if [ "\${2:-}" != "--share-gpu" ]; then\n      printf 'stack: GPU busy; pass --share-gpu\\n' >&2\n      exit 3\n    fi\n`
+    : "";
   const content = `#!/bin/sh
 set -eu
 printf '%s\n' "$*" >> ${JSON.stringify(logPath)}
@@ -254,7 +286,7 @@ if [ "${enforcePrivateRoot}" = "1" ] && [ "\${1:-}" = "--bootstrap-json" ]; then
 fi
 case "\${1:-}" in
   --bootstrap-json)
-    printf '{"schema":"localmodels.kit-location/v1","kitRoot":%s,"python":%s,"moduleDir":"modules"}\n' \
+${bootstrapFailure}    printf '{"schema":"localmodels.kit-location/v1","kitRoot":%s,"python":%s,"moduleDir":"modules"}\n' \
       ${JSON.stringify(JSON.stringify(root))} \
       ${JSON.stringify(JSON.stringify(pythonBin))}
     ;;
@@ -282,6 +314,7 @@ case "\${1:-}" in
     cat "$out_file"
     ;;
   apply)
+${applyLines}
     if [ "${createPiOnApply ? "1" : "0"}" = "1" ]; then
       mkdir -p ${JSON.stringify(path.dirname(piBinPath))} ${JSON.stringify(gatewayPiDir)}
       cat <<'PIEOF' > ${JSON.stringify(piBinPath)}
@@ -291,13 +324,19 @@ PIEOF
       chmod 0755 ${JSON.stringify(piBinPath)}
       printf '{"providers":{}}\n' > ${JSON.stringify(path.join(gatewayPiDir, "models.json"))}
     fi
-    printf 'Applied plan %s\n' "\${4:-}"
     ;;
   up)
-    printf 'Local model stack is ready\n'
+${upShareGuard}    printf 'Local model stack is ready\n'
     ;;
   remove)
-    printf 'Removed. Run stack remove --purge to free downloaded files.\n'
+    case " $* " in
+      *" --dry-run "*)
+        printf 'Would delete cached weights via stack remove --purge\n'
+        ;;
+      *)
+        printf 'Removed. Run stack remove --purge to free downloaded files.\n'
+        ;;
+    esac
     ;;
   *)
     printf 'stack.sh: unexpected subcommand %s\n' "\${1:-}" >&2
@@ -844,5 +883,387 @@ esac
 
     const dockerCalls = await readFile(dockerLogPath, "utf8");
     expect(dockerCalls).toContain("compose up --build --detach --wait");
+  });
+
+  it("validates CLI flags, conflicting modes, and standalone menu outside repo", async () => {
+    const root = await createTempRoot();
+    const { scriptPath } = await createFakeStackScript(root, {});
+    const env = buildTestEnv(root, scriptPath);
+
+    const shortHelp = await runInstallScript(["-h"], { env });
+    expect(shortHelp.code).toBe(0);
+    expect(shortHelp.stdout).toContain("--web-url");
+
+    const unknown = await runInstallScript(["--bogus"], { env });
+    expect(unknown.code).toBe(1);
+    expect(unknown.stderr).toContain("Unknown option: --bogus");
+
+    const conflict = await runInstallScript(["--connect", "--up"], { env });
+    expect(conflict.code).toBe(1);
+    expect(conflict.stderr).toContain(
+      "Options --connect and --up cannot be combined",
+    );
+
+    const missingUrl = await runInstallScript(["--web-url"], { env });
+    expect(missingUrl.code).toBe(1);
+    expect(missingUrl.stderr).toContain("--web-url requires an origin URL");
+
+    const invalidUrl = await runInstallScript(["--web-url", "not-a-url"], {
+      env,
+    });
+    expect(invalidUrl.code).toBe(1);
+    expect(invalidUrl.stderr).toContain("Invalid Linger server URL");
+
+    const standaloneDir = path.join(root, "standalone");
+    await mkdir(standaloneDir, { recursive: true });
+    const standalonePath = path.join(standaloneDir, "install.sh");
+    await copyFile(installScriptPath, standalonePath);
+    await chmod(standalonePath, 0o755);
+
+    const saHelp = await runInstallScript(["--help"], {
+      scriptPath: standalonePath,
+      cwd: standaloneDir,
+      env,
+    });
+    expect(saHelp.code).toBe(0);
+    expect(saHelp.stdout).toContain("Usage: ./install.sh");
+
+    const saMenu = await runInstallScript(["--web-url", "http://127.0.0.1:9"], {
+      scriptPath: standalonePath,
+      cwd: standaloneDir,
+      env,
+      input: "9\n",
+    });
+    expect(saMenu.code).toBe(1);
+    expect(saMenu.stdout).not.toContain("Docker Compose");
+    expect(saMenu.stderr).toContain("Invalid choice: 9");
+  });
+
+  it("supports custom URL retry/force/skip and local-models-only flows", async () => {
+    const root = await createTempRoot();
+    await mkdir(path.join(root, "home"), { recursive: true });
+    const { scriptPath, logPath } = await createFakeStackScript(root, {});
+    const server = await startMockLingerServer(root, false);
+    const standaloneDir = path.join(root, "standalone");
+    await mkdir(standaloneDir, { recursive: true });
+    const standalonePath = path.join(standaloneDir, "install.sh");
+    await copyFile(installScriptPath, standalonePath);
+    await chmod(standalonePath, 0o755);
+
+    const customRetry = await runInstallScript(
+      ["--web-url", "http://127.0.0.1:9"],
+      {
+        scriptPath: standalonePath,
+        cwd: standaloneDir,
+        env: buildTestEnv(root, scriptPath),
+        input:
+          [
+            "1",
+            "bad-url",
+            "http://127.0.0.1:9",
+            "n",
+            server.baseUrl,
+            "n",
+            "n",
+          ].join("\n") + "\n",
+      },
+    );
+    expect(customRetry.code).toBe(0);
+    expect(customRetry.stdout).toContain("Invalid URL");
+    expect(customRetry.stdout).toContain(
+      `Found Linger server at ${server.baseUrl}`,
+    );
+
+    const skipResult = await runInstallScript(
+      ["--web-url", "http://127.0.0.1:9"],
+      {
+        scriptPath: standalonePath,
+        cwd: standaloneDir,
+        env: buildTestEnv(root, scriptPath),
+        input: ["2", "n", "y"].join("\n") + "\n",
+      },
+    );
+    expect(skipResult.code).toBe(0);
+    expect(skipResult.stdout).toContain("Continuing with local models only");
+    expect(skipResult.stdout).toContain("./install.sh --connect --web-url");
+
+    const withSearch = await runInstallScript(
+      ["--with-search", "--web-url", server.baseUrl],
+      {
+        scriptPath: standalonePath,
+        cwd: standaloneDir,
+        env: buildTestEnv(root, scriptPath),
+        input: ["n", "n"].join("\n") + "\n",
+      },
+    );
+    expect(withSearch.code).toBe(0);
+    const calls = (await readFile(logPath, "utf8")).trim().split("\n");
+    const lastPlan = calls.filter((line) => line.startsWith("plan ")).pop();
+    expect(lastPlan).toBeDefined();
+    expect(lastPlan).not.toContain("--no-search");
+  });
+
+  it("handles Compose port decline, owner retry, and explicit URL reset", async () => {
+    const root = await createTempRoot();
+    const fakeRepo = path.join(root, "fake-repo");
+    const fakeBin = path.join(root, "fake-bin");
+    const homeDir = path.join(root, "home");
+    const xdgCache = path.join(root, "cache");
+    const teamhubLog = path.join(root, "teamhub.log");
+    await mkdir(path.join(fakeRepo, "scripts/install"), { recursive: true });
+    await mkdir(path.join(fakeRepo, "scripts/installs"), { recursive: true });
+    await mkdir(fakeBin, { recursive: true });
+    await mkdir(homeDir, { recursive: true });
+    await mkdir(xdgCache, { recursive: true });
+    await chmod(homeDir, 0o700);
+    await chmod(xdgCache, 0o700);
+
+    const copiedInstallPath = path.join(fakeRepo, "scripts/install/install.sh");
+    await copyFile(installScriptPath, copiedInstallPath);
+    await chmod(copiedInstallPath, 0o755);
+
+    const { scriptPath: fakeStackPath } = await createFakeStackScript(root, {});
+    await copyFile(
+      fakeStackPath,
+      path.join(fakeRepo, "scripts/installs/stack.sh"),
+    );
+    await chmod(path.join(fakeRepo, "scripts/installs/stack.sh"), 0o755);
+
+    await writeFile(fakeRepo + "/docker-compose.yml", "services:\n  web:\n");
+    await writeFile(
+      path.join(fakeRepo, ".env.example"),
+      "WEB_PUBLIC_ORIGIN=http://localhost:3000\n# WEB_HTTP_PORT=3000\n",
+    );
+
+    const server = await startMockLingerServer(root, false);
+    const serverPort = new URL(server.baseUrl).port;
+
+    await writeFile(
+      path.join(fakeBin, "docker"),
+      `#!/bin/sh
+set -eu
+if [ "\${1:-}" = "compose" ] && [ "\${2:-}" = "version" ]; then
+  printf 'Docker Compose version v2.40.2\n'
+  exit 0
+fi
+if [ "\${1:-}" = "compose" ] && [ "\${2:-}" = "exec" ]; then
+  cat > ${JSON.stringify(teamhubLog)}
+  exit 0
+fi
+exit 0
+`,
+      { mode: 0o755 },
+    );
+
+    await writeFile(
+      path.join(fakeBin, "curl"),
+      `#!/bin/sh
+set -eu
+out=""
+url=""
+prev=""
+for a in "$@"; do
+  case "$prev" in -o|--output) out="$a" ;; esac
+  case "$a" in http://*|https://*) url="$a" ;; esac
+  prev="$a"
+done
+case "$url" in
+  "${server.baseUrl}/install/linger-computer.sh")
+    body="# linger-computer-launcher-v2"
+    if [ -n "$out" ]; then printf '%s\n' "$body" > "$out"; else printf '%s\n' "$body"; fi
+    exit 0
+    ;;
+  *)
+    exit 22
+    ;;
+esac
+`,
+      { mode: 0o755 },
+    );
+
+    const env: NodeJS.ProcessEnv = {
+      HOME: homeDir,
+      XDG_CACHE_HOME: xdgCache,
+      PATH: `${fakeBin}:/usr/local/bin:/usr/bin:/bin`,
+      LINGER_INSTALL_BUSY_PORTS: "3000",
+    };
+
+    const declinedPorts = await runInstallScript([], {
+      scriptPath: copiedInstallPath,
+      cwd: fakeRepo,
+      env,
+      input: ["1", "n"].join("\n") + "\n",
+    });
+    expect(declinedPorts.code).toBe(1);
+    expect(declinedPorts.stderr).toContain("Free those ports");
+
+    await writeFile(
+      path.join(fakeRepo, ".env"),
+      `WEB_PUBLIC_ORIGIN=${server.baseUrl}\nWEB_HTTP_PORT=${serverPort}\n`,
+    );
+
+    const resetExplicit = await runInstallScript(
+      ["--web-url", "http://127.0.0.1:9"],
+      {
+        scriptPath: copiedInstallPath,
+        cwd: fakeRepo,
+        env: { ...env, LINGER_INSTALL_BUSY_PORTS: "" },
+        input: ["1", "y", "", "short", "", "n", "n"].join("\n") + "\n",
+      },
+    );
+    expect(resetExplicit.code).toBe(0);
+    expect(resetExplicit.stdout).toContain(
+      "Password must be at least 8 characters",
+    );
+    expect(resetExplicit.stdout).toContain(
+      `Linger server is ready at ${server.baseUrl}`,
+    );
+    expect((await readFile(teamhubLog, "utf8")).trim()).toBe("test1234");
+  });
+
+  it("handles GPU cancel, memory cap retry, preflight failures, and stack sanitization", async () => {
+    const root = await createTempRoot();
+    await mkdir(path.join(root, "home"), { recursive: true });
+    const server = await startMockLingerServer(root, false);
+
+    const bootErr = await createFakeStackScript(root, {
+      bootstrapError: "stack: GPU service owners unknown",
+    });
+    const bootRes = await runInstallScript(["--status"], {
+      env: buildTestEnv(root, bootErr.scriptPath),
+    });
+    expect(bootRes.code).toBe(1);
+    expect(bootRes.stderr).toContain("install.sh: GPU service owners unknown");
+    expect(bootRes.stderr).not.toContain("stack:");
+
+    const sharedScenario = await createFakeStackScript(root, {
+      picks: [
+        {
+          role: "smartest",
+          id: "qwen3.8-27b",
+          quant: "UD-Q4_K_M",
+          quality: 54,
+          decodeTokS: 109,
+          decodeBasis: "estimated",
+          card: 0,
+          shared: true,
+        },
+      ],
+      preflightFail: true,
+      applyOutputLines: [
+        "stack.sh: internal note",
+        "Applied plan plan-abcdef123456",
+      ],
+    });
+
+    const gpuDecline = await runInstallScript(["--web-url", server.baseUrl], {
+      env: buildTestEnv(root, sharedScenario.scriptPath),
+      input: "n\n",
+    });
+    expect(gpuDecline.code).toBe(0);
+    expect(gpuDecline.stdout).toContain("Installation cancelled.");
+
+    const preflightAbort = await runInstallScript(
+      ["--web-url", server.baseUrl],
+      {
+        env: buildTestEnv(root, sharedScenario.scriptPath),
+        input: ["y", "badcap", "16384M", "n"].join("\n") + "\n",
+      },
+    );
+    expect(preflightAbort.code).toBe(1);
+    expect(preflightAbort.stdout).toContain(
+      "Please enter a size like 24G or 16384M",
+    );
+    expect(preflightAbort.stderr).toContain("Preflight checks failed");
+    expect(preflightAbort.stdout).not.toContain("stack.sh");
+
+    const liveSanitize = await createFakeStackScript(root, {
+      applyOutputLines: [
+        "stack: starting service via stack.sh",
+        "Applied plan plan-abcdef123456",
+      ],
+    });
+    const applyRes = await runInstallScript(["--web-url", server.baseUrl], {
+      env: buildTestEnv(root, liveSanitize.scriptPath),
+      input: ["n", "y"].join("\n") + "\n",
+    });
+    expect(applyRes.code).toBe(0);
+    expect(applyRes.stdout).not.toContain("stack.sh");
+    expect(applyRes.stdout).not.toContain("stack:");
+  });
+
+  it("handles up --share-gpu retry, --update replan, --connect, --up, and interactive purge", async () => {
+    const root = await createTempRoot();
+    const homeDir = path.join(root, "home");
+    const piDir = path.join(
+      homeDir,
+      ".local/share/localmodels/tools/gateway-home/.pi/agent",
+    );
+    await mkdir(piDir, { recursive: true });
+    await writeFile(path.join(piDir, "models.json"), "{}");
+
+    const { scriptPath, logPath } = await createFakeStackScript(root, {
+      acceptedStack: true,
+      upFailsWithoutShareGpu: true,
+    });
+    const server = await startMockLingerServer(root, true);
+    const env = buildTestEnv(root, scriptPath);
+
+    const shareRetry = await runInstallScript(["--web-url", server.baseUrl], {
+      env,
+      input: ["1", "y"].join("\n") + "\n",
+    });
+    expect(shareRetry.code).toBe(0);
+    expect(shareRetry.stdout).toContain(
+      "Retry starting while sharing GPU with other running processes?",
+    );
+
+    const replan = await runInstallScript(["--web-url", server.baseUrl], {
+      env,
+      input: ["2", "n", "n"].join("\n") + "\n",
+    });
+    expect(replan.code).toBe(0);
+
+    const connectOnly = await runInstallScript(
+      ["--connect", "--web-url", server.baseUrl],
+      { env },
+    );
+    expect(connectOnly.code).toBe(0);
+
+    const upMode = await runInstallScript(
+      ["--up", "--web-url", server.baseUrl],
+      {
+        env: buildTestEnv(
+          root,
+          (await createFakeStackScript(root, { acceptedStack: true }))
+            .scriptPath,
+        ),
+      },
+    );
+    expect(upMode.code).toBe(0);
+
+    const purgeCancel = await runInstallScript(["--remove", "--purge"], {
+      env,
+      input: "n\n",
+    });
+    expect(purgeCancel.code).toBe(0);
+    expect(purgeCancel.stdout).toContain("Nothing deleted.");
+
+    const purgeConfirm = await runInstallScript(["--remove", "--purge"], {
+      env,
+      input: "y\n",
+    });
+    expect(purgeConfirm.code).toBe(0);
+    expect(purgeConfirm.stdout).toContain(
+      "./scripts/install/install.sh --remove --purge",
+    );
+
+    const calls = (await readFile(logPath, "utf8")).trim().split("\n");
+    expect(calls).toContain("up --share-gpu");
+    expect(
+      calls.some((c) => c.startsWith("plan ") && c.includes("--update")),
+    ).toBe(true);
+    expect(calls).toContain("remove --purge --dry-run");
+    expect(calls).toContain("remove --purge --yes");
   });
 });

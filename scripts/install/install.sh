@@ -184,6 +184,7 @@ set_env_value() {
 sanitize_engine_stream() {
   local escaped_self="${SELF_CMD//|/\\|}"
   sed -E \
+    -e 's/^stack:/install.sh:/g' \
     -e 's/stack\.sh:/install.sh:/g' \
     -e 's/on Windows use stack\.ps1/on Windows use the Linger desktop app/g' \
     -e 's/stack\.ps1/the Linger desktop app/g' \
@@ -696,13 +697,15 @@ start_compose_server() {
   printf '  Starting Linger with Docker Compose...\n'
   (cd "$REPO_ROOT" && docker compose up --build --detach --wait) || die "Docker Compose failed to start Linger."
 
-  if [[ -z "$EXPLICIT_WEB_URL" ]]; then
-    local env_origin=""
-    env_origin="$(read_env_value "$REPO_ROOT/.env" "WEB_PUBLIC_ORIGIN" || true)"
-    if [[ -n "$env_origin" ]]; then
-      WEB_URL="$(normalize_origin "$env_origin" || printf '%s' "$WEB_URL")"
-    fi
+  local env_origin=""
+  env_origin="$(read_env_value "$REPO_ROOT/.env" "WEB_PUBLIC_ORIGIN" || true)"
+  if [[ -z "$env_origin" ]]; then
+    local env_web_port=""
+    env_web_port="$(read_env_value "$REPO_ROOT/.env" "WEB_HTTP_PORT" || printf '3000')"
+    env_origin="http://localhost:$env_web_port"
   fi
+  WEB_URL="$(normalize_origin "$env_origin" || printf '%s' "$WEB_URL")"
+  EXPLICIT_WEB_URL=""
 
   local waited=0
   while (( waited < 15 )); do
@@ -1253,8 +1256,11 @@ with open(meta_out, "w", encoding="utf-8") as fh:
     exit 0
   fi
 
-  sh "$STACK_SCRIPT" apply "$WORK_DIR/plan.json" --approve "$plan_id" ||
+  if run_sanitized_live sh "$STACK_SCRIPT" apply "$WORK_DIR/plan.json" --approve "$plan_id"; then
+    :
+  else
     die "Local model installation did not finish; fix the issue above and rerun $SELF_CMD."
+  fi
 }
 
 step_connect_linger() {
