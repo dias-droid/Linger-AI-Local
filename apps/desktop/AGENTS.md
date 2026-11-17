@@ -125,6 +125,10 @@ Gateway and runs Agents. The daemon exits with the app.
   `local-models` is the planned model served by Pi, shown with the model,
   GPU, memory and download, plus the tool's caveat when it has one;
   otherwise the named runtime, with the tool's reason for no local model.
+  Under Customize the local model runs only behind Pi: with another runtime
+  it is greyed (`aria-disabled`, still focusable), does not toggle, and says
+  "Local models are only available with the Pi runtime."; choosing another
+  runtime clears it, and choosing Pi offers it again.
   When the tool reports local models blocked now (`stack.state:
 "blocked-now"`: the model fits the hardware, but other programs hold the
   memory it needs now; a tool before that field marks it by `basis:

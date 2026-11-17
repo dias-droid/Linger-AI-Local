@@ -429,6 +429,70 @@ describe("setup page Quick Install recommendation", () => {
       "Recommended for this computer: Local model + Pi",
     );
   });
+  it("offers the local model only with the Pi runtime", async () => {
+    const { run } = await openPage(welcome(capable), "welcome");
+    // Quick Install follows the tool's pick: Pi with the local model.
+    expect($("plan-summary").textContent).toBe(
+      "Recommended for this computer: Local model + Pi",
+    );
+    $("local-customize").click();
+    const option = (value: string) =>
+      document.querySelector<HTMLButtonElement>(
+        `[data-plan="runtime"] [data-value="${value}"]`,
+      )!;
+    const local = $("local-model") as HTMLButtonElement;
+    expect(local.getAttribute("aria-disabled")).toBe("false");
+    expect(local.hasAttribute("aria-describedby")).toBe(false);
+    expect($("local-pi-only").hidden).toBe(true);
+    for (const runtime of ["codex", "claude"]) {
+      option(runtime).click();
+      // Greyed, still focusable, and it says why.
+      expect(local.getAttribute("aria-checked")).toBe("false");
+      expect(local.getAttribute("aria-disabled")).toBe("true");
+      expect(local.disabled).toBe(false);
+      expect(local.getAttribute("aria-describedby")).toBe("local-pi-only");
+      expect($("local-pi-only").hidden).toBe(false);
+      expect($("local-pi-only").textContent).toBe(
+        "Local models are only available with the Pi runtime.",
+      );
+      // Clicking or pressing it does not pick it, nor switch the runtime.
+      local.click();
+      expect(local.getAttribute("aria-checked")).toBe("false");
+      expect(option(runtime).getAttribute("aria-checked")).toBe("true");
+    }
+    // Pi alone: the local model is off until chosen again.
+    option("pi").click();
+    expect(local.getAttribute("aria-disabled")).toBe("false");
+    expect($("local-pi-only").hidden).toBe(true);
+    expect(local.getAttribute("aria-checked")).toBe("false");
+    local.click();
+    expect(local.getAttribute("aria-checked")).toBe("true");
+    $("local-install").click();
+    await vi.waitFor(() =>
+      expect(installed(run)).toEqual([{ op: "local.start", runtime: "local" }]),
+    );
+  });
+
+  it("keeps a held local model on hold with Pi and says Pi is needed otherwise", async () => {
+    await openPage(welcome(held), "welcome");
+    $("local-customize").click();
+    const local = $("local-model") as HTMLButtonElement;
+    // Codex is the tool's pick here.
+    expect(local.disabled).toBe(true);
+    expect($("local-pi-only").hidden).toBe(false);
+    document
+      .querySelector<HTMLButtonElement>(
+        '[data-plan="runtime"] [data-value="pi"]',
+      )!
+      .click();
+    expect($("local-pi-only").hidden).toBe(true);
+    expect(local.getAttribute("aria-disabled")).toBe("false");
+    // Pi does not lift the hold: the model still waits for free memory.
+    expect(local.disabled).toBe(true);
+    expect($("local-sub").textContent).toBe(
+      "On hold: close other programs, then Check again.",
+    );
+  });
 });
 
 describe("setup page download progress", () => {

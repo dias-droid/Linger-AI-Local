@@ -392,6 +392,7 @@
         cursor: pointer;
       }
       button:disabled,
+      button[aria-disabled="true"],
       select:disabled {
         opacity: 0.45;
         cursor: not-allowed;
@@ -777,7 +778,7 @@
           border-color 140ms ease,
           background-color 140ms ease;
       }
-      .pick:hover:not(:disabled) {
+      .pick:hover:not(:disabled):not([aria-disabled="true"]) {
         border-color: #c4c4bc;
       }
       .pick[aria-checked="true"] {
@@ -1396,7 +1397,10 @@
               <div class="choice local" id="local-row" hidden>
                 <div class="text">
                   <strong>Local model</strong
-                  ><span class="sub" id="local-sub"></span>
+                  ><span class="sub" id="local-sub"></span
+                  ><span class="sub" id="local-pi-only" hidden
+                    >Local models are only available with the Pi runtime.</span
+                  >
                 </div>
                 <button
                   type="button"
@@ -1944,8 +1948,8 @@
           : value.slice(0, 18) + "…" + value.slice(-27);
       // Quick Install installs what the localmodels tool recommends for this
       // computer once it has checked; until then (or when it cannot check)
-      // the installer picks. The local model runs tasks through Pi, so
-      // choosing it chooses Pi.
+      // the installer picks. The tool's local-models pick runs through Pi,
+      // so it implies Pi.
       const defaults = () => {
         const models = state.localServer.localModels;
         const pick = models.state === "checked" && models.recommendation;
@@ -2348,6 +2352,9 @@
         }
         $("keys-note").textContent = "Applies when the installation runs.";
         const shown = model || held;
+        const runtime =
+          plan.runtime === "recommended" ? recommended.runtime : plan.runtime;
+        const piOnly = !!shown && runtime !== "pi";
         $("local-row").hidden = !shown;
         $("local-model").hidden = !shown;
         $("local-recheck").hidden = !held || !local.available;
@@ -2384,6 +2391,13 @@
             String(plan.localModel),
           );
           $("local-model").disabled = busy || !model;
+          // The local model runs only behind Pi: with another runtime it
+          // stays focusable, greyed and says so, but does not toggle.
+          $("local-pi-only").hidden = !piOnly;
+          $("local-model").setAttribute("aria-disabled", String(piOnly));
+          if (piOnly)
+            $("local-model").setAttribute("aria-describedby", "local-pi-only");
+          else $("local-model").removeAttribute("aria-describedby");
         }
         $("runtime-sub").textContent = known
           ? "Recommended: " + RUNTIMES[recommended.runtime] + "."
@@ -2764,10 +2778,10 @@
         run({ op: "local.recheck" }, "local-error"),
       );
       $("local-model").addEventListener("click", () => {
+        // Only Pi runs the local model; choose Pi first.
+        if ($("local-model").getAttribute("aria-disabled") === "true") return;
         picked = true;
-        plan = plan.localModel
-          ? { ...plan, localModel: false }
-          : { ...plan, runtime: "pi", localModel: true };
+        plan = { ...plan, localModel: !plan.localModel };
         render();
       });
       $("open").addEventListener("click", () => run({ op: "finish" }));
