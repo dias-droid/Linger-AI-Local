@@ -51,6 +51,11 @@ queues a follow-up over every changed source; a meeting request is not admitted 
 reads text and metadata only for the sources a refresh adds or changes, so a source frozen at its published version
 needs neither.
 
+Every refresh request of a Human, from Memory or the Web, is admitted in a `REPEATABLE READ` transaction that starts
+only after it holds that Human's admission lock, so it sees the previous admission and joins or replays it. Admissions
+of different Humans neither wait for nor abort each other, so Memory's nightly requests for every Human can run at
+once; a settlement or dispatch status change of the same Wiki is a write conflict, and the admission retries.
+
 ## History points
 
 A History point is a Revision with a `history_trigger`, so a History Entry's ID is its Revision's ID.
