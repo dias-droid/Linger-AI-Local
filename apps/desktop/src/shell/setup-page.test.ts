@@ -186,6 +186,28 @@ const small: SetupLocalModelsCheck = {
   ],
   recommendation: "codex",
 };
+// The model fits the hardware, but other programs hold its memory now.
+const held: SetupLocalModelsCheck = {
+  state: "checked",
+  eligible: false,
+  blockedNow: true,
+  memoryBytes: 16 * GB,
+  diskFreeBytes: 400 * GB,
+  model: {
+    name: "qwen3-8b",
+    downloadBytes: 6 * GB,
+    diskBytes: 8 * GB,
+    memoryBytes: 12 * GB,
+  },
+  reasons: [
+    {
+      code: "free-memory-required",
+      message:
+        "Other programs are using memory it needs (now 2.7 GB of RAM is available).",
+    },
+  ],
+  recommendation: "codex",
+};
 const welcome = (localModels: SetupLocalModelsCheck): SetupState => {
   const base = state("idle");
   return { ...base, localServer: { ...base.localServer, localModels } };
@@ -224,6 +246,84 @@ describe("setup page Quick Install recommendation", () => {
     $("local-install").click();
     await vi.waitFor(() =>
       expect(installed(run)).toEqual([{ op: "local.start", runtime: "codex" }]),
+    );
+  });
+
+  it("holds a local model that needs free memory and checks again on request", async () => {
+    const { run } = await openPage(welcome(held), "welcome");
+    expect($("plan-summary").textContent).toBe(
+      "Recommended for this computer: Codex",
+    );
+    expect($("plan-why").textContent).toBe(
+      "Local model on hold: Other programs are using memory it needs (now 2.7 GB of RAM is available). Quick Install sets up Codex now, or choose Check again once memory is free.",
+    );
+    expect($("local-recheck").hidden).toBe(false);
+    $("local-customize").click();
+    expect($("local-row").hidden).toBe(false);
+    expect($("local-model-name").textContent).toBe("qwen3-8b");
+    expect($("local-sub").textContent).toBe(
+      "On hold: close other programs, then Check again.",
+    );
+    expect(($("local-model") as HTMLButtonElement).disabled).toBe(true);
+    expect($("local-model").getAttribute("aria-checked")).toBe("false");
+    $("local-recheck").click();
+    await vi.waitFor(() =>
+      expect(run).toHaveBeenCalledWith({ op: "local.recheck" }),
+    );
+    $("local-customize").click();
+    $("local-install").click();
+    await vi.waitFor(() =>
+      expect(installed(run)).toEqual([{ op: "local.start", runtime: "codex" }]),
+    );
+  });
+
+  it("says how much memory a held local model needs and how much is free", async () => {
+    const counted = (
+      code: string,
+      message: string,
+      vram = false,
+    ): SetupLocalModelsCheck => ({
+      ...held,
+      freeMemory: {
+        ramAvailableBytes: 2899102924,
+        ramRequiredBytes: 13689304433,
+        ...(vram ? { vramFreeBytes: 3 * GB, vramRequiredBytes: 9 * GB } : {}),
+      },
+      reasons: [{ code, message }],
+    });
+    await openPage(
+      welcome(
+        counted(
+          "free-memory-required",
+          "Other programs are using memory it needs.",
+        ),
+      ),
+      "welcome",
+    );
+    expect($("plan-summary").textContent).toBe(
+      "Recommended for this computer: Codex",
+    );
+    expect($("plan-why").textContent).toBe(
+      "Local model on hold: quit other programs first; it needs 12.7 GB of memory, 2.7 GB is free. Quick Install sets up Codex now, or choose Check again once memory is free.",
+    );
+    expect($("local-recheck").hidden).toBe(false);
+    $("local-customize").click();
+    expect($("local-sub").textContent).toBe(
+      "On hold: 12.7 GB memory needed, 2.7 GB free",
+    );
+    // Another code names what holds the memory, so its words stay.
+    await openPage(
+      welcome(
+        counted(
+          "plan-unavailable",
+          "Another inference app holds this Mac's memory; quit it and check again.",
+          true,
+        ),
+      ),
+      "welcome",
+    );
+    expect($("plan-why").textContent).toBe(
+      "Local model on hold: quit other programs first; it needs 12.7 GB of memory, 2.7 GB is free; graphics memory needs 9.0 GB, 3.0 GB is free. Another inference app holds this Mac's memory; quit it and check again. Quick Install sets up Codex now, or choose Check again once memory is free.",
     );
   });
 

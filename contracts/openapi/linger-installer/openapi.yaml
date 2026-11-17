@@ -1134,12 +1134,41 @@ components:
           additionalProperties: false
           required:
             - eligible
+            - state
             - reasons
             - selectedGpuIndex
             - estimate
           properties:
             eligible:
               type: boolean
+            state:
+              type: string
+              enum:
+                - ready
+                - blocked-now
+                - unavailable
+              description: Upstream stack.state. blocked-now means the hardware can run the plan, but installing now would stop until other programs free memory; a tool without stack.state reports that case as basis capacity or reason free-memory-required.
+            hardwareCapable:
+              type:
+                - boolean
+                - "null"
+              description: Upstream stack.hardwareCapable, separate from whether local models can install now; null when the tool cannot read the facts.
+            memory:
+              type: object
+              additionalProperties: false
+              description: Upstream stack.memory, present on a capacity basis; memory free now against what the plan needs.
+              required:
+                - ramAvailableBytes
+                - ramRequiredBytes
+              properties:
+                ramAvailableBytes:
+                  type: number
+                ramRequiredBytes:
+                  type: number
+                vramFreeBytes:
+                  type: number
+                vramRequiredBytes:
+                  type: number
             reasons:
               type: array
               items:
@@ -1149,6 +1178,11 @@ components:
               description: Human-readable upstream explanations in the same order as reasons; model eligibility remains upstream-owned.
               items:
                 type: string
+            basis:
+              type: string
+              enum:
+                - capacity
+              description: Present when the upstream plan fits this computer's hardware only once other programs release the memory they hold now (reason free-memory-required); installing plans again against the memory free then.
             selectedGpuIndex:
               type:
                 - number

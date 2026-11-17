@@ -2,7 +2,10 @@
 // The setup window walks a new install through server, sign-in, connecting
 // this computer and the system permissions it needs.
 
-import type { SetupChoice } from "@linger/local-installation/setup-plan";
+import type {
+  SetupChoice,
+  SetupMemory,
+} from "@linger/local-installation/setup-plan";
 
 export interface SetupFolder {
   readonly grantId: string;
@@ -99,10 +102,17 @@ export type SetupLocalModelsCheck =
   | {
       readonly state: "checked";
       readonly eligible: boolean;
+      // The model fits the hardware, but other programs hold the memory it
+      // needs now (the tool's "blocked-now"); it is shown on hold until a
+      // new check finds that memory.
+      readonly blockedNow?: true;
+      // While blocked now: memory free now and what the plan needs.
+      readonly freeMemory?: SetupMemory;
       readonly memoryBytes: number;
       readonly diskFreeBytes: number | null;
       readonly gpu?: string;
-      // The inference model to deploy, with what it needs; when eligible.
+      // The inference model to deploy, with what it needs; when eligible or
+      // on hold for free memory.
       readonly model?: {
         readonly name: string;
         readonly downloadBytes: number | null;
@@ -110,7 +120,7 @@ export type SetupLocalModelsCheck =
         readonly memoryBytes: number | null;
       };
       // The localmodels tool's code and words for why not, or, when
-      // eligible, for what could still stop the install (free memory).
+      // eligible, for what could still stop the install.
       readonly reasons?: readonly {
         readonly code: string;
         readonly message?: string;
@@ -161,6 +171,8 @@ export type SetupCommand =
       readonly runtime?: SetupLocalRuntime;
       readonly keys?: SetupProviderKeys;
     }
+  // Checks this computer for a local model again.
+  | { readonly op: "local.recheck" }
   // Picks the install folder with the system picker, or goes back to the
   // default.
   | { readonly op: "local.location.pick" }

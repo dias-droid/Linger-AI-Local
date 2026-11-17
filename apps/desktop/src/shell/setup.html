@@ -1463,6 +1463,9 @@
             </button>
           </p>
           <p class="plan-why" id="plan-why" hidden></p>
+          <button class="link quiet" id="local-recheck" type="button" hidden>
+            Check again
+          </button>
         </div>
         <p class="error" id="local-error" role="alert"></p>
         <p class="team" id="team">
@@ -2196,6 +2199,26 @@
         const models = local.localModels;
         const model =
           models.state === "checked" && models.eligible && models.model;
+        // The model fits the hardware, but other programs hold the memory it
+        // needs now: shown, not offered, until a new check finds that memory.
+        const held =
+          models.state === "checked" && models.blockedNow && models.model;
+        // The tool's count of memory free now against what the plan needs.
+        const free = held && models.freeMemory;
+        const freeText =
+          free &&
+          "needs " +
+            size(free.ramRequiredBytes) +
+            " of memory, " +
+            size(free.ramAvailableBytes) +
+            " is free" +
+            (free.vramRequiredBytes != null
+              ? "; graphics memory needs " +
+                size(free.vramRequiredBytes) +
+                ", " +
+                size(free.vramFreeBytes) +
+                " is free"
+              : "");
         if (!model) plan.localModel = false;
         const custom = !isDefaultPlan(local);
         // Quick Install waits for the check, so it installs what it shows.
@@ -2262,13 +2285,30 @@
                 (models.reasons?.[0]?.message
                   ? ". " + models.reasons[0].message
                   : "")
-              : models.state === "checked" && !models.eligible
-                ? "No local model: " +
-                  (models.reasons?.[0]?.message ||
-                    "this computer can't run one.")
-                : models.state === "unavailable"
-                  ? "Couldn't check this computer for a local model."
-                  : "";
+              : held
+                ? "Local model on hold: " +
+                  (free
+                    ? "quit other programs first; it " +
+                      freeText +
+                      "." +
+                      // Other codes name what to quit, such as another
+                      // inference app; the counts alone do not.
+                      (models.reasons?.[0]?.code !== "free-memory-required" &&
+                      models.reasons?.[0]?.message
+                        ? " " + models.reasons[0].message
+                        : "")
+                    : models.reasons?.[0]?.message ||
+                      "other programs are using the memory it needs.") +
+                  " Quick Install sets up " +
+                  named(plan) +
+                  " now, or choose Check again once memory is free."
+                : models.state === "checked" && !models.eligible
+                  ? "No local model: " +
+                    (models.reasons?.[0]?.message ||
+                      "this computer can't run one.")
+                  : models.state === "unavailable"
+                    ? "Couldn't check this computer for a local model."
+                    : "";
         $("plan-why").hidden =
           !local.available || customizing || !$("plan-why").textContent;
         $("plan-line").hidden = !local.available;
@@ -2294,24 +2334,35 @@
           remove.textContent = removing ? "Keep" : "Remove";
         }
         $("keys-note").textContent = "Applies when the installation runs.";
-        $("local-row").hidden = !model;
-        $("local-model").hidden = !model;
-        if (model) {
-          $("local-sub").textContent = [
-            recommended.localModel
-              ? "Recommended for this computer"
-              : "Runs your tasks on this computer",
-            models.gpu,
-          ]
-            .filter(Boolean)
-            .join(" · ");
-          $("local-model-name").textContent = model.name;
+        const shown = model || held;
+        $("local-row").hidden = !shown;
+        $("local-model").hidden = !shown;
+        $("local-recheck").hidden = !held || !local.available;
+        $("local-recheck").disabled = busy;
+        if (shown) {
+          $("local-sub").textContent = held
+            ? free
+              ? "On hold: " +
+                size(free.ramRequiredBytes) +
+                " memory needed, " +
+                size(free.ramAvailableBytes) +
+                " free"
+              : "On hold: close other programs, then Check again."
+            : [
+                recommended.localModel
+                  ? "Recommended for this computer"
+                  : "Runs your tasks on this computer",
+                models.gpu,
+              ]
+                .filter(Boolean)
+                .join(" · ");
+          $("local-model-name").textContent = shown.name;
           $("local-model-needs").textContent = [
-            model.downloadBytes != null &&
-              gigabytes(model.downloadBytes) + " download",
-            model.diskBytes != null && gigabytes(model.diskBytes) + " disk",
-            model.memoryBytes != null &&
-              gigabytes(model.memoryBytes) + " memory",
+            shown.downloadBytes != null &&
+              gigabytes(shown.downloadBytes) + " download",
+            shown.diskBytes != null && gigabytes(shown.diskBytes) + " disk",
+            shown.memoryBytes != null &&
+              gigabytes(shown.memoryBytes) + " memory",
           ]
             .filter(Boolean)
             .join(" · ");
@@ -2319,7 +2370,7 @@
             "aria-checked",
             String(plan.localModel),
           );
-          $("local-model").disabled = busy;
+          $("local-model").disabled = busy || !model;
         }
         $("runtime-sub").textContent = known
           ? "Recommended: " + RUNTIMES[recommended.runtime] + "."
@@ -2689,6 +2740,9 @@
           });
       $("location-change").addEventListener("click", () =>
         run({ op: "local.location.pick" }),
+      );
+      $("local-recheck").addEventListener("click", () =>
+        run({ op: "local.recheck" }, "local-error"),
       );
       $("local-model").addEventListener("click", () => {
         picked = true;

@@ -117,9 +117,23 @@ Gateway and runs Agents. The daemon exits with the app.
   Quick Install installs the `recommendation` of the localmodels setup
   report (`installer.js --inspect`, run once as the setup window opens):
   `local-models` is the planned model served by Pi, shown with the model,
-  GPU, memory and download, plus the tool's caveat when it has one (low free
-  memory, which the install's own plan can still fail on); otherwise the
-  named runtime, with the tool's reason for no local model. The page adds no host rule of its own; while
+  GPU, memory and download, plus the tool's caveat when it has one;
+  otherwise the named runtime, with the tool's reason for no local model.
+  When the tool reports local models blocked now (`stack.state:
+"blocked-now"`: the model fits the hardware, but other programs hold the
+  memory it needs now; a tool before that field marks it by `basis:
+"capacity"` or reason `free-memory-required`, either one), the install
+  would plan again against the memory free then and stop, so the local model
+  shows on hold and is not offered. With the tool's `stack.memory` the page
+  says "quit other programs first; it needs X of memory, Y is free" (and the
+  graphics memory on a discrete GPU), adding the tool's words for any other
+  reason code; without it, the tool's reason. Quick Install installs the
+  runtime the installer recommends instead, and Check again
+  (`local.recheck`) runs the check again. A tool before `stack.state` still
+  recommends `local-models` there, so the installer's setup adapter
+  (`packages/local-installation/src/setup-plan.ts`) replaces that pick with
+  an installed runtime (signed-in first), else Codex; that override and the
+  fallbacks go once the pinned tool reports `state`. The page adds no host rule of its own; while
   the check runs the button waits with a spinner and says what it waits for
   (the first run downloads the localmodels tool, counted by `download`
   event lines before the report), and Customize marks the

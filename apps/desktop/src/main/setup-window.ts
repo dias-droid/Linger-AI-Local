@@ -232,6 +232,9 @@ export class SetupWindowModule implements Module {
         void local.begin(plan).catch(() => undefined);
         return;
       }
+      case "local.recheck":
+        ctx.get<LocalServerModule>("LocalServer").recheck();
+        return;
       case "local.location.pick": {
         const picked = await dialog.showOpenDialog(this.#window!, {
           title: "Choose Where to Install Linger",

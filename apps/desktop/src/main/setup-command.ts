@@ -27,6 +27,7 @@ const setupCommand = z.discriminatedUnion("op", [
         .optional(),
     })
     .strict(),
+  z.object({ op: z.literal("local.recheck") }).strict(),
   z.object({ op: z.literal("local.location.pick") }).strict(),
   z.object({ op: z.literal("local.location.reset") }).strict(),
   z

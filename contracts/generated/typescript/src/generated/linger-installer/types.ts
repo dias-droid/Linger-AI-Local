@@ -623,9 +623,28 @@ export interface components {
       choices: components["schemas"]["SetupChoice"][];
       localModels: {
         eligible: boolean;
+        /**
+         * @description Upstream stack.state. blocked-now means the hardware can run the plan, but installing now would stop until other programs free memory; a tool without stack.state reports that case as basis capacity or reason free-memory-required.
+         * @enum {string}
+         */
+        state: "ready" | "blocked-now" | "unavailable";
+        /** @description Upstream stack.hardwareCapable, separate from whether local models can install now; null when the tool cannot read the facts. */
+        hardwareCapable?: boolean | null;
+        /** @description Upstream stack.memory, present on a capacity basis; memory free now against what the plan needs. */
+        memory?: {
+          ramAvailableBytes: number;
+          ramRequiredBytes: number;
+          vramFreeBytes?: number;
+          vramRequiredBytes?: number;
+        };
         reasons: string[];
         /** @description Human-readable upstream explanations in the same order as reasons; model eligibility remains upstream-owned. */
         reasonMessages?: string[];
+        /**
+         * @description Present when the upstream plan fits this computer's hardware only once other programs release the memory they hold now (reason free-memory-required); installing plans again against the memory free then.
+         * @enum {string}
+         */
+        basis?: "capacity";
         selectedGpuIndex: number | null;
         estimate: {
           downloadBytes: number | null;

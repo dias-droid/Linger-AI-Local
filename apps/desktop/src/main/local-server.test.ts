@@ -94,8 +94,14 @@ if (args.includes("--inspect")) {
   const lowMemory = eligible && fs.existsSync(path.join(home, "low-memory"));
   const reasons = eligible ? (lowMemory ? ["free-memory-required"] : []) : ["facts-unavailable"];
   const reasonMessages = eligible ? (lowMemory ? ["Close other programs before installing."] : []) : ["nvidia-smi was not found"];
-  const recommendation = eligible ? "local-models" : "codex";
-  process.stdout.write(JSON.stringify({ hardware, localModels: { eligible, reasons, reasonMessages, estimate }, recommendation }) + "\n");
+  // With the plan priced on capacity, the installer recommends a runtime.
+  const recommendation = eligible && !lowMemory ? "local-models" : "codex";
+  const local = {
+    eligible: eligible && !lowMemory,
+    state: lowMemory ? "blocked-now" : eligible ? "ready" : "unavailable",
+    ...(lowMemory ? { basis: "capacity", memory: { ramAvailableBytes: 2899102924, ramRequiredBytes: 13689304433 } } : {}),
+  };
+  process.stdout.write(JSON.stringify({ hardware, localModels: { ...local, reasons, reasonMessages, estimate }, recommendation }) + "\n");
   process.exit(0);
 }
 if (args.includes("--resume")) {
@@ -1387,7 +1393,8 @@ describe("LocalServerModule", () => {
     info.mockRestore();
   });
 
-  it("keeps the tool's free-memory warning for an eligible computer", async () => {
+  it("holds a local model that needs free memory until a check finds it", async () => {
+    const info = vi.spyOn(silentLog, "info");
     const f = fixture({ checkout: "/src" }, {}, (home) => {
       mkdirSync(home, { recursive: true });
       writeFileSync(path.join(home, "low-memory"), "");
@@ -1397,16 +1404,40 @@ describe("LocalServerModule", () => {
     await vi.waitFor(() =>
       expect(f.module.status().localModels).toMatchObject({
         state: "checked",
-        eligible: true,
+        eligible: false,
+        blockedNow: true,
+        freeMemory: {
+          ramAvailableBytes: 2899102924,
+          ramRequiredBytes: 13689304433,
+        },
+        model: { name: "qwen3-8b" },
         reasons: [
           {
             code: "free-memory-required",
             message: "Close other programs before installing.",
           },
         ],
+        recommendation: "codex",
+      }),
+    );
+    expect(info).toHaveBeenCalledWith(
+      "local_server.inspected",
+      expect.objectContaining({ eligible: false, blocked_now: true }),
+    );
+    // The person closed other programs and checks again.
+    rmSync(path.join(f.home, "low-memory"));
+    f.module.recheck();
+    expect(f.module.status().localModels).toEqual({ state: "checking" });
+    await vi.waitFor(() =>
+      expect(f.module.status().localModels).toMatchObject({
+        state: "checked",
+        eligible: true,
         recommendation: "local-models",
       }),
     );
+    expect(f.module.status().localModels).not.toHaveProperty("blockedNow");
+    expect(f.module.status().localModels).not.toHaveProperty("freeMemory");
+    info.mockRestore();
   });
 
   it("approves the deployment of the chosen local model", async () => {

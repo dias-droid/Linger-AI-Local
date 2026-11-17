@@ -29,6 +29,9 @@ describe("parseSetupCommand", () => {
     expect(parseSetupCommand({ op: "local.location.reset" })).toEqual({
       op: "local.location.reset",
     });
+    expect(parseSetupCommand({ op: "local.recheck" })).toEqual({
+      op: "local.recheck",
+    });
     expect(parseSetupCommand({ op: "local.signin.start" })).toEqual({
       op: "local.signin.start",
     });

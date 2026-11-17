@@ -34,6 +34,7 @@ import { downloadVerified } from "@linger/local-installation/download";
 import { legacyMigrationPending } from "@linger/local-installation/home";
 import {
   type SetupChoice,
+  type SetupMemory,
   setupChoices,
 } from "@linger/local-installation/setup-plan";
 import {
@@ -104,15 +105,23 @@ export type LocalModelsCheck =
   | { readonly state: "checking"; readonly download?: Transfer }
   | {
       readonly state: "checked";
-      // Whether this computer can serve a local model at all.
+      // Whether this computer can serve a local model now.
       readonly eligible: boolean;
+      // The model fits this computer's hardware, but other programs hold
+      // memory it needs now: the tool's state "blocked-now". The install
+      // would plan again against the memory free then, so it is not offered
+      // until a new check finds that memory.
+      readonly blockedNow?: true;
+      // While blocked now: the memory free now and what the plan needs, as
+      // the tool counts them (VRAM only for a discrete GPU).
+      readonly freeMemory?: SetupMemory;
       readonly memoryBytes: number;
       readonly diskFreeBytes: number | null;
       readonly gpu?: string;
-      // Present only when eligible.
+      // Present when eligible or when it needs free memory.
       readonly model?: LocalModel;
       // The localmodels tool's code and words for why not, or, when
-      // eligible, for what could still stop the install (free memory).
+      // eligible, for what could still stop the install.
       readonly reasons?: readonly SetupReason[];
       // The localmodels tool's pick for this computer, which Quick Install
       // installs; the page adds no rule of its own.
@@ -492,9 +501,10 @@ export class LocalServerModule implements Module {
     this.#ctx?.bus.emit("local-server.changed");
   }
 
-  // Asks the installer, once per run, whether this computer can serve a
-  // local model; the setup window asks as it opens, before anything is
-  // installed. Then fetches the Node runtime an installation starts with.
+  // Asks the installer whether this computer can serve a local model; the
+  // setup window asks as it opens, before anything is installed, and again
+  // through recheck(). Then fetches the Node runtime an installation starts
+  // with.
   inspect(): void {
     if (
       this.#check.state !== "unchecked" ||
@@ -516,6 +526,9 @@ export class LocalServerModule implements Module {
           this.#ctx?.log.info("local_server.inspected", {
             ms: Date.now() - started,
             eligible: check.state === "checked" && check.eligible,
+            ...(check.state === "checked" && check.blockedNow
+              ? { blocked_now: true, free_memory: check.freeMemory }
+              : {}),
             ...(check.state === "checked" && check.recommendation
               ? { recommendation: check.recommendation }
               : {}),
@@ -542,6 +555,14 @@ export class LocalServerModule implements Module {
         if (!signal.aborted)
           void this.#ensureNode(signal).catch(() => undefined);
       });
+  }
+
+  // Checks again, for example after the person closed other programs to free
+  // the memory the local model needs.
+  recheck(): void {
+    if (this.#check.state === "checking" || this.#phase !== "idle") return;
+    this.#check = { state: "unchecked" };
+    this.inspect();
   }
 
   async #inspect(
@@ -602,6 +623,8 @@ export class LocalServerModule implements Module {
       recommendation?: unknown;
       localModels?: {
         eligible?: unknown;
+        state?: unknown;
+        memory?: Record<string, unknown>;
         reasons?: unknown;
         reasonMessages?: unknown;
         estimate?: {
@@ -631,8 +654,27 @@ export class LocalServerModule implements Module {
       typeof estimate?.model === "string" && estimate.model
         ? estimate.model
         : undefined;
-    // Offered only with a model to show; the plan names it.
-    const eligible = report.localModels.eligible && !!name;
+    // Offered only with a model to show; the plan names it. A plan blocked
+    // now cannot install until other programs free memory.
+    const blockedNow = !!name && report.localModels.state === "blocked-now";
+    const eligible = report.localModels.eligible && !!name && !blockedNow;
+    const memory = report.localModels.memory;
+    const freeMemory: SetupMemory | undefined =
+      blockedNow &&
+      bytes(memory?.ramAvailableBytes) !== null &&
+      bytes(memory?.ramRequiredBytes) !== null
+        ? {
+            ramAvailableBytes: memory!.ramAvailableBytes as number,
+            ramRequiredBytes: memory!.ramRequiredBytes as number,
+            ...(bytes(memory?.vramFreeBytes) !== null &&
+            bytes(memory?.vramRequiredBytes) !== null
+              ? {
+                  vramFreeBytes: memory!.vramFreeBytes as number,
+                  vramRequiredBytes: memory!.vramRequiredBytes as number,
+                }
+              : {}),
+          }
+        : undefined;
     const strings = (value: unknown) =>
       Array.isArray(value) ? value.map(String) : [];
     const messages = strings(report.localModels.reasonMessages);
@@ -657,7 +699,9 @@ export class LocalServerModule implements Module {
           ? hardware.diskFreeBytes
           : null,
       ...(typeof gpu === "string" ? { gpu } : {}),
-      ...(eligible && name
+      ...(blockedNow ? { blockedNow } : {}),
+      ...(freeMemory ? { freeMemory } : {}),
+      ...((eligible || blockedNow) && name
         ? {
             model: {
               name,
