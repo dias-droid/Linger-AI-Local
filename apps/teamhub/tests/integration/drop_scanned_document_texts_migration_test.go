@@ -1,3 +1,5 @@
+//go:build integration_migration_history
+
 package integration_test
 
 import (
@@ -5,30 +7,22 @@ import (
 	"os"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 )
 
-// Texts OCR wrote before the scanned flag was dropped are converted to what
-// the normalizer gives now, so a scan stays out of the Wiki and an image has
-// no searchable text; SVG and ordinary texts are untouched.
+// Texts that came from OCR alone are converted before the scanned flag is
+// dropped, so a scan stays out of the Wiki and an image has no searchable
+// text; SVG and ordinary texts are untouched.
 func TestDropScannedDocumentTextsConvertsOCRTexts(t *testing.T) {
-	allowParallelIntegrationTest(t)
 	ctx := context.Background()
-	databaseURL := newIntegrationDatabaseWithoutSkills(t)
-	config, err := pgx.ParseConfig(databaseURL)
+	databaseURL := newEmptyDatabase(t, "drop_scanned")
+	db := openMigrationTestDatabase(t, databaseURL)
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, os.DirFS(teamHubMigrationDirectory(t)))
 	if err != nil {
 		t.Fatal(err)
 	}
-	db := stdlib.OpenDB(*config)
-	t.Cleanup(func() { _ = db.Close() })
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, os.DirFS("../../migrations"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := provider.DownTo(ctx, 870); err != nil {
+	if _, err := provider.UpTo(ctx, 870); err != nil {
 		t.Fatal(err)
 	}
 	insertUnifiedDocumentIdentityFixture(t, ctx, db)

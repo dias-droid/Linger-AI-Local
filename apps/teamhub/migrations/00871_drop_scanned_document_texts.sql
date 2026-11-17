@@ -1,10 +1,12 @@
 -- +goose Up
 -- Document texts come only from text layers, never from OCR, so a ready PDF
 -- text always has one and the scanned flag goes away; a PDF without text is
--- still rejected from the Wiki as scanned. Texts OCR wrote are converted once
--- to what the normalizer gives now: a PDF read by OCR alone has no text and a
--- raster image is unsupported. Memory's hourly reconciliation then drops any
--- of them it indexed.
+-- still rejected from the Wiki as scanned. Texts that came from OCR alone are
+-- converted once: a PDF read by OCR alone has no text and a raster image is
+-- unsupported, and Memory's hourly reconciliation drops any of them it
+-- indexed. A PDF with a text layer keeps its stored text, including lines OCR
+-- added for its image areas, until a new Version replaces it; nothing is
+-- normalized again.
 UPDATE document_texts
 SET status = 'no_text', markdown = '', markdown_sha256 = NULL,
     search_text = '', longest_line_bytes = 0, updated_at = clock_timestamp()
