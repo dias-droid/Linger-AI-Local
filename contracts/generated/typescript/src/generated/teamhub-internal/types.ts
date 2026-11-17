@@ -1237,6 +1237,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/internal/v1/voice/sessions/{voiceSessionId}/media-epochs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Claim the next transcript media epoch for one open VoiceSession.
+     * @description Every claim returns a number no earlier claim for the session returned, including claims made by a runtime job that has since restarted. Observations of a track carry the epoch claimed for it.
+     */
+    post: operations["claimVoiceMediaEpoch"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/internal/v1/voice/sessions/{voiceSessionId}/live-context": {
     parameters: {
       query?: never;
@@ -1376,6 +1396,9 @@ export interface components {
       event_id: components["schemas"]["VoiceId"];
       /** @enum {string} */
       status: "accepted" | "ignored";
+    };
+    VoiceMediaEpochClaim: {
+      media_epoch: number;
     };
     VoiceMediaObjectKey: string;
     VoiceRecordingReport: {
@@ -5258,6 +5281,30 @@ export interface operations {
         content?: never;
       };
       400: components["responses"]["VoiceBadRequest"];
+      401: components["responses"]["VoiceUnauthenticated"];
+      404: components["responses"]["VoiceNotFound"];
+    };
+  };
+  claimVoiceMediaEpoch: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        voiceSessionId: components["schemas"]["VoiceId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The claimed epoch. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["VoiceMediaEpochClaim"];
+        };
+      };
       401: components["responses"]["VoiceUnauthenticated"];
       404: components["responses"]["VoiceNotFound"];
     };

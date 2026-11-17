@@ -1882,6 +1882,7 @@ type VoiceSession struct {
 	AuthSessionID              pgtype.Text        `json:"auth_session_id"`
 	LiveAgentActorID           pgtype.Text        `json:"live_agent_actor_id"`
 	LiveLeaseUntil             pgtype.Timestamptz `json:"live_lease_until"`
+	NextMediaEpoch             int32              `json:"next_media_epoch"`
 }
 
 type VoiceTranscriptSegment struct {

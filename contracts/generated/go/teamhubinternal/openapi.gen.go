@@ -3705,6 +3705,11 @@ type VoiceLiveToolResult struct {
 	Output string `json:"output"`
 }
 
+// VoiceMediaEpochClaim defines model for VoiceMediaEpochClaim.
+type VoiceMediaEpochClaim struct {
+	MediaEpoch int `json:"media_epoch"`
+}
+
 // VoiceMediaObjectKey defines model for VoiceMediaObjectKey.
 type VoiceMediaObjectKey = string
 
