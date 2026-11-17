@@ -3,8 +3,12 @@ import { existsSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
+import { build } from "esbuild";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { hostedDiagnosticsUploadUrl } from "../../scripts/diagnostics-upload-url.mjs";
 
 import type { SetupDiagnosticsSend } from "../shared/setup.js";
 import { ConfigStore } from "./config.js";
@@ -12,6 +16,7 @@ import {
   DIAGNOSTICS_UPLOAD_SCHEMA,
   DiagnosticsSender,
   DiagnosticsUploadError,
+  HOSTED_DIAGNOSTICS_UPLOAD_URL,
   MAX_DIAGNOSTICS_UPLOAD_BYTES,
   consentText,
   diagnosticsUploadUrl,
@@ -63,6 +68,73 @@ describe("diagnosticsUploadUrl in config.json", () => {
     expect(config.computerId).toBe("computer-1");
     expect(config.diagnosticsUploadUrl).toBeUndefined();
     expect(diagnosticsUploadUrl(config)).toBeUndefined();
+  });
+});
+
+describe("hosted receiver from the build", () => {
+  const hosted = "https://diagnostics.example.com/v1/reports";
+
+  it("is none without LINGER_DIAGNOSTICS_UPLOAD_URL", () => {
+    expect(hostedDiagnosticsUploadUrl(undefined)).toBeNull();
+    expect(hostedDiagnosticsUploadUrl("")).toBeNull();
+    expect(hostedDiagnosticsUploadUrl("  ")).toBeNull();
+    expect(HOSTED_DIAGNOSTICS_UPLOAD_URL).toBeUndefined();
+  });
+
+  it("keeps an https URL", () => {
+    expect(hostedDiagnosticsUploadUrl(` ${hosted}\n`)).toBe(hosted);
+  });
+
+  it.each([
+    "http://diagnostics.example.com/v1/reports",
+    "https://user:pass@diagnostics.example.com/v1/reports",
+    "not a url",
+  ])("fails the build for %s without repeating it", (value) => {
+    expect(() => hostedDiagnosticsUploadUrl(value)).toThrow(
+      /^LINGER_DIAGNOSTICS_UPLOAD_URL must be an https URL/,
+    );
+    try {
+      hostedDiagnosticsUploadUrl(value);
+    } catch (error) {
+      expect((error as Error).message).not.toContain(value);
+    }
+  });
+
+  it("falls back to it after config.json", () => {
+    expect(diagnosticsUploadUrl({}, undefined)).toBeUndefined();
+    expect(diagnosticsUploadUrl({}, hosted)).toBe(hosted);
+    expect(
+      diagnosticsUploadUrl(
+        { diagnosticsUploadUrl: "https://self.example.com/reports" },
+        hosted,
+      ),
+    ).toBe("https://self.example.com/reports");
+  });
+
+  // The same define build.mjs passes, so the bundle carries the value or none.
+  it.each([
+    [hosted, hosted],
+    [undefined, undefined],
+  ])("bundles %s as the hosted receiver", async (value, expected) => {
+    const outfile = path.join(tempDirectory(), "diagnostics-upload.mjs");
+    await build({
+      entryPoints: [path.join(import.meta.dirname, "diagnostics-upload.ts")],
+      outfile,
+      bundle: true,
+      platform: "node",
+      format: "esm",
+      logLevel: "silent",
+      define: {
+        __HOSTED_DIAGNOSTICS_UPLOAD_URL__: JSON.stringify(
+          hostedDiagnosticsUploadUrl(value),
+        ),
+      },
+    });
+    const bundled = (await import(
+      pathToFileURL(outfile).href
+    )) as typeof import("./diagnostics-upload.js");
+    expect(bundled.HOSTED_DIAGNOSTICS_UPLOAD_URL).toBe(expected);
+    expect(bundled.diagnosticsUploadUrl({})).toBe(expected);
   });
 });
 

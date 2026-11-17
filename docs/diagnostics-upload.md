@@ -21,8 +21,10 @@ once sent or declined.
 The receiver is `diagnosticsUploadUrl` in the desktop `config.json` (in the
 app's user data folder). It must be `https`, or `http` to `localhost`,
 `127.0.0.1` or `[::1]` while developing a receiver; any other value is
-ignored. Without it, the app uses its built-in hosted receiver, and when it
-has none, Send Diagnostics is hidden.
+ignored. Without it, the app uses the hosted receiver that the release
+pipeline builds in (`LINGER_DIAGNOSTICS_UPLOAD_URL`, see
+[desktop-release.md](desktop-release.md)); a build without one, such as a
+fork's, a local or a self-hosted build, hides Send Diagnostics.
 
 ```json
 { "diagnosticsUploadUrl": "https://diagnostics.example.com/v1/reports" }

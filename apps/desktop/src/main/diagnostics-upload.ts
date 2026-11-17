@@ -13,11 +13,15 @@ import type { SetupDiagnosticsSend } from "../shared/setup.js";
 
 export const DIAGNOSTICS_UPLOAD_SCHEMA = "linger.diagnostics-upload/v1";
 
-// The hosted receiver. Placeholder: no hosted receiver runs yet, so Send
-// Diagnostics shows only when config.json names one in
-// diagnosticsUploadUrl. Set this to the receiver's https URL once it is
-// live.
-export const HOSTED_DIAGNOSTICS_UPLOAD_URL: string | undefined = undefined;
+// The hosted receiver, which the release pipeline provides at build time
+// (LINGER_DIAGNOSTICS_UPLOAD_URL, see build.mjs). Builds without it (forks,
+// local and self-hosted builds) and tests have none, so Send Diagnostics
+// shows only when config.json names a receiver in diagnosticsUploadUrl.
+declare const __HOSTED_DIAGNOSTICS_UPLOAD_URL__: string | null | undefined;
+export const HOSTED_DIAGNOSTICS_UPLOAD_URL: string | undefined =
+  (typeof __HOSTED_DIAGNOSTICS_UPLOAD_URL__ === "undefined"
+    ? undefined
+    : __HOSTED_DIAGNOSTICS_UPLOAD_URL__) ?? undefined;
 
 // Receivers may accept less; this keeps a runaway log from leaving at all.
 export const MAX_DIAGNOSTICS_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -42,10 +46,10 @@ export const isUploadUrl = (value: string): boolean => {
 };
 
 // The receiver this app sends to, or none: then Send Diagnostics is hidden.
-export const diagnosticsUploadUrl = (config: {
-  readonly diagnosticsUploadUrl?: string | undefined;
-}): string | undefined =>
-  config.diagnosticsUploadUrl ?? HOSTED_DIAGNOSTICS_UPLOAD_URL;
+export const diagnosticsUploadUrl = (
+  config: { readonly diagnosticsUploadUrl?: string | undefined },
+  hosted: string | undefined = HOSTED_DIAGNOSTICS_UPLOAD_URL,
+): string | undefined => config.diagnosticsUploadUrl ?? hosted;
 
 const uploadTicket = z.object({
   schema: z.literal(DIAGNOSTICS_UPLOAD_SCHEMA),

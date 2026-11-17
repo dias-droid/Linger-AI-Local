@@ -207,8 +207,9 @@ Gateway and runs Agents. The daemon exits with the app.
   platform.
 - `src/main/diagnostics-upload.ts`: "Send Diagnostics" on the same three
   surfaces, shown only while a receiver is set up (`diagnosticsUploadUrl` in
-  `config.json`, else `HOSTED_DIAGNOSTICS_UPLOAD_URL`, a placeholder that is
-  unset until the hosted receiver runs). `DiagnosticsSender` builds the zip
+  `config.json`, else `HOSTED_DIAGNOSTICS_UPLOAD_URL`, which `build.mjs` bakes
+  in from the release pipeline's `LINGER_DIAGNOSTICS_UPLOAD_URL` secret and
+  leaves unset in other builds). `DiagnosticsSender` builds the zip
   into `<userData>/diagnostics-outbox`, waits for consent showing every file,
   the size and the host, uploads it with the
   [`linger.diagnostics-upload/v1`](../../docs/diagnostics-upload.md)

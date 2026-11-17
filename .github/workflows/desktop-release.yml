@@ -153,6 +153,10 @@ jobs:
             echo "WINDOWS_SIGNING_PASSWORD_FILE=$keys/authenticode.password" >>"$GITHUB_ENV"
           fi
       - run: scripts/ci/desktop-release.sh build ${{ matrix.target }}
+        env:
+          # The hosted diagnostics receiver this build carries; a secret so
+          # the address stays masked. Without it Send Diagnostics is hidden.
+          LINGER_DIAGNOSTICS_UPLOAD_URL: ${{ secrets.LINGER_DIAGNOSTICS_UPLOAD_URL }}
       - name: Remove signing files
         if: always()
         run: rm -rf "$RUNNER_TEMP/signing"

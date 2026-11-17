@@ -10,6 +10,7 @@ import path from "node:path";
 import { build } from "esbuild";
 
 import { buildDaemon } from "./scripts/build-daemon.mjs";
+import { hostedDiagnosticsUploadUrl } from "./scripts/diagnostics-upload-url.mjs";
 import { buildTeamhub, TEAMHUB_TARGETS } from "./scripts/build-teamhub.mjs";
 import {
   buildRuntime,
@@ -89,6 +90,9 @@ const common = {
     __DESKTOP_VERSION__: JSON.stringify(version),
     __SOURCE_ARCHIVE__: JSON.stringify(sourceArchive),
     __SOURCE_DEPENDENCIES__: JSON.stringify(sourceDependencies),
+    __HOSTED_DIAGNOSTICS_UPLOAD_URL__: JSON.stringify(
+      hostedDiagnosticsUploadUrl(process.env.LINGER_DIAGNOSTICS_UPLOAD_URL),
+    ),
   },
   logLevel: "warning",
 };

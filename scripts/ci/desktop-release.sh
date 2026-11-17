@@ -30,6 +30,9 @@ set -euo pipefail
 #                                (~/.cache/linger-desktop)
 #   LINGER_NATIVE_DEPS_URL       folder serving those archives by file name; in a GitLab
 #                                CI job it defaults to the project's linger-native-deps package
+#   LINGER_DIAGNOSTICS_UPLOAD_URL
+#                                hosted diagnostics receiver that build.mjs builds in (https);
+#                                without it Send Diagnostics is hidden
 #   RELEASE_OUT                  output root (.linger-runtime/desktop-release); release
 #                                files go to $RELEASE_OUT/assets/
 #   RCODESIGN                    rcodesign executable for darwin-arm64 (PATH)
