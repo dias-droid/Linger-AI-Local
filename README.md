@@ -51,7 +51,7 @@ Efficient AI model–harness co-design brings a full local agent to consumer Mac
   <tr><td>Tiel Coder 35B-A3B</td><td align="center">83</td><td align="center">78.8</td><td align="center">337–345</td></tr>
 </table>
 
-¹ Not from PolyStrata's results: our lab measured the Q2_0 file with a short prompt on a 96 GB card held to an 8 GB budget, with 32 GB of RAM and a 64K context. It is not a real 8 GB card, and the earlier 95 tok/s IQ1_M figure was not reproduced: the IQ1_M file we could find, the Coder variant, gave 32.1 under the same conditions.
+¹ Not from PolyStrata's results: our lab measured the Q2_0 file with a short prompt on a 96 GB card held to an 8 GB budget, with 32 GB of RAM and a 64K context. It is not a real 8 GB card, and it does not settle the earlier 95 tok/s IQ1_M figure: Flash-Next Coder IQ1_M gave 32.1 under the same conditions, and the full-model UD-IQ1_M was not tested.
 
 Full results (**5 more models**!) can be found in [PolyStrata](https://github.com/simplexai-labs/PolyStrata#how-fast-is-it).
 
@@ -77,14 +77,14 @@ One command detects your hardware, recommends the best model, installs it and ch
     <th align="left" width="2700">Compares with</th>
   </tr>
   <tr><td>Mac 16 GB</td><td>Spark-X2.6-4B Q4_K_M†</td><td align="center">37.6 short (37.4–37.8); 13.3 after a 126K prompt (13.30–13.31)</td><td align="center">Not ranked</td><td>—</td></tr>
-  <tr><td>Mac 24 GB</td><td>Qwen3.8-27B UD-IQ3_S</td><td align="center">46.06 single session (median of 3); 48.43 for two sessions together</td><td align="center">51.9</td><td>≈ Claude Opus 4.5</td></tr>
+  <tr><td>Mac 24 GB</td><td>Qwen3.8-27B UD-IQ3_S</td><td align="center">46.06 single session (median of 3); 48.43 for 2 sessions together</td><td align="center">51.9</td><td>≈ Claude Opus 4.5</td></tr>
   <tr><td>Mac 32 GB</td><td>Qwen3.8-27B UD-Q4_K_M</td><td align="center">45.44 single session (median of 3)</td><td align="center">54.0</td><td>≈ Claude Sonnet 4.6</td></tr>
-  <tr><td>NVIDIA 8 GB + 32 GB</td><td>Qwen3.6-35B-A3B UD-Q3_K_M</td><td align="center">121–146 short; 88–103 after a 62K prompt</td><td align="center">35.4</td><td>≈ Gemini 2.5 Pro</td></tr>
-  <tr><td>NVIDIA 12 GB + 32 GB</td><td>Qwen3.8-Flash-Next GSQ-RCO Q2_0†</td><td align="center">21.3 short (19.8–25.4); 34.1 after a 62K prompt (12.0–37.3), first token after about 3 minutes</td><td align="center">57.3</td><td>≈ Claude Opus 4.6</td></tr>
-  <tr><td>NVIDIA 24 GB + 64 GB</td><td>Qwen3.8-27B UD-Q4_K_M</td><td align="center">32.5–33.2 single session at 130K; 28–41 per session with two sessions at about 8K</td><td align="center">54.0</td><td>≈ Claude Sonnet 4.6</td></tr>
+  <tr><td>Linux NVIDIA 8 GB + 32 GB</td><td>Qwen3.6-35B-A3B UD-Q3_K_M</td><td align="center">121–146 short; 88–103 after a 62K prompt</td><td align="center">35.4</td><td>≈ Gemini 2.5 Pro</td></tr>
+  <tr><td>Linux NVIDIA 12 GB + 32 GB</td><td>Qwen3.8-Flash-Next GSQ-RCO Q2_0†</td><td align="center">21.3 short (19.8–25.4); 34.1 after a 62K prompt (12.0–37.3), first token after about 3 minutes</td><td align="center">57.3</td><td>≈ Claude Opus 4.6</td></tr>
+  <tr><td>Linux NVIDIA 24 GB + 64 GB</td><td>Qwen3.8-27B UD-Q4_K_M</td><td align="center">32.5–33.2 single session at 130K; 28–41 per session with two sessions at about 8K</td><td align="center">54.0</td><td>≈ Claude Sonnet 4.6</td></tr>
 </table>
 
-<sub>Decode speeds were measured in our lab, mostly on a simulated tier (a larger card or Mac held to the tier's budget), so a real machine of the tier can be slower. SimplexAI scores sit on the third-party AIHOT scale, where 50 is the reference average, and scores within 3 points count as the same level. † Not this machine's default recommendation. Not ranked: AIHOT has no third-party results for the model. Test conditions, defaults and self-tests are in <a href="docs/local-inference.md#planning">Local inference</a>.</sub>
+<sub>Decode speeds were measured in our lab, mostly on a simulated tier (a larger card held to the tier's memory budget, or a larger Mac planned as the tier), so a real machine of the tier can be slower. SimplexAI scores sit on the third-party AIHOT scale, where 50 is the reference average, and scores within 3 points count as the same level. † Not this machine's default recommendation. Not ranked: AIHOT has no third-party results for the model. Test conditions, defaults and self-tests are in <a href="docs/local-inference.md#planning">Local inference</a>.</sub>
 
 <!-- END GENERATED: public-tiers tiers -->
 
