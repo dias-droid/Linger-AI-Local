@@ -13,6 +13,7 @@
 </p>
 
 <p align="center">
+  <a href="https://discord.gg/K9TjZNwC4"><img height="28" alt="Join our Discord" src="https://img.shields.io/badge/Discord-5865F2?logo=discord&amp;logoColor=white&amp;style=for-the-badge"></a>
   <a href="https://x.com/HeyLingerAI"><img height="28" alt="Follow on X" src="https://img.shields.io/badge/@HeyLingerAI-000000?logo=x&logoColor=white&amp;style=for-the-badge"></a>
   <a href="https://www.youtube.com/@HeyLingerAI"><img height="28" alt="YouTube" src="https://img.shields.io/badge/YouTube-FF0000?logo=youtube&logoColor=white&amp;style=for-the-badge"></a>
   <a href="https://www.reddit.com/user/HeyLinger/"><img height="28" alt="Reddit" src="https://img.shields.io/badge/Reddit-FF4500?logo=reddit&logoColor=white&amp;style=for-the-badge"></a>
