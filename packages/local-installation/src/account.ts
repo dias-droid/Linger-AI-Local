@@ -94,8 +94,8 @@ interface LocalAccount {
   provisioned: boolean;
 }
 
-// For a database made again from nothing: the next account step creates
-// the owner again with the saved email and password.
+// Blocks private login reads during database replacement until the account
+// step has established the owner in the new database.
 export async function unprovisionLocalAccount(root: string): Promise<void> {
   const file = path.join(root, "local-account.json");
   const text = await readPrivate(file);
@@ -124,6 +124,7 @@ export async function ensureLocalAccount(
   options: {
     email?: string;
     password?: string;
+    // Resolves only when this email owns the deployment; never resets a password.
     provisionOwner: (email: string, password: string) => Promise<void>;
   },
 ): Promise<{ email: string; file: string; password: string }> {
@@ -210,8 +211,10 @@ export async function ensureLocalAccount(
   if (login.ok) return complete(login);
   if (login.status !== 401)
     throw new Error(`Local account login check failed (HTTP ${login.status})`);
+  let ownerConfirmed = false;
   try {
     await options.provisionOwner(email, account.password);
+    ownerConfirmed = true;
   } catch {
     // The command can fail after commit. Never expose diagnostics containing
     // private input; confirm ownership using the persisted password instead.
@@ -222,6 +225,12 @@ export async function ensureLocalAccount(
     password: account.password,
   });
   if (confirmed.ok) return complete(confirmed);
+  // An existing owner may have changed the password in Settings. The local
+  // command confirms the owner exists, not that the saved password is current.
+  if (account.provisioned && ownerConfirmed && confirmed.status === 401) {
+    signal.throwIfAborted();
+    return { email, file, password: account.password };
+  }
   throw new Error(
     `Local account sign-in failed after creation (HTTP ${confirmed.status}). Credentials are preserved; existing accounts will not be reset.`,
   );

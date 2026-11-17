@@ -335,7 +335,7 @@ it("recreates a missing owner when the private file is already marked provisione
       ),
   ).toEqual(["/v0/auth/login", "/v0/auth/login", "/v0/auth/logout"]);
 });
-it("rejects a provisioned account with a stale password without replacing credentials", async () => {
+it("keeps an existing provisioned owner ready after the user changes their password", async () => {
   const f = await fixture();
   const saved = JSON.stringify({
     email: "owner@linger.local",
@@ -348,9 +348,13 @@ it("rejects a provisioned account with a stale password without replacing creden
     vi.fn(async () => new Response("server-private-secret", { status: 401 })),
   );
   provisionOwner.mockResolvedValue(undefined);
-  await expect(ensureLocalAccount(f.instance, f.signal, owner)).rejects.toThrow(
-    "Local account sign-in failed after creation (HTTP 401). Credentials are preserved; existing accounts will not be reset.",
-  );
+  await expect(
+    ensureLocalAccount(f.instance, f.signal, owner),
+  ).resolves.toEqual({
+    email: "owner@linger.local",
+    password: "saved-private-password",
+    file: f.file,
+  });
   expect(provisionOwner).toHaveBeenCalledOnce();
   expect(fetch).toHaveBeenCalledTimes(2);
   expect(await readFile(f.file, "utf8")).toBe(saved);
@@ -391,5 +395,70 @@ it("preserves a provisioned account and hides details on a network failure", asy
     "The local account service is unavailable. Reopen Linger to retry; account credentials are preserved.",
   );
   expect(provisionOwner).not.toHaveBeenCalled();
+  expect(await readFile(f.file, "utf8")).toBe(saved);
+});
+
+it("does not trust a provisioned marker when owner confirmation and login both fail", async () => {
+  const f = await fixture();
+  const saved = JSON.stringify({
+    email: "owner@linger.local",
+    password: "saved-private-password",
+    provisioned: true,
+  });
+  await writeFile(f.file, saved, { mode: 0o600 });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("server-private-secret", { status: 401 })),
+  );
+  provisionOwner.mockRejectedValue(new Error("private-owner-command-failure"));
+  await expect(ensureLocalAccount(f.instance, f.signal, owner)).rejects.toThrow(
+    "Local account sign-in failed after creation (HTTP 401). Credentials are preserved; existing accounts will not be reset.",
+  );
+  expect(await readFile(f.file, "utf8")).toBe(saved);
+});
+it.each([429, 503])(
+  "does not accept a provisioned owner when the confirmation login fails with %s",
+  async (status) => {
+    const f = await fixture();
+    const saved = JSON.stringify({
+      email: "owner@linger.local",
+      password: "saved-private-password",
+      provisioned: true,
+    });
+    await writeFile(f.file, saved, { mode: 0o600 });
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(null, { status: ++calls === 1 ? 401 : status }),
+      ),
+    );
+    provisionOwner.mockResolvedValue(undefined);
+    await expect(
+      ensureLocalAccount(f.instance, f.signal, owner),
+    ).rejects.toThrow(
+      `Local account sign-in failed after creation (HTTP ${status}). Credentials are preserved; existing accounts will not be reset.`,
+    );
+    expect(await readFile(f.file, "utf8")).toBe(saved);
+  },
+);
+it("does not report an existing provisioned owner ready after cancellation", async () => {
+  const f = await fixture();
+  const controller = new AbortController();
+  const saved = JSON.stringify({
+    email: "owner@linger.local",
+    password: "saved-private-password",
+    provisioned: true,
+  });
+  await writeFile(f.file, saved, { mode: 0o600 });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(null, { status: 401 })),
+  );
+  provisionOwner.mockImplementation(async () => controller.abort());
+  await expect(
+    ensureLocalAccount(f.instance, controller.signal, owner),
+  ).rejects.toThrow();
   expect(await readFile(f.file, "utf8")).toBe(saved);
 });

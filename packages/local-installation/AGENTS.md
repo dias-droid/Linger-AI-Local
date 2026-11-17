@@ -11,12 +11,15 @@ stop unrelated processes, pull mutable images, or delete volumes as recovery.
 Every installation runs natively from a Linger source checkout; Docker is not
 used.
 
-The account file records provisioning history, not current database readiness.
-Every installation verifies the saved credentials before reporting the account
-ready. On HTTP 401, use the existing idempotent owner command and confirm login:
-it can recreate a missing owner after a database replacement, but never resets
-an existing password or replaces saved credentials. Other login failures stop
-without provisioning.
+The account file records provisioning history, not current database readiness
+or a promise that its saved password is still current. On HTTP 401, the existing
+idempotent owner command establishes whether this email owns the deployment and
+can recreate a missing owner without resetting a password. Confirm login after
+it: a provisioned owner whose password was deliberately changed remains ready
+when the owner command succeeded and login still returns 401. This grants no
+session and does not replace saved credentials. A failed owner command, other
+login errors, or an unprovisioned account whose login fails must not be treated
+as a changed password.
 
 Each instance directory holds `user.env` (0600), the only file a person edits:
 `COMPOSIO_API_KEY`, `SONIOX_API_KEY`, `XAI_API_KEY` and `TZ`
@@ -70,8 +73,9 @@ migration, which refuses a database that already holds one. A database from
 the desktop app before the rename has `public.accounts` but no applied 852
 row in `goose_db_version`, so it can never migrate (`legacy-database.ts`).
 Once the database is up, Native checks for that; for such a database it
-stops PostgreSQL, marks `local-account.json` as not provisioned (so the
-account step creates the owner again with the same email and password) and
+stops PostgreSQL, marks `local-account.json` as not provisioned (so private
+login/enrollment reads refuse it until the account step confirms the owner in
+the replacement database) and
 moves `data/agent`, `data/artifacts`, `computer-enrollment.token` and, last,
 `native/postgres-data` into `simplex-backup-<UTC time>` in the instance,
 deleting nothing. The database moves last so that a run stopped partway
