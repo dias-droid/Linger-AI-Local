@@ -131,6 +131,10 @@ describe("prepareNativeDatabase on Windows", () => {
 });
 
 describe("prepareNativeDatabase initdb", () => {
+  // The root guard refuses initdb, and CI containers often run as root.
+  beforeEach(() => {
+    Object.defineProperty(process, "getuid", { ...getuid, value: () => 1000 });
+  });
   const data = path.join(instance.root, "native/postgres-data");
   const pending = `${data}.partial`;
   const pgdata = () =>
