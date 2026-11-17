@@ -13,7 +13,7 @@ import {
   type MessageDocumentOption,
   type MessageSkillOption,
 } from "./message-composer-references";
-import { activeMessageMentions } from "./message-mentions";
+import { activeMessageMentions, formatMentionToken } from "./message-mentions";
 import type { ComposerVoiceState } from "./use-composer-voice";
 
 export const TEAMHUB_MESSAGE_MAX_LENGTH = 50_000;
@@ -178,6 +178,17 @@ export type ComposerReferences = ReturnType<
 
 export function messageLengthError() {
   return `Message must be ${TEAMHUB_MESSAGE_MAX_LENGTH.toLocaleString()} characters or fewer.`;
+}
+
+/** Names unavailable mentions; `nextStep` tells the user how to proceed. */
+export function unavailableMentionsError(
+  mentions: TeamHubActorRef[],
+  nextStep: (noun: string) => string,
+) {
+  const names = mentions.map(formatMentionToken).join(", ");
+  const verb = mentions.length === 1 ? "is" : "are";
+  const noun = mentions.length === 1 ? "mention" : "mentions";
+  return `${names} ${verb} not available in this Room. ${nextStep(noun)}`;
 }
 
 export function findDocumentOption(

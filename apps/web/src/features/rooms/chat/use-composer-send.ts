@@ -8,6 +8,7 @@ import type { ComposerAttachments } from "./use-composer-attachments";
 import {
   type ComposerDraft,
   messageLengthError,
+  unavailableMentionsError,
   TEAMHUB_MESSAGE_MAX_LENGTH,
 } from "./use-composer-draft";
 import type { ComposerPicker } from "./use-composer-picker";
@@ -94,11 +95,11 @@ export function useComposerSend({
       return;
     }
     if (unavailableMentions.length) {
-      const names = unavailableMentions.map(formatMentionToken).join(", ");
-      const verb = unavailableMentions.length === 1 ? "is" : "are";
-      const noun = unavailableMentions.length === 1 ? "mention" : "mentions";
       setMessageError(
-        `${names} ${verb} not available in this Room. Remove the ${noun} to send.`,
+        unavailableMentionsError(
+          unavailableMentions,
+          (noun) => `Remove the ${noun} to send.`,
+        ),
       );
       return;
     }

@@ -255,6 +255,33 @@ describe("voice material composer", () => {
     );
   });
 
+  it("rejects a voice turn whose draft mentions an unavailable Agent", async () => {
+    const staleActor = {
+      display_name: "Retired Agent",
+      id: "actor-retired",
+      kind: "agent" as const,
+      tenant_id: scope.tenantId,
+    };
+    const f = mount({
+      agentOptionsReady: true,
+      initialMentions: [staleActor],
+      initialValue: "@Retired Agent",
+    });
+    act(() =>
+      voice.binding!.onChange({
+        entered: true,
+        text: "Explain this",
+        sourceId: "source-1",
+      }),
+    );
+    await expect(
+      voice.binding!.prepareSend("Explain this", "turn-retired")(),
+    ).rejects.toThrow(
+      "@Retired Agent is not available in this Room. Exit to review the draft.",
+    );
+    expect(f.onSend).not.toHaveBeenCalled();
+  });
+
   it("offers only Send once the draft addresses someone", async () => {
     const codex = {
       display_name: "Codex",

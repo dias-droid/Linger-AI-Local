@@ -8,6 +8,7 @@ import {
   type ComposerDraft,
   type ComposerReferences,
   messageLengthError,
+  unavailableMentionsError,
   TEAMHUB_MESSAGE_MAX_LENGTH,
 } from "./use-composer-draft";
 import type { ComposerSend } from "./use-composer-send";
@@ -134,6 +135,13 @@ export function useComposerVoiceTurn({
       if (references.pendingAvailability)
         throw new Error(
           "Message references are still loading. Exit to review the draft.",
+        );
+      if (references.unavailableMentions.length)
+        throw new Error(
+          unavailableMentionsError(
+            references.unavailableMentions,
+            () => "Exit to review the draft.",
+          ),
         );
       try {
         snapshot ??= withVoiceMaterials(
