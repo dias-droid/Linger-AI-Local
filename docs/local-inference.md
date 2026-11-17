@@ -26,7 +26,7 @@ packed around it.
 
 | Machine                    | Model               | Quant        | Context | Decode, tok/s                                                                                  | SimplexAI  | Compares with       |
 | -------------------------- | ------------------- | ------------ | ------- | ---------------------------------------------------------------------------------------------- | ---------- | ------------------- |
-| Mac 16 GB                  | Spark-X2.6-4B†      | Q4_K_M       | 128K    | 37.6 short (37.4–37.8); 13.3 after a 126K prompt (13.30–13.31)                                 | Not ranked | —                   |
+| Mac 16 GB                  | Spark-X2.6-4B       | Q4_K_M       | 64K     | 37.6 short (37.4–37.8); 13.3 after a 126K prompt (13.30–13.31)                                 | Not ranked | —                   |
 | Mac 24 GB                  | Qwen3.8-27B         | UD-IQ3_S     | 64K     | 46.06 single session (median of 3); 48.43 for 2 sessions together                              | 51.9       | ≈ Claude Opus 4.5   |
 | Mac 32 GB                  | Qwen3.8-27B         | UD-Q4_K_M    | 128K    | 45.44 single session (median of 3)                                                             | 54.0       | ≈ Claude Sonnet 4.6 |
 | Linux NVIDIA 8 GB + 32 GB  | Qwen3.6-35B-A3B     | UD-Q3_K_M    | 64K     | 121–146 short; 88–103 after a 62K prompt                                                       | 35.4       | ≈ Gemini 2.5 Pro    |
@@ -43,8 +43,6 @@ Test conditions:
 - Linux NVIDIA 8 GB + 32 GB: Simulated: a 96 GB card limited to an 8 GB budget, memory capped at 28 GB for a 32 GB machine; strata-poly poly.7, one request per start; not a real 8 GB card.
 - Linux NVIDIA 12 GB + 32 GB: Simulated: a 96 GB card limited to a 12 GB budget, memory capped at 28 GB; Strata pages the experts from the model file; 3 requests from one start; not a real 12 GB card.
 - Linux NVIDIA 24 GB + 64 GB: A real RTX 4090 D 24 GB card; the two sessions share one 128K window (about 8K each when both ran); llama.cpp r3 build of 2026-10-25, KV q8_0/q4_0 and q8_0/q8_0 (the ranges cover both); the two sessions overlapped only in part, so per-session numbers are approximate; not a rerun of the current installer recipe.
-
-† Mac 16 GB: the table shows Spark-X2.6-4B Q4_K_M; the default recommendation for this machine is LFM3-1.7B Q8_0.
 
 Not ranked (Mac 16 GB): AIHOT has no third-party results for Spark-X2.6-4B. Our own self-test: SciCode subproblems 28.2% (82/291), read on AIHOT's SciCode scale as 22.1 (12.5–30.8). Self-test, not a SimplexAI score: Q4_K_M on an M5 Ultra with 256 GiB (llama.cpp b11370, 4 sessions of 192K, not the 16 GB setup), thinking on, 16,384 output tokens per turn (25 of 65 problems hit the cap and count as failed), one pass@1; the interval covers resampling the problems only; the vendor reports 36.8% unquantized.
 
