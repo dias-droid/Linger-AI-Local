@@ -704,6 +704,11 @@ describe("root install.sh", () => {
     const dockerLogPath = path.join(root, "docker-calls.log");
     await mkdir(path.join(fakeRepo, "scripts/install"), { recursive: true });
     await mkdir(path.join(fakeRepo, "scripts/installs"), { recursive: true });
+    await mkdir(path.join(fakeRepo, ".linger-runtime"), { recursive: true });
+    await chmod(path.join(fakeRepo, ".linger-runtime"), 0o555);
+    cleanups.push(async () => {
+      await chmod(path.join(fakeRepo, ".linger-runtime"), 0o755);
+    });
     await mkdir(fakeBin, { recursive: true });
     await mkdir(homeDir, { recursive: true });
     await mkdir(xdgCache, { recursive: true });
@@ -805,12 +810,12 @@ esac
     expect(updatedEnv).toContain("WEB_PUBLIC_ORIGIN=http://localhost:3001");
     expect(updatedEnv).toContain("LIVEKIT_URL=ws://127.0.0.1:17881");
     expect(updatedEnv).toContain(
-      "COMPOSE_FILE=docker-compose.yml:.linger-runtime/compose.ports.yml",
+      "COMPOSE_FILE=docker-compose.yml:.local/compose.ports.yml",
     );
     expect(updatedEnv).not.toContain("POSTGRES_PORT=5433");
 
     const portsOverride = await readFile(
-      path.join(fakeRepo, ".linger-runtime/compose.ports.yml"),
+      path.join(fakeRepo, ".local/compose.ports.yml"),
       "utf8",
     );
     expect(portsOverride).toContain("ports: !override");

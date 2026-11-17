@@ -420,21 +420,6 @@ collect_docker_host_ports() {
   tr ', ' '\n' | sed -nE 's/.*:([0-9]+)->[0-9]+\/(tcp|udp).*/\1\/\2/p' | sort -u
 }
 
-parse_port_from_url() {
-  local url="$1"
-  local fallback="$2"
-  local rest="${url#*://}"
-  rest="${rest%%/*}"
-  if [[ "$rest" == *:* ]]; then
-    local p="${rest##*:}"
-    if [[ "$p" =~ ^[0-9]+$ ]]; then
-      printf '%s\n' "$p"
-      return 0
-    fi
-  fi
-  printf '%s\n' "$fallback"
-}
-
 read_livekit_override_port() {
   local file="$1"
   local container_port="$2"
@@ -512,7 +497,7 @@ pick_free_port() {
 
 ensure_compose_ports() {
   local env_file="$REPO_ROOT/.env"
-  local override_file="$REPO_ROOT/.linger-runtime/compose.ports.yml"
+  local override_file="$REPO_ROOT/.local/compose.ports.yml"
 
   local own_raw=""
   own_raw="$(cd "$REPO_ROOT" && docker compose ps --format '{{.Ports}}' 2>/dev/null || true)"
@@ -537,7 +522,7 @@ ensure_compose_ports() {
   cur_node="$(read_env_value "$env_file" "NODE_SERVICES_HTTP_PORT" || printf '4319')"
   cur_doc="$(read_env_value "$env_file" "DOCUMENT_RUNTIME_HTTP_PORT" || printf '4321')"
   cur_lk_url="$(read_env_value "$env_file" "LIVEKIT_URL" || printf 'ws://127.0.0.1:17880')"
-  cur_lk_http="$(parse_port_from_url "$cur_lk_url" "17880")"
+  cur_lk_http="$(read_livekit_override_port "$override_file" "7880" "17880")"
   cur_lk_tcp="$(read_livekit_override_port "$override_file" "7881" "7881")"
   cur_lk_udp="$(read_livekit_override_port "$override_file" "7882" "7882")"
 
@@ -668,12 +653,10 @@ ensure_compose_ports() {
   fi
 
   if [[ "$new_lk_http" != "17880" || "$new_lk_tcp" != "7881" || "$new_lk_udp" != "7882" ]]; then
-    if [[ "$new_lk_http" != "$cur_lk_http" ]]; then
-      if [[ -z "$cur_lk_url" || "$cur_lk_url" =~ ^ws://(127\.0\.0\.1|localhost): ]]; then
-        set_env_value "$env_file" "LIVEKIT_URL" "ws://127.0.0.1:$new_lk_http"
-      fi
+    if [[ -z "$cur_lk_url" || "$cur_lk_url" =~ ^ws://(127\.0\.0\.1|localhost): ]]; then
+      set_env_value "$env_file" "LIVEKIT_URL" "ws://127.0.0.1:$new_lk_http"
     fi
-    mkdir -p "$REPO_ROOT/.linger-runtime"
+    mkdir -p "$REPO_ROOT/.local"
     cat <<EOF > "$override_file"
 services:
   livekit:
@@ -684,10 +667,13 @@ services:
 EOF
     local cur_compose_file=""
     cur_compose_file="$(read_env_value "$env_file" "COMPOSE_FILE" || true)"
+    cur_compose_file="${cur_compose_file//.linger-runtime\/compose.ports.yml/}"
+    cur_compose_file="${cur_compose_file#:}"
+    cur_compose_file="${cur_compose_file%:}"
     if [[ -z "$cur_compose_file" ]]; then
-      set_env_value "$env_file" "COMPOSE_FILE" "docker-compose.yml:.linger-runtime/compose.ports.yml"
-    elif [[ ":$cur_compose_file:" != *":.linger-runtime/compose.ports.yml:"* ]]; then
-      set_env_value "$env_file" "COMPOSE_FILE" "$cur_compose_file:.linger-runtime/compose.ports.yml"
+      set_env_value "$env_file" "COMPOSE_FILE" "docker-compose.yml:.local/compose.ports.yml"
+    elif [[ ":$cur_compose_file:" != *":.local/compose.ports.yml:"* ]]; then
+      set_env_value "$env_file" "COMPOSE_FILE" "$cur_compose_file:.local/compose.ports.yml"
     fi
   fi
 }
@@ -699,6 +685,7 @@ start_compose_server() {
     printf '  Created .env from .env.example.\n'
   fi
 
+  mkdir -p "$REPO_ROOT/.linger-runtime/postgres-logs/stack" 2>/dev/null || true
   ensure_compose_ports
 
   printf '  Starting Linger with Docker Compose...\n'
