@@ -65,6 +65,7 @@ func (a *App) registerExternalApps(ctx context.Context, cfg config.ExternalAppsC
 func (a *App) addExternalAppJobs(features *featureSet, appListeners bool) {
 	externalsource.AddJobWorkers(features.workers, a.externalSources, a.connectedAppsConfigured)
 	river.AddWorker(features.workers, &connectionAuthorizationSettleWorker{app: a})
+	river.AddWorker(features.workers, &profileSetupReminderWorker{app: a})
 	features.schedule(a.connectedAppSweeps(features.workers)...)
 	if !appListeners {
 		return
