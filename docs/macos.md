@@ -34,11 +34,10 @@ xattr -dr com.apple.quarantine /Applications/Linger.app
 
 ## Download
 
-**[Download Linger 0.1.2 for macOS (Apple silicon DMG)](https://github.com/simplexai-labs/linger/releases/download/desktop-v0.1.2/Linger-0.1.2-macos-arm64.dmg)**
+**[Download the latest macOS release](https://github.com/simplexai-labs/linger/releases/latest)**
 
-For the newest build, open the [latest release](https://github.com/simplexai-labs/linger/releases/latest)
-and choose `Linger-<version>-macos-arm64.dmg`. Check the download against
-`SHA256SUMS.txt` from the same release.
+Under **Assets**, choose `Linger-<version>-macos-arm64.dmg` for Apple silicon.
+Check the download against `SHA256SUMS.txt` from the same release.
 
 See [Install the desktop app](https://docs.heylinger.com/install/desktop-app)
 for help when setup fails.
