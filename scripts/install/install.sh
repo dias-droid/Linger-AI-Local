@@ -33,6 +33,7 @@ MODE="guide"
 EXPLICIT_WEB_URL=""
 WEB_URL=""
 CONNECT_LINGER=1
+WITH_SEARCH=0
 PURGE=0
 YES=0
 
@@ -49,6 +50,7 @@ Guided setup for Linger local models and connecting this computer to Linger.
 Options:
   --web-url <origin>   Linger server URL (default: http://localhost:3000)
   --connect            Install and connect linger-computer only
+  --with-search        Also install the local DuckDuckGo web-search helper
   --up                 Start installed local models and refresh linger-computer
   --status             Show local model and linger-computer status
   --remove             Uninstall local model services (keeps downloaded files)
@@ -185,6 +187,9 @@ sanitize_engine_stream() {
     -e 's/stack\.sh:/install.sh:/g' \
     -e 's/on Windows use stack\.ps1/on Windows use the Linger desktop app/g' \
     -e 's/stack\.ps1/the Linger desktop app/g' \
+    -e "s/'stack service[^']*'/the existing local service/g" \
+    -e "s/stack service [^;,.]*/the existing local service/g" \
+    -e "s/ or plan another --llm-port//g" \
     -e "s|(python3 -m )?localmodels stack remove --purge|${escaped_self} --remove --purge|g" \
     -e "s|stack remove --purge|${escaped_self} --remove --purge|g" \
     -e "s|(python3 -m )?localmodels stack remove|${escaped_self} --remove|g" \
@@ -917,7 +922,11 @@ step_check_hardware_and_options() {
 
   MODEL_ACTION="plan"
   HAS_ACCEPTED_STACK=0
+  SHARED_GPU_APPROVED=0
   PLAN_ARGS=()
+  if (( WITH_SEARCH == 0 )); then
+    PLAN_ARGS+=("--no-search")
+  fi
 
   set +e
   sh "$STACK_SCRIPT" status --json > "$WORK_DIR/status.json" 2>"$WORK_DIR/status.err"
@@ -1089,6 +1098,7 @@ with open(picks_out, "w", encoding="utf-8") as fh:
       printf '  Installation cancelled.\n'
       exit 0
     fi
+    SHARED_GPU_APPROVED=1
     PLAN_ARGS+=("--gpu" "$selected_card" "--share-gpu")
 
     local gpu_mem_cap=""
@@ -1155,6 +1165,7 @@ import json, sys
 
 plan = json.load(open(sys.argv[1], encoding="utf-8"))
 meta_out = sys.argv[2]
+shared_gpu_approved = len(sys.argv) > 3 and sys.argv[3] == "1"
 
 def gib(b):
     if b is None:
@@ -1202,20 +1213,29 @@ for item in findings:
     if not isinstance(item, dict):
         continue
     level = item.get("level")
-    if level in ("warn", "fail"):
-        tag = "Warning" if level == "warn" else "Check failed"
-        detail = item.get("detail") or ""
-        fix = item.get("fix") or ""
-        print(f"    {tag}: {detail}")
+    check_id = item.get("check") or ""
+    detail = item.get("detail") or ""
+    fix = item.get("fix") or ""
+    if level == "fail":
+        print(f"    Check failed: {detail}")
         if fix:
             print(f"      Fix: {fix}")
+    elif level == "warn":
+        if check_id == "preflight.gpu" and shared_gpu_approved:
+            continue
+        if check_id == "preflight.running":
+            print(f"    Note:      {detail} (kept untouched on separate ports)")
+            continue
+        print(f"    Note:      {detail}")
+        if fix:
+            print(f"      Hint: {fix}")
 
 counts = preflight.get("counts") or {}
 fail_count = int(counts.get("fail") or 0)
 plan_id = plan.get("plan_id") or ""
 with open(meta_out, "w", encoding="utf-8") as fh:
     fh.write(f"{plan_id}\t{fail_count}\n")
-' "$WORK_DIR/plan.json" "$WORK_DIR/plan_meta.tsv" | sanitize_engine_stream
+' "$WORK_DIR/plan.json" "$WORK_DIR/plan_meta.tsv" "$SHARED_GPU_APPROVED" | sanitize_engine_stream
 
   local plan_id=""
   local fail_count="0"
@@ -1377,6 +1397,10 @@ while (( $# > 0 )); do
       ;;
     --connect)
       set_mode "connect"
+      shift
+      ;;
+    --with-search)
+      WITH_SEARCH=1
       shift
       ;;
     --up)

@@ -170,10 +170,23 @@ async function createFakeStackScript(
   const warnFinding = scenario.planPreflightWarn
     ? [
         {
+          check: "preflight.gpu",
+          level: "warn",
+          detail: "2 compute process(es) outside the stack on its GPU",
+          fix: "make sure they can share the card",
+        },
+        {
+          check: "preflight.running",
+          level: "warn",
+          detail:
+            "this tool still runs 1 other deployment(s): kokoro-82m-18380",
+          fix: "use stack plan --update, or stop one with 'stack service local foo stop'",
+        },
+        {
           check: "preflight.note",
           level: "warn",
           detail: scenario.planPreflightWarn,
-          fix: "Run stack up after reboot",
+          fix: "Run stack up after reboot, or plan another --llm-port",
         },
       ]
     : [];
@@ -506,12 +519,18 @@ describe("root install.sh", () => {
     const stackCalls = (await readFile(logPath, "utf8")).trim().split("\n");
     const planCall = stackCalls.find((line) => line.startsWith("plan "));
     expect(planCall).toBeDefined();
+    expect(planCall).toContain("--no-search");
     expect(planCall).toContain("--prefer fastest");
     expect(planCall).toContain("--gpu 0");
     expect(planCall).toContain("--share-gpu");
     expect(planCall).toContain("--gpu-memory 24G");
     expect(planCall).toContain("--decision auto");
     expect(planCall).toContain("--aux embedding,reranker");
+
+    expect(result.stdout).not.toContain("2 compute process(es) outside");
+    expect(result.stdout).toContain("kept untouched on separate ports");
+    expect(result.stdout).not.toContain("stack service");
+    expect(result.stdout).not.toContain("--llm-port");
 
     const applyCall = stackCalls.find((line) => line.startsWith("apply "));
     expect(applyCall).toContain("--approve plan-abcdef123456");
