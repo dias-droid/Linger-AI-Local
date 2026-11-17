@@ -142,46 +142,18 @@ No second time needed. Name the kind and it changes whether you are told; name t
 
 ### Option 1: the desktop app
 
-For one person on one computer. Download the package for your platform from
-[GitHub Releases](https://github.com/simplexai-labs/linger/releases). The app
+For one person on one computer. Choose your platform below. The app
 opens Linger, connects this computer and runs its agents. **Quick Install** on its
 setup screen sets up a Linger server on this computer too.
 
-| Platform                           | Package                                                                                            |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------- |
-| macOS 14.0 or later, Apple silicon | `Linger-<version>-macos-arm64.dmg`                                                                 |
-| Windows x64                        | `Linger-<version>-windows-x64-setup.exe`, or `-windows-x64-portable.zip` to run without installing |
-| Linux x64                          | `Linger-<version>-linux-x64.tar.gz` (glibc 2.35 or newer)                                          |
+| Platform                                                                 | Package                                                                                       |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| [macOS 14.0 or later, Apple silicon](docs/macos.md)                         | `Linger-<version>-macos-arm64.dmg`                                                              |
+| [Windows x64](https://github.com/simplexai-labs/linger/releases/latest)     | `Linger-<version>-windows-x64-setup.exe`, or `-windows-x64-portable.zip` to run without installing |
+| [Linux x64](https://github.com/simplexai-labs/linger/releases/latest)       | `Linger-<version>-linux-x64.tar.gz` (glibc 2.35 or newer)                                         |
 
 There is no package for Intel Macs; use Docker Compose there. Check each
 download against `SHA256SUMS.txt` from the same release.
-
-The macOS package is not yet signed with a certificate Apple recognizes, so
-macOS blocks the first launch. Allow it once:
-
-<details>
-<summary><b>Show macOS first-launch steps</b></summary>
-
-1. Open Linger from Applications. In the **“Linger” Not Opened** dialog, click
-   **Done**. Do not click **Move to Trash**, the highlighted button.
-
-   <img src="assets/install-macos-not-opened.webp" width="320" alt="The macOS dialog “Linger” Not Opened says Apple could not verify Linger is free of malware, with a highlighted Move to Trash button above a Done button">
-
-2. Open **System Settings › Privacy & Security** and scroll to **Security**.
-   Next to **“Linger” was blocked to protect your Mac**, click **Open Anyway**.
-
-   <img src="assets/install-macos-open-anyway.webp" width="560" alt="System Settings with Privacy &amp; Security selected in the sidebar. Under Security, the message “Linger” was blocked to protect your Mac has an Open Anyway button next to it, and red arrows point to Privacy &amp; Security and to Open Anyway">
-
-3. Click **Open Anyway** again and enter your password or use Touch ID.
-
-If macOS says Linger "is damaged and can't be opened", or **Open Anyway** does
-not appear, run this in Terminal and open Linger again:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/Linger.app
-```
-
-</details>
 
 See [Install the desktop app](https://docs.heylinger.com/install/desktop-app)
 for the Windows and Linux steps and for help when setup fails.
