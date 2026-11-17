@@ -87,9 +87,19 @@ export function useComposerSend({
       mentions,
       pendingAvailability,
       skillReferences,
+      unavailableMentions,
     } = resolveReferences(normalized);
     if (pendingAvailability) {
       setMessageError("Message references are still loading. Try again.");
+      return;
+    }
+    if (unavailableMentions.length) {
+      const names = unavailableMentions.map(formatMentionToken).join(", ");
+      const verb = unavailableMentions.length === 1 ? "is" : "are";
+      const noun = unavailableMentions.length === 1 ? "mention" : "mentions";
+      setMessageError(
+        `${names} ${verb} not available in this Room. Remove the ${noun} to send.`,
+      );
       return;
     }
 
