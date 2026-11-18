@@ -39,6 +39,8 @@ interface Binding {
     environment: Record<string, string>;
     configFingerprint: string;
   } | null;
+  // Why the stack is not ready, such as pi-extensions-unavailable.
+  reasons?: { code?: unknown; message?: unknown }[];
 }
 interface Options {
   shareGpu?: boolean;
@@ -182,6 +184,22 @@ function binding(value: unknown, id?: string): Binding {
     throw new Error("Invalid upstream Pi binding.");
   return b;
 }
+// The binding's reason codes, such as pi-extensions-unavailable.
+function reasonCodes(observed: Binding | null): string[] {
+  return (observed?.reasons ?? []).flatMap((reason) =>
+    typeof reason?.code === "string" &&
+    /^[a-z][a-z0-9-]{0,63}$/.test(reason.code)
+      ? [reason.code]
+      : [],
+  );
+}
+// The first reason's upstream message, for display only.
+function reasonText(observed: Binding | null): string {
+  const message = observed?.reasons?.[0]?.message;
+  return typeof message === "string" && message.trim()
+    ? `: ${message.trim().replace(/\s+/g, " ").slice(0, 300)}`
+    : "";
+}
 export async function localModelsEnvironment(
   instance: Instance,
 ): Promise<NodeJS.ProcessEnv> {
@@ -235,6 +253,8 @@ export async function prepareLocalModels(
   dependencies: Dependencies = {},
 ): Promise<InstallOutcome | undefined> {
   options.signal.throwIfAborted();
+  // Why the binding was not ready, for the client to word; set once observed.
+  let reasons: string[] = [];
   const action = (
     code: string,
     message: string,
@@ -243,7 +263,11 @@ export async function prepareLocalModels(
     code: 4,
     state: "action_required",
     message,
-    details: { code, ...(summary ? { localModelsPlan: summary } : {}) },
+    details: {
+      code,
+      ...(summary ? { localModelsPlan: summary } : {}),
+      ...(reasons.length ? { reasons } : {}),
+    },
   });
   if (options.localModelsReplan && options.localModelsApproval)
     return action(
@@ -399,23 +423,10 @@ export async function prepareLocalModels(
         "--json",
       ]);
       if (result.code !== 0) return null;
-      return binding(JSON.parse(result.stdout), summary.planId);
+      const observed = binding(JSON.parse(result.stdout), summary.planId);
+      reasons = observed.ready ? [] : reasonCodes(observed);
+      return observed;
     };
-    if (
-      previous &&
-      !options.localModelsReplan &&
-      binding(JSON.parse(previous)).planId === summary.planId
-    ) {
-      const observed = await observe();
-      if (observed?.ready) {
-        await atomicPrivate(bindFile, JSON.stringify(observed));
-        return;
-      }
-      return action(
-        "LOCAL_MODELS_RECOVERY_REQUIRED",
-        "The upstream stack is not ready. Review an updated plan; existing resources were preserved.",
-      );
-    }
     let inputs:
       | { planId?: unknown; shareGpu?: unknown; decision?: unknown }
       | undefined;
@@ -425,24 +436,51 @@ export async function prepareLocalModels(
     } catch {
       // A damaged or incomplete approval binding cannot authorize deployment.
     }
-    if (
-      inputs?.planId !== summary.planId ||
-      inputs?.shareGpu !== shareGpu ||
-      inputs?.decision !== false
-    )
-      return action(
-        "LOCAL_MODELS_RECOVERY_REQUIRED",
-        "Local model resource choices changed or their approval binding is unavailable. Review a new plan; existing resources were preserved.",
-      );
-    if (
-      options.localModelsApproval !== summary.planId ||
-      options.localModelsReplan
-    )
-      return action(
-        "LOCAL_MODELS_APPROVAL_REQUIRED",
-        "Review the upstream local model plan before installing.",
-        summary,
-      );
+    const approvedInputs =
+      inputs?.planId === summary.planId &&
+      inputs?.shareGpu === shareGpu &&
+      inputs?.decision === false;
+    // A binding saved for this plan means it was approved and deployed once.
+    const deployed =
+      !!previous &&
+      !options.localModelsReplan &&
+      binding(JSON.parse(previous)).planId === summary.planId;
+    if (deployed) {
+      const observed = await observe();
+      if (observed?.ready) {
+        await atomicPrivate(bindFile, JSON.stringify(observed));
+        return;
+      }
+      if (!approvedInputs)
+        return action(
+          "LOCAL_MODELS_RECOVERY_REQUIRED",
+          "The local model stack is not ready, and its resource choices changed since its plan was approved. Review a new plan; existing resources were preserved.",
+        );
+      // Whatever stopped the approved stack (a stopped or adopted
+      // deployment, a Pi without extension support from an earlier
+      // localmodels), applying the same plan again restores it; the
+      // approval it was deployed under still holds.
+      options.onEvent({
+        kind: "log",
+        stage: "runtime",
+        message: `The local model stack is not ready (${reasons.join(", ") || "unknown"}); applying its approved plan again.\n`,
+      });
+    } else {
+      if (!approvedInputs)
+        return action(
+          "LOCAL_MODELS_RECOVERY_REQUIRED",
+          "Local model resource choices changed or their approval binding is unavailable. Review a new plan; existing resources were preserved.",
+        );
+      if (
+        options.localModelsApproval !== summary.planId ||
+        options.localModelsReplan
+      )
+        return action(
+          "LOCAL_MODELS_APPROVAL_REQUIRED",
+          "Review the upstream local model plan before installing.",
+          summary,
+        );
+    }
     const applied = await command([
       "stack",
       "apply",
@@ -462,7 +500,7 @@ export async function prepareLocalModels(
     if (!observed?.ready)
       return action(
         "LOCAL_MODELS_RECOVERY_REQUIRED",
-        "The upstream tool could not verify the local stack binding. Existing resources were preserved.",
+        `The upstream tool could not verify the local stack binding${reasonText(observed)}. Existing resources were preserved.`,
       );
     await atomicPrivate(bindFile, JSON.stringify(observed));
     options.onEvent({

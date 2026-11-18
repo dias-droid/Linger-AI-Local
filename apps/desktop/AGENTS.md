@@ -185,7 +185,12 @@ Gateway and runs Agents. The daemon exits with the app.
   from their folder, the record keeps naming it, and the start failure page's
   Retry moves them again. An app older than the recorded version
   (a downgrade) leaves the services on their newer source and logs
-  `local_server.source_newer_than_app`. A Quick Install that stopped
+  `local_server.source_newer_than_app`. When the local model stops a resume,
+  the start failure names the stack's first known binding reason code
+  (`details.reasons`, such as `pi-extensions-unavailable`) in its own words
+  and, by `details.code`, the action that works: Try Again for
+  `LOCAL_MODELS_RECOVERY_REQUIRED` (the resume applies the approved plan
+  again), Set Up Again to review a new plan or choose another runtime. A Quick Install that stopped
   before the computer enrolled is not resumed: setup shows again and Install
   finishes it, reusing a finished job only while its origin answers (a stopped
   server gets a new job, which starts the services again). The start failure

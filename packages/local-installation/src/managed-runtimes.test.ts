@@ -371,3 +371,64 @@ it("does not retry once the install is cancelled during the wait", async () => {
   ).rejects.toThrow();
   expect(applies(localmodels)).toHaveLength(1);
 });
+
+// A harness command that fails at `step` with one harness-error/v1 line.
+function harnessFailing(step: "plan" | "apply", code: string, message = "") {
+  return vi.fn(async (_home: string, args: string[]) => {
+    if (args[1] === "plan" && step !== "plan")
+      await writeFile(
+        args[args.indexOf("--out") + 1]!,
+        JSON.stringify({
+          schema: "localmodels.harness-plan/v1",
+          id: "a".repeat(64),
+          runtime: "pi",
+        }),
+      );
+    const failed = args[1] === step;
+    return {
+      code: failed ? 1 : 0,
+      stdout: failed
+        ? JSON.stringify({
+            schema: "localmodels.harness-error/v1",
+            code,
+            message,
+          })
+        : "",
+      stderr: "",
+    };
+  });
+}
+
+it("reports a plan the harness refused, such as a Windows runtime root too long for Pi", async () => {
+  const options = await fixture();
+  const localmodels = harnessFailing(
+    "plan",
+    "RUNTIME_ACTION_FAILED",
+    "Runtime action failed: The runtime root is 120 characters; Pi's dependency tree fits below a root of at most 90 on Windows unless long paths are enabled. Inspect the plan and retry.",
+  );
+  const failure = await installNativeRuntime("pi", options, {
+    localmodels,
+  }).catch((error: Error & { code: string }) => error);
+  expect(failure).toMatchObject({ code: "RUNTIME_PLAN_REFUSED" });
+  expect((failure as Error).message).toContain(
+    "The runtime root is 120 characters",
+  );
+  expect(localmodels.mock.calls.some(([, args]) => args[1] === "apply")).toBe(
+    false,
+  );
+});
+
+it.each(["RUNTIME_ACTION_FAILED", "RUNTIME_EXTENSIONS_FAILED"])(
+  "keeps the harness apply failure %s as its code",
+  async (code) => {
+    const options = await fixture();
+    const failure = await installNativeRuntime("pi", options, {
+      localmodels: harnessFailing(
+        "apply",
+        code,
+        "Runtime action failed: pi is still not usable after apply. Inspect the plan and retry.",
+      ),
+    }).catch((error: Error & { code: string }) => error);
+    expect(failure).toMatchObject({ code });
+  },
+);

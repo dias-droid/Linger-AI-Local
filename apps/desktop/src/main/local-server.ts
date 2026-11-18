@@ -2326,7 +2326,7 @@ export class LocalServerModule implements Module {
     const outcome = await new Promise<{
       code: number;
       message: string;
-      details?: { source?: unknown };
+      details?: { source?: unknown; code?: unknown; reasons?: unknown };
       runtime?: InstanceRuntime;
     }>((resolve, reject) => {
       const child = spawn(
@@ -2363,7 +2363,7 @@ export class LocalServerModule implements Module {
             JSON.parse(last) as {
               code: number;
               message: string;
-              details?: { source?: unknown };
+              details?: { source?: unknown; code?: unknown; reasons?: unknown };
               runtime?: InstanceRuntime;
             },
           );
@@ -2372,8 +2372,29 @@ export class LocalServerModule implements Module {
         }
       });
     });
-    if (outcome.code !== 0)
-      throw new Error(outcome.message || "The installation stopped");
+    if (outcome.code !== 0) {
+      const { code, reasons } = outcome.details ?? {};
+      const action =
+        typeof code === "string" && Object.hasOwn(RESUME_ACTIONS, code)
+          ? RESUME_ACTIONS[code]
+          : undefined;
+      const reason = Array.isArray(reasons)
+        ? reasons.find(
+            (item): item is string =>
+              typeof item === "string" &&
+              Object.hasOwn(LOCAL_MODEL_NOT_READY, item),
+          )
+        : undefined;
+      throw new Error(
+        [
+          reason && LOCAL_MODEL_NOT_READY[reason],
+          outcome.message || "The installation stopped",
+          action,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      );
+    }
     this.#adoptRuntime(outcome.runtime);
     const source = outcome.details?.source;
     return typeof source === "string" ? source : undefined;
@@ -2666,6 +2687,31 @@ const LOCAL_MODEL_FAILURES = new Set([
   "LOCAL_MODELS_RECOVERY_REQUIRED",
   "GPU_SHARING_REVOCATION_FAILED",
 ]);
+
+// What works from the start-failure page when the local model stops a
+// restart: a restart applies the approved plan again, but only setup can
+// approve a new one or switch the runtime.
+const RESUME_ACTIONS: Record<string, string> = {
+  LOCAL_MODELS_RECOVERY_REQUIRED:
+    "Try Again to apply the approved local model plan again, or Set Up Again to review a new plan or choose another AI runtime.",
+  LOCAL_MODELS_APPROVAL_REQUIRED:
+    "Set Up Again to review the local model plan or choose another AI runtime.",
+};
+
+// Why the local model stack was not ready, by the reason code localmodels'
+// setup binding gives.
+const LOCAL_MODEL_NOT_READY: Record<string, string> = {
+  "pi-extensions-unavailable":
+    "The local model's Pi can't load extensions, which every Linger run needs.",
+  "deployment-unavailable": "The local model service isn't running.",
+  "acceptance-unavailable": "The local model stack hasn't passed its checks.",
+  "gateway-ownership": "The local model gateway isn't running.",
+  "gateway-unavailable": "The local model gateway isn't running.",
+  "pi-model-unavailable": "Pi can't reach the local model.",
+  "pi-config-changed": "Pi's settings changed while they were checked.",
+  "plan-invalid": "The approved local model plan can't be read.",
+  "binding-unavailable": "The local model stack couldn't be checked.",
+};
 
 export interface Reconnect {
   readonly windowMs: number;

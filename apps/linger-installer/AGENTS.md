@@ -28,7 +28,18 @@ once its services are ready on it: until then `instance.json` keeps naming the
 checkout they run from, the new checkout's migrations run only after the
 runtime (the local model, for one) is ready, and a run that stops earlier
 leaves the running services and their schema as they were. A successful
-outcome's `details.source` names the checkout the services serve from. With
+outcome's `details.source` names the checkout the services serve from. A
+local model stack whose saved binding is no longer ready (any setup binding
+reason, `pi-extensions-unavailable` from a Pi an earlier localmodels
+installed without extension support included) gets its approved plan applied
+again when the saved plan inputs still match the current choices; only a
+plan the person approved is ever applied, and a stack still not ready ends
+`LOCAL_MODELS_RECOVERY_REQUIRED` with the binding's reason codes in
+`details.reasons`. A failed job's `errorCode` is the runtime's cause when it
+has one (`RUNTIME_PLAN_REFUSED`, a harness plan refused before anything
+changed, such as an unusable `SIMPLEX_PI_PATH` or a Windows runtime root too
+long for Pi without long paths; `RUNTIME_ACTION_FAILED`;
+`RUNTIME_EXTENSIONS_FAILED`), otherwise `INSTALL_FAILED`. With
 `--external-computer`, a successful outcome carries `runtime`, the same instance runtime as
 `GET /api/instances/{name}/runtime` (runtime and localmodels tool paths), so
 the desktop's Computer follows them.

@@ -134,7 +134,10 @@ if (args.includes("--resume")) {
   const repo = args[args.indexOf("--source-repo") + 1];
   const servingFile = path.join(home, "resume-serving");
   const source = fs.existsSync(servingFile) ? fs.readFileSync(servingFile, "utf8") : fs.existsSync(repo) ? fs.realpathSync(repo) : repo;
-  process.stdout.write("noise\n" + JSON.stringify({ code, message: code ? "Native teamhub stopped" : "ok", details: { source }, ...(runtime ? { runtime } : {}) }) + "\n");
+  // resume-fails may hold the failed outcome's message and details.
+  const failure = code ? fs.readFileSync(path.join(home, "resume-fails"), "utf8").trim() : "";
+  const outcome = failure ? JSON.parse(failure) : { message: code ? "Native teamhub stopped" : "ok", details: { source } };
+  process.stdout.write("noise\n" + JSON.stringify({ code, ...outcome, ...(runtime ? { runtime } : {}) }) + "\n");
   process.exit(code);
 }
 const origin = "http://127.0.0.1:4321";
@@ -2656,6 +2659,60 @@ describe("LocalServerModule after a restart", () => {
     expect(f.module.status().message).toBe("Native teamhub stopped");
     expect(f.setServer).not.toHaveBeenCalled();
     expect(f.showStartFailed).toHaveBeenCalledWith("Native teamhub stopped");
+    await f.host.stop("quit");
+  });
+
+  it.each([
+    [
+      "LOCAL_MODELS_RECOVERY_REQUIRED",
+      "Try Again to apply the approved local model plan again, or Set Up Again to review a new plan or choose another AI runtime.",
+    ],
+    [
+      "LOCAL_MODELS_APPROVAL_REQUIRED",
+      "Set Up Again to review the local model plan or choose another AI runtime.",
+    ],
+  ])(
+    "names the action that works when the local model stops a restart (%s)",
+    async (code, action) => {
+      const f = fixture({}, enrolled, (home) => {
+        record(home);
+        writeFileSync(
+          path.join(home, "resume-fails"),
+          JSON.stringify({
+            message: "The local model stack is not ready.",
+            details: { code },
+          }),
+        );
+      });
+      await f.host.start();
+      await vi.waitFor(() => expect(f.module.status().phase).toBe("failed"));
+      expect(f.showStartFailed).toHaveBeenCalledWith(
+        `The local model stack is not ready. ${action}`,
+      );
+      await f.host.stop("quit");
+    },
+  );
+
+  it("says why the local model stack is not ready, from its reason code", async () => {
+    const f = fixture({}, enrolled, (home) => {
+      record(home);
+      writeFileSync(
+        path.join(home, "resume-fails"),
+        JSON.stringify({
+          message:
+            "The upstream tool could not verify the local stack binding.",
+          details: {
+            code: "LOCAL_MODELS_RECOVERY_REQUIRED",
+            reasons: ["pi-extensions-unavailable", "gateway-unavailable"],
+          },
+        }),
+      );
+    });
+    await f.host.start();
+    await vi.waitFor(() => expect(f.module.status().phase).toBe("failed"));
+    expect(f.showStartFailed).toHaveBeenCalledWith(
+      "The local model's Pi can't load extensions, which every Linger run needs. The upstream tool could not verify the local stack binding. Try Again to apply the approved local model plan again, or Set Up Again to review a new plan or choose another AI runtime.",
+    );
     await f.host.stop("quit");
   });
 

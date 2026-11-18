@@ -53,6 +53,25 @@ export function runtimeVersionFailure(
     ? { code, message: versionFailures[code]! }
     : undefined;
 }
+/**
+ * The failures this module reports with their own code: a harness plan
+ * refused before anything changed (an unusable SIMPLEX_PI_PATH, a Windows
+ * runtime root too long for Pi without long paths), an apply that left the
+ * runtime unusable, a Pi that cannot load extensions, and any other
+ * localmodels failure.
+ */
+const runtimeFailures = new Set([
+  "RUNTIME_PLAN_REFUSED",
+  "RUNTIME_ACTION_FAILED",
+  "RUNTIME_EXTENSIONS_FAILED",
+  "LOCALMODELS_RUNTIME_UNAVAILABLE",
+]);
+export function runtimeFailureCode(error: unknown): string | undefined {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === "string" && runtimeFailures.has(code)
+    ? code
+    : undefined;
+}
 type LocalmodelsResult = Awaited<ReturnType<typeof runLocalmodels>>;
 function unavailable(failed?: {
   args: string[];
@@ -75,9 +94,25 @@ function unavailable(failed?: {
     } catch {
       /* Non-JSON output is read below as redacted diagnostics. */
     }
-    const { cause, log } = localmodelsFailure(failed.args, failed.result);
+    const { code, cause, log } = localmodelsFailure(failed.args, failed.result);
     for (const message of log)
       failed.onEvent?.({ kind: "log", stage: "runtime", message });
+    if (code === "RUNTIME_EXTENSIONS_FAILED")
+      return Object.assign(
+        new Error(
+          "Pi cannot load extensions, which Linger needs on every run. If you installed Pi yourself, update or remove it, then try again.",
+        ),
+        { code },
+      );
+    if (code === "RUNTIME_ACTION_FAILED") {
+      const planned = failed.args[1] === "plan";
+      return Object.assign(
+        new Error(
+          `The localmodels Runtime ${planned ? "plan was refused" : "operation failed"}${cause ? `: ${cause}` : "."}`,
+        ),
+        { code: planned ? "RUNTIME_PLAN_REFUSED" : code },
+      );
+    }
     if (cause)
       return Object.assign(
         new Error(`The localmodels Runtime operation failed: ${cause}`),
@@ -141,11 +176,7 @@ export async function inspectRuntimeDescriptors(
     const failure = runtimeVersionFailure(error);
     if (failure)
       throw Object.assign(new Error(failure.message), { code: failure.code });
-    if (
-      error instanceof Error &&
-      (error as { code?: string }).code === "LOCALMODELS_RUNTIME_UNAVAILABLE"
-    )
-      throw error;
+    if (error instanceof Error && runtimeFailureCode(error)) throw error;
     throw unavailable();
   }
 }
@@ -296,11 +327,7 @@ export async function installNativeRuntime(
     const failure = runtimeVersionFailure(error);
     if (failure)
       throw Object.assign(new Error(failure.message), { code: failure.code });
-    if (
-      error instanceof Error &&
-      (error as { code?: string }).code === "LOCALMODELS_RUNTIME_UNAVAILABLE"
-    )
-      throw error;
+    if (error instanceof Error && runtimeFailureCode(error)) throw error;
     throw unavailable();
   } finally {
     await rm(temporary, { recursive: true, force: true });

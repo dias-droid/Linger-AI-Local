@@ -417,7 +417,14 @@ export class JobManager {
             "LOCAL_MODELS_UNAVAILABLE",
             "LOCAL_MODELS_APPROVAL_REQUIRED",
             "LOCAL_MODELS_RECOVERY_REQUIRED",
-          ].includes(String(details.code))
+          ].includes(String(details.code)) ||
+          // Why the runtime could not be installed, in place of INSTALL_FAILED.
+          (record.job.state === "failed" &&
+            [
+              "RUNTIME_PLAN_REFUSED",
+              "RUNTIME_ACTION_FAILED",
+              "RUNTIME_EXTENSIONS_FAILED",
+            ].includes(String(details.code)))
         ) {
           record.job.errorCode = String(details.code);
           if (details.code === "LOCAL_MODELS_APPROVAL_REQUIRED") {

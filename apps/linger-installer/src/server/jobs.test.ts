@@ -257,6 +257,26 @@ test.each([
   },
 );
 
+test.each([
+  ["RUNTIME_PLAN_REFUSED", "RUNTIME_PLAN_REFUSED"],
+  ["RUNTIME_ACTION_FAILED", "RUNTIME_ACTION_FAILED"],
+  ["RUNTIME_EXTENSIONS_FAILED", "RUNTIME_EXTENSIONS_FAILED"],
+  ["NATIVE_SOURCE_INSTALLATION_FAILED", "INSTALL_FAILED"],
+])(
+  "a failed installation with runtime cause %s reports it as %s",
+  async (code, errorCode) => {
+    const { jobs } = await setup(async () => ({
+      code: 5,
+      state: "failed",
+      message: "The runtime could not be installed.",
+      details: { code, stage: "runtime" },
+    }));
+    const job = await jobs.start({ instance: "default" });
+    await jobs.wait(job.id);
+    expect(jobs.get(job.id)).toMatchObject({ state: "failed", errorCode });
+  },
+);
+
 const localPlan = {
   planId: "a".repeat(64),
   gpuIndex: 1,

@@ -279,7 +279,8 @@ test("replanning requires a separate review and never silently approves", async 
   ).toMatchObject({ details: { code: "LOCAL_MODELS_APPROVAL_REQUIRED" } });
   expect(f.call.mock.calls.some((c) => c[1][1] === "apply")).toBe(false);
 });
-test("saved binding needs fresh upstream health before reuse", async () => {
+// A deployed stack whose binding is ready, then observed not ready once.
+async function deployedThenNotReady(reason: string) {
   const f = await fixture();
   await prepareLocalModels(f.instance, f.options, { localmodels: f.call });
   await prepareLocalModels(
@@ -287,11 +288,118 @@ test("saved binding needs fresh upstream health before reuse", async () => {
     { ...f.options, localModelsApproval: f.id },
     { localmodels: f.call },
   );
+  const ready = structuredClone(f.binding);
   f.binding.ready = false;
   f.binding.pi = null as never;
+  f.binding.reasons = [{ code: reason, message: "upstream text" }] as never;
+  f.call.mockClear();
+  return { ...f, ready };
+}
+test.each(["deployment-unavailable", "pi-extensions-unavailable"])(
+  "a saved binding observed not ready (%s) applies the approved plan again",
+  async (reason) => {
+    const f = await deployedThenNotReady(reason);
+    const original = f.call.getMockImplementation()!;
+    f.call.mockImplementation(async (...a) => {
+      // stack apply brings the stack and its Pi back.
+      if (a[1][1] === "apply") Object.assign(f.binding, f.ready);
+      return original(...a);
+    });
+    expect(
+      await prepareLocalModels(f.instance, f.options, { localmodels: f.call }),
+    ).toBeUndefined();
+    const stack = f.call.mock.calls
+      .map(([, args]) => args)
+      .filter((args) => args[0] === "stack");
+    expect(stack).toEqual([
+      [
+        "stack",
+        "apply",
+        path.join(f.home, "runtime/localmodels/plan.json"),
+        "--approve",
+        f.id,
+        "--jsonl",
+      ],
+    ]);
+    expect(
+      JSON.parse(
+        await readFile(
+          path.join(f.home, "runtime/localmodels/binding.json"),
+          "utf8",
+        ),
+      ),
+    ).toEqual(f.ready);
+    expect(f.options.onEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: "log",
+        stage: "runtime",
+        message: expect.stringContaining(reason),
+      }),
+    );
+  },
+);
+test("a stack still not ready after applying the approved plan again asks for recovery", async () => {
+  const f = await deployedThenNotReady("gateway-unavailable");
+  const result = await prepareLocalModels(f.instance, f.options, {
+    localmodels: f.call,
+  });
+  expect(result).toMatchObject({
+    state: "action_required",
+    details: {
+      code: "LOCAL_MODELS_RECOVERY_REQUIRED",
+      reasons: ["gateway-unavailable"],
+    },
+  });
+  expect(
+    f.call.mock.calls.filter(([, args]) => args[1] === "apply"),
+  ).toHaveLength(1);
+  // The earlier ready binding is never replaced by one not verified.
+  expect(
+    JSON.parse(
+      await readFile(
+        path.join(f.home, "runtime/localmodels/binding.json"),
+        "utf8",
+      ),
+    ),
+  ).toEqual(f.ready);
+});
+test("a failed re-apply of the approved plan reports the upstream cause", async () => {
+  const f = await deployedThenNotReady("deployment-unavailable");
+  const original = f.call.getMockImplementation()!;
+  f.call.mockImplementation(async (...a) => {
+    if (a[1][1] !== "apply") return original(...a);
+    a[2]!.onOutput!("stack: port 8080 is held by another program\n");
+    return { code: 1, stdout: "", stderr: "" };
+  });
   expect(
     await prepareLocalModels(f.instance, f.options, { localmodels: f.call }),
-  ).toMatchObject({ details: { code: "LOCAL_MODELS_RECOVERY_REQUIRED" } });
+  ).toMatchObject({
+    state: "action_required",
+    // What made it apply the plan again.
+    details: {
+      code: "LOCAL_MODELS_RECOVERY_REQUIRED",
+      reasons: ["deployment-unavailable"],
+    },
+    message: expect.stringContaining(
+      "stack: port 8080 is held by another program",
+    ),
+  });
+});
+test("a not-ready binding is never re-applied once resource choices changed", async () => {
+  const f = await deployedThenNotReady("deployment-unavailable");
+  const result = await prepareLocalModels(
+    f.instance,
+    { ...f.options, shareGpu: false },
+    { localmodels: f.call },
+  );
+  expect(result).toMatchObject({
+    details: { code: "LOCAL_MODELS_RECOVERY_REQUIRED" },
+  });
+  expect(
+    f.call.mock.calls.some(
+      ([, args]) => args[0] === "stack" && ["plan", "apply"].includes(args[1]!),
+    ),
+  ).toBe(false);
 });
 test("cancellation propagates without pretending to finish", async () => {
   const f = await fixture();
