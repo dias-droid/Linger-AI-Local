@@ -132,8 +132,8 @@ the Native services as described in
 ## Auto-update
 
 Installed apps update from the GitHub Releases themselves
-(`apps/desktop/src/main/updater.ts`). Shortly after start and then every six
-hours, the app downloads
+(`apps/desktop/src/main/updater.ts`). Shortly after start and then every
+hour, the app downloads
 `https://github.com/simplexai-labs/linger/releases/latest/download/manifest.json`
 and its `.sig`, checks the Ed25519 signature against `UPDATE_PUBLIC_KEY` in
 `update-manifest.ts` and compares the manifest's version with its own

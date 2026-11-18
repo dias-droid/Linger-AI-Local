@@ -95,7 +95,7 @@ export type SpawnSetup = (
 export const SETUP_ARGS = ["/S", "/relaunch"] as const;
 
 const CHECK_DELAY_MS = 60_000;
-const CHECK_INTERVAL_MS = 6 * 60 * 60_000;
+const CHECK_INTERVAL_MS = 60 * 60_000;
 // A dropped connection should not cost a whole check interval.
 const RETRY_DELAY_MS = 5 * 60_000;
 const STAGED_PREFIX = ".Linger-update-";
