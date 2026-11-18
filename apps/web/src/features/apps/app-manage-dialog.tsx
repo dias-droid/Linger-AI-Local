@@ -23,7 +23,10 @@ import {
   externalConnectionsQueryKey,
 } from "./connected-apps-queries";
 import { ConnectAppStatus, useConnectAppFlow } from "./connect-app-flow";
-import { establishedExternalConnections } from "./connection-state";
+import {
+  establishedExternalConnections,
+  openPendingExternalConnection,
+} from "./connection-state";
 
 export function AppManageDialog({
   app,
@@ -62,7 +65,12 @@ export function AppManageDialog({
                   : `Connect ${app.display_name}`
               }
               disabled={connectFlow.connection.isPending}
-              onClick={() => connectFlow.start(app)}
+              onClick={() =>
+                connectFlow.start(
+                  app,
+                  openPendingExternalConnection(connections, app.key),
+                )
+              }
               size="compact"
               tone="secondary"
             >

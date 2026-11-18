@@ -38,3 +38,15 @@ func TestConnectorAccountSelection(t *testing.T) {
 		t.Fatal("apps without dedicated commands must still select a delegated account")
 	}
 }
+
+func TestConnectorAuthorizationPrompt(t *testing.T) {
+	for _, tc := range []struct{ selector, want string }{
+		{"", "Please connect and authorize your Outlook Mail account so I can continue."},
+		{"work@example.com", "Please connect and authorize the Outlook Mail account work@example.com so I can continue."},
+		{"external_connection_971b3337eee6a6b2cfcb96fe9431099d", "Please connect and authorize your Outlook Mail account so I can continue."},
+	} {
+		if got := connectorAuthorizationPrompt("Outlook Mail", tc.selector); got != tc.want {
+			t.Errorf("selector %q: got %q", tc.selector, got)
+		}
+	}
+}

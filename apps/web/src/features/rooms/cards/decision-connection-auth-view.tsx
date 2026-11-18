@@ -18,6 +18,8 @@ import {
   externalConnectionsQueryOptions,
 } from "@/features/apps/connected-apps-queries";
 import {
+  externalConnectionNeedsAttention,
+  openPendingExternalConnection,
   reauthorizationConnectUrl,
   usableConnectUrl,
 } from "@/features/apps/connection-state";
@@ -40,6 +42,9 @@ interface Props {
 }
 
 const label = "App authorization requested";
+
+/** The account picker value for a new account; never a connection id. */
+const NEW_ACCOUNT = "__new_account__";
 
 /**
  * A connection authorization: the Human picks or connects an account of the
@@ -173,17 +178,30 @@ function ConnectionAuthorizationActions({
   const app = apps.data?.apps.find((item) => item.key === appKey);
   const appName = app?.display_name ?? fallbackAppName;
   const agentName = card.requester.display_name;
-  const available = (connections.data?.connections ?? []).filter(
-    (item) =>
-      item.provider === appKey &&
-      !["disconnecting", "revoke_pending"].includes(item.status),
+  const appConnections = (connections.data?.connections ?? []).filter(
+    (item) => item.provider === appKey,
   );
-  if (created && !available.some((item) => item.id === created.id))
-    available.push(created);
+  // Only accounts the Human can use or repair; abandoned pending attempts and
+  // rejected duplicates are not accounts.
+  const available = appConnections.filter(
+    (item) =>
+      item.status === "active" || externalConnectionNeedsAttention(item),
+  );
+  // The connection this card just started stays visible while it is pending.
+  const createdNow =
+    created &&
+    (appConnections.find((item) => item.id === created.id) ?? created);
+  if (
+    createdNow?.status === "pending" &&
+    !available.some((item) => item.id === createdNow.id)
+  )
+    available.push(createdNow);
   const selected =
-    available.find((item) => item.id === selectedId) ??
-    available.find((item) => item.status === "active") ??
-    available[0];
+    selectedId === NEW_ACCOUNT
+      ? undefined
+      : (available.find((item) => item.id === selectedId) ??
+        available.find((item) => item.status === "active") ??
+        available.find(externalConnectionNeedsAttention));
   const resumeUrl =
     fallbackUrl ||
     reauthorizationConnectUrl(bound.data) ||
@@ -219,10 +237,25 @@ function ConnectionAuthorizationActions({
       if (!connection) {
         if (!app || !app.capabilities.includes("agent_tools"))
           throw new Error("This app is unavailable for Agent access.");
-        connection = await client.createExternalConnection(app.key);
+        // Resume an open pending attempt of this app instead of adding a row.
+        const pending = openPendingExternalConnection(
+          connections.data?.connections ?? [],
+          app.key,
+        );
+        // A pending row that cannot be read is abandoned for a new one.
+        const detail = pending
+          ? await client
+              .getExternalConnection(pending.id)
+              .catch(() => undefined)
+          : undefined;
+        connectUrl = usableConnectUrl(detail) ?? "";
+        connection =
+          detail && connectUrl
+            ? detail
+            : await client.createExternalConnection(app.key);
+        if (!connectUrl) connectUrl = connection.connect_url ?? "";
         setCreated(connection);
         setSelectedId(connection.id);
-        connectUrl = connection.connect_url ?? "";
       } else if (connection.status !== "active" && !connectUrl) {
         connectUrl =
           reauthorizationConnectUrl(connection) ??
@@ -273,6 +306,10 @@ function ConnectionAuthorizationActions({
     app?.availability === "available" &&
     app.capabilities.includes("agent_tools");
   const loading = !authorizing && (connections.isPending || apps.isPending);
+  const showPicker =
+    !authorizing &&
+    available.length > 0 &&
+    (canConnectNew || available.length > 1);
   const primaryAction = resumeUrl ? (
     <Button
       aria-label="Open authorization window"
@@ -341,24 +378,29 @@ function ConnectionAuthorizationActions({
           : undefined)
       }
     >
-      {!authorizing && available.length > 1 ? (
+      {showPicker ? (
         <div className="pb-1">
           <Select
             aria-label={`${appName} account`}
             className="h-8 w-full px-2.5 text-sm"
             disabled={busy}
             onValueChange={setSelectedId}
-            value={selected?.id ?? ""}
+            value={selected?.id ?? (canConnectNew ? NEW_ACCOUNT : "")}
           >
             {available.map((connection) => (
               <SelectItem key={connection.id} value={connection.id}>
                 {`${connection.identity_label || appName}${
-                  connection.status !== "active"
-                    ? ` (${connection.status})`
-                    : ""
+                  connection.status === "active"
+                    ? ""
+                    : connection.status === "pending"
+                      ? " (pending)"
+                      : " (needs reconnecting)"
                 }`}
               </SelectItem>
             ))}
+            {canConnectNew ? (
+              <SelectItem value={NEW_ACCOUNT}>Connect a new account</SelectItem>
+            ) : null}
           </Select>
         </div>
       ) : null}

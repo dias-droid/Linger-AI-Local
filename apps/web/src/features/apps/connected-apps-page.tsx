@@ -21,7 +21,10 @@ import {
   AppManageDialog,
   DisconnectConnectionDialog,
 } from "./app-manage-dialog";
-import { activeExternalConnections } from "./connection-state";
+import {
+  activeExternalConnections,
+  openPendingExternalConnection,
+} from "./connection-state";
 import {
   externalAppsQueryOptions,
   externalConnectionsQueryOptions,
@@ -223,10 +226,7 @@ function CatalogAppCard({
   const connectFlow = useConnectAppFlow();
   const createConnection = connectFlow.connection;
   const active = activeExternalConnections(connections);
-  const pending = connections.find(
-    (connection) =>
-      connection.status === "pending" && !connection.status_error_code,
-  );
+  const pending = openPendingExternalConnection(connections, app.key);
   const canConnect = app.availability === "available";
   const canStart = connectFlow.canStart(app);
   const connectedLabel = active.length

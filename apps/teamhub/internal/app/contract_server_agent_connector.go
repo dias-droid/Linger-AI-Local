@@ -91,15 +91,26 @@ func (a *App) resolveConnectorAccount(c *gin.Context) {
 		a.writeAgentAPIError(c, 400, api.AgentApiErrorCodeInvalidInput, "Unsupported application")
 		return
 	}
-	prompt := fmt.Sprintf("Please connect and authorize the %s account so the command can continue.", input.AppKey)
-	if selector != "" {
-		prompt = fmt.Sprintf("Please connect and authorize the %s account %s so the command can continue.", input.AppKey, selector)
+	displayName := input.AppKey
+	catalog := a.externalSources.ListApps()
+	if i := slices.IndexFunc(catalog, func(app externalsource.ExternalApp) bool { return app.Key == input.AppKey }); i >= 0 {
+		displayName = catalog[i].DisplayName
 	}
+	prompt := connectorAuthorizationPrompt(displayName, selector)
 	if roomID, card, ok := a.postConnectorCard(c, token, prompt, typedcard.DecisionCommand{
 		ConnectionAuth: &typedcard.ConnectionAuthDecision{Prompt: prompt, AppKey: input.AppKey, ReusePending: true},
 	}); ok {
 		c.JSON(200, gin.H{"status": "authorization_required", "room_id": roomID, "message_id": card.MessageID, "interaction_id": card.DecisionID})
 	}
+}
+
+// connectorAuthorizationPrompt is the Human-facing ask on a ConnectionAuth
+// card. A selector that is a connection ID is internal and never shown.
+func connectorAuthorizationPrompt(displayName, selector string) string {
+	if selector == "" || strings.HasPrefix(selector, "external_connection_") {
+		return fmt.Sprintf("Please connect and authorize your %s account so I can continue.", displayName)
+	}
+	return fmt.Sprintf("Please connect and authorize the %s account %s so I can continue.", displayName, selector)
 }
 
 // requestProviderKey posts, or reuses, the card asking the Agent's Human for

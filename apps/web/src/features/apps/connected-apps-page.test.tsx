@@ -663,6 +663,47 @@ describe("Connected apps", () => {
     ).toBeEnabled();
   });
 
+  it("resumes an open pending account from Add account instead of creating one", async () => {
+    const open = vi
+      .spyOn(window, "open")
+      .mockReturnValue({ opener: null } as unknown as Window);
+    const runtime = await testRuntime();
+    const existing = (await runtime.client.listExternalConnections())
+      .connections[0]!;
+    const pending = {
+      ...existing,
+      id: "external-connection-pending",
+      identity_label: "",
+      status: "pending" as const,
+      connect_url: "https://connect.example.test/open",
+      connect_expires_at: "2999-01-01T00:00:00Z",
+    };
+    vi.spyOn(runtime.client, "listExternalConnections").mockResolvedValue({
+      connections: [existing, pending],
+    });
+    vi.spyOn(runtime.client, "getExternalConnection").mockResolvedValue(
+      pending,
+    );
+    const create = vi.spyOn(runtime.client, "createExternalConnection");
+
+    renderPage(runtime, "/apps?app=gmail");
+
+    const dialog = await screen.findByRole("dialog", { name: "Gmail" });
+    fireEvent.click(
+      within(dialog).getByRole("button", {
+        name: "Add another Gmail account",
+      }),
+    );
+    await waitFor(() =>
+      expect(open).toHaveBeenCalledWith(
+        "https://connect.example.test/open",
+        expect.any(String),
+        expect.any(String),
+      ),
+    );
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("confirms what disconnecting stops before disconnecting an account", async () => {
     const runtime = await testRuntime();
     const existing = (await runtime.client.listExternalConnections())

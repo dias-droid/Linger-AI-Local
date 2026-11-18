@@ -14,6 +14,22 @@ export function externalConnectionNeedsAttention(
   );
 }
 
+/**
+ * The pending connection of an app whose authorization can still be resumed,
+ * so a new attempt reuses it instead of creating another row.
+ */
+export function openPendingExternalConnection(
+  connections: TeamHubExternalConnection[],
+  appKey: string,
+) {
+  return connections.find(
+    (connection) =>
+      connection.provider === appKey &&
+      connection.status === "pending" &&
+      !connection.status_error_code,
+  );
+}
+
 export function establishedExternalConnections(
   connections: TeamHubExternalConnection[],
 ) {

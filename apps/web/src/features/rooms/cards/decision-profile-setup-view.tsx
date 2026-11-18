@@ -20,7 +20,10 @@ import {
   externalAppsQueryOptions,
   externalConnectionsQueryOptions,
 } from "@/features/apps/connected-apps-queries";
-import { activeExternalConnections } from "@/features/apps/connection-state";
+import {
+  activeExternalConnections,
+  openPendingExternalConnection,
+} from "@/features/apps/connection-state";
 import { teamHubDone } from "@/features/teamhub/teamhub-api";
 import {
   createTeamHubIdempotencyKey,
@@ -274,10 +277,7 @@ function SetupAppRow({
   const active = showConnections
     ? activeExternalConnections(connections)[0]
     : undefined;
-  const pending = connections.find(
-    (connection) =>
-      connection.status === "pending" && !connection.status_error_code,
-  );
+  const pending = openPendingExternalConnection(connections, appKey);
   const verifying = connections.some(
     (connection) =>
       connection.status === "pending" &&

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { TeamHubExternalConnection } from "@/features/teamhub/teamhub-types";
 import { MemoryRouter } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createTestTeamHubRuntime } from "@/test/teamhub-test-runtime";
@@ -29,8 +30,21 @@ async function setup(
   actorId = "alice",
   hasConnection = true,
   status: "active" | "pending" = "active",
+  others: Partial<TeamHubExternalConnection>[] = [],
+  canConnectNew = true,
 ) {
   const runtime = createTestTeamHubRuntime();
+  if (!canConnectNew) {
+    const catalog = await runtime.client.listExternalApps();
+    vi.spyOn(runtime.client, "listExternalApps").mockResolvedValue({
+      ...catalog,
+      apps: catalog.apps.map((app) =>
+        app.key === "notion"
+          ? { ...app, availability: "unavailable" as const }
+          : app,
+      ),
+    });
+  }
 
   const existing = (await runtime.client.listExternalConnections())
     .connections[0]!;
@@ -42,7 +56,10 @@ async function setup(
     status,
   };
   vi.spyOn(runtime.client, "listExternalConnections").mockResolvedValue({
-    connections: hasConnection ? [connection] : [],
+    connections: [
+      ...(hasConnection ? [connection] : []),
+      ...others.map((other) => ({ ...connection, ...other })),
+    ],
   });
   if (next.status === "authorizing")
     vi.spyOn(runtime.client, "getExternalConnection").mockResolvedValue({
@@ -264,6 +281,160 @@ describe("Chat connection authorization", () => {
       expect.objectContaining({ connectionId: connection.id }),
     );
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it("lists only usable accounts and offers a new account", async () => {
+    vi.spyOn(window, "open").mockReturnValue({
+      opener: null,
+    } as unknown as Window);
+    const { runtime, decision, connection } = await setup(
+      card,
+      "alice",
+      true,
+      "active",
+      [
+        { id: "notion-pending", status: "pending", identity_label: "" },
+        {
+          id: "notion-duplicate",
+          status: "failed",
+          status_error_code: "duplicate_remote_principal",
+          identity_label: "Duplicate Notion",
+        },
+        {
+          id: "notion-expired",
+          status: "expired",
+          identity_label: "Old Notion",
+        },
+      ],
+    );
+    const create = vi
+      .spyOn(runtime.client, "createExternalConnection")
+      .mockResolvedValue({
+        ...connection,
+        id: "notion-new",
+        status: "pending",
+        connect_url: "https://connect.example.test/new",
+      });
+    vi.spyOn(runtime.client, "getExternalConnection").mockResolvedValue({
+      ...connection,
+      id: "notion-pending",
+      status: "pending",
+      connect_url: "https://connect.example.test/old",
+      connect_expires_at: "2026-01-01T00:00:00Z",
+    });
+    const picker = await screen.findByRole("combobox", {
+      name: "Notion account",
+    });
+    expect(picker).toHaveTextContent("Alice's Notion");
+    fireEvent.click(picker);
+    const options = (await screen.findAllByRole("option")).map(
+      (option) => option.textContent,
+    );
+    expect(options).toEqual([
+      "Alice's Notion",
+      "Old Notion (needs reconnecting)",
+      "Connect a new account",
+    ]);
+    fireEvent.click(
+      screen.getByRole("option", { name: "Connect a new account" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Connect Notion" }),
+    );
+    await waitFor(() =>
+      expect(decision).toHaveBeenCalledWith(
+        expect.objectContaining({ connectionId: "notion-new" }),
+      ),
+    );
+    expect(create).toHaveBeenCalledOnce();
+  });
+
+  it("hides the picker for a single account when no new account can be added", async () => {
+    await setup(card, "alice", true, "active", [], false);
+    expect(
+      await screen.findByRole("button", { name: "Allow Project Writer" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("combobox", { name: "Notion account" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers a new account beside a single account", async () => {
+    await setup();
+    expect(
+      await screen.findByRole("combobox", { name: "Notion account" }),
+    ).toHaveTextContent("Alice's Notion");
+  });
+
+  it("reuses an open pending connection for a new account", async () => {
+    vi.spyOn(window, "open").mockReturnValue({
+      opener: null,
+    } as unknown as Window);
+    const { runtime, decision, connection } = await setup(
+      card,
+      "alice",
+      false,
+      "active",
+      [{ id: "notion-pending", status: "pending" }],
+    );
+    vi.spyOn(runtime.client, "getExternalConnection").mockResolvedValue({
+      ...connection,
+      id: "notion-pending",
+      status: "pending",
+      connect_url: "https://connect.example.test/open",
+      connect_expires_at: "2999-01-01T00:00:00Z",
+    });
+    const create = vi.spyOn(runtime.client, "createExternalConnection");
+    expect(
+      screen.queryByRole("combobox", { name: "Notion account" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Connect Notion" }),
+    );
+    await waitFor(() =>
+      expect(window.open).toHaveBeenCalledWith(
+        "https://connect.example.test/open",
+        "linger_composio_oauth",
+        expect.any(String),
+      ),
+    );
+    expect(decision).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: "notion-pending" }),
+    );
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("creates a new connection when the open pending one cannot be read", async () => {
+    vi.spyOn(window, "open").mockReturnValue({
+      opener: null,
+    } as unknown as Window);
+    const { runtime, decision, connection } = await setup(
+      card,
+      "alice",
+      false,
+      "active",
+      [{ id: "notion-pending", status: "pending" }],
+    );
+    vi.spyOn(runtime.client, "getExternalConnection").mockRejectedValue(
+      new Error("gone"),
+    );
+    const create = vi
+      .spyOn(runtime.client, "createExternalConnection")
+      .mockResolvedValue({
+        ...connection,
+        id: "notion-new",
+        status: "pending",
+        connect_url: "https://connect.example.test/new",
+      });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Connect Notion" }),
+    );
+    await waitFor(() =>
+      expect(decision).toHaveBeenCalledWith(
+        expect.objectContaining({ connectionId: "notion-new" }),
+      ),
+    );
+    expect(create).toHaveBeenCalledOnce();
   });
 
   it("navigates OAuth only after durable consent is accepted", async () => {
