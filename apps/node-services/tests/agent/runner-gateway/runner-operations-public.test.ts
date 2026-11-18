@@ -199,6 +199,63 @@ describe("RunnerGateway", () => {
     },
   );
 
+  it("keeps a user-stopped Task's place through the cancel timeout and a later chat", async () => {
+    const gateway = createTestRunnerGateway({
+      createId: sequenceIds(),
+      operationCancelTimeoutMs: 10,
+    });
+    const peer = new RecordingPeer();
+    const connection = await acceptReadyConnection(gateway, peer, {
+      ...hello([], 1),
+      runtime_diagnostics: runtimeDiagnostics({ link: "api" }),
+    });
+    try {
+      const task = await gateway.startOperation({
+        ...runTarget(),
+        runKind: "task",
+      });
+      const start = peer.sent.find(
+        (command) => command.type === "operation.start",
+      )!;
+      await connection.receive(
+        event(start, 1, {
+          type: "operation.accepted",
+          command_id: start.command_id,
+          runner_pid: 100,
+        }),
+      );
+      const stopped = expect(task.result).rejects.toMatchObject({
+        code: "cancelled",
+      });
+      await task.cancel("user_stop");
+      await connection.receive(
+        event(start, 2, {
+          type: "operation.event",
+          event: { type: "status.changed", status: "working" },
+        }),
+      );
+      const chat = gateway.startOperation({
+        ...runTarget(),
+        ...readyContextScope("chat"),
+        runKind: "chat",
+      });
+      expect(await settlesWithin(task.result, 15)).toBe(false);
+      expect(await settlesWithin(chat, 15)).toBe(false);
+      expect(
+        peer.sent
+          .filter((command) => command.type === "cancel")
+          .map((command) => command.reason),
+      ).toEqual(["user_stop"]);
+      await connection.receive(
+        event(start, 3, { type: "operation.cancelled", reason: "user_stop" }),
+      );
+      await stopped;
+      void (await chat).result.catch(() => undefined);
+    } finally {
+      connection.disconnect();
+    }
+  });
+
   it("records the Runtime turn a Run's Operation started as soon as it starts", async () => {
     const recordRunOperation = vi.fn(async () => {});
     const gateway = createTestRunnerGateway({

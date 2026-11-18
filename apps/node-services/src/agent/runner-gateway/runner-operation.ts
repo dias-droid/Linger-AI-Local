@@ -1018,7 +1018,9 @@ export class RunnerOperationState {
         message,
       );
     } catch {
-      if (this.#terminal || this.#yieldRequested) return;
+      // A user stop may precede a chat waiter. Retain the Task's occupation
+      // until the Computer reports a terminal, including across reconnects.
+      if (this.#terminal || this.#delegatedTask) return;
       this.#complete(() =>
         this.#outcome.reject(
           new RunnerOperationError("cancelled", message, false),
