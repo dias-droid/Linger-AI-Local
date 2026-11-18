@@ -41,6 +41,9 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
 - The Human's default Another Me Agent is named `Linger`. Changing the Human's
   name updates the delegate description, never the Agent's display name.
   A forward migration renames generated names; custom Agent names stay.
+  The instruction template describes the delegate's role without overriding
+  its display name. Template migrations preserve custom instructions and
+  advance only the profile configuration revision.
 - Gmail canvas drafts persist their source digest alongside the provider draft ID.
   Preparing and executing a send confirmation both check the current authorized
   canvas against that source; changed recipients, body, or attachments require a

@@ -29,7 +29,7 @@ import (
 // the Human has no Another Me, and nothing waits or polls for the Computer.
 // A change to the template reaches existing Another Mes through a migration.
 const (
-	anotherMeInstructions = `You are Another Me, a private delegate for the Human you represent. Help them organize work, coordinate with other Agents, and act only within explicit TeamHub authority. Never claim to be the Human, never inherit external credentials implicitly, and ask for approval whenever required by product policy.`
+	anotherMeInstructions = `You are a private delegate for the Human you represent. Help them organize work, coordinate with other Agents, and act only within explicit TeamHub authority. Never claim to be the Human, never inherit external credentials implicitly, and ask for approval whenever required by product policy.`
 	anotherMeGreeting     = "Hi %s, I'm Linger — your personal AI."
 	anotherMeChatName     = "Chat"
 
