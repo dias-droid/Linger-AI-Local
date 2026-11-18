@@ -38,7 +38,7 @@ var (
 // refusal and lost its cause.
 func viewReadError(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
-		return ErrContextConflict
+		return contextConflict("the Context has no retained View")
 	}
 	if errors.Is(err, ErrProjectionRecoveryRequired) || errors.Is(err, ErrContextConflict) {
 		return err
@@ -501,14 +501,14 @@ func (s *ViewStore) apply(ctx context.Context, view View, contentURL string, tim
 		return ViewRecord{}, readErr
 	}
 	if readErr == nil && !sameContextOwner(current.View, view) {
-		return ViewRecord{}, ErrContextConflict
+		return ViewRecord{}, contextConflict("the retained View belongs to another owner")
 	}
 	if err := s.checkSharedTaskScope(ctx, view); err != nil {
 		return ViewRecord{}, err
 	}
 	workspacePath := contextWorkspace(s.root, view.ExecutionContextKey)
 	projectionPrevious := current
-	if readErr != nil || current.WorkspacePath != workspacePath {
+	if readErr != nil || !sameWorkspacePath(current.WorkspacePath, workspacePath) {
 		// Another directory never inherits the old row's file claims.
 		projectionPrevious = ViewRecord{}
 	}
@@ -553,7 +553,25 @@ func (s *ViewStore) apply(ctx context.Context, view View, contentURL string, tim
 	if err != nil {
 		return ViewRecord{}, err
 	}
-	if err := validateProjectionUpdate(workspacePath, ownership, projectionPrevious.View.Mappings, view.Mappings); err != nil {
+	err = validateProjectionUpdate(workspacePath, ownership, projectionPrevious.View.Mappings, view.Mappings)
+	if errors.Is(err, ErrContextConflict) && projectionPrevious.WorkspacePath == "" {
+		// No row claims this directory, so no View owns its read-only files and
+		// every later View would refuse them the same way.
+		orphaned, setAsideErr := setAsideOrphanedProjection(workspacePath, view.Mappings)
+		if setAsideErr != nil {
+			return ViewRecord{}, setAsideErr
+		}
+		if orphaned != "" {
+			logger := s.logger
+			if logger == nil {
+				logger = slog.Default()
+			}
+			logger.Warn("runner.context_view.orphaned_projection_set_aside",
+				"agent_id", view.AgentID, "view_digest", view.ViewDigest, "cause", err.Error(), "directory", orphaned)
+			err = validateProjectionUpdate(workspacePath, ownership, projectionPrevious.View.Mappings, view.Mappings)
+		}
+	}
+	if err != nil {
 		return ViewRecord{}, err
 	}
 	if _, err := os.Lstat(workspacePath); err == nil {
@@ -659,7 +677,7 @@ func (s *ViewStore) ValidatedWorkspace(ctx context.Context, executionContextKey 
 func (s *ViewStore) ValidatedView(ctx context.Context, executionContextKey string, encoded json.RawMessage) (ViewRecord, error) {
 	var ref ViewRef
 	if err := json.Unmarshal(encoded, &ref); err != nil || executionContextKey == "" || !viewDigestPattern.MatchString(ref.ViewDigest) {
-		return ViewRecord{}, ErrContextConflict
+		return ViewRecord{}, contextConflict("the Operation names no valid View")
 	}
 	return s.CurrentView(ctx, executionContextKey, ref.ViewDigest)
 }
@@ -675,8 +693,11 @@ func (s *ViewStore) CurrentView(ctx context.Context, executionContextKey, viewDi
 	if err != nil {
 		return ViewRecord{}, viewReadError(err)
 	}
-	if record.Unready || (viewDigest != "" && record.View.ViewDigest != viewDigest) {
-		return ViewRecord{}, ErrContextConflict
+	if record.Unready {
+		return ViewRecord{}, contextConflict("the View is still being published")
+	}
+	if viewDigest != "" && record.View.ViewDigest != viewDigest {
+		return ViewRecord{}, contextConflict("the workspace is at another View")
 	}
 	if err := validateWorkspaceLinks(record.WorkspacePath, record.View.Mappings); err != nil {
 		return ViewRecord{}, err
