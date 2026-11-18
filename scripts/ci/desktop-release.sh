@@ -16,6 +16,9 @@ set -euo pipefail
 #   desktop-release.sh build <target>             fetch-native, compile and package
 #   desktop-release.sh manifest <dir> <version>   write the signed update manifest
 #                                                 (manifest.json and .sig) into <dir>
+#   desktop-release.sh install-scripts <dir> <version>
+#                                                 verify stack pins and copy install.sh
+#                                                 and install.ps1 into <dir>
 #   desktop-release.sh checksums <dir> <version>  write <dir>/SHA256SUMS.txt
 #   desktop-release.sh gitlab-upload <dir> <version>
 #                                                 upload <dir>'s files to a GitLab generic
@@ -67,7 +70,7 @@ die() {
 
 usage() {
   echo "Usage: $0 version <tag> | fetch-native|compile|package|build <target>" \
-    "| manifest|checksums <dir> <version> | github-release <dir> <tag> <version>" \
+    "| manifest|install-scripts|checksums <dir> <version> | github-release <dir> <tag> <version>" \
     "| gitlab-upload <dir> <version>" >&2
   exit 2
 }
@@ -332,9 +335,22 @@ NODE
     die "could not write the update manifest"
 }
 
+cmd_install_scripts() {
+  local dir="${1:-}" version="${2:-}"
+  [[ -d "$dir" && "$version" =~ $version_pattern ]] ||
+    die "install-scripts needs the folder holding the release files and the release version"
+  command -v node >/dev/null || die "install-scripts needs Node.js (node)"
+  node "$repo_root/scripts/sync-install-stack-pin.mjs" --root "$repo_root" --check
+  cp "$repo_root/scripts/install/install.sh" "$dir/install.sh"
+  cp "$repo_root/scripts/install/install.ps1" "$dir/install.ps1"
+  chmod 0755 "$dir/install.sh"
+  chmod 0644 "$dir/install.ps1"
+  echo "desktop-release: copied install.sh and install.ps1 for $version"
+}
+
 # Every release ships the three installers; SHA256SUMS.txt covers each file
-# of the version, extra ones such as the portable zip and the app archive
-# included, and the update manifest and its signature when there are.
+# of the version, guided installer scripts, extra ones such as the portable
+# zip and the app archive, and the update manifest and its signature when there are.
 cmd_checksums() {
   local dir="${1:-}" version="${2:-}" required file files=()
   [[ -d "$dir" ]] || die "checksums needs the folder holding the release files"
@@ -344,7 +360,7 @@ cmd_checksums() {
   done
   while IFS= read -r file; do
     files+=("$(basename "$file")")
-  done < <(find "$dir" -maxdepth 1 -type f \( -name "Linger-$version-*" -o -name manifest.json -o -name manifest.json.sig \) | LC_ALL=C sort)
+  done < <(find "$dir" -maxdepth 1 -type f \( -name "Linger-$version-*" -o -name install.sh -o -name install.ps1 -o -name manifest.json -o -name manifest.json.sig \) | LC_ALL=C sort)
   : >"$dir/SHA256SUMS.txt.part"
   for file in "${files[@]}"; do
     printf '%s  %s\n' "$(sha256_of "$dir/$file")" "$file" >>"$dir/SHA256SUMS.txt.part"
@@ -430,6 +446,7 @@ case "$command" in
   package) cmd_package "$@" ;;
   build) cmd_build "$@" ;;
   manifest) cmd_manifest "$@" ;;
+  install-scripts) cmd_install_scripts "$@" ;;
   checksums) cmd_checksums "$@" ;;
   gitlab-upload) cmd_gitlab_upload "$@" ;;
   github-release) cmd_github_release "$@" ;;

@@ -166,7 +166,10 @@ $script:ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Pare
 $script:PowerShellExe = (Get-Process -Id $PID).Path
 $script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $script:TempDirsToClean = New-Object System.Collections.Generic.List[string]
-$script:DefaultStackUrl = 'https://simplexai.com/stack.ps1'
+# >>> stack release pin
+$script:StackPinNpmVersion = '0.1.0-dev.38'
+$script:StackPinSha256 = 'adf4c67d0cf59a26e54484edf3ea7ad2c54001fbbaeaec6bd8f938096e6a4bdf'
+# <<< stack release pin
 $script:StackScriptPath = ''
 $script:KitHome = ''
 $script:KitHomeResolved = $false
@@ -558,6 +561,167 @@ function Test-PrivateWindowsDirectory([string]$Path) {
     }
 }
 
+function Read-TarAsciiField([byte[]]$Buffer, [int]$Start, [int]$MaxLen) {
+    $end = $Start
+    $limit = [Math]::Min($Buffer.Length, ($Start + $MaxLen))
+    while ($end -lt $limit -and $Buffer[$end] -ne 0) {
+        $end++
+    }
+    if ($end -eq $Start) { return '' }
+    return [Text.Encoding]::ASCII.GetString($Buffer, $Start, ($end - $Start))
+}
+
+function Extract-TarGzEntryBytes([string]$TgzPath, [string]$EntryPath) {
+    $maxBytes = 16777216
+    if ((Get-Item -LiteralPath $TgzPath).Length -gt $maxBytes) {
+        return @{ ArchiveValid = $false; Found = $false; Bytes = $null }
+    }
+    $tarBytes = $null
+    try {
+        $fs = [IO.File]::OpenRead($TgzPath)
+        try {
+            $gz = New-Object IO.Compression.GZipStream($fs, [IO.Compression.CompressionMode]::Decompress)
+            try {
+                $ms = New-Object IO.MemoryStream
+                try {
+                    $buf = New-Object byte[] 65536
+                    $total = 0
+                    while ($true) {
+                        $read = $gz.Read($buf, 0, $buf.Length)
+                        if ($read -le 0) { break }
+                        $total += $read
+                        if ($total -gt $maxBytes) {
+                            return @{ ArchiveValid = $false; Found = $false; Bytes = $null }
+                        }
+                        $ms.Write($buf, 0, $read)
+                    }
+                    $tarBytes = $ms.ToArray()
+                } finally {
+                    $ms.Dispose()
+                }
+            } finally {
+                $gz.Dispose()
+            }
+        } finally {
+            $fs.Dispose()
+        }
+    } catch {
+        return @{ ArchiveValid = $false; Found = $false; Bytes = $null }
+    }
+
+    $offset = 0
+    while (($offset + 512) -le $tarBytes.Length) {
+        $allZero = $true
+        for ($i = 0; $i -lt 512; $i++) {
+            if ($tarBytes[$offset + $i] -ne 0) {
+                $allZero = $false
+                break
+            }
+        }
+        if ($allZero) { break }
+
+        $rawName = Read-TarAsciiField $tarBytes $offset 100
+        $magic = Read-TarAsciiField $tarBytes ($offset + 257) 5
+        $prefix = if ($magic -eq 'ustar') { Read-TarAsciiField $tarBytes ($offset + 345) 155 } else { '' }
+        $fullName = if ($prefix) { "$prefix/$rawName" } else { $rawName }
+        $normalized = ($fullName -replace '^\./', '').Replace('\', '/')
+        $sizeRaw = (Read-TarAsciiField $tarBytes ($offset + 124) 12).Trim()
+        $entrySize = 0
+        if ($sizeRaw) {
+            try {
+                $entrySize = [Convert]::ToInt32($sizeRaw, 8)
+            } catch {
+                return @{ ArchiveValid = $false; Found = $false; Bytes = $null }
+            }
+        }
+        $typeByte = $tarBytes[$offset + 156]
+        $dataStart = $offset + 512
+        if ($entrySize -lt 0 -or ($dataStart + $entrySize) -gt $tarBytes.Length) {
+            return @{ ArchiveValid = $false; Found = $false; Bytes = $null }
+        }
+        if (($typeByte -eq 0 -or $typeByte -eq 48) -and $normalized -eq $EntryPath) {
+            $entryBytes = New-Object byte[] $entrySize
+            if ($entrySize -gt 0) {
+                [Buffer]::BlockCopy($tarBytes, $dataStart, $entryBytes, 0, $entrySize)
+            }
+            return @{ ArchiveValid = $true; Found = $true; Bytes = $entryBytes }
+        }
+        $padded = [int]([Math]::Ceiling($entrySize / 512.0) * 512)
+        $offset = $dataStart + $padded
+    }
+    return @{ ArchiveValid = $true; Found = $false; Bytes = $null }
+}
+
+function Get-BytesSha256Hex([byte[]]$Bytes) {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $digest = $sha.ComputeHash($Bytes)
+        return ([BitConverter]::ToString($digest) -replace '-', '').ToLowerInvariant()
+    } finally {
+        $sha.Dispose()
+    }
+}
+
+function Download-PinnedStackScript([string]$DestinationPath, [string]$TempDir) {
+    if (-not $script:StackPinNpmVersion -or -not $script:StackPinSha256) {
+        Exit-Fail 'Local model runtime release pin is missing.'
+    }
+
+    $registries = @()
+    $override = $env:SIMPLEX_NPM_REGISTRY
+    if ($override) {
+        $trimmed = $override.TrimEnd('/')
+        if ($trimmed -notmatch '^https://[^/\s]+' -and $trimmed -notmatch '^http://(127\.0\.0\.1|localhost)(:\d+)?(/.*)?$') {
+            Exit-Fail 'SIMPLEX_NPM_REGISTRY must use https or loopback http.'
+        }
+        $registries = @($trimmed)
+    } else {
+        $region = if ($env:SIMPLEX_REGION) { $env:SIMPLEX_REGION } else { 'auto' }
+        if ($region -notin @('auto', 'global', 'cn')) {
+            Exit-Fail 'SIMPLEX_REGION must be auto, global, or cn.'
+        }
+        if ($region -eq 'cn') {
+            $registries = @('https://registry.npmmirror.com', 'https://registry.npmjs.org')
+        } else {
+            $registries = @('https://registry.npmjs.org', 'https://registry.npmmirror.com')
+        }
+    }
+
+    $tgzPath = Join-Path $TempDir 'localmodels-launcher.tgz'
+    $lastError = 'download failed'
+    foreach ($base in $registries) {
+        $tarUrl = "$base/@simplexai/localmodels/-/localmodels-$($script:StackPinNpmVersion).tgz"
+        if (Test-Path -LiteralPath $tgzPath) {
+            Remove-Item -LiteralPath $tgzPath -Force -ErrorAction SilentlyContinue
+        }
+        try {
+            Invoke-WebRequest -UseBasicParsing -MaximumRedirection 5 -Uri $tarUrl -OutFile $tgzPath -TimeoutSec 60
+        } catch {
+            $lastError = $_.Exception.Message
+            continue
+        }
+
+        $extracted = Extract-TarGzEntryBytes $tgzPath 'package/stack.ps1'
+        if (-not $extracted.ArchiveValid) {
+            $lastError = 'downloaded archive is invalid'
+            continue
+        }
+        if (-not $extracted.Found) {
+            Exit-Fail 'Downloaded runtime bootstrap archive is missing stack.ps1.'
+        }
+        $actualSha = Get-BytesSha256Hex ([byte[]]$extracted.Bytes)
+        if ($actualSha -ne $script:StackPinSha256) {
+            if (Test-Path -LiteralPath $DestinationPath) {
+                Remove-Item -LiteralPath $DestinationPath -Force -ErrorAction SilentlyContinue
+            }
+            Exit-Fail 'Local model runtime bootstrap checksum mismatch.'
+        }
+        [IO.File]::WriteAllBytes($DestinationPath, [byte[]]$extracted.Bytes)
+        return
+    }
+    Exit-Fail "Could not download the local model runtime helper: $lastError"
+}
+
 function Resolve-StackScript {
     if ($env:LINGER_STACK_SCRIPT) {
         if (-not (Test-Path -LiteralPath $env:LINGER_STACK_SCRIPT -PathType Leaf)) {
@@ -577,11 +741,14 @@ function Resolve-StackScript {
     Set-PrivateWindowsDirectoryAcl $tempRoot
     $script:TempDirsToClean.Add($tempRoot)
     $dest = Join-Path $tempRoot 'stack.ps1'
-    $srcUrl = if ($env:LINGER_STACK_URL) { $env:LINGER_STACK_URL } else { $script:DefaultStackUrl }
-    try {
-        Invoke-WebRequest -UseBasicParsing -Uri $srcUrl -OutFile $dest -TimeoutSec 30
-    } catch {
-        Exit-Fail "Could not download the local model runtime helper: $($_.Exception.Message)"
+    if ($env:LINGER_STACK_URL) {
+        try {
+            Invoke-WebRequest -UseBasicParsing -Uri $env:LINGER_STACK_URL -OutFile $dest -TimeoutSec 30
+        } catch {
+            Exit-Fail "Could not download the local model runtime helper: $($_.Exception.Message)"
+        }
+    } else {
+        Download-PinnedStackScript $dest $tempRoot
     }
     $script:StackScriptPath = $dest
 }

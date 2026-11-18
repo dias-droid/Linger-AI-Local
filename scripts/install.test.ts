@@ -1,4 +1,5 @@
 import { execFile, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmod,
   copyFile,
@@ -16,6 +17,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { gzipSync } from "node:zlib";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -1447,5 +1449,173 @@ describe("scripts/install/install.ps1 and release pin parity", () => {
     expect(stackPs1).toContain(`$StackVersion = '${shVersion}'`);
     expect(stackPs1).toContain(`$StackSourceCommit = '${shCommit}'`);
     expect(stackPs1).toContain(`$StackNpmVersion = '${shNpm}'`);
+  });
+
+  it("keeps standalone install script stack pins synchronized and free of floating domain URLs", async () => {
+    const syncScript = path.join(
+      repositoryRoot,
+      "scripts",
+      "sync-install-stack-pin.mjs",
+    );
+    const { stdout } = await execFileAsync(
+      process.execPath,
+      [syncScript, "--check"],
+      { cwd: repositoryRoot, encoding: "utf8" },
+    );
+    expect(stdout).toContain("Verified install stack pins");
+
+    const [shBody, ps1Body] = await Promise.all([
+      readFile(installScriptPath, "utf8"),
+      readFile(
+        path.join(repositoryRoot, "scripts", "install", "install.ps1"),
+        "utf8",
+      ),
+    ]);
+    expect(shBody).not.toContain("simplexai.com/stack");
+    expect(ps1Body).not.toContain("simplexai.com/stack");
+  });
+
+  it("downloads, SHA-256 verifies, and rejects tampered @simplexai/localmodels tarballs when run standalone", async () => {
+    const buildSingleFileTgz = (entryName: string, content: Buffer): Buffer => {
+      const header = Buffer.alloc(512);
+      header.write(entryName, 0, "ascii");
+      header.write("0000755\0", 100, "ascii");
+      header.write("0000000\0", 108, "ascii");
+      header.write("0000000\0", 116, "ascii");
+      header.write(
+        `${content.length.toString(8).padStart(11, "0")}\0`,
+        124,
+        "ascii",
+      );
+      header.write("00000000000\0", 136, "ascii");
+      header.write("        ", 148, "ascii");
+      header.write("0", 156, "ascii");
+      header.write("ustar\0", 257, "ascii");
+      header.write("00", 263, "ascii");
+      let sum = 0;
+      for (const byte of header) {
+        sum += byte;
+      }
+      header.write(`${sum.toString(8).padStart(6, "0")}\0 `, 148, "ascii");
+      const pad = (512 - (content.length % 512)) % 512;
+      const tar = Buffer.concat([
+        header,
+        content,
+        Buffer.alloc(pad),
+        Buffer.alloc(1024),
+      ]);
+      return gzipSync(tar);
+    };
+
+    const startMockNpm = async (expectedUrlPath: string, tgzBytes: Buffer) => {
+      const srv = createServer((req, res) => {
+        if (req.url === expectedUrlPath) {
+          res.writeHead(200, { "content-type": "application/gzip" });
+          res.end(tgzBytes);
+          return;
+        }
+        res.writeHead(404);
+        res.end("not found");
+      });
+      await new Promise<void>((resolve) => srv.listen(0, "127.0.0.1", resolve));
+      cleanups.push(
+        () =>
+          new Promise<void>((resolve, reject) =>
+            srv.close((err) => (err ? reject(err) : resolve())),
+          ),
+      );
+      const addr = srv.address() as AddressInfo;
+      return `http://127.0.0.1:${addr.port}`;
+    };
+
+    const root = await createTempRoot();
+    await mkdir(path.join(root, "home"), { recursive: true });
+    await chmod(path.join(root, "home"), 0o700);
+    const standaloneDir = path.join(root, "standalone");
+    await mkdir(standaloneDir, { recursive: true });
+    const standaloneSh = path.join(standaloneDir, "install.sh");
+    await copyFile(installScriptPath, standaloneSh);
+    await chmod(standaloneSh, 0o755);
+
+    const shRaw = await readFile(standaloneSh, "utf8");
+    const npmVer = shRaw.match(/^STACK_PIN_NPM_VERSION='([^']+)'/m)?.[1];
+    expect(npmVer).toBeTruthy();
+    const tarUrlPath = `/@simplexai/localmodels/-/localmodels-${npmVer}.tgz`;
+
+    // 1. Unmodified install.sh rejects a tampered package/stack.sh immediately.
+    const tamperedUrl = await startMockNpm(
+      tarUrlPath,
+      buildSingleFileTgz(
+        "package/stack.sh",
+        Buffer.from("#!/bin/sh\necho bad\n"),
+      ),
+    );
+    const envBase = buildTestEnv(root, "");
+    delete envBase.LINGER_STACK_SCRIPT;
+    delete envBase.LINGER_STACK_URL;
+    const tamperedRes = await runInstallScript(["--status"], {
+      scriptPath: standaloneSh,
+      cwd: standaloneDir,
+      env: { ...envBase, SIMPLEX_NPM_REGISTRY: tamperedUrl },
+    });
+    expect(tamperedRes.code).toBe(1);
+    expect(tamperedRes.stderr).toContain(
+      "Local model runtime bootstrap checksum mismatch.",
+    );
+
+    // 1b. Bounded streaming caps uncompressed package/stack.sh at 16 MiB.
+    const oversizedUrl = await startMockNpm(
+      tarUrlPath,
+      buildSingleFileTgz(
+        "package/stack.sh",
+        Buffer.alloc(16 * 1024 * 1024 + 64),
+      ),
+    );
+    const oversizedRes = await runInstallScript(["--status"], {
+      scriptPath: standaloneSh,
+      cwd: standaloneDir,
+      env: { ...envBase, SIMPLEX_NPM_REGISTRY: oversizedUrl },
+    });
+    expect(oversizedRes.code).toBe(1);
+    expect(oversizedRes.stderr).toContain(
+      "Local model runtime bootstrap exceeds maximum size.",
+    );
+
+    // 2. Standalone install.sh extracts and runs verified package/stack.sh when SHA-256 matches.
+    const fakeBody = Buffer.from(
+      `#!/bin/sh
+if [ "\${1:-}" = "--bootstrap-json" ]; then
+  printf '{"schema":"localmodels.kit-location/v1","python":"/bin/sh"}\\n'
+  exit 0
+fi
+if [ "\${1:-}" = "status" ]; then
+  printf 'qwen3.8-27b active\\n'
+  exit 0
+fi
+exit 0
+`,
+      "utf8",
+    );
+    const fakeSha = createHash("sha256").update(fakeBody).digest("hex");
+    const pinnedSh = path.join(standaloneDir, "install-pinned.sh");
+    await writeFile(
+      pinnedSh,
+      shRaw.replace(
+        /STACK_PIN_SHA256='[a-f0-9]+'/,
+        `STACK_PIN_SHA256='${fakeSha}'`,
+      ),
+      { mode: 0o755 },
+    );
+    const goodUrl = await startMockNpm(
+      tarUrlPath,
+      buildSingleFileTgz("package/stack.sh", fakeBody),
+    );
+    const goodRes = await runInstallScript(["--status"], {
+      scriptPath: pinnedSh,
+      cwd: standaloneDir,
+      env: { ...envBase, SIMPLEX_NPM_REGISTRY: goodUrl },
+    });
+    expect(goodRes.code).toBe(0);
+    expect(goodRes.stdout).toContain("qwen3.8-27b active");
   });
 });

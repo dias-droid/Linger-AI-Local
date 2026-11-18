@@ -8,6 +8,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -380,5 +381,76 @@ describe("desktop-release.sh github-release", () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("owner/name");
+  });
+});
+
+describe("desktop-release.sh install-scripts", () => {
+  const version = "0.16.33";
+
+  it("exports verified install.sh and install.ps1 and covers them in SHA256SUMS.txt", () => {
+    const dir = folder();
+    for (const suffix of [
+      "macos-arm64.dmg",
+      "linux-x64.tar.gz",
+      "windows-x64-setup.exe",
+    ]) {
+      writeFileSync(join(dir, `Linger-${version}-${suffix}`), suffix);
+    }
+
+    const exported = run(["install-scripts", dir, version]);
+    expect(exported.status).toBe(0);
+    expect(exported.stdout).toContain(
+      `copied install.sh and install.ps1 for ${version}`,
+    );
+    expect(statSync(join(dir, "install.sh")).mode & 0o111).toBe(0o111);
+    expect(existsSync(join(dir, "install.ps1"))).toBe(true);
+
+    const sums = run(["checksums", dir, version]);
+    expect(sums.status).toBe(0);
+    const checksumText = readFileSync(join(dir, "SHA256SUMS.txt"), "utf8");
+    const shHash = createHash("sha256")
+      .update(readFileSync(join(process.cwd(), "scripts/install/install.sh")))
+      .digest("hex");
+    const ps1Hash = createHash("sha256")
+      .update(readFileSync(join(process.cwd(), "scripts/install/install.ps1")))
+      .digest("hex");
+    expect(checksumText).toContain(`${shHash}  install.sh\n`);
+    expect(checksumText).toContain(`${ps1Hash}  install.ps1\n`);
+  });
+
+  it("refuses install-scripts when standalone pins drift from scripts/installs", () => {
+    const checkout = folder();
+    for (const rel of ["scripts/ci", "scripts/install", "scripts/installs"]) {
+      mkdirSync(join(checkout, rel), { recursive: true });
+    }
+    for (const file of [
+      "scripts/ci/desktop-release.sh",
+      "scripts/sync-install-stack-pin.mjs",
+      "scripts/installs/stack.sh",
+      "scripts/installs/stack.ps1",
+      "scripts/install/install.sh",
+      "scripts/install/install.ps1",
+    ]) {
+      copyFileSync(join(process.cwd(), file), join(checkout, file));
+    }
+    const driftedSh = readFileSync(
+      join(checkout, "scripts/install/install.sh"),
+      "utf8",
+    ).replace(
+      /STACK_PIN_SHA256='[a-f0-9]+'/,
+      `STACK_PIN_SHA256='${"0".repeat(64)}'`,
+    );
+    writeFileSync(join(checkout, "scripts/install/install.sh"), driftedSh);
+
+    const dir = folder();
+    const result = run(
+      ["install-scripts", dir, version],
+      {},
+      join(checkout, "scripts/ci/desktop-release.sh"),
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Stack release pin drift");
+    expect(existsSync(join(dir, "install.sh"))).toBe(false);
   });
 });

@@ -122,6 +122,7 @@ gh release upload native-deps <archive> --repo simplexai-labs/linger
 | `Linger-<version>-windows-x64-setup.exe`    | Windows x64 per-user installer                                  |
 | `Linger-<version>-windows-x64-portable.zip` | Windows x64 folder to run without installing                    |
 | `Linger-<version>-macos-arm64.app.tar.gz`   | macOS app the updater swaps in                                  |
+| `install.sh`, `install.ps1`                 | guided local-model & Computer installer scripts                 |
 | `manifest.json`, `manifest.json.sig`        | only with the update key: the [auto-update](#auto-update) feed  |
 | `SHA256SUMS.txt`                            | SHA-256 of every file above                                     |
 

@@ -82,7 +82,110 @@ public sealed class TestHttpMockServer : IDisposable {
         try { _thread.Join(1000); } catch {}
     }
 }
+
+public sealed class TestNpmTgzServer : IDisposable {
+    private readonly TcpListener _listener;
+    private readonly Thread _thread;
+    private volatile bool _running;
+    private readonly string _expectedPath;
+    private readonly byte[] _tgzBytes;
+    public int Port { get; private set; }
+    public string BaseUrl { get { return "http://127.0.0.1:" + Port; } }
+
+    public TestNpmTgzServer(string expectedPath, byte[] tgzBytes) {
+        _expectedPath = expectedPath;
+        _tgzBytes = tgzBytes;
+        _listener = new TcpListener(IPAddress.Loopback, 0);
+        _listener.Start();
+        Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+        _running = true;
+        _thread = new Thread(Loop);
+        _thread.IsBackground = true;
+        _thread.Start();
+    }
+
+    private void Loop() {
+        while (_running) {
+            try {
+                using (var client = _listener.AcceptTcpClient())
+                using (var stream = client.GetStream()) {
+                    var reader = new StreamReader(stream, Encoding.ASCII, false, 1024, true);
+                    var requestLine = reader.ReadLine() ?? "";
+                    while (true) {
+                        var line = reader.ReadLine();
+                        if (string.IsNullOrEmpty(line)) break;
+                    }
+                    if (requestLine.StartsWith("GET " + _expectedPath + " ", StringComparison.Ordinal)) {
+                        var header = Encoding.ASCII.GetBytes(
+                            "HTTP/1.1 200 OK\r\nContent-Type: application/gzip\r\nContent-Length: " +
+                            _tgzBytes.Length + "\r\nConnection: close\r\n\r\n");
+                        stream.Write(header, 0, header.Length);
+                        stream.Write(_tgzBytes, 0, _tgzBytes.Length);
+                    } else {
+                        var header = Encoding.ASCII.GetBytes(
+                            "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                        stream.Write(header, 0, header.Length);
+                    }
+                }
+            } catch {
+                if (!_running) break;
+            }
+        }
+    }
+
+    public void Dispose() {
+        _running = false;
+        try { _listener.Stop(); } catch {}
+        try { _thread.Join(1000); } catch {}
+    }
+}
 '@
+}
+
+function New-SingleFileTgzBytes([string]$EntryName, [byte[]]$ContentBytes) {
+    $header = New-Object byte[] 512
+    $nameBytes = [Text.Encoding]::ASCII.GetBytes($EntryName)
+    [Buffer]::BlockCopy($nameBytes, 0, $header, 0, [Math]::Min($nameBytes.Length, 100))
+    foreach ($pair in @(
+        @{ Off = 100; Val = "0000755`0" },
+        @{ Off = 108; Val = "0000000`0" },
+        @{ Off = 116; Val = "0000000`0" },
+        @{ Off = 124; Val = ([Convert]::ToString($ContentBytes.Length, 8).PadLeft(11, '0') + "`0") },
+        @{ Off = 136; Val = "00000000000`0" },
+        @{ Off = 148; Val = '        ' },
+        @{ Off = 156; Val = '0' },
+        @{ Off = 257; Val = "ustar`0" },
+        @{ Off = 263; Val = '00' }
+    )) {
+        $b = [Text.Encoding]::ASCII.GetBytes($pair.Val)
+        [Buffer]::BlockCopy($b, 0, $header, $pair.Off, $b.Length)
+    }
+    $sum = 0
+    for ($i = 0; $i -lt 512; $i++) { $sum += [int]$header[$i] }
+    $chk = [Convert]::ToString($sum, 8).PadLeft(6, '0') + "`0 "
+    $chkBytes = [Text.Encoding]::ASCII.GetBytes($chk)
+    [Buffer]::BlockCopy($chkBytes, 0, $header, 148, $chkBytes.Length)
+
+    $padLen = (512 - ($ContentBytes.Length % 512)) % 512
+    $ms = New-Object IO.MemoryStream
+    try {
+        $gz = New-Object IO.Compression.GZipStream($ms, [IO.Compression.CompressionMode]::Compress, $true)
+        try {
+            $gz.Write($header, 0, $header.Length)
+            if ($ContentBytes.Length -gt 0) { $gz.Write($ContentBytes, 0, $ContentBytes.Length) }
+            if ($padLen -gt 0) {
+                $padBytes = New-Object byte[] $padLen
+                $gz.Write($padBytes, 0, $padBytes.Length)
+            }
+            $trailer = New-Object byte[] 1024
+            $gz.Write($trailer, 0, $trailer.Length)
+        } finally {
+            $gz.Dispose()
+        }
+        return ,$ms.ToArray()
+    } finally {
+        $ms.Dispose()
+    }
 }
 
 function Assert-True([bool]$Condition, [string]$Message) {
@@ -752,6 +855,84 @@ exit 0
         Assert-Exit $rPurgeYes 0 'purge --yes'
     } finally {
         $mDay2.Server.Dispose()
+    }
+
+    # 7. Standalone @simplexai/localmodels tarball download, SHA-256 verification & tamper rejection
+    $dPkg = Join-Path $workRoot 't-pkg'
+    $hPkg = Join-Path $dPkg 'home'
+    $laPkg = Join-Path $dPkg 'la'
+    $saPkgDir = Join-Path $dPkg 'standalone'
+    foreach ($dirToMake in @($hPkg, $laPkg, $saPkgDir)) {
+        $null = New-Item -ItemType Directory -Path $dirToMake -Force
+    }
+    $saPs1 = Join-Path $saPkgDir 'install.ps1'
+    Copy-Item -LiteralPath $InstallScriptPath -Destination $saPs1 -Force
+    $ps1Raw = [IO.File]::ReadAllText($saPs1, $script:Utf8NoBom)
+    $npmMatch = [regex]::Match($ps1Raw, '\$script:StackPinNpmVersion = ''([^'']+)''')
+    Assert-True $npmMatch.Success 'install.ps1 declares StackPinNpmVersion'
+    $npmPinVer = $npmMatch.Groups[1].Value
+    $tarUrlPath = "/@simplexai/localmodels/-/localmodels-$npmPinVer.tgz"
+
+    $badStackBytes = $script:Utf8NoBom.GetBytes("Write-Output 'tampered'`n")
+    [byte[]]$badTgz = New-SingleFileTgzBytes 'package/stack.ps1' $badStackBytes
+    $srvBad = New-Object TestNpmTgzServer($tarUrlPath, $badTgz)
+    try {
+        $envBad = @{
+            USERPROFILE = $hPkg
+            HOME = $hPkg
+            LOCALAPPDATA = $laPkg
+            LINGER_STACK_SCRIPT = $null
+            LINGER_STACK_URL = $null
+            SIMPLEX_NPM_REGISTRY = $srvBad.BaseUrl
+            LINGER_INSTALL_TEST_ELEVATED = '0'
+        }
+        $rTampered = Invoke-Script @('--status') $envBad '' $saPs1 $saPkgDir
+        Assert-Exit $rTampered 1 'tampered npm tgz rejected'
+        Assert-Contains $rTampered.StdErr 'Local model runtime bootstrap checksum mismatch.' 'tampered checksum message'
+    } finally {
+        $srvBad.Dispose()
+    }
+
+    $fakeStackBody = @'
+if ($args.Count -ge 1 -and $args[0] -eq '--bootstrap-json') {
+    Write-Output '{"schema":"localmodels.kit-location/v1","python":"ok"}'
+    exit 0
+}
+if ($args.Count -ge 1 -and $args[0] -eq 'status') {
+    Write-Output 'qwen3.8-27b active'
+    exit 0
+}
+exit 0
+'@
+    $goodStackBytes = $script:Utf8NoBom.GetBytes($fakeStackBody)
+    $shaAlg = [Security.Cryptography.SHA256]::Create()
+    try {
+        $goodSha = ([BitConverter]::ToString($shaAlg.ComputeHash($goodStackBytes)) -replace '-', '').ToLowerInvariant()
+    } finally {
+        $shaAlg.Dispose()
+    }
+    $pinnedSaPs1 = Join-Path $saPkgDir 'install-pinned.ps1'
+    $pinShaMatch = [regex]::Match($ps1Raw, '\$script:StackPinSha256 = ''[a-f0-9]+''')
+    Assert-True $pinShaMatch.Success 'install.ps1 declares StackPinSha256'
+    $patchedPs1 = $ps1Raw.Replace($pinShaMatch.Value, ('$script:StackPinSha256 = ''' + $goodSha + ''''))
+    [IO.File]::WriteAllText($pinnedSaPs1, $patchedPs1, $script:Utf8NoBom)
+    [byte[]]$goodTgz = New-SingleFileTgzBytes 'package/stack.ps1' $goodStackBytes
+    $srvGood = New-Object TestNpmTgzServer($tarUrlPath, $goodTgz)
+    try {
+        $envGood = @{
+            USERPROFILE = $hPkg
+            HOME = $hPkg
+            LOCALAPPDATA = $laPkg
+            LINGER_STACK_SCRIPT = $null
+            LINGER_STACK_URL = $null
+            SIMPLEX_NPM_REGISTRY = $srvGood.BaseUrl
+            LINGER_INSTALL_TEST_ELEVATED = '0'
+        }
+        $rGood = Invoke-Script @('--status') $envGood '' $pinnedSaPs1 $saPkgDir
+        Assert-Exit $rGood 0 'verified npm tgz executes status'
+        Assert-Contains $rGood.StdOut 'qwen3.8-27b active' 'verified npm tgz status output'
+    } finally {
+        $srvGood.Dispose()
     }
 
     Write-Host "ALL $($script:Assertions) ASSERTIONS PASSED under $($script:CurrentExe)!"

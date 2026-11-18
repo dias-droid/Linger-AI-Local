@@ -3,7 +3,10 @@
 This directory holds only the entry scripts of the local model stack, plus this
 README. Its release pipeline generates the scripts with pinned versions; source,
 tests and release tools stay in their own repository, and the pipeline rewrites
-only its scripts and its marked section below.
+only its scripts and its marked section below. After updating `stack.sh` and
+`stack.ps1`, run `node scripts/sync-install-stack-pin.mjs --write` so
+`scripts/install/install.sh` and `scripts/install/install.ps1` keep matching
+release pins.
 
 ## Your own API keys: `user.env`
 
