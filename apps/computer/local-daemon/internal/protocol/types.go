@@ -40,6 +40,7 @@ type Command struct {
 	ReconcileOperationIDs []string        `json:"reconcile_operation_ids,omitempty"`
 	ContextContentURL     string          `json:"context_content_url,omitempty"`
 	TargetRelease         *TargetRelease  `json:"target_release,omitempty"`
+	ServiceFeatures       []string        `json:"service_features,omitempty"`
 	Payload               json.RawMessage `json:"payload,omitempty"`
 }
 

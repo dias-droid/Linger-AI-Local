@@ -126,6 +126,8 @@ const MAX_BATCH_PAGES = 5;
 const MAX_CANDIDATES = 40;
 /** Existing entities the consolidation step sees. */
 const MAX_CONSOLIDATION_PAGES = 300;
+/** Calls one type's consolidation may take when a call fails. */
+const CONSOLIDATION_ATTEMPTS = 2;
 
 type EntityTypeId = Exclude<PersonalWikiNodeTypeId, "session">;
 
@@ -1217,18 +1219,51 @@ ${renderExcerpts(
     return [...issues, ...inspection.issues];
   }
 
-  /** Records routed entities; a new name that matches a page joins that page. */
   /**
    * Parallel routing tasks name new entities without seeing each other, so
-   * one entity can arrive under two names. Before any page is written, one
-   * call reads every new entity routed this run beside the existing pages and
-   * merges each group that names one entity, the way OpenWiki settles its
-   * whole page plan before writing. It reports how many entities it merged
-   * away; a failed call leaves the routing as it is.
+   * one entity can arrive under two names. Before any page is written, this
+   * merges each group that names one entity. It settles each type's new
+   * entities in its own call: types never merge, and a short list keeps each
+   * reply small. Types run in parallel; a type whose call fails is tried once
+   * more from the entities still unmerged.
    */
   async #consolidate(): Promise<number> {
-    const fresh = [...this.#todos.entries()].filter(([, todo]) => !todo.page);
-    if (fresh.length < 2 || this.#expired()) return 0;
+    if (this.#expired()) return 0;
+    const types = PERSONAL_WIKI_ENTITY_TYPES.map(
+      (definition) => definition.id as EntityTypeId,
+    ).filter((type) => {
+      const fresh = this.#freshEntities(type).length;
+      return (
+        fresh > 1 ||
+        (fresh === 1 && this.entities.some((entry) => entry.type === type))
+      );
+    });
+    const merged = await Promise.all(
+      types.map(async (type) => {
+        let total = 0;
+        for (let attempt = 1; attempt <= CONSOLIDATION_ATTEMPTS; attempt += 1) {
+          const result = await this.#consolidateType(type, attempt);
+          total += result.merged;
+          if (!result.failed || this.#expired()) break;
+        }
+        return total;
+      }),
+    );
+    return merged.reduce((sum, count) => sum + count, 0);
+  }
+
+  /** New entities of one type that no page holds yet, in routing order. */
+  #freshEntities(type: EntityTypeId): Array<[string, EntityTodo]> {
+    return [...this.#todos.entries()].filter(
+      ([, todo]) => !todo.page && todo.type === type,
+    );
+  }
+
+  async #consolidateType(
+    type: EntityTypeId,
+    attempt: number,
+  ): Promise<{ merged: number; failed: boolean }> {
+    const fresh = this.#freshEntities(type);
     const listing = fresh
       .map(
         ([, todo], index) =>
@@ -1236,15 +1271,19 @@ ${renderExcerpts(
       )
       .join("\n");
     const registry = renderEntityRegistry(
-      this.entities.slice(0, MAX_CONSOLIDATION_PAGES),
+      this.entities
+        .filter((entry) => entry.type === type)
+        .slice(0, MAX_CONSOLIDATION_PAGES),
     );
     const merged = new Set<number>();
+    const step = `consolidate:${type}:${attempt}`;
     const startedAt = Date.now();
+    let failed = false;
     try {
-      const result = await this.#chain!("consolidate", (model) =>
+      const result = await this.#chain!(step, (model) =>
         runAgentTask({
           model,
-          step: "consolidate",
+          step,
           task: consolidateTask(),
           maxInputTokens: this.loopTokens,
           deadline: this.request.deadline,
@@ -1262,16 +1301,25 @@ ${renderExcerpts(
           signal: this.signal,
         }),
       );
-      this.#logTask("wiki.consolidate", result, startedAt);
+      this.#logTask(`wiki.consolidate.${type}`, result, startedAt);
     } catch (error) {
       if (this.signal.aborted) throw error;
+      failed = true;
       writeWikiLog(
         "wiki_consolidate_skipped",
-        { run_id: this.runId, error: String(error) },
+        { run_id: this.runId, type, attempt, error: String(error) },
         "ERROR",
       );
     }
-    return merged.size;
+    writeWikiLog("wiki_consolidate_type", {
+      run_id: this.runId,
+      type,
+      attempt,
+      listed_count: fresh.length,
+      merged_count: merged.size,
+      failed,
+    });
+    return { merged: merged.size, failed };
   }
 
   /** Merges listed new entities into one of them or into an existing page. */
@@ -1349,6 +1397,7 @@ ${renderExcerpts(
     };
   }
 
+  /** Records routed entities; a new name that matches a page joins that page. */
   #addTodo(
     args: Readonly<Record<string, unknown>>,
     allowed: ReadonlySet<string>,
@@ -1662,7 +1711,7 @@ function batchTask(pages: readonly PagePlan[]): AgentTask {
     instructions: `Write the durable Wiki pages this task names, each from the evidence routed to it.
 
 - Pages lists each page with its type, path, canonical name and object. Propose each listed page once, with \`target\` set to its path and that object; never another page. Propose several pages in one step.
-- An existing page is shown under Current page, without the parts the application writes (its source list and Change Log). Update it under the shared entity rules below: keep what the new evidence does not change, and change only what it supports.
+- An existing page is shown under Current page, without the parts the application writes (its source list and Change Log). Preserve supported facts. Keep a section with \`{"keep": true}\` when this run's evidence adds or changes nothing it describes; a section you write follows the current section rules, reorganizing its existing facts as needed.
 - Write in the main language of the evidence messages; the routing notes are only pointers.
 - On a new page write every summary section as \`{"text": ..., "reason": ...}\`; \`{"keep": true}\` only keeps text an existing page already has.
 - The evidence shows the routed messages or passages with their citations. Use \`read_source\` when a passage needs more context, and \`read_page\` to check an existing related page before linking it. Pages marked new in this run are being written now: link them by path without reading them.

@@ -186,6 +186,7 @@ async function main(): Promise<void> {
   const home = lingerHome();
   const localServer = new LocalServerModule({
     home,
+    version: VERSION,
     macosVersion: () => process.getSystemVersion(),
     installerDirectory: path.join(here, "../installer"),
     ...(__SOURCE_ARCHIVE__ ? { sourceArchive: __SOURCE_ARCHIVE__ } : {}),
@@ -216,7 +217,6 @@ async function main(): Promise<void> {
       ? updateInstallFor(process.platform, process.execPath, existsSync)
       : undefined,
     downloadDirectory: path.join(userData, "updates"),
-    services: localServer,
     announce: (state) => {
       if (!Notification.isSupported()) return;
       const notice = new Notification(updateNotice(state));

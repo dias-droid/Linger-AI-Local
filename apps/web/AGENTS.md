@@ -28,7 +28,10 @@ build:assets` to check the initial JS budget.
   code and enum label to English in `local-models-copy.ts`. Without `?computer=`
   the desktop app opens
   its own Computer. Only the Computer's owner can act; actions return at once
-  and progress arrives as `local-models` invalidation hints. A Computer's
+  and progress arrives as `local-models` invalidation hints. From the click
+  until a snapshot with another status or observation time, or a refusal, the
+  row shows a requested load or download as started and spins the button of
+  any other action, with the row's actions off. A Computer's
   detail on the Computers page links here and reads no model state itself.
 - `src/test`: unit-test support, including the in-process TeamHub test server.
 - `e2e`: Playwright product workflows; every spec runs on the real TeamHub and

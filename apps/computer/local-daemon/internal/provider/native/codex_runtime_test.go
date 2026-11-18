@@ -843,6 +843,29 @@ func TestCodexMCPFrontKeepsThreadAcrossURLChanges(t *testing.T) {
 	}
 }
 
+func TestCodexManagedMCPAvoidsTheKeyring(t *testing.T) {
+	fake := newCodexFake(t, []codexFakeTurn{{Status: "completed", Items: []map[string]any{codexAgentMessage("m", "ok", nil)}}},
+		map[string]string{"FAKE_MODES": "secret_service_unresponsive"})
+	if err := os.WriteFile(filepath.Join(fake.home, "config.toml"), []byte("mcp_oauth_credentials_store = \"keyring\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	spec := fake.spec()
+	spec.FirstProgressBudget = time.Second
+	spec.StartupBudget = 2 * time.Second
+	spec.MCPServers = json.RawMessage(`{"mcpServers":{"browser":{"type":"http","url":"http://127.0.0.1:1/mcp/token/browser"}}}`)
+	out, _ := codexDrain(t, fake.runtime(nil), "one", spec)
+	if out.Status != statusCompleted || out.Output != "ok" {
+		t.Fatalf("new thread = %+v", out)
+	}
+	if _, err := StopCodexHomeForMaintenance(fake.home); err != nil {
+		t.Fatal(err)
+	}
+	spec.ResumeID = out.SessionID
+	if out, _ = codexDrain(t, fake.runtime(nil), "two", spec); out.Status != statusCompleted || fake.count("thread/resume") != 1 {
+		t.Fatalf("resumed thread = %+v methods = %v", out, fake.methods())
+	}
+}
+
 func jsonText(value any) string {
 	encoded, _ := json.Marshal(value)
 	return string(encoded)

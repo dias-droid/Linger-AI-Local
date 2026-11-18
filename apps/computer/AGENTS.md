@@ -76,9 +76,15 @@
   `app-sha256` differs from the Agent's `target_release`. A Daemon
   change therefore needs no version bump to reach Computers.
 - Bump `apps/computer/package.json` only when raising the version
-  floor. The package version is the source for the bundled CLI and Go Daemon
-  `ReleaseVersion`; it is used for display and the floor, never to trigger or
-  order upgrades.
+  floor or when the Agent Service must tell a release that decodes a new
+  optional `runner.welcome` field from one that rejects it (the Daemon decodes
+  frames strictly). The package version is the source for the bundled CLI and
+  Go Daemon `ReleaseVersion`; it is used for display, the floor, and those
+  welcome fields, never to trigger or order upgrades.
+- A Daemon can outlive its Agent Service release: a desktop upgrade replaces
+  the Daemon while the installed services keep running until the owner
+  updates them. A Daemon-to-Agent frame family added within protocol 2 is
+  sent only when `runner.welcome`'s `service_features` names it.
 - Before reporting a Daemon update as delivered, distinguish an image that
   carries the new build from an existing Computer that has actually upgraded
   (its active bundle's `app-sha256`).

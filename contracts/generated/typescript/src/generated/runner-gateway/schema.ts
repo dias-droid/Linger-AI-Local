@@ -189,6 +189,11 @@ export const runnerGatewayEnvelopeSchema = {
         "A host feature the Computer has. Every other v2 behavior is part of protocol 2 itself.",
       enum: ["browser_connection", "computer_permissions"],
     },
+    ServiceFeature: {
+      description:
+        "An optional Runner behavior the Agent Service accepts. An older service rejects its frames as a protocol violation.",
+      enum: ["local_models"],
+    },
     Timestamp: {
       type: "string",
       format: "date-time",
@@ -2581,7 +2586,7 @@ export const runnerGatewayEnvelopeSchema = {
     },
     RunnerLocalModels: {
       description:
-        "The Computer's model library. Sent after runner.hello, after every library change, and at most every 2 seconds while a download or load runs. revision grows within one connection.",
+        "The Computer's model library. Sent after a runner.welcome whose service_features names local_models, after every library change, and at most every 2 seconds while a download or load runs. revision grows within one connection.",
       type: "object",
       additionalProperties: false,
       required: [
@@ -2948,6 +2953,15 @@ export const runnerGatewayEnvelopeSchema = {
           minLength: 1,
           maxLength: 2048,
           pattern: "^https?://",
+        },
+        service_features: {
+          description:
+            "Runner behaviors this Agent Service accepts beyond the protocol 2 base. A Computer sends runner.local_models and runs execute with kind local_models only when the list names local_models. The service sends the field only to a Computer release that decodes it.",
+          type: "array",
+          uniqueItems: true,
+          items: {
+            $ref: "#/$defs/ServiceFeature",
+          },
         },
       },
     },

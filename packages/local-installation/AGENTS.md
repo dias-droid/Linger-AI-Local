@@ -82,6 +82,28 @@ existing Computer is rebound once on its next connect. A distribution without
 the tool writes none. External Computers (the Desktop's) get the same paths as
 the `LINGER_LOCALMODELS_*` keys of the installer's instance runtime.
 
+Each native service runs under a detached supervisor
+(`native-process-worker.mjs`) whose record holds its PID, birth and an
+unguessable lease. POSIX finds the service's processes by process group and
+the lease in their environment. Windows has neither: the lease is in the
+supervisor's command line (its job file name) and the tree follows parent
+links (`windowsLeaseTree`), which break when a parent dies first. So on
+Windows a stop ends one snapshot of the tree leaves first and the supervisor
+last; a supervisor with nothing under it counts as stopped (the PowerShell
+of its own process listing does not count as its service); a program file
+starts as `source-native.mjs`'s direct child, not through cmd.exe, so it ends
+with its supervisor. Before the services start and after a stop, the
+installer ends what an earlier run lost track of (`reclaimNativeOrphans`): a
+supervisor whose job file is in this instance's process directory under a
+lease no serving record holds, and a process on one of this instance's
+ports whose command line runs from this installation's folders but belongs
+to no recorded service, with its wrappers up to its supervisor. Never by a
+program name alone, and never the installer or what started it. Readiness on
+Windows also needs each port's listener inside that service's tree: an
+earlier release's TeamHub or web still on the port would otherwise pass the
+health check for a service that could not bind, and a port held by another
+program fails the start after 15 seconds instead of at the deadline.
+
 Move a freshly downloaded or unpacked file or folder into place with
 `renameRetrying` from `fs-retry.ts`: on Windows antivirus and indexing hold
 new files for a moment, and a plain rename then fails with EPERM.

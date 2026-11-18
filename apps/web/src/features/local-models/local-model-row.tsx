@@ -20,7 +20,11 @@ import { cn } from "@/lib/cn";
 
 import { ModelFacts } from "./local-model-details";
 import { unavailableShortCopy } from "./local-models-copy";
-import type { LocalModel, LocalModelsView } from "./local-models-queries";
+import type {
+  LocalModel,
+  LocalModelAction,
+  LocalModelsView,
+} from "./local-models-queries";
 import {
   downloadPercent,
   downloadStatusDetail,
@@ -92,6 +96,7 @@ export function ModelRow({
   disabled,
   entry,
   expanded,
+  requested,
   view,
   ...handlers
 }: Handlers & {
@@ -99,10 +104,21 @@ export function ModelRow({
   disabled: boolean;
   entry: ModelEntry;
   expanded: boolean;
+  /** An action asked for and not yet in a snapshot. */
+  requested?: LocalModelAction;
   view: LocalModelsView;
 }) {
   const panelId = useId();
-  const { model, status } = entry;
+  const { model } = entry;
+  // A requested load or download reads as started at once; the snapshot that
+  // follows says how it went.
+  const status: ModelStatus =
+    requested === "load"
+      ? "loading"
+      : requested === "download"
+        ? "downloading"
+        : entry.status;
+  const started = status !== entry.status;
   const where = placeName(view, model.pool);
   const tag = statusTags[status];
   const progress = downloadPercent(model);
@@ -114,7 +130,7 @@ export function ModelRow({
       : model.fit === "system"
         ? `${download} · runs slower`
         : download,
-    downloading: downloadStatusDetail(model),
+    downloading: started ? null : downloadStatusDetail(model),
     failed: null,
     idle: model.note ? "no room to load yet" : null,
     loaded: [
@@ -129,11 +145,11 @@ export function ModelRow({
 
   const action = (
     {
-      available: ["Download", handlers.onDownload],
-      downloading: ["Cancel", handlers.onCancel],
-      failed: ["Retry", handlers.onLoad],
-      idle: ["Load", handlers.onLoad],
-      loaded: ["Unload", handlers.onUnload],
+      available: ["Download", handlers.onDownload, "download"],
+      downloading: ["Cancel", handlers.onCancel, "cancel"],
+      failed: ["Retry", handlers.onLoad, "load"],
+      idle: ["Load", handlers.onLoad, "load"],
+      loaded: ["Unload", handlers.onUnload, "unload"],
       loading: null,
       unavailable: null,
     } as const
@@ -205,6 +221,7 @@ export function ModelRow({
             aria-label={`${action[0]} ${model.name}`}
             className="px-2.5"
             disabled={disabled}
+            loading={requested === action[2]}
             onClick={(event) => {
               stopRowClick(event);
               action[1]();
@@ -233,7 +250,7 @@ export function ModelRow({
           />
         </Button>
       </div>
-      {status === "downloading" ? (
+      {entry.status === "downloading" ? (
         <div className="px-4 pb-3">
           <span
             aria-label={`${model.name} download progress`}
@@ -267,6 +284,7 @@ export function ModelRow({
             <Button
               className="mt-2"
               disabled={disabled}
+              loading={requested === "remove"}
               onClick={handlers.onRemove}
               size="compact"
               tone="danger"

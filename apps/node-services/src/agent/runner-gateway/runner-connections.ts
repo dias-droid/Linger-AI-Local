@@ -24,6 +24,7 @@ import {
   LocalComputerPlacementError,
   LocalRuntimeAdmissionUnavailableError,
   MINIMUM_CURRENT_COMPUTER_VERSION,
+  FIRST_SERVICE_FEATURES_COMPUTER_VERSION,
   type LocalPlacementRequirement,
   type LocalReasoningEffort,
   type LocalRuntimeModelDefinition,
@@ -448,6 +449,12 @@ export class RunnerConnections {
               this.context.options.computerRelease,
             ),
           }
+        : {}),
+      ...(isComputerVersionAtLeast(
+        connection.hello.daemon_version,
+        FIRST_SERVICE_FEATURES_COMPUTER_VERSION,
+      )
+        ? { service_features: ["local_models"] }
         : {}),
     };
   }

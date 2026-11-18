@@ -11,6 +11,10 @@ import {
   linuxProcessStates,
   nativeProcessIdentity as observed,
   nativeLeaseProcesses,
+  windowsLeaseTree,
+  windowsSnapshot,
+  type WindowsProcess,
+  type WindowsSnapshot,
 } from "./native-process-identity.js";
 
 export type NativeService =
@@ -110,16 +114,76 @@ async function groupLive(group: number): Promise<boolean> {
       return Number(pgid) === group && !state?.startsWith("Z");
     });
 }
+/** The recorded supervisor and what it started, or nothing when it is gone. */
+function recordedTree(
+  processes: WindowsProcess[],
+  record: Pick<Lease, "pid" | "birth" | "lease">,
+): WindowsProcess[] {
+  const tree = windowsLeaseTree(processes, record.lease);
+  const owner = tree[0];
+  return owner?.pid === record.pid &&
+    `win32:${owner.pid}:${owner.created}` === record.birth
+    ? tree
+    : [];
+}
+/**
+ * Whether the recorded supervisor still runs its service. On Windows a
+ * supervisor left with no process under it serves nothing, and one from an
+ * earlier release may never exit on its own; counting it as running kept
+ * every start waiting for a service that was gone.
+ */
+async function serving(record: Lease): Promise<boolean> {
+  if (process.platform !== "win32")
+    return (await observed(record.pid, record.lease)) === record.birth;
+  return recordedTree((await windowsSnapshot()).processes, record).length > 1;
+}
 export async function inspectNativeProcess(
   root: string,
   name: NativeService,
 ): Promise<NativeProcessState> {
   const record = await stored(root, name);
   if (!record) return { running: false };
-  return {
-    running: (await observed(record.pid, record.lease)) === record.birth,
-    pid: record.pid,
-  };
+  return { running: await serving(record), pid: record.pid };
+}
+export interface NativeListener {
+  name: NativeService;
+  port: number;
+}
+export interface NativeListenerState {
+  running: boolean;
+  /**
+   * Windows only: the PID of a process outside the service's recorded tree
+   * that listens on its port. The service cannot serve there, and a health
+   * check on that port reaches the other process.
+   */
+  foreign?: number;
+}
+/** Whether each service runs and, on Windows, whether its port is its own. */
+export async function inspectNativeListeners(
+  root: string,
+  listeners: NativeListener[],
+): Promise<NativeListenerState[]> {
+  if (process.platform !== "win32")
+    return Promise.all(
+      listeners.map(async ({ name }) => ({
+        running: (await inspectNativeProcess(root, name)).running,
+      })),
+    );
+  const snapshot = await windowsSnapshot();
+  return Promise.all(
+    listeners.map(async ({ name, port }) => {
+      const record = await stored(root, name);
+      const tree = record ? recordedTree(snapshot.processes, record) : [];
+      const owner = snapshot.listeners.get(port);
+      return {
+        running: tree.length > 1,
+        ...(owner !== undefined &&
+        !tree.some((candidate) => candidate.pid === owner)
+          ? { foreign: owner }
+          : {}),
+      };
+    }),
+  );
 }
 interface NativeConfiguration {
   executable: string;
@@ -144,11 +208,7 @@ export async function nativeConfigurationChanged(
   options: NativeConfiguration & { root: string; name: NativeService },
 ): Promise<boolean> {
   const existing = await stored(options.root, options.name);
-  if (
-    !existing ||
-    (await observed(existing.pid, existing.lease)) !== existing.birth
-  )
-    return false;
+  if (!existing || !(await serving(existing))) return false;
   return configurationHash(options) !== existing.configuration;
 }
 export async function startNativeProcess(options: {
@@ -168,10 +228,7 @@ export async function startNativeProcess(options: {
   const location = paths(options.root, options.name);
   const configuration = configurationHash(options);
   const existing = await stored(options.root, options.name);
-  if (
-    existing &&
-    (await observed(existing.pid, existing.lease)) === existing.birth
-  ) {
+  if (existing && (await serving(existing))) {
     if (configuration !== existing.configuration) {
       if (!options.restartOnConfigurationChange)
         throw new Error(
@@ -185,7 +242,13 @@ export async function startNativeProcess(options: {
     }
     return { running: true, pid: existing.pid };
   }
-  if (existing) {
+  if (existing && process.platform === "win32") {
+    // The lease names the supervisor on its command line, so whatever is
+    // still on it, such as a supervisor that outlived its service, is this
+    // service's own to end. A recorded PID alone proves nothing on Windows,
+    // which reuses PIDs quickly.
+    await stopNativeProcess(options.root, options.name);
+  } else if (existing) {
     if (
       (await stillLive(existing.pid)) ||
       (await groupLive(existing.pid)) ||
@@ -295,6 +358,17 @@ export async function startNativeProcess(options: {
     return { running: true, pid: child.pid };
   } catch (error) {
     // A failed record write must not leave an unmanageable owned group behind.
+    if (process.platform === "win32") {
+      await stopWindowsTree(options.name, lease).catch((failure: unknown) => {
+        throw new Error(
+          `Native ${options.name} failed to stop after identity persistence failed.`,
+          { cause: failure },
+        );
+      });
+      if (child.connected) child.disconnect();
+      child.unref();
+      throw error;
+    }
     const deadline = Date.now() + 5_000;
     for (;;) {
       const owned = await nativeLeaseProcesses(lease);
@@ -338,6 +412,11 @@ export async function stopNativeProcess(
 ): Promise<void> {
   const record = await stored(root, name);
   if (!record) return;
+  if (process.platform === "win32") {
+    await stopWindowsTree(name, record.lease);
+    await rm(paths(root, name).record, { force: true });
+    return;
+  }
   const current = await observed(record.pid, record.lease);
   let owned = await nativeLeaseProcesses(record.lease);
   if (current !== record.birth && !owned.length) {
@@ -413,4 +492,174 @@ export async function stopNativeProcess(
   )
     throw new Error(`Native ${name} did not stop; identity record retained.`);
   await rm(paths(root, name).record, { force: true });
+}
+
+function terminate(pid: number) {
+  try {
+    // Windows has no signals: every kill is TerminateProcess.
+    process.kill(pid, "SIGKILL");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+  }
+}
+/** Deepest first, so that no process loses the parent that links it here. */
+export function windowsTerminationOrder(tree: WindowsProcess[]): number[] {
+  return tree.map((candidate) => candidate.pid).reverse();
+}
+/**
+ * Ends the supervisor holding the lease and everything under it. Windows
+ * links a child only through its parent's PID, so ending a parent first
+ * (as the signal loop for process groups does) cut its children off the
+ * tree: TeamHub, web and node-services outlived every stop and kept their
+ * ports. Each pass ends one snapshot's processes leaves first; the
+ * supervisor, whose command line carries the lease that finds the tree, goes
+ * only once nothing is left under it.
+ */
+async function stopWindowsTree(name: NativeService, lease: string) {
+  const deadline = Date.now() + 12_000;
+  for (;;) {
+    const tree = windowsLeaseTree((await windowsSnapshot()).processes, lease);
+    if (!tree.length) return;
+    if (Date.now() >= deadline)
+      throw new Error(`Native ${name} did not stop; identity record retained.`);
+    const order = windowsTerminationOrder(tree);
+    for (const pid of tree.length > 1 ? order.slice(0, -1) : order)
+      terminate(pid);
+    await delay(100);
+  }
+}
+
+const SUPERVISOR = "native-process-worker.mjs";
+const comparable = (value: string) => value.replaceAll("/", "\\").toLowerCase();
+/**
+ * What Windows must end before this instance's services start: processes an
+ * earlier run started and lost track of. Each is proved this instance's own
+ * by its command line, never by a program name alone:
+ * - a supervisor whose job file is in this instance's process directory but
+ *   whose service is gone or whose lease no record holds any more;
+ * - a process listening on one of this instance's ports that runs from one
+ *   of this installation's folders yet belongs to no recorded service, with
+ *   its wrappers up to its supervisor (a stop of an earlier release ended
+ *   the supervisor and left TeamHub, web and node-services running).
+ * The result lists PIDs in the order to end them, deepest first.
+ */
+export function windowsOrphans(
+  snapshot: WindowsSnapshot,
+  records: Array<Pick<Lease, "pid" | "birth" | "lease">>,
+  options: { root: string; ports: number[]; paths: string[]; self: number },
+): number[] {
+  const { processes } = snapshot;
+  const byPid = new Map(processes.map((entry) => [entry.pid, entry]));
+  const owned = new Set<number>();
+  const leases = new Set<string>();
+  for (const record of records) {
+    const tree = recordedTree(processes, record);
+    if (tree.length < 2) continue;
+    leases.add(record.lease);
+    for (const entry of tree) owned.add(entry.pid);
+  }
+  // This process and the ones that started it are never ended.
+  const keep = new Set<number>();
+  for (
+    let entry = byPid.get(options.self);
+    entry && !keep.has(entry.pid);
+    entry = byPid.get(entry.parent)
+  )
+    keep.add(entry.pid);
+  const children = (parent: WindowsProcess) =>
+    processes.filter(
+      (entry) => entry.parent === parent.pid && entry.created >= parent.created,
+    );
+  const order: number[] = [];
+  const end = (top: WindowsProcess) => {
+    const tree = [top];
+    for (let index = 0; index < tree.length; index++)
+      for (const child of children(tree[index]!))
+        if (!tree.includes(child)) tree.push(child);
+    for (const pid of windowsTerminationOrder(tree))
+      if (!order.includes(pid) && !owned.has(pid) && !keep.has(pid))
+        order.push(pid);
+  };
+  const jobs =
+    comparable(path.join(options.root, "native", "processes")) + "\\";
+  for (const entry of processes) {
+    const command = comparable(entry.command);
+    if (!command.includes(SUPERVISOR) || !command.includes(jobs)) continue;
+    const lease = /\.([a-f0-9]{64})\.job\b/.exec(command)?.[1];
+    if (lease && !leases.has(lease)) end(entry);
+  }
+  const folders = options.paths.map((folder) => comparable(folder) + "\\");
+  const ours = (entry: WindowsProcess) =>
+    !keep.has(entry.pid) &&
+    folders.some((folder) => comparable(entry.command).includes(folder));
+  for (const port of options.ports) {
+    const pid = snapshot.listeners.get(port);
+    let top = pid === undefined ? undefined : byPid.get(pid);
+    if (!top || owned.has(top.pid) || !ours(top)) continue;
+    // A supervisor heads every service tree, at most four links up
+    // (node-services: main.js, its supervisor, cmd.exe, source-native.mjs).
+    for (
+      let depth = 0;
+      depth < 4 && !comparable(top.command).includes(SUPERVISOR);
+      depth++
+    ) {
+      const parent = byPid.get(top.parent);
+      if (
+        !parent ||
+        parent.created > top.created ||
+        owned.has(parent.pid) ||
+        !ours(parent)
+      )
+        break;
+      top = parent;
+    }
+    end(top);
+  }
+  return order;
+}
+/**
+ * Ends what `windowsOrphans` finds for this instance; nothing elsewhere.
+ * Returns the PIDs it ended.
+ */
+export async function reclaimNativeOrphans(
+  root: string,
+  options: { ports: number[]; paths: string[] },
+): Promise<number[]> {
+  if (process.platform !== "win32") return [];
+  const records: Lease[] = [];
+  for (const name of services)
+    try {
+      const record = await stored(root, name as NativeService);
+      if (record) records.push(record);
+    } catch {
+      // A damaged record proves nothing; its supervisor counts as unrecorded.
+    }
+  const ended: number[] = [];
+  const deadline = Date.now() + 12_000;
+  for (;;) {
+    const orphans = windowsOrphans(await windowsSnapshot(), records, {
+      root,
+      ...options,
+      self: process.pid,
+    });
+    if (!orphans.length) return ended;
+    if (Date.now() >= deadline)
+      throw new Error(
+        `Processes an earlier Linger started on this computer did not stop (PIDs ${orphans.join(", ")}).`,
+      );
+    const refused: number[] = [];
+    for (const pid of orphans)
+      try {
+        terminate(pid);
+        if (!ended.includes(pid)) ended.push(pid);
+      } catch {
+        // Such as one started as administrator.
+        refused.push(pid);
+      }
+    if (refused.length === orphans.length)
+      throw new Error(
+        `Processes an earlier Linger started on this computer could not be ended (PIDs ${refused.join(", ")}). End them in Task Manager, then try again.`,
+      );
+    await delay(100);
+  }
 }

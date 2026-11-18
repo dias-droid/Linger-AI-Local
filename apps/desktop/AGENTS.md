@@ -166,8 +166,17 @@ Gateway and runs Agents. The daemon exits with the app.
   file and renamed, so a power loss leaves the old record or none) and, while
   the window still uses that origin and the computer is enrolled, restarts the
   services on launch with `installer.js --resume`, which also restarts them
-  when the instance's `user.env` changed. A source folder removed since is
-  unpacked again from the app's package first. A Quick Install that stopped
+  when the instance's `user.env` changed. A source folder removed since, or
+  one the installer no longer accepts as a Linger checkout (such as one the
+  earlier Simplex app unpacked), is unpacked again from the app's package
+  first and replaces the recorded one. The record also names the app
+  version that unpacked the source; when this app brings another source
+  package (it was installed over an older one), that launch unpacks it and
+  resumes on it, with the "Updating Linger" page instead of the older
+  interface, then prunes the older folder. A failure shows the start failure
+  page, whose Retry tries again. An app older than the recorded version
+  (a downgrade) leaves the services on their newer source and logs
+  `local_server.source_newer_than_app`. A Quick Install that stopped
   before the computer enrolled is not resumed: setup shows again and Install
   finishes it, reusing a finished job only while its origin answers (a stopped
   server gets a new job, which starts the services again). The start failure
@@ -258,14 +267,15 @@ Gateway and runs Agents. The daemon exits with the app.
   (logged as `desktop.legacy_user_data_kept`); one without a credential is set
   aside as `Linger.before-move-<time>`, so the Computer keeps its identity.
   LocalServer runs `installer.js --migrate` when an instance record still
-  carries a `simplex-` project name, before it reads
-  `desktop/local-server.json`
+  carries a `simplex-` project name, in the default home and in the home
+  `desktop/local-server.json` names when the person chose another install
+  location, before it resumes
   (`packages/local-installation/src/legacy-migration.ts`). Instances the
   installer left unconverted are logged as
-  `local_server.legacy_instance_skipped` with their reason and do not hold
-  the app back; only when `desktop` itself stayed unconverted, or the
-  installer could not run, LocalServer enters the failed state with that
-  reason, and Retry runs the migration again. There is
+  `local_server.legacy_instance_skipped` with their home and reason and do
+  not hold the app back; only when `desktop` in the home in use stayed
+  unconverted, or the installer could not run there, LocalServer enters the
+  failed state with that reason, and Retry runs the migration again. There is
   no downgrade path: an older build reads neither the converted instances nor
   the moved data folder. The bundle ID and
   Windows AppUserModelID are `com.simplexai.linger.desktop.preview`. The
@@ -282,19 +292,19 @@ Gateway and runs Agents. The daemon exits with the app.
   `%APPDATA%\Linger` and the Linger home with all their data and asks nothing;
   a later install starts the services again (resume, or setup's Install).
   Setup over an installed release stops it the same way before it replaces
-  the files, since the services run on `Linger.exe` and hold it open. Each
+  the files, since the services run on `Linger.exe` and hold it open. Setup
+  always stops them with its own `installer.js`, copied to the plugins
+  folder, on the old `Linger.exe`: an earlier release's script may not stop
+  them (0.1.2's left TeamHub, web and node-services running on Windows). Each
   install writes `resources\stops-services`; a release without it would start
-  on `--quit` and has no `--stop`, so setup skips `--quit` (CloseLinger asks
-  the person to quit a running app) and runs its own `installer.js`, copied to
-  the plugins folder, on the old `Linger.exe`. Retry in that prompt runs the
-  stop again. Nothing running: the stop finds nothing and setup goes on. The
+  on `--quit`, so setup skips `--quit` for it (CloseLinger asks the person to
+  quit a running app). Retry in that prompt runs the stop again. Nothing running: the stop finds nothing and setup goes on. The
   stop also asks the pinned localmodels kit, when that kit is installed in the
   home, to end its foundations controller under `runtime/model-services`
   (`foundations stop`) and the stack's processes (`stack down`); it downloads
   nothing, and Linger does not end the tool's processes itself.
-  Setup over a release runs that release's script, so a release from before
-  this stop leaves its controller running; on Windows the tool cannot prove
-  and end a controller from a kit that has no stop command either.
+  On Windows the tool cannot prove and end a controller from a kit that has
+  no stop command.
   The tool refuses the chat stack on Windows, so no engine runs there.
 - `src/main/legacy-migration.ts`: on start, stops a bridge an older version
   left running and moves its credential and the Desktop 0.16 daemon identity

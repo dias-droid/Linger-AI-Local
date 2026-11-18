@@ -29,8 +29,10 @@ import { checkTeamhubBinaries } from "./teamhub-binaries.js";
 import { npmRegistryEnvironment } from "./npm-registry.js";
 import { prepareNativeDatabase } from "./native-database.js";
 import {
+  inspectNativeListeners,
   inspectNativeProcess,
   nativeConfigurationChanged,
+  reclaimNativeOrphans,
   startNativeProcess,
   stopNativeProcess,
   type NativeService,
@@ -192,11 +194,19 @@ export async function probeNativeSourceServices(
     ["node-services", "node-services", source.ports.nodeServices, "/readyz"],
     ["document-runtime", "node-services", source.ports.document, "/readyz"],
   ] as const;
+  const states = await inspectNativeListeners(
+    instance.root,
+    endpoints.map(([, name, port]) => ({ name, port })),
+  ).catch(() => endpoints.map(() => ({ running: false, foreign: undefined })));
   return Promise.all(
-    endpoints.map(async ([service, processName, port, endpoint]) => {
+    endpoints.map(async ([service, , port, endpoint], index) => {
+      const { running, foreign } = states[index]!;
+      // Another process on the port would answer the health check for a
+      // service that cannot listen there.
+      if (foreign !== undefined)
+        return { service, ready: false, foreign, port };
       try {
-        if (!(await inspectNativeProcess(instance.root, processName)).running)
-          return { service, ready: false };
+        if (!running) return { service, ready: false };
         const response = await fetch(`http://127.0.0.1:${port}${endpoint}`, {
           redirect: "error",
           signal: AbortSignal.any([
@@ -290,10 +300,27 @@ async function waitHealthy(
 ) {
   const deadline = Date.now() + 20 * 60_000;
   let last = 0;
+  const occupied = new Map<string, number>();
   for (;;) {
     signal.throwIfAborted();
-    const checks = await probeNativeSourceServices(instance, signal);
-    if (checks.every((check) => check.ready)) return checks;
+    const probed = await probeNativeSourceServices(instance, signal);
+    if (probed.every((check) => check.ready))
+      return probed.map(({ service, ready }) => ({ service, ready }));
+    // A port another process holds never frees up by waiting; the service
+    // that should listen there exits or retries until the deadline.
+    for (const check of probed) {
+      if (!("foreign" in check)) {
+        occupied.delete(check.service);
+        continue;
+      }
+      const since = occupied.get(check.service) ?? Date.now();
+      occupied.set(check.service, since);
+      if (Date.now() - since >= 15_000)
+        throw new Error(
+          `Native ${check.service} cannot listen on port ${check.port}: another program (PID ${check.foreign}) is using it. End that program, then try again.`,
+        );
+    }
+    const checks = probed;
     // A failed build exits the service, so its log explains the stop.
     const failure = await startupFailure(instance, ends);
     if (failure) throw new Error(failure);
@@ -765,6 +792,7 @@ async function runNativeSource(
           "services",
           "Starting private PostgreSQL and applying migrations…",
         );
+        await reclaimEarlierProcesses(current, home, emit);
         const postgresWasRunning = (
           await inspectNativeProcess(current.root, "postgres")
         ).running;
@@ -1061,6 +1089,32 @@ async function runNativeSource(
     output.flush();
   }
 }
+/**
+ * Windows: ends the processes of this instance an earlier run lost track of
+ * (an earlier release's stop left them, or their supervisor died), so they
+ * neither hold the ports nor answer health checks for the new services.
+ */
+async function reclaimEarlierProcesses(
+  instance: Instance,
+  home: string,
+  onEvent?: (event: InstallerEvent) => void,
+) {
+  const source = requireNative(instance);
+  const liveKit = await readLiveKitSettings(instance.root);
+  const ended = await reclaimNativeOrphans(instance.root, {
+    ports: [
+      ...Object.values(source.ports),
+      ...(liveKit ? [liveKit.httpPort] : []),
+    ],
+    paths: [home, instance.root, source.repo],
+  });
+  if (ended.length)
+    onEvent?.({
+      kind: "log",
+      stage: "services",
+      message: `Ended ${ended.length} Linger processes an earlier run left behind (PIDs ${ended.join(", ")}).\n`,
+    });
+}
 export async function stopNativeSource(
   instance: Instance,
   signal?: AbortSignal,
@@ -1073,6 +1127,10 @@ export async function stopNativeSource(
       signal?.throwIfAborted();
       await stopNativeProcess(instance.root, name);
     }
+    await reclaimEarlierProcesses(
+      instance,
+      path.resolve(instance.root, "../.."),
+    );
     await stopModelGateway(instance, signal);
   });
 }

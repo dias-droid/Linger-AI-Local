@@ -40,6 +40,7 @@ import {
 } from "./teamhub-binaries.js";
 import { prepareRuntime } from "./managed-runtimes.js";
 import {
+  inspectNativeListeners,
   inspectNativeProcess,
   nativeConfigurationChanged,
   startNativeProcess,
@@ -70,12 +71,32 @@ vi.mock("./managed-codex.js", () => ({
   managedRuntimeEnvironment: vi.fn(async () => ({})),
   configureManagedCodex: vi.fn(),
 }));
-vi.mock("./native-process.js", () => ({
-  inspectNativeProcess: vi.fn(),
-  nativeConfigurationChanged: vi.fn(),
-  startNativeProcess: vi.fn(),
-  stopNativeProcess: vi.fn(),
-}));
+vi.mock("./native-process.js", () => {
+  const inspectNativeProcess = vi.fn();
+  return {
+    inspectNativeProcess,
+    // Port ownership is checked only on Windows; elsewhere it is the
+    // process state.
+    inspectNativeListeners: vi.fn(
+      async (root: string, listeners: { name: string; port: number }[]) =>
+        Promise.all(
+          listeners.map(async ({ name }) => ({
+            running: Boolean(
+              (
+                (await inspectNativeProcess(root, name)) as {
+                  running?: boolean;
+                }
+              )?.running,
+            ),
+          })),
+        ),
+    ),
+    reclaimNativeOrphans: async () => [],
+    nativeConfigurationChanged: vi.fn(),
+    startNativeProcess: vi.fn(),
+    stopNativeProcess: vi.fn(),
+  };
+});
 vi.mock("./native-database.js", () => ({ prepareNativeDatabase: vi.fn() }));
 vi.mock("./source-computer.js", () => ({ prepareSourceComputer: vi.fn() }));
 vi.mock("./computer.js", () => ({
@@ -581,6 +602,43 @@ test("a full disk ends startup at once instead of at the deadline", async () => 
   expect(result.message).toContain(
     "This computer's disk is full, so native teamhub could not be built.",
   );
+});
+
+test("a port an earlier TeamHub still holds fails startup instead of passing its health check", async () => {
+  const f = await fixture();
+  vi.mocked(prepareRuntime).mockResolvedValue({
+    code: 0,
+    state: "ready",
+    message: "ready",
+  });
+  vi.useFakeTimers({ toFake: ["Date"] });
+  try {
+    // The earlier TeamHub answers /healthz on the port; each probe is ten
+    // seconds later.
+    vi.mocked(inspectNativeListeners).mockImplementation(
+      async (_root, listeners) => {
+        vi.setSystemTime(Date.now() + 10_000);
+        return listeners.map(({ name }) =>
+          name === "teamhub"
+            ? { running: true, foreign: 4328 }
+            : { running: true },
+        );
+      },
+    );
+    const result = await installNativeSource({
+      ...f,
+      name: "native-flow",
+      setupChoice: "pi",
+      signal: new AbortController().signal,
+      onEvent: () => {},
+    });
+    expect(result).toMatchObject({ code: 1 });
+    expect(result.message).toMatch(
+      /Native teamhub cannot listen on port \d+: another program \(PID 4328\) is using it/,
+    );
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 // What scripts/source-native.mjs logs when go build fails, as on Windows

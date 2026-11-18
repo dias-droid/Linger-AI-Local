@@ -568,7 +568,8 @@ describe("setup page Send Diagnostics", () => {
 
   it("asks before sending and lists every file", async () => {
     const { run, push } = await openPage(failed({ phase: "idle" }));
-    expect($("send-diagnostics").hidden).toBe(false);
+    // The failed step renders after openPage sees the installing step, so wait for it.
+    await vi.waitFor(() => expect($("send-diagnostics").hidden).toBe(false));
     $("send-diagnostics").click();
     await vi.waitFor(() =>
       expect(run).toHaveBeenCalledWith({

@@ -1531,6 +1531,7 @@ type RunnerWelcome struct {
 	ReconcileOperationIDs []string               `json:"reconcile_operation_ids"`
 	TargetRelease         *ComputerTargetRelease `json:"target_release,omitempty"`
 	ContextContentURL     string                 `json:"context_content_url,omitempty"`
+	ServiceFeatures       []string               `json:"service_features,omitempty"`
 }
 
 // FixedFields lists the keys whose value the schema fixes for a RunnerWelcome.

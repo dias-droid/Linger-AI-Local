@@ -487,10 +487,9 @@ describe("AgentWikiBackend", () => {
       async (directory) => [await chatInput(directory)],
       fakeModel(true),
     );
-    // Two new entities: one consolidation call settles them before writing.
+    // Two new entities of different types: nothing to consolidate.
     expect(requests.map((entry) => entry.step)).toEqual([
       "route:1/1",
-      "consolidate/1",
       "batch:1:write:0/1",
       "batch:1:write:0/2",
     ]);
@@ -499,10 +498,10 @@ describe("AgentWikiBackend", () => {
     const sessions = requests.map((entry) => entry.sessionKey);
     expect(sessions.every(Boolean)).toBe(true);
     expect(new Set(sessions).size).toBe(sessions.length);
-    expect(requests[3]!.input).toContain("# Evidence");
+    expect(requests[2]!.input).toContain("# Evidence");
     // Both pages are in the one task; its finish waits for the topic.
-    expect(requests[2]!.input).toContain("topics/pilot-program.md (new page");
-    expect(requests[3]!.input).toContain(
+    expect(requests[1]!.input).toContain("topics/pilot-program.md (new page");
+    expect(requests[2]!.input).toContain(
       "Not done yet: propose or skip_page topics/pilot-program.md",
     );
     expect(files).toEqual([
@@ -745,11 +744,16 @@ ${filler}
   function namingModel(
     names: Record<string, { name: string; slug: string }>,
     merges: ReadonlyArray<{ keep: string; merge: string[] }> = [],
+    failedConsolidations = 0,
   ) {
     const requests: ModelChainCallRequest[] = [];
+    let consolidations = 0;
     const call = vi.fn(async (request: ModelChainCallRequest) => {
       requests.push(request);
       if (request.instructions!.includes("Settle the new entities")) {
+        consolidations += 1;
+        if (consolidations <= failedConsolidations)
+          throw new Error("Runtime is unavailable");
         const listed = new Map(
           [...request.input.matchAll(/^- \[(\d+)\] \w+ "([^"]+)"/gmu)].map(
             ([, index, name]) => [name!, Number(index)],
@@ -867,6 +871,7 @@ ${filler}
   async function generateNamed(
     names: Record<string, { name: string; slug: string }>,
     merges: ReadonlyArray<{ keep: string; merge: string[] }> = [],
+    failedConsolidations = 0,
   ) {
     const root = await temporary();
     const inputsDirectory = join(root, "inputs");
@@ -889,7 +894,7 @@ ${filler}
       mode: "initialize",
       outputDirectory: join(root, "output"),
     };
-    const model = namingModel(names, merges);
+    const model = namingModel(names, merges, failedConsolidations);
     await new AgentWikiBackend({ modelCall: () => model.modelCall }).generate(
       request,
     );
@@ -963,6 +968,26 @@ ${filler}
     );
     expect(page).toContain("teamhub://rooms/rooma/messages/m1");
     expect(page).toContain("teamhub://rooms/roomb/messages/m1");
+  });
+
+  it("tries a type's consolidation once more when its call fails", async () => {
+    const { files, requests } = await generateNamed(
+      {
+        rooma: { name: "AWS", slug: "aws" },
+        roomb: {
+          name: "アマゾン ウェブ サービス",
+          slug: "amazon-web-services",
+        },
+      },
+      [{ keep: "AWS", merge: ["アマゾン ウェブ サービス"] }],
+      1,
+    );
+    expect(
+      requests
+        .map((entry) => entry.step)
+        .filter((step) => step.startsWith("consolidate")),
+    ).toEqual(["consolidate:client:1/1", "consolidate:client:2/1"]);
+    expect(files).toEqual(["clients/aws.md"]);
   });
 
   it("keeps one of two new pages that still share an identity after correction", async () => {

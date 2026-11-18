@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { createTestTeamHubRuntime } from "@/test/teamhub-test-runtime";
@@ -74,6 +80,18 @@ describe("Direct Agent runtime settings", () => {
       ),
     );
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+  it("keeps the effort outside the model label that shortens", async () => {
+    renderSwitch({});
+    const trigger = await screen.findByRole("button", {
+      name: "5.4 Sol Medium",
+    });
+    const label = within(trigger).getByText("5.4 Sol");
+    expect(label).toHaveClass("agent-model-switch-trigger-label");
+    expect(label).not.toHaveTextContent("Medium");
+    expect(within(trigger).getByText("Medium")).toHaveClass(
+      "agent-model-switch-trigger-effort",
+    );
   });
   it("allows inspecting while busy but disables saving", async () => {
     const updateTenantAgent = vi.fn();

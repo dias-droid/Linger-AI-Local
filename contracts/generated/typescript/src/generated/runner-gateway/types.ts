@@ -27,6 +27,10 @@ export type AgentToDaemonEnvelope =
 export type ProtocolVersion = "2";
 export type Id = string;
 export type PositiveInteger = number;
+/**
+ * An optional Runner behavior the Agent Service accepts. An older service rejects its frames as a protocol violation.
+ */
+export type ServiceFeature = "local_models";
 export type JsonValue =
   | null
   | boolean
@@ -780,6 +784,10 @@ export interface RunnerWelcome {
    * Base URL the Computer fetches Context View manifests (views/<view_digest>) and files (files/<sha256>) from while this connection is current.
    */
   context_content_url?: string;
+  /**
+   * Runner behaviors this Agent Service accepts beyond the protocol 2 base. A Computer sends runner.local_models and runs execute with kind local_models only when the list names local_models. The service sends the field only to a Computer release that decodes it.
+   */
+  service_features?: ServiceFeature[];
 }
 export interface ComputerTargetRelease {
   targets: {
@@ -1202,7 +1210,7 @@ export interface RunnerRuntimeDiagnostics {
   runtime_diagnostics: RuntimeDiagnostics;
 }
 /**
- * The Computer's model library. Sent after runner.hello, after every library change, and at most every 2 seconds while a download or load runs. revision grows within one connection.
+ * The Computer's model library. Sent after a runner.welcome whose service_features names local_models, after every library change, and at most every 2 seconds while a download or load runs. revision grows within one connection.
  */
 export interface RunnerLocalModels {
   type: "runner.local_models";

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  cleanup,
   fireEvent,
   render,
   screen,
@@ -21,7 +22,14 @@ import { teamHubErrorResponse } from "@/test/teamhub-test-server";
 
 import { LocalModelsPage } from "./local-models-page";
 import type { LocalModelsView } from "./local-models-queries";
-import { gb, gpuPool, labView, macView } from "./local-models-test-support";
+import {
+  gb,
+  gpuPool,
+  labView,
+  localModel,
+  macView,
+  modelView,
+} from "./local-models-test-support";
 
 const tenantId = "tenant-northstar";
 const viewPath =
@@ -166,6 +174,36 @@ function publishSnapshot(fixture: Fixture, view: LocalModelsView) {
   });
 }
 
+/** One card's status line, without its model name. */
+function statusOf(name: string) {
+  return statuses()
+    .find((line) => line.startsWith(`${name}: `))!
+    .slice(name.length + 2);
+}
+
+/**
+ * Holds every action request until the returned function answers it with
+ * respond(), as a Computer that takes a while to decide.
+ */
+function holdActions(fixture: Fixture, respond: () => Response) {
+  const held: (() => void)[] = [];
+  fixture.runtime.server.on(
+    "POST",
+    actionPath,
+    () => new Promise((resolve) => held.push(() => resolve(respond()))),
+  );
+  return () => {
+    for (const release of held.splice(0)) release();
+  };
+}
+
+function accepted(action: string) {
+  return Response.json(
+    { action, computer_id: "computer-lab", model_id: "held" },
+    { status: 202 },
+  );
+}
+
 function withModel(
   view: LocalModelsView,
   modelId: string,
@@ -205,6 +243,54 @@ describe("LocalModelsPage", () => {
     // A model that can't be downloaded has no action, only its toggle.
     expect(within(card("Llama 3.1 405B")).getAllByRole("button")).toHaveLength(
       1,
+    );
+  });
+
+  it("marks the model the Computer recommends, whatever its fit", async () => {
+    // localmodels recommends what its stack would install: on a small Mac a
+    // ladder model, on a small card a fallback that runs from system memory.
+    const absent = (
+      id: string,
+      name: string,
+      fit: "system" | "unified",
+      recommended: boolean,
+    ) =>
+      modelView(
+        localModel({
+          download_bytes: gb(2.6),
+          family: "other",
+          fit,
+          id,
+          name,
+          pool: fit === "system" ? "system" : "unified",
+          recommended,
+        }),
+      );
+    const fixture = setup([
+      macView({
+        models: [
+          absent("lfm3-1.7b:Q8_0", "LFM3 1.7B", "unified", false),
+          absent("spark-x2.6-4b:Q4_K_M", "Spark-X2.6 4B", "unified", true),
+        ],
+      }),
+      labView({
+        computer: { ...labView().computer, computer_id: "computer-win" },
+        models: [absent("qwen3.5-9b:Q4_K_M", "Qwen3.5 9B", "system", true)],
+      }),
+    ]);
+    renderPage(fixture, "?computer=computer-mac");
+    await findModels();
+    expect(statuses()).toEqual([
+      "Spark-X2.6 4B: Not downloaded · 2.6 GB · Recommended",
+      "LFM3 1.7B: Not downloaded · 2.6 GB",
+    ]);
+
+    cleanup();
+    renderPage(fixture, "?computer=computer-win");
+    await waitFor(() =>
+      expect(statuses()).toEqual([
+        "Qwen3.5 9B: Not downloaded · 2.6 GB · Recommended",
+      ]),
     );
   });
 
@@ -457,6 +543,7 @@ describe("LocalModelsPage", () => {
     publishSnapshot(fixture, {
       ...labView(),
       models: labView().models.map((item) => ({ ...item, used_by: [] })),
+      observed_at: "2026-11-13T10:00:05.000Z",
     });
     fireEvent.click(screen.getByRole("button", { name: "Qwen3 Coder 30B" }));
     await waitFor(() =>
@@ -619,6 +706,92 @@ describe("LocalModelsPage", () => {
         within(dialog).getByRole("button", { name: "Unload" }),
       ).toBeDisabled(),
     );
+  });
+
+  it("shows a load as under way from the click until a snapshot reflects it", async () => {
+    const fixture = setup();
+    const answer = holdActions(fixture, () => accepted("load"));
+    let reads = 0;
+    fixture.runtime.server.on("GET", viewPath, ({ params }) => {
+      reads += 1;
+      return fixture.views[params.computerId!];
+    });
+    renderPage(fixture);
+    await findModels();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load Gemma 3 27B" }));
+    await waitFor(() => expect(statusOf("Gemma 3 27B")).toMatch(/^Loading/));
+    const row = card("Gemma 3 27B");
+    expect(
+      within(row).queryByRole("button", { name: "Load Gemma 3 27B" }),
+    ).toBeNull();
+    expect(row.querySelector(".town-shimmer-text")).not.toBeNull();
+
+    // Accepted, and the fresh read still carries the snapshot from before.
+    const readsBefore = reads;
+    answer();
+    await waitFor(() => expect(reads).toBeGreaterThan(readsBefore));
+    expect(statusOf("Gemma 3 27B")).toMatch(/^Loading/);
+
+    publishSnapshot(
+      fixture,
+      withModel(labView(), "gemma3-27b:Q4_K_M", { state: "loaded" }),
+    );
+    await waitFor(() => expect(statusOf("Gemma 3 27B")).toMatch(/^Loaded/));
+  });
+
+  it("spins and disables the row's button while an unload is sent", async () => {
+    const fixture = setup();
+    const answer = holdActions(fixture, () => accepted("unload"));
+    renderPage(fixture);
+    await findModels();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Unload Qwen3 Coder 30B" }),
+    );
+    fireEvent.click(
+      within(
+        screen.getByRole("dialog", { name: "Unload Qwen3 Coder 30B?" }),
+      ).getByRole("button", { name: "Unload" }),
+    );
+    const unload = await screen.findByRole("button", {
+      name: "Unload Qwen3 Coder 30B",
+    });
+    await waitFor(() => expect(unload).toHaveAttribute("aria-busy", "true"));
+    expect(unload).toBeDisabled();
+
+    answer();
+    publishSnapshot(
+      fixture,
+      withModel(labView(), "qwen3-coder-30b:Q4_K_M", { state: "idle" }),
+    );
+    await waitFor(() =>
+      expect(statusOf("Qwen3 Coder 30B")).toMatch(/^Downloaded/),
+    );
+    expect(
+      screen.getByRole("button", { name: "Load Qwen3 Coder 30B" }),
+    ).toBeEnabled();
+  });
+
+  it("puts the row back and explains when the Computer refuses", async () => {
+    const fixture = setup();
+    const answer = holdActions(fixture, () =>
+      teamHubErrorResponse(409, "LOCAL_MODEL_NO_ROOM", "raw refusal detail"),
+    );
+    renderPage(fixture);
+    await findModels();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load Gemma 3 27B" }));
+    await waitFor(() => expect(statusOf("Gemma 3 27B")).toMatch(/^Loading/));
+
+    answer();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Gemma 3 27B: There isn't enough free memory to load it. Unload another model first.",
+    );
+    expect(statusOf("Gemma 3 27B")).toMatch(/^Downloaded/);
+    expect(
+      screen.getByRole("button", { name: "Load Gemma 3 27B" }),
+    ).toBeEnabled();
   });
 
   it("shows a refusal from the Computer as copy for its code", async () => {

@@ -623,6 +623,8 @@ func TestPiCatalogLabelsAModelByItsName(t *testing.T) {
 		json.RawMessage(`{"id":"same","name":"same","provider":"local"}`),
 		json.RawMessage(`{"id":"blank","name":" ","provider":"local"}`),
 		json.RawMessage(`{"id":"unnamed","provider":"local"}`),
+		json.RawMessage(`{"id":"q4","name":"Qwen 27B","provider":"localmodels-library"}`),
+		json.RawMessage(`{"id":"q4","name":"Qwen 27B","provider":"other"}`),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -632,10 +634,10 @@ func TestPiCatalogLabelsAModelByItsName(t *testing.T) {
 		ids = append(ids, model.ID)
 		labels = append(labels, model.Label)
 	}
-	if !slices.Equal(ids, []string{"localmodels/localmodels-agent", "local/same", "local/blank", "local/unnamed"}) {
+	if !slices.Equal(ids, []string{"localmodels/localmodels-agent", "local/same", "local/blank", "local/unnamed", "localmodels-library/q4", "other/q4"}) {
 		t.Fatalf("ids = %v", ids)
 	}
-	if !slices.Equal(labels, []string{"ling-3.0-tiny (localmodels/localmodels-agent)", "local/same", "local/blank", "local/unnamed"}) {
+	if !slices.Equal(labels, []string{"ling-3.0-tiny", "local/same", "local/blank", "local/unnamed", "Qwen 27B (localmodels-library/q4)", "Qwen 27B (other/q4)"}) {
 		t.Fatalf("labels = %v", labels)
 	}
 }

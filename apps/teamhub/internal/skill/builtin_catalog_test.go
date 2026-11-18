@@ -199,7 +199,7 @@ func assertImportedBuiltinSkillDefaults(t *testing.T, catalog builtinCatalog) {
 	adapted := map[string]string{
 		"simplexai_builtin_docx":            "1.0.0",
 		"simplexai_builtin_pdf":             "1.0.0",
-		"simplexai_builtin_pptx":            "1.0.4",
+		"simplexai_builtin_pptx":            "1.0.5",
 		"simplexai_builtin_xlsx":            "1.0.0",
 		"simplexai_builtin_skill_installer": "1.0.0",
 	}

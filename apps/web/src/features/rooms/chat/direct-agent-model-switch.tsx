@@ -53,7 +53,7 @@ function RuntimeSettingsEntry({ client, registration, tenantId, busy }: Props) {
     ?.runtimes.find((item) => item.type === placement?.runtime_type)?.models;
   const model = models?.find((item) => item.id === registration.runtime.model);
   const effort = registration.runtime.reasoning_effort;
-  const summary = `${model?.label ?? registration.runtime.model}${effort ? ` ${EFFORT_LABEL[effort]}` : ""}`;
+  const label = model?.label ?? registration.runtime.model;
   const update = useMutation({
     mutationFn: (input: AgentRuntimeUpdateInput) =>
       teamHubData(
@@ -99,7 +99,16 @@ function RuntimeSettingsEntry({ client, registration, tenantId, busy }: Props) {
           setOpen(true);
         }}
       >
-        <span className="agent-model-switch-trigger-label">{summary}</span>
+        <span className="agent-model-switch-trigger-label">{label}</span>
+        {/* A long model label shortens with an ellipsis; the effort stays. */}
+        {effort ? (
+          <>
+            {" "}
+            <span className="agent-model-switch-trigger-effort">
+              {EFFORT_LABEL[effort]}
+            </span>
+          </>
+        ) : null}
       </button>
       {open ? (
         <Suspense

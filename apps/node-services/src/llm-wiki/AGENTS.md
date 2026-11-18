@@ -19,6 +19,12 @@
   knowledge through TeamHub and Memory.
 - Run bounded Wiki model tasks on the owner’s Agent Runtime. Route candidate entities, write meeting and entity pages, and validate the complete candidate locally before returning it. Never spawn a model CLI or call a model API from the service.
 - Render structured page proposals with the registered schema and generate directory indexes deterministically.
+- Contact identity introductions and relationship narratives, and Project
+  direction arrays, are authored as structured fields or kept as they are on an
+  existing page. Render them to
+  the existing Markdown sections; preserve supported facts and their citations
+  across sections when reorganizing a page. A model payload schema change does
+  not itself change the persisted Wiki format or its page paths.
 - Normalize sources only through the process's one `DocumentNormalizer`, which
   the host passes in; never construct another. A source that can never be
   normalized is left out of the generation.
@@ -64,7 +70,8 @@
   the sources it never ran as deferred,
   `agent-wiki-backend.ts` generates with the memory Agent (`src/memory-agent.ts`):
   routing over candidate entities, meeting Session pages, one consolidation
-  call that merges the new entities parallel routing named more than once,
+  call per entity type, run in parallel and retried once on failure, that
+  merges the new entities parallel routing named more than once,
   entity pages written in batches, one correction round; `wiki-candidate-*.ts` validate and recover
   candidates. Room chats get no Session page.
 - `actor-wiki/` holds the operation directory state and the candidate tree

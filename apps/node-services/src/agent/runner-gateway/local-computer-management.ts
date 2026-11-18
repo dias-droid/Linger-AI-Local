@@ -25,6 +25,10 @@ export const MINIMUM_CURRENT_COMPUTER_VERSION = "0.44.0";
 // below the current release updates itself from the welcome's
 // `target_release`; an older protocol 2 build is refused.
 export const FIRST_PROTOCOL_2_COMPUTER_VERSION = "0.43.0";
+// The first release that decodes runner.welcome's `service_features`. An
+// older Computer rejects the unknown key and would never reach its
+// `target_release`, so it is welcomed without the field.
+export const FIRST_SERVICE_FEATURES_COMPUTER_VERSION = "0.52.0";
 
 const COMPUTER_RELEASE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 

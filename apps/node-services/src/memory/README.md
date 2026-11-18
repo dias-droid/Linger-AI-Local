@@ -160,9 +160,9 @@ Core configuration:
   recording transcripts, Session fact extraction and fact recall, the nightly tracking-item pass, and the nightly
   revision of a person's reminder guidelines from the day's proactive reminder feedback. Session facts need
   `TEAMHUB_DATABASE_URL`.
-- Built-in constants (no longer environment variables): hourly tasks run each AnotherMe in parallel (a deployment
-  has one account, usually one AnotherMe); one `weekly` handles at most 4 Subjects at once, and each person's Room
-  Sessions also run 4 at a time; `weekly` always runs on Monday; Memory model requests share a 10-minute business
+- Built-in constants (no longer environment variables): calendar tasks and their retries run at most 4 AnotherMes
+  at once (a deployment has one account, usually one AnotherMe), and each person's Room Sessions also run 4 at a
+  time; `weekly` always runs on Monday; Memory model requests share a 10-minute business
   cancellation, response header and body read timeout, with no streaming; the Chunk reconciliation runs hourly,
   with at most 4 Sources indexed at once per Agent.
 - `TEAMHUB_DATABASE_URL` is required: the Memory role keeps its scheduler state in that database
@@ -617,7 +617,8 @@ same subject's Daily → Wiki → Graph for that date runs again, and the recove
 chain succeeds, without updating other subjects. Per-person lanes hold only within one process and are no
 distributed multi-process lock; each data root still needs exactly one Scheduler process.
 
-The calendar tasks run each AnotherMe isolated and in parallel:
+The calendar tasks run each AnotherMe isolated and in parallel, at most 4 at once. A slot is taken only when the
+subject's lane is free, so a subject still busy with its own earlier work does not hold one:
 
 - Hourly `wiki`: lists every authorized AnotherMe (a deployment usually has one) and runs each in isolation. The chain is Session Raw staging → indexing that Raw.
   Only the 00:00 run that closes the previous day, and a meeting's recording, then ask TeamHub for a Wiki

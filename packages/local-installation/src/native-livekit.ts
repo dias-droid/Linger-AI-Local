@@ -5,7 +5,11 @@ import path from "node:path";
 import { parseEnv } from "node:util";
 import { setTimeout as delay } from "node:timers/promises";
 import { atomicPrivate, readPrivate } from "./instance.js";
-import { inspectNativeProcess, startNativeProcess } from "./native-process.js";
+import {
+  inspectNativeListeners,
+  inspectNativeProcess,
+  startNativeProcess,
+} from "./native-process.js";
 
 // The LiveKit server Native voice runs, as docker-compose.yml runs it for
 // Docker: the voice workers and the browser meet there. It listens on
@@ -149,7 +153,12 @@ export async function liveKitReady(
   signal?: AbortSignal,
 ): Promise<boolean> {
   try {
-    if (!(await inspectNativeProcess(root, "livekit")).running) return false;
+    const [state] = await inspectNativeListeners(root, [
+      { name: "livekit", port: settings.httpPort },
+    ]);
+    // Another process on the port would answer for a LiveKit that cannot
+    // listen there.
+    if (!state?.running || state.foreign !== undefined) return false;
     const response = await fetch(`http://127.0.0.1:${settings.httpPort}/`, {
       redirect: "error",
       signal: AbortSignal.any([

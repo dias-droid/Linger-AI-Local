@@ -160,7 +160,10 @@ type Daemon struct {
 	diagnosticsRevision uint64
 	connectionMu        sync.Mutex
 	diagnosticsStream   transport.Stream
-	operationStream     transport.Stream
+	// localModelsStream is the live connection when its Agent Service
+	// accepts runner.local_models; nil otherwise.
+	localModelsStream transport.Stream
+	operationStream   transport.Stream
 	// dispatcher is the live connection's command dispatcher. It is atomic so
 	// DrainIfIdle can read it under admissionMu without taking connectionMu.
 	dispatcher           atomic.Pointer[commandDispatcher]

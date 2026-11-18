@@ -125,17 +125,16 @@ FunctionEnd
 !insertmacro STOP_LINGER ""
 !insertmacro STOP_LINGER "un."
 
-; An earlier release that cannot stop its services is stopped by this
-; release's script, run by that release's Linger.exe. A running app of such a
-; release is left to CloseLinger.
+; An earlier release's services are stopped by this release's script, run
+; by that release's Linger.exe: an earlier script may not stop them (one
+; before --stop has none; 0.1.2's left TeamHub, web and node-services
+; running). A running app of a release without the marker is left to
+; CloseLinger.
 Function StopEarlierLinger
   IfFileExists "$INSTDIR\Linger.exe" 0 done
-  StrCpy $R0 "${INSTALLER_SCRIPT}"
-  IfFileExists "${STOP_MARKER}" stop
   InitPluginsDir
   File "/oname=$PLUGINSDIR\stop.mjs" "${STAGE}\resources\app\dist\installer\installer.js"
   StrCpy $R0 "$PLUGINSDIR\stop.mjs"
-  stop:
   Call StopLinger
   done:
 FunctionEnd

@@ -34,6 +34,7 @@ import {
 import { downloadVerified } from "@linger/local-installation/download";
 import { latestLegacyBackup } from "@linger/local-installation/legacy-database";
 import { legacyMigrationPending } from "@linger/local-installation/home";
+import { validateSourceRepository } from "@linger/local-installation/source-checkout";
 import type { LegacyInstanceSkipped } from "@linger/local-installation/legacy-migration";
 import {
   type SetupChoice,
@@ -64,6 +65,7 @@ import {
 import type { Module, ModuleContext } from "./modules.js";
 import { sameOrigin } from "./navigation.js";
 import { humanTenant, type EnrollmentModule } from "./enrollment.js";
+import { compareVersions } from "./update-manifest.js";
 import type { WindowManagerModule } from "./window-manager.js";
 import {
   installerKeyChanges,
@@ -285,6 +287,8 @@ export interface LocalServerOptions {
   // The desktop keeps its Node runtime and its record here wherever the
   // installation goes.
   readonly home: string;
+  // This app's version, recorded with the source package it unpacks.
+  readonly version: string;
   // The bundled installer (installer.js, web/, native-process-worker.mjs).
   readonly installerDirectory: string;
   readonly sourceArchive?: SourceArchive;
@@ -420,10 +424,6 @@ export class LocalServerModule implements Module {
   #locationError: string | undefined;
   #node: Promise<string> | undefined;
   #abort = new AbortController();
-  // The running installation when this app brings a newer source package;
-  // the services move to it once the person chooses to update.
-  #outdated: LocalRecord | undefined;
-  #updating: Promise<void> | undefined;
   #offRetry: (() => void) | undefined;
   #offReset: (() => void) | undefined;
   #offDaemon: (() => void) | undefined;
@@ -448,13 +448,21 @@ export class LocalServerModule implements Module {
 
   async start(ctx: ModuleContext): Promise<void> {
     this.#ctx = ctx;
-    const migrationFailure = await this.#migrateLegacyHome(ctx);
     // After a reboot the local services are gone; start them again while the
     // window still points at them. A record of a Quick Install that stopped
     // before this computer connected (the app quit or the computer went off
     // during its last steps) is not resumed: setup shows instead, and its
     // Install finishes that installation.
     let record = await this.#readRecord();
+    // The record stays in the default home, but the installation it names
+    // may be in a location the person chose; that home converts too, and
+    // only its own instance holds the app back.
+    const inUse = record?.home ?? this.#options.home;
+    let migrationFailure: string | undefined;
+    for (const home of new Set([this.#options.home, inUse])) {
+      const failure = await this.#migrateLegacyHome(ctx, home);
+      if (home === inUse) migrationFailure = failure;
+    }
     if (record) this.#home = record.home;
     const config = ctx.config.get();
     const resumes =
@@ -897,6 +905,7 @@ export class LocalServerModule implements Module {
         home,
         repo,
         origin: job.origin,
+        version: this.#options.version,
       });
       await this.#pruneSources(home, [repo]);
       this.#home = home;
@@ -1240,26 +1249,30 @@ export class LocalServerModule implements Module {
   }
 
   // An install from before the rename keeps legacy names in its instance
-  // records; the bundled installer converts them once, before a record is
-  // read. Returns why this computer's instance stayed unconverted, for the
-  // person to see; other instances it left behind are only logged.
-  async #migrateLegacyHome(ctx: ModuleContext): Promise<string | undefined> {
+  // records; the bundled installer converts them once, before the services
+  // start. Returns why this computer's instance in `home` stayed
+  // unconverted, for the person to see; other instances it left behind are
+  // only logged.
+  async #migrateLegacyHome(
+    ctx: ModuleContext,
+    home: string,
+  ): Promise<string | undefined> {
     if (
-      !(await legacyMigrationPending(this.#options.home)) ||
+      !(await legacyMigrationPending(home)) ||
       !existsSync(this.#installerScript())
     )
       return undefined;
     const outcome = await new Promise<LegacyMigrationRun>((resolve) => {
       const child = spawn(
         process.execPath,
-        [this.#installerScript(), "--home", this.#options.home, "--migrate"],
+        [this.#installerScript(), "--home", home, "--migrate"],
         {
           stdio: ["ignore", "pipe", "pipe"],
           windowsHide: true,
           env: {
             ...process.env,
             ELECTRON_RUN_AS_NODE: "1",
-            LINGER_HOME: this.#options.home,
+            LINGER_HOME: home,
           },
         },
       );
@@ -1279,14 +1292,18 @@ export class LocalServerModule implements Module {
     const { failure, skipped } = legacyMigrationResult(outcome, LOCAL_INSTANCE);
     for (const entry of skipped)
       ctx.log.warn("local_server.legacy_instance_skipped", {
+        home,
         instance: entry.instance,
         reason: entry.reason,
       });
     if (failure) {
-      ctx.log.warn("local_server.home_migration_failed", { error: failure });
+      ctx.log.warn("local_server.home_migration_failed", {
+        home,
+        error: failure,
+      });
       return failure;
     }
-    ctx.log.info("local_server.home_migrated", {});
+    ctx.log.info("local_server.home_migrated", { home });
     return undefined;
   }
 
@@ -2023,28 +2040,44 @@ export class LocalServerModule implements Module {
   }
 
   // Runs the installer headless against the saved instance; it starts only
-  // the services that are not running and asks for nothing. A newer source
-  // package in an updated app waits for the person (updateSource) while the
-  // installed one is still there.
+  // the services that are not running and asks for nothing. When this app
+  // brings a newer source package (it was installed over an older one), the
+  // services move to it first: the window and the Computer already are this
+  // version, and the older services would serve the older interface.
   async #resume(record: LocalRecord, signal: AbortSignal): Promise<void> {
     this.#origin = record.origin;
     const windows = this.#ctx?.get<WindowManagerModule>("WindowManager");
     try {
-      this.#set("preparing", "Starting Linger on this computer…");
-      // The window would show the server as unreachable until it is back.
-      if (!(await this.#reachable(record.origin))) windows?.showStarting();
-      const newer = this.#newerSource(record);
-      // A source folder removed since (by hand, or a cleanup that an uninstall
-      // left half done) is unpacked again from this app's package.
+      const update = this.#sourceUpdate(record);
+      if (update) {
+        // The services restart even if they still answer.
+        this.#set("preparing", "Updating Linger on this computer…");
+        windows?.showUpdating();
+      } else {
+        this.#set("preparing", "Starting Linger on this computer…");
+        // The window would show the server as unreachable until it is back.
+        if (!(await this.#reachable(record.origin))) windows?.showStarting();
+      }
+      // A source folder the installer no longer runs is unpacked again from
+      // this app's package: one removed since (by hand, or a cleanup that an
+      // uninstall left half done), or one the earlier Simplex app unpacked.
       const repo =
         this.#options.sourceArchive &&
         !this.#options.checkout &&
-        !existsSync(record.repo)
+        (update ||
+          !(await validateSourceRepository(record.repo).then(
+            () => true,
+            () => false,
+          )))
           ? await this.#ensureSource(record.home, signal)
           : record.repo;
       await this.#runResume(record, repo, signal);
       if (repo !== record.repo) await this.#moved(record, repo);
-      this.#outdated = newer && repo === record.repo ? record : undefined;
+      if (update)
+        this.#ctx?.log.info("local_server.source_updated", {
+          source: path.basename(repo),
+          from: record.version,
+        });
       this.#ready(record.origin);
       this.#set("ready", "Linger is running on this computer.");
     } catch (error) {
@@ -2066,7 +2099,6 @@ export class LocalServerModule implements Module {
     try {
       await rm(this.#recordFile(), { force: true });
       this.#origin = undefined;
-      this.#outdated = undefined;
       this.#set("idle", "");
       ctx.log.info("local_server.reset");
       await ctx.get<EnrollmentModule>("Enrollment").unenroll();
@@ -2083,62 +2115,37 @@ export class LocalServerModule implements Module {
     return answers(this.#options.fetch ?? fetch, origin);
   }
 
-  // Whether this app brings a source package the running services do not
-  // use yet.
-  sourceUpdateAvailable(): boolean {
-    return this.#outdated !== undefined;
-  }
-
-  // Moves the services to this app's source package. The window shows that
-  // Linger is updating while they restart, then the server again.
-  updateSource(): Promise<void> {
-    const record = this.#outdated;
-    if (!record) return Promise.resolve();
-    this.#updating ??= this.#updateSource(record).finally(() => {
-      this.#updating = undefined;
-    });
-    return this.#updating;
-  }
-
-  async #updateSource(record: LocalRecord): Promise<void> {
-    const signal = this.#abort.signal;
-    const windows = this.#ctx?.get<WindowManagerModule>("WindowManager");
-    windows?.showUpdating();
-    try {
-      this.#set("preparing", "Updating Linger on this computer…");
-      const repo = await this.#ensureSource(record.home, signal);
-      await this.#runResume(record, repo, signal);
-      await this.#moved(record, repo);
-      this.#outdated = undefined;
-      this.#set("ready", "Linger is running on this computer.");
-      this.#ctx?.log.info("local_server.source_updated", {
-        source: path.basename(repo),
-      });
-    } catch (error) {
-      if (signal.aborted) return;
-      this.#ctx?.log.warn("local_server.update_failed", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      this.#set(
-        "failed",
-        error instanceof Error ? error.message : String(error),
-      );
-    } finally {
-      if (!signal.aborted) windows?.loadServer();
-    }
-  }
-
-  #newerSource(record: LocalRecord): boolean {
+  // Whether the services run another source package than this app brings,
+  // one that an older app unpacked. An older app installed over a newer one
+  // leaves its services as they are: the newer services may have changed
+  // the data in ways the older ones do not know.
+  #sourceUpdate(record: LocalRecord): boolean {
     const archive = this.#options.sourceArchive;
-    return (
-      !this.#options.checkout &&
-      !!archive &&
-      path.basename(record.repo) !== archive.sha256.slice(0, 16)
-    );
+    if (
+      this.#options.checkout ||
+      !archive ||
+      path.basename(record.repo) === archive.sha256.slice(0, 16)
+    )
+      return false;
+    if (
+      record.version &&
+      compareVersions(record.version, this.#options.version) > 0
+    ) {
+      this.#ctx?.log.warn("local_server.source_newer_than_app", {
+        installed: record.version,
+        app: this.#options.version,
+      });
+      return false;
+    }
+    return true;
   }
 
   async #moved(record: LocalRecord, repo: string): Promise<void> {
-    await this.#writeRecord({ ...record, repo });
+    await this.#writeRecord({
+      ...record,
+      repo,
+      version: this.#options.version,
+    });
     await this.#pruneSources(record.home, [repo]);
   }
 
@@ -2250,6 +2257,9 @@ export class LocalServerModule implements Module {
                 : this.#options.home,
             repo: value.repo,
             origin: value.origin,
+            ...(typeof value.version === "string"
+              ? { version: value.version }
+              : {}),
           }
         : undefined;
     } catch {
@@ -2308,6 +2318,9 @@ interface LocalRecord {
   readonly home: string;
   readonly repo: string;
   readonly origin: string;
+  // The version of the app that unpacked `repo`; a record without one was
+  // written by an app older than any that reads it.
+  readonly version?: string;
 }
 
 // This computer as the server's Local Computers list reports it.

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	mathrand "math/rand/v2"
+	"slices"
 	"sort"
 	"time"
 
@@ -316,11 +317,14 @@ func (d *Daemon) acceptRunnerWelcome(ctx, connectionCtx context.Context, stream 
 		d.prewarmOnce.Do(func() { go p.Prewarm(ctx) })
 	}
 	d.setGatewayState("connected")
-	if err := d.activateStreamAndReplay(ctx, stream, command.ReconcileOperationIDs); err != nil {
+	localModels := slices.Contains(command.ServiceFeatures, serviceFeatureLocalModels)
+	if err := d.activateStreamAndReplay(ctx, stream, command.ReconcileOperationIDs, localModels); err != nil {
 		return err
 	}
 	go d.heartbeatLoop(connectionCtx, stream, command.HeartbeatIntervalMs)
-	d.refreshLocalModels(connectionCtx)
+	if localModels {
+		d.refreshLocalModels(connectionCtx)
+	}
 	return nil
 }
 
@@ -394,6 +398,9 @@ func (d *Daemon) clearDiagnosticsStream(stream transport.Stream) {
 	d.connectionMu.Lock()
 	if d.diagnosticsStream == stream {
 		d.diagnosticsStream = nil
+	}
+	if d.localModelsStream == stream {
+		d.localModelsStream = nil
 	}
 	d.connectionMu.Unlock()
 }
@@ -504,11 +511,17 @@ func (d *Daemon) replayRetainedEvents(ctx context.Context, stream transport.Stre
 	return nil
 }
 
-func (d *Daemon) activateStreamAndReplay(ctx context.Context, stream transport.Stream, operationIDs []string) error {
+// activateStreamAndReplay makes stream the live connection; localModels says
+// whether its Agent Service accepts runner.local_models.
+func (d *Daemon) activateStreamAndReplay(ctx context.Context, stream transport.Stream, operationIDs []string, localModels bool) error {
 	d.connectionMu.Lock()
 	defer d.connectionMu.Unlock()
 	d.diagnosticsStream = stream
 	d.operationStream = stream
+	d.localModelsStream = nil
+	if localModels {
+		d.localModelsStream = stream
+	}
 	return d.replayRetainedEvents(ctx, stream, operationIDs)
 }
 

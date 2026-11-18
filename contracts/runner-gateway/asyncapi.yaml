@@ -5,10 +5,14 @@ info:
   description: >-
     Authenticated bidirectional Agent Runner desired state and Runtime operation
     protocol between Agent Service and a Local Computer Daemon. Every frame
-    carries protocol_version 2; the Computer and the Agent Service are built
-    from one commit, so the protocol has no feature negotiation. The only
-    capabilities a Computer declares are host features (browser_connection
-    and computer_permissions).
+    carries protocol_version 2. The only capabilities a Computer declares are
+    host features (browser_connection and computer_permissions). A desktop
+    upgrade can leave a newer Computer connected to an older Agent Service,
+    so a frame family added within protocol 2 is gated: runner.welcome's
+    service_features names each one the service accepts, and the Computer
+    sends nothing from a family the list leaves out. The service sends the
+    field only to a Computer release that decodes it, because an older
+    Computer rejects unknown welcome keys.
     The Daemon initiates the WebSocket connection; the service-issued
     connection epoch fences commands and responses after reconnect. The
     Daemon receives runner.reconciled only after the service has completed
@@ -54,8 +58,9 @@ info:
     refresh). The Computer answers executed with outcome accepted or refused
     at once and supervises the long-running localmodels job itself; progress
     and outcomes reach the service only as runner.local_models snapshots,
-    which the Computer sends after runner.hello, after every library change,
-    and at most every 2 seconds while a download or load runs.
+    which the Computer sends after a runner.welcome whose service_features
+    names local_models, after every library change, and at most every 2
+    seconds while a download or load runs.
 x-frame-limits:
   maxBytes: 4194304
   maxDepth: 32

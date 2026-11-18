@@ -244,6 +244,13 @@ file, puts the snapshot back into the result and deletes the file, so the model
 need not call `browser_snapshot` again. Only links under `.linger/browser-output/`
 are replaced.
 
+A Codex Context home receives these entries as URL servers in its projected
+`config.toml`, together with `mcp_oauth_credentials_store = "file"`. Codex
+otherwise reads the OAuth credentials of every URL server from the OS keyring,
+and on Linux a session bus whose Secret Service never answers blocks the turn
+until the Run times out. The managed servers never use OAuth, and the setting
+applies only to that runtime home, not to the user's own Codex home.
+
 The tool catalog is cached per Computer installation; an Operation's tool service
 expires as soon as it closes. After connecting to the Runner Gateway, the Daemon
 discovers the catalog once in the background so the first run does not wait. On

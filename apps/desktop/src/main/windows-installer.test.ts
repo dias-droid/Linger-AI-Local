@@ -68,12 +68,13 @@ it("waits for the app to exit only when it was asked to quit", () => {
   );
 });
 
-it("stops a release without --stop with this release's script", () => {
+it("stops every earlier release with this release's script", () => {
   const earlier = block("Function StopEarlierLinger", "FunctionEnd");
+  // An earlier release's own script may leave its services running.
+  expect(earlier).not.toContain("STOP_MARKER");
   order(
     earlier,
     'IfFileExists "$INSTDIR\\Linger.exe" 0 done',
-    'IfFileExists "${STOP_MARKER}" stop',
     "${STAGE}\\resources\\app\\dist\\installer\\installer.js",
     'StrCpy $R0 "$PLUGINSDIR\\stop.mjs"',
     "Call StopLinger",

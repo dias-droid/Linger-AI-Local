@@ -72,6 +72,21 @@ if (args.includes("--user-keys")) {
   process.stdout.write(JSON.stringify({ saved: names }) + "\n");
   process.exit(0);
 }
+if (args.includes("--migrate")) {
+  // Converts every legacy instance record, except a "desktop" that
+  // migrate-skips holds back.
+  const holds = fs.existsSync(path.join(home, "migrate-skips"));
+  const instances = path.join(home, "instances");
+  for (const name of fs.existsSync(instances) ? fs.readdirSync(instances) : []) {
+    if (holds && name === "desktop") continue;
+    const file = path.join(instances, name, "instance.json");
+    const record = JSON.parse(fs.readFileSync(file, "utf8"));
+    fs.writeFileSync(file, JSON.stringify({ ...record, project: record.project.replace(/^simplex-/, "linger-") }));
+  }
+  const skipped = holds ? [{ instance: "desktop", reason: "Its Computer is running 1 task(s)." }] : [];
+  process.stdout.write(JSON.stringify({ skipped }) + "\n");
+  process.exit(0);
+}
 fs.mkdirSync(path.join(home, "installer"), { recursive: true });
 fs.writeFileSync(path.join(home, "installer", "args.json"), JSON.stringify(args));
 if (args.includes("--inspect")) {
@@ -125,6 +140,10 @@ const sourceArchive = (root: string) => {
   const tree = path.join(root, "tree", "linger-1.0.0", "scripts");
   mkdirSync(tree, { recursive: true });
   writeFileSync(path.join(tree, "source-native.mjs"), "");
+  writeFileSync(
+    path.join(path.dirname(tree), "package.json"),
+    JSON.stringify({ name: "linger" }),
+  );
   const file = path.join(root, "linger.tar.gz");
   execFileSync("tar", [
     "-czf",
@@ -139,6 +158,28 @@ const sourceArchive = (root: string) => {
     sha256: createHash("sha256").update(bytes).digest("hex"),
   };
 };
+
+// A source package an earlier app unpacked into `directory`, named `name`.
+const unpackedSource = (directory: string, name = "linger") => {
+  mkdirSync(path.join(directory, "scripts"), { recursive: true });
+  writeFileSync(path.join(directory, "scripts/source-native.mjs"), "");
+  writeFileSync(path.join(directory, "package.json"), JSON.stringify({ name }));
+};
+
+// An instance record an earlier Simplex app wrote under `home`.
+const legacyInstance = (home: string, name = "desktop") => {
+  mkdirSync(path.join(home, "instances", name), { recursive: true });
+  writeFileSync(
+    path.join(home, "instances", name, "instance.json"),
+    JSON.stringify({ mode: "source-native", project: `simplex-${name}-1` }),
+  );
+};
+const instanceProject = (home: string, name = "desktop") =>
+  (
+    JSON.parse(
+      readFileSync(path.join(home, "instances", name, "instance.json"), "utf8"),
+    ) as { project: string }
+  ).project;
 
 const DONE = {
   state: "waiting_user",
@@ -265,6 +306,7 @@ const installerApi = (
 };
 
 const TEAMHUB = "http://127.0.0.1:4100";
+const APP_VERSION = "0.17.0";
 const KEY = Buffer.from(Array.from({ length: 32 }, (_, i) => i));
 const server = (origin: string): LocalServerIdentity => ({
   origin,
@@ -331,6 +373,7 @@ const fixture = (
   }) as typeof fetch;
   const module = new LocalServerModule({
     home,
+    version: APP_VERSION,
     installerDirectory,
     platform: "linux",
     arch: "x64",
@@ -622,6 +665,7 @@ describe("LocalServerModule", () => {
       home: f.home,
       repo,
       origin: "http://localhost:3000",
+      version: APP_VERSION,
     });
     await f.host.stop("quit");
   });
@@ -1079,6 +1123,7 @@ describe("LocalServerModule", () => {
     const bundled = (sha256: string) =>
       new LocalServerModule({
         home: f.home,
+        version: APP_VERSION,
         installerDirectory: path.join(f.root, "installer"),
         platform: "linux",
         arch: "x64",
@@ -1139,6 +1184,7 @@ describe("LocalServerModule", () => {
     const install = async () => {
       await new LocalServerModule({
         home: f.home,
+        version: APP_VERSION,
         installerDirectory: path.join(f.root, "installer"),
         platform: "linux",
         arch: "x64",
@@ -1213,6 +1259,7 @@ describe("LocalServerModule", () => {
     const install = async (glibcVersion = "2.35") => {
       await new LocalServerModule({
         home: f.home,
+        version: APP_VERSION,
         installerDirectory: path.join(f.root, "installer"),
         platform: "linux",
         arch: "x64",
@@ -1312,6 +1359,7 @@ describe("LocalServerModule", () => {
     );
     await new LocalServerModule({
       home: f.home,
+      version: APP_VERSION,
       installerDirectory: installer,
       platform: "darwin",
       arch: "arm64",
@@ -2271,7 +2319,126 @@ describe("LocalServerModule after a restart", () => {
     await f.host.stop("quit");
   });
 
-  it("moves the services to the source package of an updated app when asked", async () => {
+  // The services an app installed over this one unpacked: the record names
+  // their source folder and the app that unpacked it.
+  const installedBy = (archive: ReturnType<typeof sourceArchive>) =>
+    fixture(
+      {
+        sourceArchive: {
+          url: "https://cdn.example/linger.tar.gz",
+          sha256: archive.sha256,
+        },
+        // The services still answer, as when only the app was replaced.
+        fetch: (async () => new Response(archive.bytes)) as typeof fetch,
+      },
+      enrolled,
+      (home) => {
+        const sources = path.join(home, "desktop", "source");
+        unpackedSource(path.join(sources, "previous"));
+        writeFileSync(
+          path.join(home, "desktop", "local-server.json"),
+          JSON.stringify({
+            home,
+            repo: path.join(sources, "previous"),
+            origin: "http://localhost:3000",
+          }),
+        );
+      },
+    );
+
+  it("moves the services to the source package of an app installed over an older one", async () => {
+    const root = tempDirectory();
+    const archive = sourceArchive(root);
+    const f = installedBy(archive);
+    await f.host.start();
+    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    const sources = path.join(f.home, "desktop", "source");
+    const current = path.join(sources, archive.sha256.slice(0, 16));
+    const args = installerArgs(f.home);
+    expect(args).toContain("--resume");
+    expect(args[args.indexOf("--source-repo") + 1]).toBe(current);
+    // The window leaves the older interface while they restart.
+    expect(f.showUpdating).toHaveBeenCalledOnce();
+    expect(f.setServer).toHaveBeenCalledWith("http://localhost:3000");
+    expect(
+      JSON.parse(
+        readFileSync(path.join(f.home, "desktop", "local-server.json"), "utf8"),
+      ),
+    ).toEqual({
+      home: f.home,
+      repo: current,
+      origin: "http://localhost:3000",
+      version: APP_VERSION,
+    });
+    expect(readdirSync(sources)).toEqual([path.basename(current)]);
+    await f.host.stop("quit");
+  });
+
+  it("shows the start failure when moving to the newer source package fails", async () => {
+    const root = tempDirectory();
+    const archive = sourceArchive(root);
+    const f = installedBy(archive);
+    writeFileSync(path.join(f.home, "resume-fails"), "");
+    await f.host.start();
+    await vi.waitFor(() => expect(f.module.status().phase).toBe("failed"));
+    expect(f.showStartFailed).toHaveBeenCalledWith("Native teamhub stopped");
+    // Try Again moves them once more.
+    rmSync(path.join(f.home, "resume-fails"));
+    f.bus.emit("local-server.retry");
+    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    const args = installerArgs(f.home);
+    expect(args[args.indexOf("--source-repo") + 1]).toBe(
+      path.join(f.home, "desktop", "source", archive.sha256.slice(0, 16)),
+    );
+    await f.host.stop("quit");
+  });
+
+  it("starts the services on their own source package when it is this app's", async () => {
+    const root = tempDirectory();
+    const archive = sourceArchive(root);
+    const repo = (home: string) =>
+      path.join(home, "desktop", "source", archive.sha256.slice(0, 16));
+    const download = vi.fn(
+      async (_url: string | URL | Request) =>
+        new Response(null, { status: 503 }),
+    );
+    const f = fixture(
+      {
+        sourceArchive: {
+          url: "https://cdn.example/linger.tar.gz",
+          sha256: archive.sha256,
+        },
+        fetch: download as typeof fetch,
+      },
+      enrolled,
+      (home) => {
+        unpackedSource(repo(home));
+        writeFileSync(
+          path.join(home, "desktop", "local-server.json"),
+          JSON.stringify({
+            home,
+            repo: repo(home),
+            origin: "http://localhost:3000",
+            version: APP_VERSION,
+          }),
+        );
+      },
+    );
+    await f.host.start();
+    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    const args = installerArgs(f.home);
+    expect(args[args.indexOf("--source-repo") + 1]).toBe(repo(f.home));
+    expect(f.showUpdating).not.toHaveBeenCalled();
+    expect(
+      download.mock.calls.some(([url]) =>
+        String(url).startsWith("https://cdn.example/"),
+      ),
+    ).toBe(false);
+    await f.host.stop("quit");
+  });
+
+  it("leaves services a newer app unpacked on their source package", async () => {
+    const warn = vi.spyOn(silentLog, "warn");
     const root = tempDirectory();
     const archive = sourceArchive(root);
     const f = fixture(
@@ -2285,38 +2452,37 @@ describe("LocalServerModule after a restart", () => {
       enrolled,
       (home) => {
         const sources = path.join(home, "desktop", "source");
-        mkdirSync(path.join(sources, "previous"), { recursive: true });
+        unpackedSource(path.join(sources, "newer"));
         writeFileSync(
           path.join(home, "desktop", "local-server.json"),
           JSON.stringify({
             home,
-            repo: path.join(sources, "previous"),
+            repo: path.join(sources, "newer"),
             origin: "http://localhost:3000",
+            version: "0.18.0",
           }),
         );
       },
     );
     await f.host.start();
     await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
-    const sources = path.join(f.home, "desktop", "source");
-    const previous = path.join(sources, "previous");
-    const current = path.join(sources, archive.sha256.slice(0, 16));
-    const before = installerArgs(f.home);
-    expect(before[before.indexOf("--source-repo") + 1]).toBe(previous);
-    expect(f.module.sourceUpdateAvailable()).toBe(true);
-    await f.module.updateSource();
-    expect(f.showUpdating).toHaveBeenCalledOnce();
-    expect(f.loadServer).toHaveBeenCalledOnce();
-    expect(f.module.sourceUpdateAvailable()).toBe(false);
-    expect(f.module.status().phase).toBe("ready");
+    const newer = path.join(f.home, "desktop", "source", "newer");
     const args = installerArgs(f.home);
-    expect(args[args.indexOf("--source-repo") + 1]).toBe(current);
+    expect(args[args.indexOf("--source-repo") + 1]).toBe(newer);
+    expect(f.showUpdating).not.toHaveBeenCalled();
+    expect(readdirSync(path.join(f.home, "desktop", "source"))).toEqual([
+      "newer",
+    ]);
     expect(
       JSON.parse(
         readFileSync(path.join(f.home, "desktop", "local-server.json"), "utf8"),
       ),
-    ).toMatchObject({ repo: current });
-    expect(readdirSync(sources)).toEqual([path.basename(current)]);
+    ).toMatchObject({ repo: newer, version: "0.18.0" });
+    expect(warn).toHaveBeenCalledWith("local_server.source_newer_than_app", {
+      installed: "0.18.0",
+      app: APP_VERSION,
+    });
+    warn.mockRestore();
     await f.host.stop("quit");
   });
 
@@ -2427,8 +2593,147 @@ describe("LocalServerModule after a restart", () => {
     expect(
       existsSync(path.join(repo(f.home), "scripts/source-native.mjs")),
     ).toBe(true);
-    expect(f.module.sourceUpdateAvailable()).toBe(false);
     await f.host.stop("quit");
+  });
+
+  it("moves to the source package when the earlier Simplex app unpacked the one in use", async () => {
+    const root = tempDirectory();
+    const archive = sourceArchive(root);
+    const legacy = (home: string) =>
+      path.join(home, "desktop", "source", "simplex");
+    const f = fixture(
+      {
+        sourceArchive: {
+          url: "https://cdn.example/linger.tar.gz",
+          sha256: archive.sha256,
+        },
+        fetch: (async () => new Response(archive.bytes)) as typeof fetch,
+      },
+      enrolled,
+      (home) => {
+        unpackedSource(legacy(home), "simplexai-coworkspace");
+        writeFileSync(
+          path.join(home, "desktop", "local-server.json"),
+          JSON.stringify({
+            home,
+            repo: legacy(home),
+            origin: "http://localhost:3000",
+          }),
+        );
+      },
+    );
+    await f.host.start();
+    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    const sources = path.join(f.home, "desktop", "source");
+    const current = path.join(sources, archive.sha256.slice(0, 16));
+    const args = installerArgs(f.home);
+    expect(args[args.indexOf("--source-repo") + 1]).toBe(current);
+    expect(
+      JSON.parse(
+        readFileSync(path.join(f.home, "desktop", "local-server.json"), "utf8"),
+      ),
+    ).toMatchObject({ repo: current });
+    expect(readdirSync(sources)).toEqual([path.basename(current)]);
+    await f.host.stop("quit");
+  });
+
+  it("converts and resumes an earlier Simplex installation in a location the person chose", async () => {
+    const root = tempDirectory();
+    const archive = sourceArchive(root);
+    const chosen = path.join(root, "chosen");
+    const legacy = path.join(chosen, "desktop", "source", "simplex");
+    const f = fixture(
+      {
+        sourceArchive: {
+          url: "https://cdn.example/linger.tar.gz",
+          sha256: archive.sha256,
+        },
+        fetch: (async () => new Response(archive.bytes)) as typeof fetch,
+      },
+      enrolled,
+      (home) => {
+        // The default home holds only the record and a setup that never
+        // finished.
+        legacyInstance(home);
+        legacyInstance(chosen);
+        unpackedSource(legacy, "simplexai-coworkspace");
+        mkdirSync(path.join(home, "desktop"), { recursive: true });
+        writeFileSync(
+          path.join(home, "desktop", "local-server.json"),
+          JSON.stringify({
+            home: chosen,
+            repo: legacy,
+            origin: "http://localhost:3000",
+          }),
+        );
+      },
+    );
+    await f.host.start();
+    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    expect(instanceProject(f.home)).toBe("linger-desktop-1");
+    expect(instanceProject(chosen)).toBe("linger-desktop-1");
+    const current = path.join(
+      chosen,
+      "desktop",
+      "source",
+      archive.sha256.slice(0, 16),
+    );
+    const args = installerArgs(chosen);
+    expect(args).toContain("--resume");
+    expect(args[args.indexOf("--home") + 1]).toBe(chosen);
+    expect(args[args.indexOf("--source-repo") + 1]).toBe(current);
+    expect(existsSync(path.join(f.home, "desktop", "source"))).toBe(false);
+    expect(
+      JSON.parse(
+        readFileSync(path.join(f.home, "desktop", "local-server.json"), "utf8"),
+      ),
+    ).toEqual({
+      home: chosen,
+      repo: current,
+      origin: "http://localhost:3000",
+      version: APP_VERSION,
+    });
+    expect(readdirSync(path.dirname(current))).toEqual([
+      path.basename(current),
+    ]);
+    await f.host.stop("quit");
+  });
+
+  it("holds the app back only for the instance in use when a conversion is skipped", async () => {
+    const chosen = path.join(tempDirectory(), "chosen");
+    const setup = (skips: string) => (home: string) => {
+      legacyInstance(home);
+      legacyInstance(chosen);
+      writeFileSync(
+        path.join(skips === "default" ? home : chosen, "migrate-skips"),
+        "",
+      );
+      mkdirSync(path.join(home, "desktop"), { recursive: true });
+      writeFileSync(
+        path.join(home, "desktop", "local-server.json"),
+        JSON.stringify({
+          home: chosen,
+          repo: "/source",
+          origin: "http://localhost:3000",
+        }),
+      );
+    };
+    const unused = fixture({}, enrolled, setup("default"));
+    await unused.host.start();
+    await vi.waitFor(() => expect(unused.module.status().phase).toBe("ready"));
+    expect(instanceProject(unused.home)).toBe("simplex-desktop-1");
+    await unused.host.stop("quit");
+
+    rmSync(chosen, { recursive: true });
+    const used = fixture({}, enrolled, setup("chosen"));
+    await used.host.start();
+    await vi.waitFor(() => expect(used.module.status().phase).toBe("failed"));
+    expect(used.module.status().message).toMatch(
+      /could not convert this computer's installation.*running 1 task/,
+    );
+    expect(used.showStartFailed).toHaveBeenCalledOnce();
+    expect(existsSync(path.join(chosen, "installer", "args.json"))).toBe(false);
+    await used.host.stop("quit");
   });
 
   it("forgets the installation and its enrollment when the person sets up again", async () => {
@@ -2848,7 +3153,10 @@ describe("LocalServerModule on Windows", () => {
     mkdirSync(path.join(source, hash), { recursive: true });
     writeFileSync(path.join(source, hash, "half"), "");
     await f.module.begin();
-    expect(readdirSync(path.join(source, hash)).sort()).toEqual(["scripts"]);
+    expect(readdirSync(path.join(source, hash)).sort()).toEqual([
+      "package.json",
+      "scripts",
+    ]);
     expect(f.module.status().phase).toBe("ready");
     await f.host.stop("quit");
   });

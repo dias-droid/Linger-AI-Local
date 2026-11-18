@@ -33,6 +33,7 @@ import {
   localModelActionMutationKey,
   localModelsQueryKey,
   localModelsQueryOptions,
+  type LocalModelAction,
   type LocalModelActionInput,
   type LocalModelsView,
 } from "./local-models-queries";
@@ -281,6 +282,17 @@ function Library({
     code?: string;
     modelId: string;
   } | null>(null);
+  // An action the Computer accepted, shown on its row until a snapshot moves
+  // the model on: a different status or a newer snapshot.
+  const [accepted, setAccepted] = useState<
+    Record<
+      string,
+      { action: LocalModelAction; from?: ModelStatus; observedAt?: string }
+    >
+  >({});
+  const entries = view.available ? modelEntries(view) : [];
+  const find = (modelId: string) =>
+    entries.find((entry) => entry.model.id === modelId);
   const mutationKey = localModelActionMutationKey(tenantId, computerId);
   const action = useMutation({
     mutationFn: (input: LocalModelActionInput) =>
@@ -291,7 +303,21 @@ function Library({
         code: error instanceof TeamHubError ? error.code : undefined,
         modelId: input.modelId,
       }),
-    onMutate: () => setFailure(null),
+    onMutate: (input) => {
+      setFailure(null);
+      return { from: find(input.modelId)?.status };
+    },
+    onSuccess: (_result, input, started) =>
+      setAccepted((current) => ({
+        ...current,
+        [input.modelId]: {
+          action: input.action,
+          from: started?.from,
+          observedAt: queryClient.getQueryData<LocalModelsView>(
+            localModelsQueryKey(tenantId, computerId),
+          )?.observed_at,
+        },
+      })),
     // The Computer answers at once; a fresh read shows what it started even
     // before its next snapshot hint.
     onSettled: () =>
@@ -299,14 +325,24 @@ function Library({
         queryKey: localModelsQueryKey(tenantId, computerId),
       }),
   });
-  const pendingIds = new Set(
-    useMutationState({
-      filters: { mutationKey, status: "pending" },
-      select: (mutation) =>
-        (mutation.state.variables as LocalModelActionInput | undefined)
-          ?.modelId,
-    }),
-  );
+  const sending = useMutationState({
+    filters: { mutationKey, status: "pending" },
+    select: (mutation) =>
+      mutation.state.variables as LocalModelActionInput | undefined,
+  });
+  // The action each row shows as under way: one being sent, or one accepted
+  // that no snapshot reflects yet.
+  const requests = new Map<string, LocalModelAction>();
+  for (const [modelId, request] of Object.entries(accepted)) {
+    if (
+      request.observedAt === view.observed_at &&
+      request.from === find(modelId)?.status
+    )
+      requests.set(modelId, request.action);
+  }
+  for (const input of sending) {
+    if (input) requests.set(input.modelId, input.action);
+  }
   const offline = view.computer.status === "offline";
   const readOnly = !view.viewer_is_owner;
   // A dialog stays open across snapshots, so its confirm checks the model
@@ -317,11 +353,8 @@ function Library({
   ) =>
     !offline &&
     !readOnly &&
-    !pendingIds.has(entry.model.id) &&
+    !requests.has(entry.model.id) &&
     actionStatuses[action].includes(entry.status);
-  const entries = view.available ? modelEntries(view) : [];
-  const find = (modelId: string) =>
-    entries.find((entry) => entry.model.id === modelId);
   const dialogEntry =
     dialog && dialog.kind !== "advanced" ? find(dialog.modelId) : undefined;
   const makeRoom =
@@ -402,7 +435,7 @@ function Library({
               const modelId = entry.model.id;
               return (
                 <ModelRow
-                  disabled={offline || readOnly || pendingIds.has(modelId)}
+                  disabled={offline || readOnly || requests.has(modelId)}
                   entry={entry}
                   expanded={expandedId === modelId}
                   key={modelId}
@@ -416,6 +449,7 @@ function Library({
                     )
                   }
                   onUnload={() => unload(entry)}
+                  requested={requests.get(modelId)}
                   view={view}
                 />
               );

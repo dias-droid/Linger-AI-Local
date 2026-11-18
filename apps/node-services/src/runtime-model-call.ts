@@ -365,6 +365,15 @@ function validatorFor(schema: object): ValidateFunction {
   return validate;
 }
 
+/** Why a value does not match a schema, or undefined when it does. */
+export function schemaProblem(
+  schema: object,
+  value: unknown,
+): string | undefined {
+  const validate = validatorFor(schema);
+  return validate(value) ? undefined : ajv.errorsText(validate.errors);
+}
+
 const silentLogger: Pick<JsonLogger, "log"> = { log: () => undefined };
 
 /** How long a finished call's answer waits for a caller that left. */

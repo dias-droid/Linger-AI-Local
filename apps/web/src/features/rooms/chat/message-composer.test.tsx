@@ -17,6 +17,7 @@ import {
   formatSkillToken,
 } from "./message-composer-references";
 import { TEAMHUB_MESSAGE_MAX_LENGTH } from "./use-composer-draft";
+import { createTeamHubMessageContent } from "@/features/teamhub/teamhub-message-content";
 
 describe("MessageComposer", () => {
   it("remeasures wrapping after a width change without resubscribing on rerenders", () => {
@@ -1302,7 +1303,7 @@ describe("MessageComposer", () => {
     });
   });
 
-  it("degrades unavailable restored references to plain text", () => {
+  it("blocks a restored draft that mentions an unavailable Agent", () => {
     const onSend = vi.fn();
     const staleActor = {
       display_name: "Retired Agent",
@@ -1314,12 +1315,6 @@ describe("MessageComposer", () => {
       <MessageComposer
         agentOptionsReady
         documentOptionsReady
-        initialDocumentReferences={[
-          {
-            documentId: "document-deleted",
-            token: "@Deleted_plan",
-          },
-        ]}
         initialMentions={[staleActor]}
         initialSkillReferences={[
           {
@@ -1329,8 +1324,7 @@ describe("MessageComposer", () => {
             token: "/retired-skill",
           },
         ]}
-        initialValue="@Retired_Agent /retired-skill inspect @Deleted_plan"
-        onOpenDocument={vi.fn()}
+        initialValue="@Retired Agent /retired-skill inspect"
         onOpenProfile={vi.fn()}
         onSend={onSend}
       />,
@@ -1340,13 +1334,142 @@ describe("MessageComposer", () => {
     expect(
       screen.queryByRole("button", { name: /Retired Agent profile/i }),
     ).not.toBeInTheDocument();
+    fireEvent.keyDown(editor, { key: "Enter" });
+
+    expect(onSend).not.toHaveBeenCalled();
+    expect(editor.value).toBe("@Retired Agent /retired-skill inspect");
+    expect(
+      screen.getByText(
+        "@Retired Agent is not available in this Room. Remove the mention to send.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("degrades unavailable restored Document references to plain text", () => {
+    const onSend = vi.fn();
+    render(
+      <MessageComposer
+        agentOptionsReady
+        documentOptionsReady
+        initialDocumentReferences={[
+          {
+            documentId: "document-deleted",
+            token: "@Deleted_plan",
+          },
+        ]}
+        initialValue="inspect @Deleted_plan"
+        onOpenDocument={vi.fn()}
+        onSend={onSend}
+      />,
+    );
+    const editor = screen.getByLabelText<HTMLTextAreaElement>("Message Room");
+
     expect(
       screen.queryByRole("button", { name: /Open Deleted plan/i }),
     ).not.toBeInTheDocument();
     fireEvent.keyDown(editor, { key: "Enter" });
 
     expect(onSend).toHaveBeenCalledWith({
-      body: "@Retired_Agent /retired-skill inspect @Deleted_plan",
+      body: "inspect @Deleted_plan",
+      files: [],
+      mentions: [],
+    });
+  });
+
+  it("keeps a mention whose Agent is renamed after the pick", () => {
+    const onSend = vi.fn();
+    const picked = {
+      display_name: "Old Name",
+      id: "actor-renamed",
+      kind: "agent" as const,
+      tenant_id: "tenant-1",
+    };
+    const renamed = { ...picked, display_name: "New Name" };
+    const { rerender } = render(
+      <MessageComposer
+        agentOptionsReady
+        mentionOptions={[picked]}
+        onSend={onSend}
+      />,
+    );
+    const editor = screen.getByLabelText<HTMLTextAreaElement>("Message Room");
+    fireEvent.change(editor, { target: { selectionStart: 1, value: "@" } });
+    fireEvent.keyDown(editor, { key: "Enter" });
+    expect(editor.value).toBe("@Old Name ");
+
+    rerender(
+      <MessageComposer
+        agentOptionsReady
+        mentionOptions={[renamed]}
+        onSend={onSend}
+      />,
+    );
+    fireEvent.change(editor, { target: { value: "@Old Name review" } });
+    fireEvent.keyDown(editor, { key: "Enter" });
+
+    expect(onSend).toHaveBeenCalledWith({
+      body: "@Old Name review",
+      files: [],
+      mentions: [picked],
+    });
+    const sent = onSend.mock.calls[0]![0] as {
+      body: string;
+      mentions: (typeof picked)[];
+    };
+    expect(
+      createTeamHubMessageContent({
+        files: [],
+        mentions: sent.mentions,
+        text: sent.body,
+      }).segments,
+    ).toContainEqual(
+      expect.objectContaining({
+        target: picked.id,
+        type: "reference",
+      }),
+    );
+  });
+
+  it("blocks sending while a picked mention is unavailable until it is removed", () => {
+    const onSend = vi.fn();
+    const picked = {
+      display_name: "Retired Agent",
+      id: "actor-retired",
+      kind: "agent" as const,
+      tenant_id: "tenant-1",
+    };
+    const { rerender } = render(
+      <MessageComposer
+        agentOptionsReady
+        mentionOptions={[picked]}
+        onSend={onSend}
+      />,
+    );
+    const editor = screen.getByLabelText<HTMLTextAreaElement>("Message Room");
+    fireEvent.change(editor, { target: { selectionStart: 1, value: "@" } });
+    fireEvent.keyDown(editor, { key: "Enter" });
+    expect(editor.value).toBe("@Retired Agent ");
+
+    rerender(
+      <MessageComposer agentOptionsReady mentionOptions={[]} onSend={onSend} />,
+    );
+    const error =
+      "@Retired Agent is not available in this Room. Remove the mention to send.";
+    fireEvent.change(editor, { target: { value: "@Retired Agent hi" } });
+    fireEvent.keyDown(editor, { key: "Enter" });
+    expect(onSend).not.toHaveBeenCalled();
+    expect(screen.getByText(error)).toBeVisible();
+
+    fireEvent.change(editor, { target: { value: "@Retired Agent hi there" } });
+    expect(screen.queryByText(error)).not.toBeInTheDocument();
+    fireEvent.keyDown(editor, { key: "Enter" });
+    expect(onSend).not.toHaveBeenCalled();
+    expect(screen.getByText(error)).toBeVisible();
+
+    fireEvent.change(editor, { target: { value: "hi there" } });
+    fireEvent.keyDown(editor, { key: "Enter" });
+    expect(onSend).toHaveBeenCalledWith({
+      body: "hi there",
       files: [],
       mentions: [],
     });

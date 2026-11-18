@@ -71,29 +71,6 @@ describe("trayMenu", () => {
     });
   });
 
-  it("offers to update the services on this computer", () => {
-    const menu = (kind: "ready" | "waiting" | "installing") =>
-      trayMenu({
-        status: { tone: "online", label: "Online" },
-        preventSleep: false,
-        enrolled: true,
-        update: { kind, version: "0.16.20", services: true },
-      })[1];
-    expect(menu("ready")).toEqual({
-      kind: "action",
-      action: "install-update",
-      label: "Update Linger on This Computer",
-    });
-    expect(menu("waiting")).toEqual({
-      kind: "label",
-      label: "Updating When Tasks Finish",
-    });
-    expect(menu("installing")).toEqual({
-      kind: "label",
-      label: "Updating Linger on This Computer…",
-    });
-  });
-
   it("shows a download in progress", () => {
     const items = trayMenu({
       status: { tone: "online", label: "Online" },
@@ -168,10 +145,5 @@ describe("updateNotice", () => {
       title: "Update available",
       body: "Linger 0.17.0 is available. Click to open its download page.",
     });
-    expect(
-      updateNotice({ kind: "ready", version: "0.16.7", services: true }).body,
-    ).toBe(
-      "Click to update Linger on this computer. It restarts in about a minute.",
-    );
   });
 });
