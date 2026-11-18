@@ -642,7 +642,13 @@ signed macOS application and `cua-driver.exe` for Windows x64 and ARM64. The
 bundle includes every dependency resource and a per-file SHA-256 manifest; the
 installer refuses files outside the manifest, damaged resources and symlinks. The
 runtime never runs `npx latest` or downloads tool dependencies. Pi still uses its
-existing RPC executor, and images keep their native content types.
+existing RPC executor, and images keep their native content types. Pi loads
+every extension through jiti, which a Pi unpacked from its bare npm bundle (the
+managed runtime harness installs it so) lacks; the Daemon puts the bundle's
+`node_modules`, which carries jiti, on that Pi's `NODE_PATH`. A Pi installed
+with its dependencies resolves its own jiti first. Node reads `NODE_PATH` at
+startup, so the extension then restores the value Pi inherited, and the
+commands Pi starts never resolve a package from the bundle.
 
 The compatibility probe of the pinned Playwright catalog is
 `TestPinnedPlaywrightCatalog`; it needs `LINGER_PLAYWRIGHT_COMPAT_ENTRY` and

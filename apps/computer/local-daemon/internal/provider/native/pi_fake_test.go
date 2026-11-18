@@ -96,6 +96,7 @@ func piFake(mode string, args []string) int {
 	}
 	if path := os.Getenv(piFakeArgvEnv); path != "" {
 		_ = os.WriteFile(path, []byte(strings.Join(args, "\n")), 0o600)
+		_ = os.WriteFile(path+".node_path", []byte(os.Getenv(piNodePathKey)), 0o600)
 	}
 	reader := bufio.NewReader(os.Stdin)
 	for {

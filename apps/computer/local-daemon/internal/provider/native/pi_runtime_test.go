@@ -448,6 +448,9 @@ func TestPiLaunchArguments(t *testing.T) {
 	if got := strings.Split(string(data), "\n"); strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Fatalf("argv\n got %q\nwant %q", got, want)
 	}
+	if nodePath, _ := os.ReadFile(argv + ".node_path"); string(nodePath) != filepath.Join(filepath.Dir(filepath.Dir(extension)), "node_modules") {
+		t.Fatalf("NODE_PATH = %q", nodePath)
+	}
 	instructions, err := os.ReadFile(filepath.Join(sessionDir, piInstructionsName))
 	if err != nil || string(instructions) != "be brief" {
 		t.Fatalf("instructions = %q, %v", instructions, err)
@@ -460,6 +463,24 @@ func TestPiLaunchArguments(t *testing.T) {
 	data, _ = os.ReadFile(argv)
 	if outcome.Status != statusCompleted || strings.Contains(string(data), "--model") || strings.Contains(string(data), "--thinking") || !strings.HasSuffix(string(data), "--tools\n"+piBaseTools) {
 		t.Fatalf("default argv = %q (%+v)", data, outcome)
+	}
+	if nodePath, _ := os.ReadFile(argv + ".node_path"); len(nodePath) != 0 {
+		t.Fatalf("NODE_PATH without an extension = %q", nodePath)
+	}
+}
+
+func TestPiExtensionNodePath(t *testing.T) {
+	extension := filepath.Join("tools", "extensions", "pi-mcp.mjs")
+	modules := filepath.Join("tools", "node_modules")
+	env := map[string]string{}
+	piExtensionNodePath(env, extension)
+	if env[piNodePathKey] != modules || env[piInheritedNodePathKey] != "" || len(env) != 2 {
+		t.Fatalf("fresh env = %q", env)
+	}
+	env = map[string]string{"Node_Path": "own"}
+	piExtensionNodePath(env, extension)
+	if len(env) != 2 || env["Node_Path"] != modules+string(filepath.ListSeparator)+"own" || env[piInheritedNodePathKey] != "own" {
+		t.Fatalf("existing NODE_PATH = %q", env)
 	}
 }
 
