@@ -104,6 +104,11 @@ earlier release's TeamHub or web still on the port would otherwise pass the
 health check for a service that could not bind, and a port held by another
 program fails the start after 15 seconds instead of at the deadline.
 
+On POSIX, a start that finds the recorded supervisor gone but processes
+still carrying its lease (the app was killed with it) ends them as a stop
+does and starts the service again. A live recorded PID or process group
+without the lease proves nothing and is refused, never signalled.
+
 Move a freshly downloaded or unpacked file or folder into place with
 `renameRetrying` from `fs-retry.ts`: on Windows antivirus and indexing hold
 new files for a moment, and a plain rename then fails with EPERM.

@@ -99,6 +99,7 @@ test("refuses to signal a PID whose recorded lease differs", async () => {
   await writeFile(file, JSON.stringify(altered), { mode: 0o600 });
   expect((await inspectNativeProcess(root, "web")).running).toBe(false);
   await expect(stopNativeProcess(root, "web")).rejects.toThrow(/identity/i);
+  await expect(startNativeProcess(options)).rejects.toThrow(/identity/i);
   expect(() => process.kill(processState.pid!, 0)).not.toThrow();
   await writeFile(file, original, { mode: 0o600 });
 });
@@ -186,6 +187,43 @@ test("stops descendants that ignore SIGINT after the service leader exits", asyn
   await stopNativeProcess(root, "web");
   await expect.poll(() => exited(pid)).toBe(true);
 }, 20_000);
+
+test.skipIf(process.platform === "win32")(
+  "replaces a service whose supervisor was killed with the app",
+  async () => {
+    const root = await fixture();
+    const options = {
+      root,
+      name: "web" as const,
+      executable: process.execPath,
+      args: [
+        "-e",
+        "require('node:fs').writeFileSync('service.pid',String(process.pid));setInterval(()=>{},1000)",
+      ],
+      cwd: root,
+      env: process.env,
+    };
+    const first = await startNativeProcess(options);
+    await expect
+      .poll(async () =>
+        readFile(path.join(root, "service.pid"), "utf8").catch(() => ""),
+      )
+      .not.toBe("");
+    const orphan = Number(
+      await readFile(path.join(root, "service.pid"), "utf8"),
+    );
+    await rm(path.join(root, "service.pid"));
+    process.kill(first.pid!, "SIGKILL");
+    await expect.poll(() => exited(first.pid!)).toBe(true);
+    expect(exited(orphan)).toBe(false);
+
+    const second = await startNativeProcess(options);
+    expect(second.pid).not.toBe(first.pid);
+    await expect.poll(() => exited(orphan)).toBe(true);
+    expect((await inspectNativeProcess(root, "web")).running).toBe(true);
+  },
+  20_000,
+);
 
 test("cleans the launched owned group when identity persistence fails", async () => {
   const root = await fixture();

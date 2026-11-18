@@ -249,11 +249,14 @@ export async function startNativeProcess(options: {
     // which reuses PIDs quickly.
     await stopNativeProcess(options.root, options.name);
   } else if (existing) {
-    if (
-      (await stillLive(existing.pid)) ||
-      (await groupLive(existing.pid)) ||
-      (await nativeLeaseProcesses(existing.lease)).length
-    )
+    // A supervisor killed with the app (a forced quit, a crash) leaves its
+    // service running without it. The unguessable lease in their
+    // environment proves those processes are this service's own, so they
+    // are ended the way a stop ends them; a PID or group without the lease
+    // proves nothing and is never signalled.
+    if ((await nativeLeaseProcesses(existing.lease)).length)
+      await stopNativeProcess(options.root, options.name);
+    else if ((await stillLive(existing.pid)) || (await groupLive(existing.pid)))
       throw new Error(
         `Native ${options.name} process identity cannot be verified; refusing to replace it.`,
       );
