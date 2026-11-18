@@ -44,6 +44,8 @@ export interface AttachRunnerGatewayWebSocketOptions {
   readonly path?: string;
   readonly rejectUnmatchedUpgrades?: boolean;
   readonly helloTimeoutMs?: number;
+  /** How long a protocol close waits for the peer before terminating. */
+  readonly closeTimeoutMs?: number;
   readonly onSessionError?: (
     error: unknown,
     context: RunnerSessionErrorContext,
@@ -62,7 +64,7 @@ export interface RunnerGatewayWebSocketHandle {
 
 const DEFAULT_PATH = "/v1/runner-gateway";
 const DEFAULT_HELLO_TIMEOUT_MS = 10_000;
-const CLOSE_TIMEOUT_MS = 1_000;
+const DEFAULT_CLOSE_TIMEOUT_MS = 1_000;
 const MAX_QUEUED_FRAMES = 1_024;
 const MAX_QUEUED_BYTES = 16 * 1024 * 1024;
 const MAX_TIMER_DELAY_MS = 2_147_000_000;
@@ -81,6 +83,10 @@ export const attachRunnerGatewayWebSocket = (
   const helloTimeoutMs = options.helloTimeoutMs ?? DEFAULT_HELLO_TIMEOUT_MS;
   if (!Number.isSafeInteger(helloTimeoutMs) || helloTimeoutMs < 1) {
     throw new TypeError("Runner Gateway hello timeout must be positive");
+  }
+  const closeTimeoutMs = options.closeTimeoutMs ?? DEFAULT_CLOSE_TIMEOUT_MS;
+  if (!Number.isSafeInteger(closeTimeoutMs) || closeTimeoutMs < 1) {
+    throw new TypeError("Runner Gateway close timeout must be positive");
   }
   const credentials = new CredentialCatalog(options.credentialAuthenticators);
   const webSocketServer = new WebSocketServer({
@@ -140,6 +146,7 @@ export const attachRunnerGatewayWebSocket = (
         credentialStatus: async () =>
           credentialIsActive(credential) ? "active" : "revoked",
         helloTimeoutMs,
+        closeTimeoutMs,
         onClose: () => sessions.delete(session),
         onError: options.onSessionError,
       });
@@ -246,6 +253,7 @@ export class RunnerSocketSession {
   readonly #credential: RunnerGatewayCredential;
   readonly #credentialStatus: () => Promise<CredentialStatus>;
   readonly #helloTimeoutMs: number;
+  readonly #closeTimeoutMs: number;
   readonly #onClose: () => void;
   readonly #onError?: AttachRunnerGatewayWebSocketOptions["onSessionError"];
   readonly #frames: Array<
@@ -287,6 +295,7 @@ export class RunnerSocketSession {
     readonly credential: RunnerGatewayCredential;
     readonly credentialStatus: () => Promise<CredentialStatus>;
     readonly helloTimeoutMs: number;
+    readonly closeTimeoutMs: number;
     readonly onClose: () => void;
     readonly onError?: AttachRunnerGatewayWebSocketOptions["onSessionError"];
   }) {
@@ -295,6 +304,7 @@ export class RunnerSocketSession {
     this.#credential = options.credential;
     this.#credentialStatus = options.credentialStatus;
     this.#helloTimeoutMs = options.helloTimeoutMs;
+    this.#closeTimeoutMs = options.closeTimeoutMs;
     this.#onClose = options.onClose;
     this.#onError = options.onError;
   }
@@ -686,7 +696,7 @@ export class RunnerSocketSession {
     this.#webSocket.close(code, reason);
     this.#closeTimer ??= setTimeout(
       () => this.#webSocket.terminate(),
-      CLOSE_TIMEOUT_MS,
+      this.#closeTimeoutMs,
     );
     this.#closeTimer.unref();
   }

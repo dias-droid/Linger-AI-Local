@@ -8,6 +8,8 @@ import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import {
   chmod,
+  copyFile,
+  cp,
   mkdir,
   mkdtemp,
   readdir,
@@ -22,7 +24,7 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { afterEach, expect, it, vi } from "vitest";
+import { afterAll, afterEach, expect, it, vi } from "vitest";
 
 import {
   createTeamHubAgentCliCredentialIssuer,
@@ -72,6 +74,57 @@ const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
   await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()));
 });
+
+// Each test needs the Daemon binary and the TeamHub CLI at its own path, since
+// the Daemon finds the CLI beside its binary. Build both once per file run from
+// the current sources and copy them per test; nothing is reused across runs.
+let builds: Promise<{ daemon: string; cli: string }> | undefined;
+
+afterAll(async () => {
+  const built = await builds?.catch(() => undefined);
+  if (built)
+    await rm(path.dirname(built.daemon), { recursive: true, force: true });
+});
+
+const buildOnce = (): Promise<{ daemon: string; cli: string }> =>
+  (builds ??= (async () => {
+    const root = await mkdtemp(
+      path.join(os.tmpdir(), "linger-go-daemon-build-"),
+    );
+    const daemon = path.join(root, "linger-computer-daemon");
+    const cli = path.join(root, "cli");
+    await Promise.all([
+      execFileAsync(
+        "go",
+        ["build", "-o", daemon, "./cmd/linger-computer-daemon"],
+        {
+          cwd: path.resolve(process.cwd(), "../computer/local-daemon"),
+          timeout: 60_000,
+        },
+      ),
+      execFileAsync(
+        process.execPath,
+        [
+          path.resolve(process.cwd(), "../teamhub-cli/scripts/build-cli.mjs"),
+          "--outdir",
+          cli,
+        ],
+        { timeout: 15_000 },
+      ),
+    ]);
+    return { daemon, cli };
+  })());
+
+const installDaemonBinary = async (binary: string): Promise<void> => {
+  const { daemon } = await buildOnce();
+  await mkdir(path.dirname(binary), { recursive: true });
+  await copyFile(daemon, binary);
+};
+
+const installTeamHubCli = async (directory: string): Promise<void> => {
+  const { cli } = await buildOnce();
+  await cp(cli, directory, { recursive: true });
+};
 
 const processTest =
   process.env.LINGER_GO_LOCAL_DAEMON_TEST === "1" ? it : it.skip;
@@ -379,24 +432,8 @@ processTest(
         mkdir(state),
         mkdir(workspace),
       ]);
-      await execFileAsync(
-        "go",
-        ["build", "-o", binary, "./cmd/linger-computer-daemon"],
-        {
-          cwd: path.resolve(process.cwd(), "../computer/local-daemon"),
-          signal,
-          timeout: 60_000,
-        },
-      );
-      await execFileAsync(
-        process.execPath,
-        [
-          path.resolve(process.cwd(), "../teamhub-cli/scripts/build-cli.mjs"),
-          "--outdir",
-          path.join(root, "cli"),
-        ],
-        { signal, timeout: 15_000 },
-      );
+      await installDaemonBinary(binary);
+      await installTeamHubCli(path.join(root, "cli"));
       await symlink(
         process.execPath,
         path.join(root, "runtime", "bin", "node"),
@@ -690,18 +727,8 @@ processTest(
   "connects the real Go Local Computer Daemon through Registration reconciliation",
   async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "linger-go-daemon-"));
-    const localDaemonRoot = path.resolve(
-      process.cwd(),
-      "../computer/local-daemon",
-    );
     const binary = path.join(root, "linger-computer-daemon");
-    await execFileAsync(
-      "go",
-      ["build", "-o", binary, "./cmd/linger-computer-daemon"],
-      {
-        cwd: localDaemonRoot,
-      },
-    );
+    await installDaemonBinary(binary);
     const computerId = "computer-go-canary";
     const tenantId = "tenant-acme";
     const ownerActorId = "actor-alice";
@@ -1643,23 +1670,11 @@ processTest(
     let child: ChildProcess | undefined;
     let shell: ContextExecutor<LocalRuntimeSettings> | undefined;
     try {
-      await execFileAsync(
-        "go",
-        ["build", "-o", binary, "./cmd/linger-computer-daemon"],
-        { cwd: path.resolve(process.cwd(), "../computer/local-daemon") },
-      );
+      await installDaemonBinary(binary);
       await mkdir(state, { mode: 0o700 });
       await mkdir(workspace, { mode: 0o700 });
       await mkdir(path.join(root, "runtime", "bin"), { recursive: true });
-      await execFileAsync(
-        process.execPath,
-        [
-          path.resolve(process.cwd(), "../teamhub-cli/scripts/build-cli.mjs"),
-          "--outdir",
-          path.join(root, "cli"),
-        ],
-        { timeout: 15_000 },
-      );
+      await installTeamHubCli(path.join(root, "cli"));
       await symlink(
         process.execPath,
         path.join(root, "runtime", "bin", "node"),
@@ -1985,11 +2000,7 @@ processTest(
     await writeFile(path.join(root, "cli", "teamhub"), "#!/bin/sh\nexit 0\n", {
       mode: 0o700,
     });
-    await execFileAsync(
-      "go",
-      ["build", "-o", binary, "./cmd/linger-computer-daemon"],
-      { cwd: path.resolve(process.cwd(), "../computer/local-daemon") },
-    );
+    await installDaemonBinary(binary);
     const computerId = "computer-presence";
     const tenantId = "tenant-acme";
     const ownerActorId = "actor-alice";
@@ -2549,11 +2560,7 @@ const openProcessHarness = async (mode: CodexMode) => {
     },
     /** Starts the Daemon, waits until this Gateway sees the Computer online. */
     async boot(): Promise<void> {
-      await execFileAsync(
-        "go",
-        ["build", "-o", binary, "./cmd/linger-computer-daemon"],
-        { cwd: path.resolve(process.cwd(), "../computer/local-daemon") },
-      );
+      await installDaemonBinary(binary);
       await mkdir(state);
       await mkdir(workspace);
       await writeFile(credential, token, { mode: 0o600 });
@@ -2881,13 +2888,7 @@ processTest(
     });
     let child: ChildProcess | undefined;
     try {
-      await execFileAsync(
-        "go",
-        ["build", "-o", binary, "./cmd/linger-computer-daemon"],
-        {
-          cwd: path.resolve(process.cwd(), "../computer/local-daemon"),
-        },
-      );
+      await installDaemonBinary(binary);
       await Promise.all([mkdir(state), mkdir(workspace)]);
       await writeFile(credential, token, { mode: 0o600 });
       await writeFile(hangMarker, "wait");

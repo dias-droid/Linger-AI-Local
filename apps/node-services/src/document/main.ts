@@ -19,12 +19,16 @@ const maxRestartDelayMs = 60_000;
 export async function startDocumentService(options: {
   logger: JsonLogger;
   createThread?: () => Worker;
+  /** Delay before the first rebuild; doubles per failure up to the maximum. */
+  firstRestartDelayMs?: number;
 }): Promise<{ stop(): Promise<void> }> {
   const createThread = options.createThread ?? createDocumentThread;
   let current: Worker | undefined;
   let launching: Promise<void> | undefined;
   let restartTimer: ReturnType<typeof setTimeout> | undefined;
-  let restartDelayMs = firstRestartDelayMs;
+  const initialRestartDelayMs =
+    options.firstRestartDelayMs ?? firstRestartDelayMs;
+  let restartDelayMs = initialRestartDelayMs;
   let stopping = false;
 
   const restartLater = (error: unknown): void => {
@@ -59,7 +63,7 @@ export async function startDocumentService(options: {
       if (current !== thread) return;
       current = undefined;
       if (Date.now() - startedAt >= maxRestartDelayMs) {
-        restartDelayMs = firstRestartDelayMs;
+        restartDelayMs = initialRestartDelayMs;
       }
       void thread.terminate().then(() => restartLater(error));
     };

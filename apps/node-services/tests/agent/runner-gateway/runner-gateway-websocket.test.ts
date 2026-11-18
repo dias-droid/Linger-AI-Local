@@ -414,8 +414,11 @@ describe("Runner Gateway WebSocket", () => {
 
   it("drops frames that arrive after a heartbeat timeout while the close is pending", async () => {
     const onSessionError = vi.fn();
+    // The close stays pending from the 200 ms timeout until 600 ms, so the
+    // heartbeat sent at 300 ms lands while the gateway is CLOSING.
     const fixture = await startFixture({
       heartbeatTimeoutMs: 200,
+      closeTimeoutMs: 400,
       onSessionError,
     });
     const socket = new WebSocket(fixture.url, {
@@ -443,7 +446,7 @@ describe("Runner Gateway WebSocket", () => {
 
   it("drops frames from a replaced connection while its close is pending", async () => {
     const onSessionError = vi.fn();
-    const fixture = await startFixture({ onSessionError });
+    const fixture = await startFixture({ closeTimeoutMs: 300, onSessionError });
     const connect = async (): Promise<WebSocket> => {
       const socket = new WebSocket(fixture.url, {
         headers: { Authorization: "Bearer runner-secret" },
@@ -1543,6 +1546,7 @@ const startFixture = async (
     credentialAuthenticators?: readonly RunnerCredentialAuthenticator[];
     rejectUnmatchedUpgrades?: boolean;
     helloTimeoutMs?: number;
+    closeTimeoutMs?: number;
     heartbeatTimeoutMs?: number;
     computerDaemonIdentityVerifier?: ComputerDaemonIdentityVerifier;
     onSessionError?: AttachRunnerGatewayWebSocketOptions["onSessionError"];
@@ -1582,6 +1586,7 @@ const startFixture = async (
     ],
     rejectUnmatchedUpgrades: options.rejectUnmatchedUpgrades,
     helloTimeoutMs: options.helloTimeoutMs,
+    closeTimeoutMs: options.closeTimeoutMs,
     onSessionError: options.onSessionError,
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

@@ -18,10 +18,11 @@ interface CloseEvent {
 
 // The deadline tests wait for a held validation to time out; a short deadline
 // proves the same close without waiting for the production default. The
-// queue-full head's deadline starts before the test's 2 s window to queue 129
-// frames, so it keeps a margin over that window.
+// queue-full head's deadline starts before the test's window to queue 129
+// frames (which takes about 10 ms), so it keeps a margin over that window.
 const authorizationDeadlineMs = 1_000;
-const queueFullAuthorizationDeadlineMs = 3_500;
+const queueFullWindowMs = 1_000;
+const queueFullAuthorizationDeadlineMs = 1_500;
 
 describe("Document Runtime mutation queue", () => {
   it("keeps one rapidly editing client connected across a transient autosave lock", async () => {
@@ -251,7 +252,7 @@ describe("Document Runtime mutation queue", () => {
 
       const rejected = await Promise.race([
         queueFull,
-        rejectAfter(2_000, "queue-full close"),
+        rejectAfter(queueFullWindowMs, "queue-full close"),
       ]);
       expect(rejected.event).toEqual({
         code: 1000,
