@@ -3068,9 +3068,12 @@ type Error struct {
 // ErrorDetail defines model for ErrorDetail.
 type ErrorDetail struct {
 	// Code Optional stable classification for this individual validation issue.
-	Code   *string `json:"code,omitempty"`
-	Field  string  `json:"field"`
-	Reason string  `json:"reason"`
+	Code  *string `json:"code,omitempty"`
+	Field string  `json:"field"`
+
+	// LimitBytes With code too_large, the largest size the field accepts, in bytes.
+	LimitBytes *int64 `json:"limit_bytes,omitempty"`
+	Reason     string `json:"reason"`
 }
 
 // ErrorResponse defines model for ErrorResponse.

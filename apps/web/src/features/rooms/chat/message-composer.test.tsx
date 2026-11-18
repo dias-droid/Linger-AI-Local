@@ -17,6 +17,7 @@ import {
   formatSkillToken,
 } from "./message-composer-references";
 import { TEAMHUB_MESSAGE_MAX_LENGTH } from "./use-composer-draft";
+import { TeamHubError } from "@/features/teamhub/teamhub-error";
 import { createTeamHubMessageContent } from "@/features/teamhub/teamhub-message-content";
 
 describe("MessageComposer", () => {
@@ -459,6 +460,40 @@ describe("MessageComposer", () => {
       files: [file],
       mentions: [],
     });
+  });
+
+  it("names the file's size and the attachment limit when TeamHub refuses a large file", async () => {
+    const onStageAttachment = vi.fn().mockRejectedValue(
+      new TeamHubError({
+        code: "PAYLOAD_TOO_LARGE",
+        details: [
+          {
+            code: "too_large",
+            field: "content",
+            limit_bytes: 50 * 1024 * 1024,
+            reason: "exceeds the attachment size limit",
+          },
+        ],
+        message: "message attachment exceeds the configured limit",
+        status: 413,
+      }),
+    );
+    const file = new File([], "big.zip");
+    Object.defineProperty(file, "size", { value: 60 * 1024 * 1024 });
+    render(
+      <MessageComposer
+        attachmentEnabled
+        onSend={vi.fn()}
+        onStageAttachment={onStageAttachment}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Choose message attachments"), {
+      target: { files: [file] },
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "big.zip: Attachments can be up to 50 MB, and this file is 60 MB.",
+    );
   });
 
   it("keeps the compact attachment remove control visible and cancels its staged upload", async () => {

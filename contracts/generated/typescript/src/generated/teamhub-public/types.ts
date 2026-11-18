@@ -4192,6 +4192,11 @@ export interface components {
       /** @description Optional stable classification for this individual validation issue. */
       code?: string;
       reason: string;
+      /**
+       * Format: int64
+       * @description With code too_large, the largest size the field accepts, in bytes.
+       */
+      limit_bytes?: number;
     };
     Error: {
       /** @example ROOM_NOT_FOUND */
