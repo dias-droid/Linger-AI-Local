@@ -35,6 +35,19 @@ voice key; without them, or when they fail to prepare, TeamHub gets
 `TEAMHUB_VOICE_MEDIA=off` and the install continues. The services' `voice`
 setting tracks only the tools, so a key change never restarts them through
 it. A native process restarts when its generated environment changes.
+Every port the installer chooses (`ports.ts`) must be free on both
+127.0.0.1 and ::1 with nothing answering there: `localhost` resolves to ::1
+first on macOS, and a program on ::1 alone would answer for a service that
+bound 127.0.0.1 without an error. The web static host listens on both. Each
+start re-checks a stopped service's ports and moves one another program took
+to a free port, persisted in `instance.json` or `livekit.env`, so the service
+restarts with the new environment. The web port is the product origin, which
+the browser session, the desktop app and the Computer keep once the owner
+account exists (or a database set aside from an older install marks it to be
+made again); it moves only before that. The account step sends a password only
+after the origin's `/v0/local/identity` proof, and a service that stops on a
+taken port names the port, instead of a foreign server's answer or a bare
+failure.
 Every update or recreate path stops node-services on its own, right before
 TeamHub restarts (natively: for a changed configuration) and while TeamHub is
 still up, so its graceful shutdown requeues in-flight Agent Runs.

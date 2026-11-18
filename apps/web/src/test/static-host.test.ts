@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createServiceProxy,
   createStaticHost,
+  listenOnHosts,
   serviceProxyRoutes,
 } from "../../static-host.mjs";
 
@@ -170,6 +171,24 @@ describe("Web static host routing", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
     await expect(response.text()).resolves.toBe("");
+  });
+});
+
+describe("Web static host listening", () => {
+  it("listens on every listed address and fails when one is taken", async () => {
+    const servers = await listenOnHosts(
+      () => createServer((_, response) => response.end("ok")),
+      0,
+      "127.0.0.1",
+    );
+    const { port } = servers[0]!.address() as { port: number };
+    // ::1 is skipped on a computer without IPv6.
+    const both = await listenOnHosts(() => createServer(), 0, "127.0.0.1, ::1");
+    expect(both.length).toBeGreaterThanOrEqual(1);
+    await expect(
+      listenOnHosts(() => createServer(), port, "127.0.0.1"),
+    ).rejects.toMatchObject({ code: "EADDRINUSE" });
+    for (const listening of [...servers, ...both]) listening.close();
   });
 });
 

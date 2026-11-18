@@ -34,7 +34,6 @@ import {
   legacyMigrationResult,
   parseSetCookie,
   LocalServerUnverifiedError,
-  localIdentityProof,
   proveLocalServer,
   SignInRejectedError,
   signInFailure,
@@ -42,6 +41,7 @@ import {
   type LocalServerIdentity,
   type LocalServerOptions,
 } from "./local-server.js";
+import { localIdentityProof } from "@linger/local-installation/account";
 import type { DesktopConfig } from "./config.js";
 import { EventBus, type ModuleContext } from "./modules.js";
 import {

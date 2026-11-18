@@ -1,5 +1,5 @@
 import { windowsPrivatePath } from "./windows-private.js";
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { lstat, readFile } from "node:fs/promises";
 import path from "node:path";
 import { readLocalIdentityKey, type Instance } from "./instance.js";
@@ -94,6 +94,18 @@ interface LocalAccount {
   provisioned: boolean;
 }
 
+// Whether the owner account exists. Until it does, nothing outside the
+// installer keeps the product origin. An unreadable file counts as existing.
+export async function localAccountProvisioned(root: string): Promise<boolean> {
+  const text = await readPrivate(path.join(root, "local-account.json"));
+  if (text === undefined) return false;
+  try {
+    return (JSON.parse(text) as Partial<LocalAccount>).provisioned !== false;
+  } catch {
+    return true;
+  }
+}
+
 // Blocks private login reads during database replacement until the account
 // step has established the owner in the new database.
 export async function unprovisionLocalAccount(root: string): Promise<void> {
@@ -114,6 +126,103 @@ export async function unprovisionLocalAccount(root: string): Promise<void> {
     file,
     JSON.stringify({ ...account, provisioned: false }, null, 2) + "\n",
   );
+}
+
+// What TeamHub answers a challenge with (internal/localidentity).
+export const localIdentityProof = (
+  key: Uint8Array,
+  nonce: string,
+  origin: string,
+): Buffer =>
+  createHmac("sha256", key)
+    .update(`linger-local-identity\n${nonce}\n${origin}`)
+    .digest();
+
+// The server did not prove it holds the key; says what failed, never with what.
+export class LocalIdentityError extends Error {
+  readonly reason: string;
+
+  constructor(reason: string, options?: ErrorOptions) {
+    super(`The local server did not prove its identity (${reason}).`, options);
+    this.name = "LocalIdentityError";
+    this.reason = reason;
+  }
+}
+
+// Asks the server at `url` to prove it holds this installation's identity
+// key for `origin`, with a fresh nonce each time, so an earlier answer
+// proves nothing.
+export async function proveLocalIdentity(options: {
+  url: string | URL;
+  origin: string;
+  key: Uint8Array;
+  signal: AbortSignal;
+  fetch?: typeof fetch;
+}): Promise<void> {
+  const nonce = randomBytes(32).toString("base64url");
+  let proof: unknown;
+  try {
+    const response = await (options.fetch ?? fetch)(options.url, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ nonce }),
+      redirect: "error",
+      signal: options.signal,
+    });
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new LocalIdentityError(`status ${response.status}`);
+    }
+    proof = ((await response.json()) as { proof?: unknown } | null)?.proof;
+  } catch (error) {
+    if (error instanceof LocalIdentityError) throw error;
+    throw new LocalIdentityError(
+      error instanceof SyntaxError ? "invalid answer" : "no answer",
+      { cause: error },
+    );
+  }
+  const expected = localIdentityProof(options.key, nonce, options.origin);
+  const actual =
+    typeof proof === "string" && /^[A-Za-z0-9_-]{43}$/.test(proof)
+      ? Buffer.from(proof, "base64url")
+      : undefined;
+  if (
+    !actual ||
+    actual.length !== expected.length ||
+    !timingSafeEqual(actual, expected)
+  )
+    throw new LocalIdentityError("wrong proof");
+}
+
+const serviceUnavailable = () =>
+  new Error(
+    "The local account service is unavailable. Reopen Linger to retry; account credentials are preserved.",
+  );
+// The password goes only to a server that proves, through the origin, that
+// it is this instance's TeamHub: another program can answer on `localhost`,
+// which macOS tries on ::1 first.
+async function proveOrigin(instance: Instance, signal: AbortSignal) {
+  const key = await readLocalIdentityKey(instance.root);
+  if (!key) throw new Error("The instance has no server identity key.");
+  try {
+    await proveLocalIdentity({
+      url: `${instance.origin}/v0/local/identity`,
+      origin: instance.origin,
+      key: Buffer.from(key, "base64"),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
+    });
+  } catch (error) {
+    signal.throwIfAborted();
+    if (!(error instanceof LocalIdentityError) || error.reason === "no answer")
+      throw serviceUnavailable();
+    throw new Error(
+      `Another program is answering at ${instance.origin}, so Linger cannot use port ${new URL(instance.origin).port}. Quit that program, then reopen Linger to retry; account credentials are preserved.`,
+      { cause: error },
+    );
+  }
 }
 
 // Called under the instance lock. TeamHub owns deployment-owner creation;
@@ -173,6 +282,7 @@ export async function ensureLocalAccount(
   }
   const email = account.email;
   signal.throwIfAborted();
+  await proveOrigin(instance, signal);
   async function post(route: string, body: unknown, cookie?: string) {
     let response: Response;
     try {
@@ -188,9 +298,7 @@ export async function ensureLocalAccount(
       });
     } catch {
       signal.throwIfAborted();
-      throw new Error(
-        "The local account service is unavailable. Reopen Linger to retry; account credentials are preserved.",
-      );
+      throw serviceUnavailable();
     }
     await response.body?.cancel();
     return response;

@@ -14,10 +14,12 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   realpath,
   rm,
   writeFile,
 } from "node:fs/promises";
+import net from "node:net";
 import path from "node:path";
 import os from "node:os";
 import { afterEach, expect, test, vi } from "vitest";
@@ -26,6 +28,7 @@ import {
   installNativeSource,
   stopNativeSource,
 } from "./native-source.js";
+import { localIdentityProof } from "./account.js";
 import { runProcess } from "./process.js";
 import {
   installAppleDeveloperTools,
@@ -164,15 +167,39 @@ async function fixture() {
   });
   vi.stubGlobal(
     "fetch",
-    vi.fn(
-      async (url) =>
-        new Response("{}", {
-          status:
-            String(url).endsWith("/v0/auth/login") && !provisioned ? 401 : 200,
-        }),
+    vi.fn(async (url, init?: RequestInit) =>
+      String(url).endsWith("/v0/local/identity")
+        ? identityProof(home, String(url), init)
+        : new Response("{}", {
+            status:
+              String(url).endsWith("/v0/auth/login") && !provisioned
+                ? 401
+                : 200,
+          }),
     ),
   );
   return { home, repo, running };
+}
+// The instance's TeamHub answering at its origin (see account.ts).
+async function identityProof(home: string, url: string, init?: RequestInit) {
+  const origin = new URL(url).origin;
+  const { nonce } = JSON.parse(init?.body as string) as { nonce: string };
+  for (const name of await readdir(path.join(home, "instances"))) {
+    const root = path.join(home, "instances", name);
+    const instance = JSON.parse(
+      await readFile(path.join(root, "instance.json"), "utf8"),
+    ) as { origin: string };
+    if (instance.origin !== origin) continue;
+    const key = await readFile(path.join(root, "local-identity.key"), "utf8");
+    return Response.json({
+      proof: localIdentityProof(
+        Buffer.from(key.trim(), "base64"),
+        nonce,
+        origin,
+      ).toString("base64url"),
+    });
+  }
+  return new Response(null, { status: 404 });
 }
 test("native services and owner creation continue while selected Runtime authentication is pending", async () => {
   const f = await fixture();
@@ -669,6 +696,51 @@ test("a full disk ends startup at once instead of at the deadline", async () => 
   expect(result.message).toContain(
     "This computer's disk is full, so native teamhub could not be built.",
   );
+});
+
+test("a service that stops because another program took its port names the port", async () => {
+  const f = await fixture();
+  vi.mocked(prepareRuntime).mockResolvedValue({
+    code: 0,
+    state: "ready",
+    message: "ready",
+  });
+  // Another program takes TeamHub's port after Linger chose it, so TeamHub
+  // exits at once.
+  const holder = net.createServer();
+  let port: number | undefined;
+  vi.mocked(startNativeProcess).mockImplementation(async (options) => {
+    if (options.name !== "teamhub") {
+      f.running.add(options.name);
+      return { running: true, pid: 100 };
+    }
+    const instance = JSON.parse(
+      await readFile(
+        path.join(f.home, "instances", "native-flow", "instance.json"),
+        "utf8",
+      ),
+    ) as { source: { ports: { teamhub: number } } };
+    port = instance.source.ports.teamhub;
+    await new Promise<void>((resolve) =>
+      holder.listen(port, "127.0.0.1", resolve),
+    );
+    return { running: false };
+  });
+  try {
+    const result = await installNativeSource({
+      ...f,
+      name: "native-flow",
+      setupChoice: "pi",
+      signal: new AbortController().signal,
+      onEvent: () => {},
+    });
+    expect(result).toMatchObject({ code: 1 });
+    expect(result.message).toContain(
+      `Native teamhub cannot listen on port ${port}: another program is using it.`,
+    );
+  } finally {
+    await new Promise((resolve) => holder.close(resolve));
+  }
 });
 
 test("a port an earlier TeamHub still holds fails startup instead of passing its health check", async () => {

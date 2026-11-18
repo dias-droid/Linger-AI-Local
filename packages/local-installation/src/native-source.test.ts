@@ -1,4 +1,6 @@
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
+import { createSocket } from "node:dgram";
+import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseEnv } from "node:util";
@@ -14,10 +16,37 @@ import {
 } from "./native-source.js";
 
 const roots: string[] = [];
+const listeners: (() => Promise<void>)[] = [];
 afterEach(async () => {
+  await Promise.all(listeners.splice(0).map((close) => close()));
   for (const root of roots.splice(0))
     await rm(root, { recursive: true, force: true });
 });
+// Another program takes `port`, on ::1 alone when the computer has it.
+async function occupy(port: number, protocol: "tcp" | "udp" = "tcp") {
+  for (const host of ["::1", "127.0.0.1"])
+    try {
+      if (protocol === "udp") {
+        const socket = createSocket(host === "::1" ? "udp6" : "udp4");
+        await new Promise<void>((resolve, reject) => {
+          socket.once("error", reject);
+          socket.bind(port, host, resolve);
+        });
+        listeners.push(() => new Promise((done) => socket.close(() => done())));
+      } else {
+        const server = net.createServer((socket) => socket.end());
+        await new Promise<void>((resolve, reject) => {
+          server.once("error", reject);
+          server.listen({ port, host }, resolve);
+        });
+        listeners.push(() => new Promise((done) => server.close(() => done())));
+      }
+      return;
+    } catch {
+      // No ::1 here; take IPv4 loopback instead.
+    }
+  throw new Error(`Cannot occupy port ${port}`);
+}
 async function fixture() {
   const home = await mkdtemp(path.join(tmpdir(), "native-source-"));
   roots.push(home);
@@ -180,4 +209,66 @@ test("an owned native instance follows a new checkout and keeps its data", async
   const saved = await loadInstance({ home: f.home, name: "desktop" });
   expect(saved?.releaseDir).toBe(next);
   expect(saved?.source).toEqual(moved.instance.source);
+});
+test("a resumed instance moves off ports another program took", async () => {
+  const f = await fixture();
+  const options = { home: f.home, name: "native-test" };
+  const first = await prepareNativeConfiguration(f.repo, options);
+  const before = first.instance.source!.ports;
+  const livekit = (await readLiveKitSettings(first.instance.root))!;
+  await occupy(before.web);
+  await occupy(before.teamhub);
+  await occupy(before.postgres);
+  await occupy(livekit.httpPort);
+  await occupy(livekit.rtcPort, "udp");
+
+  const second = await prepareNativeConfiguration(f.repo, options);
+  const after = second.instance.source!.ports;
+  for (const name of ["web", "teamhub", "postgres"] as const)
+    expect(after[name]).not.toBe(before[name]);
+  expect(after.nodeServices).toBe(before.nodeServices);
+  expect(after.document).toBe(before.document);
+  // Without an owner account nothing keeps the origin yet, so it moves too.
+  expect(second.instance.port).toBe(after.web);
+  expect(second.instance.origin).toBe(`http://localhost:${after.web}`);
+  expect(await loadInstance(options)).toEqual(second.instance);
+  expect(second.env.WEB_PUBLIC_ORIGIN).toBe(second.instance.origin);
+  expect(second.env.TEAMHUB_HTTP_ADDRESS).toBe(`127.0.0.1:${after.teamhub}`);
+  expect(second.env.TEAMHUB_DATABASE_URL).toContain(
+    `:${after.postgres}/simplexai`,
+  );
+  const moved = (await readLiveKitSettings(first.instance.root))!;
+  expect(moved.httpPort).not.toBe(livekit.httpPort);
+  expect(moved.rtcPort).not.toBe(livekit.rtcPort);
+  expect(moved.apiSecret).toBe(livekit.apiSecret);
+  expect(second.env.LIVEKIT_URL).toBe(`ws://127.0.0.1:${moved.httpPort}`);
+  expect(second.warnings.join("")).toContain(
+    `Port ${before.teamhub} is in use by another program; Linger's teamhub uses port ${after.teamhub} instead.`,
+  );
+  expect(second.warnings).toHaveLength(5);
+
+  // Once the owner account exists, the browser session and the desktop app
+  // keep the origin: the web port stays and its service reports the program.
+  await writeFile(
+    path.join(first.instance.root, "local-account.json"),
+    JSON.stringify({ provisioned: true }),
+    { mode: 0o600 },
+  );
+  await occupy(after.web);
+  const third = await prepareNativeConfiguration(f.repo, options);
+  expect(third.instance.port).toBe(after.web);
+  expect(third.instance.source!.ports).toEqual(after);
+  expect(third.warnings).toEqual([]);
+
+  // A database set aside from an older install marks the account to be made
+  // again, but that install's desktop still keeps the origin.
+  await writeFile(
+    path.join(first.instance.root, "local-account.json"),
+    JSON.stringify({ provisioned: false }),
+    { mode: 0o600 },
+  );
+  await mkdir(path.join(first.instance.root, "simplex-backup-earlier"));
+  const fourth = await prepareNativeConfiguration(f.repo, options);
+  expect(fourth.instance.port).toBe(after.web);
+  expect(fourth.warnings).toEqual([]);
 });

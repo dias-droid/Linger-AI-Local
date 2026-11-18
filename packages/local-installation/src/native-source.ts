@@ -1,4 +1,5 @@
 import { prepareFoundationServices } from "./foundation-services.js";
+import { portFree } from "./ports.js";
 import { prepareModelGateway, stopModelGateway } from "./model-gateway.js";
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
@@ -156,17 +157,18 @@ export async function checkNativeSourceEnvironment(options: {
     }
   }
 }
-export async function probeNativeSourceServices(
-  instance: Instance,
-  signal?: AbortSignal,
-) {
-  const source = requireNative(instance);
-  const endpoints = [
+const probeEndpoints = (source: NonNullable<Instance["source"]>) =>
+  [
     ["web", "web", source.ports.web, "/healthz"],
     ["teamhub", "teamhub", source.ports.teamhub, "/healthz"],
     ["node-services", "node-services", source.ports.nodeServices, "/readyz"],
     ["document-runtime", "node-services", source.ports.document, "/readyz"],
   ] as const;
+export async function probeNativeSourceServices(
+  instance: Instance,
+  signal?: AbortSignal,
+) {
+  const endpoints = probeEndpoints(requireNative(instance));
   const states = await inspectNativeListeners(
     instance.root,
     endpoints.map(([, name, port]) => ({ name, port })),
@@ -298,10 +300,17 @@ async function waitHealthy(
     const failure = await startupFailure(instance, ends);
     if (failure) throw new Error(failure);
     for (const name of watchedServices)
-      if (!(await inspectNativeProcess(instance.root, name)).running)
+      if (!(await inspectNativeProcess(instance.root, name)).running) {
+        // With the service gone, whatever holds its port is another program.
+        for (const [, owner, port] of probeEndpoints(instance.source!))
+          if (owner === name && !(await portFree(port)))
+            throw new Error(
+              `Native ${name} cannot listen on port ${port}: another program is using it. Quit that program, then try again.`,
+            );
         throw new Error(
           `Native ${name} stopped during startup. Inspect ${path.join(instance.root, "native/logs", `${name}.log`)}.`,
         );
+      }
     if (Date.now() >= deadline) {
       const waiting = checks
         .filter((row) => !row.ready)

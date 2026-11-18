@@ -1,11 +1,5 @@
 import { spawn } from "node:child_process";
-import {
-  createHash,
-  createHmac,
-  randomBytes,
-  randomUUID,
-  timingSafeEqual,
-} from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { createReadStream, existsSync, readFileSync } from "node:fs";
 import {
   constants as fsConstants,
@@ -28,6 +22,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { createZstdDecompress } from "node:zlib";
 
 import {
+  LocalIdentityError,
+  proveLocalIdentity,
   readLocalIdentity,
   readLocalLogin,
 } from "@linger/local-installation/account";
@@ -3004,65 +3000,30 @@ const unverifiedReason = (error: unknown): string =>
 
 export const LOCAL_IDENTITY_TIMEOUT_MS = 5_000;
 
-// What TeamHub answers a challenge with (internal/localidentity).
-export const localIdentityProof = (
-  key: Uint8Array,
-  nonce: string,
-  origin: string,
-): Buffer =>
-  createHmac("sha256", key)
-    .update(`linger-local-identity\n${nonce}\n${origin}`)
-    .digest();
-
-// Asks TeamHub to prove it holds this installation's identity key, with a
-// fresh nonce each time, so an earlier answer proves nothing. The challenge
-// goes to TeamHub's own port: a program on the web port could pass it on to
-// a TeamHub still running, but whatever answers on TeamHub's port and holds
-// the key is TeamHub.
+// Asks TeamHub to prove it holds this installation's identity key. The
+// challenge goes to TeamHub's own port: a program on the web port could
+// pass it on to a TeamHub still running, but whatever answers on TeamHub's
+// port and holds the key is TeamHub.
 export const proveLocalServer = async (
   server: LocalServerIdentity,
   fetcher: typeof fetch = fetch,
   timeoutMs = LOCAL_IDENTITY_TIMEOUT_MS,
 ): Promise<void> => {
-  const nonce = randomBytes(32).toString("base64url");
-  let proof: unknown;
   try {
-    const response = await fetcher(
-      new URL("/v0/local/identity", server.teamhub),
-      {
-        method: "POST",
-        headers: {
-          accept: "application/json",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ nonce }),
-        redirect: "error",
-        signal: AbortSignal.timeout(timeoutMs),
-      },
-    );
-    if (!response.ok) {
-      await response.body?.cancel();
-      throw new LocalServerUnverifiedError(`status ${response.status}`);
-    }
-    proof = ((await response.json()) as { proof?: unknown } | null)?.proof;
+    await proveLocalIdentity({
+      url: new URL("/v0/local/identity", server.teamhub),
+      origin: server.origin,
+      key: server.key,
+      signal: AbortSignal.timeout(timeoutMs),
+      fetch: fetcher,
+    });
   } catch (error) {
-    if (error instanceof LocalServerUnverifiedError) throw error;
-    throw new LocalServerUnverifiedError(
-      error instanceof SyntaxError ? "invalid answer" : "no answer",
-      { cause: error },
-    );
+    if (error instanceof LocalIdentityError)
+      throw new LocalServerUnverifiedError(error.reason, {
+        cause: error.cause,
+      });
+    throw error;
   }
-  const expected = localIdentityProof(server.key, nonce, server.origin);
-  const actual =
-    typeof proof === "string" && /^[A-Za-z0-9_-]{43}$/.test(proof)
-      ? Buffer.from(proof, "base64url")
-      : undefined;
-  if (
-    !actual ||
-    actual.length !== expected.length ||
-    !timingSafeEqual(actual, expected)
-  )
-    throw new LocalServerUnverifiedError("wrong proof");
 };
 
 // Signs in to the local server with its owner and hands the session cookies

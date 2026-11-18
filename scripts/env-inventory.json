@@ -34,7 +34,7 @@
     },
     "web": {
       "owner": "code-default",
-      "description": "Port and allowed hosts read by the Vite dev server, and the address and port of the static host that serves the production build to Native. Code defaults apply, so it is not listed in .env.example.",
+      "description": "Port and allowed hosts read by the Vite dev server, and the comma-separated addresses and port of the static host that serves the production build to Native. Code defaults apply, so it is not listed in .env.example.",
       "names": ["HOST", "PORT", "WEB_ALLOWED_DEV_HOSTS"]
     },
     "teamhub-tools": {
