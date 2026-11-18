@@ -1413,6 +1413,8 @@ describe("scripts/install/install.ps1 and release pin parity", () => {
       );
       expect(stdout).toContain("ASSERTIONS PASSED");
     },
+    // Longer than the suite's own 120 s limit, so vitest does not end it first.
+    180_000,
   );
 
   it("documents the Windows guided installer command in README.md", async () => {
