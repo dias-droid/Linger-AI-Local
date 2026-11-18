@@ -43,6 +43,8 @@ build:assets` to check the initial JS budget.
 
 ## Important Conventions
 
+- The first-visit Agent introduction uses its display name from TeamHub,
+  including the default `Linger` name and any name the Human chooses.
 - The login page keeps Linger's headline and day timeline on the left,
   and the sign-in form on the right. A faint white grid fades gently into the
   form's white background without a dark panel, colored glow, or blur. The
