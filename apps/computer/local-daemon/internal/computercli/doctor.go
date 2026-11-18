@@ -180,7 +180,7 @@ func inspectDaemonHealth(ctx context.Context, client controlClient, commandName 
 	case "identity-conflict":
 		return doctorCheck{
 			Name: "daemon", Category: categoryCredential, Status: "fail",
-			Detail: fmt.Sprintf("This computer's Daemon Identity is already bound to another Computer registration. Run %s login to reconnect, or %s doctor --prune to reset local state", commandName, commandName),
+			Detail: fmt.Sprintf("This computer's Daemon Identity is already bound to another Computer registration. Run %s doctor --prune to reset local state", commandName),
 		}
 	case "upgrade-required":
 		return doctorCheck{

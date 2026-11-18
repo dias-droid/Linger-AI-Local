@@ -289,7 +289,7 @@ func TestDaemonStartShowsProcessConnectionAndRuntimes(t *testing.T) {
 	if code := f.run("daemon", "start", "--config", f.configPath); code != 11 {
 		t.Fatalf("exit=%d", code)
 	}
-	contains(t, f.stdout.String(), "Connection  This computer's identity is already bound to another Computer registration. Run linger-computer login to reconnect it.\n")
+	contains(t, f.stdout.String(), "Connection  This computer's identity is already bound to another Computer registration. Run linger-computer doctor --prune to reset local state.\n")
 }
 
 func TestDefaultConfigLocations(t *testing.T) {
@@ -691,7 +691,10 @@ func TestDoctorFailures(t *testing.T) {
 	if code := f.run("doctor", "--json", "--config", f.configPath); code != 11 {
 		t.Fatalf("identity-conflict doctor exit=%d", code)
 	}
-	contains(t, f.stdout.String(), "already bound to another Computer registration")
+	contains(t, f.stdout.String(), "Run linger-computer doctor --prune to reset local state")
+	if strings.Contains(f.stdout.String(), "login to reconnect") {
+		t.Fatalf("unexpected login reconnect hint: %s", f.stdout.String())
+	}
 }
 
 func TestDoctorPrune(t *testing.T) {
