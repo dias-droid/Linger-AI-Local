@@ -228,6 +228,9 @@ func (f *claudeFake) signalled() int {
 	if policy == "report" {
 		f.emit(`{"type":"result","subtype":"error","is_error":true,"result":"interrupted by caller"}`)
 	}
+	if policy == "completed" {
+		f.emit(`{"type":"result","subtype":"success","terminal_reason":"completed","result":"done"}`)
+	}
 	return 0
 }
 

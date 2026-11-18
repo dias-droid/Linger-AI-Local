@@ -137,7 +137,16 @@ func (t *piTurn) finish(began time.Time, status, failure string, interrupted boo
 		t.abortQueue()
 	}
 	confirmed := p.stop()
-	if status == statusCompleted {
+	if confirmed && status == piStatusCancelled {
+		// A natural settle can arrive while the abort request is in flight.
+		select {
+		case <-t.settled:
+			if settled, reason := t.settledStatus(); settled != statusAborted {
+				status, failure = settled, reason
+			}
+		default:
+		}
+	} else if status == statusCompleted {
 		status, failure = t.settledStatus()
 	}
 	outcome := t.outcomeFor(began, status, failure)

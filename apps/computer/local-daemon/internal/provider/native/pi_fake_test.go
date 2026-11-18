@@ -175,6 +175,11 @@ func (f *piFakeProcess) handle(id, kind, message string) int {
 		if !f.cleared {
 			return 24
 		}
+		if f.mode == "complete-on-abort" {
+			f.finish()
+			f.reply(id, kind, nil)
+			return -1
+		}
 		f.send(map[string]any{"type": "agent_settled", "aborted": true})
 		f.reply(id, kind, nil)
 	default:
@@ -185,7 +190,7 @@ func (f *piFakeProcess) handle(id, kind, message string) int {
 
 func (f *piFakeProcess) act() int {
 	switch f.mode {
-	case "steer", "steer-race", "steer-unconsumed":
+	case "steer", "steer-race", "steer-unconsumed", "complete-on-abort":
 	case "retry":
 		f.assistantEnd("", "error", "retryable")
 		f.send(map[string]any{"type": "agent_end"})

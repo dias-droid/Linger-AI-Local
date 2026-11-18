@@ -267,6 +267,19 @@ func TestPiSteerCompletionRace(t *testing.T) {
 	}
 }
 
+func TestPiCompletionRacingAbort(t *testing.T) {
+	h := piNewHarness(t, "complete-on-abort", nil)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	run := h.start(ctx, "go", RunSpec{})
+	piWaitRunning(t, run)
+	cancel()
+	_, out := piCollect(t, run)
+	if out.Status != statusCompleted || out.Output != "done" || !out.ExitConfirmed || out.ExitUnconfirmed {
+		t.Fatalf("outcome = %+v", out)
+	}
+}
+
 func TestPiCancelClearsQueueAndReapsChildren(t *testing.T) {
 	pidFile := filepath.Join(t.TempDir(), "child.pid")
 	commands := filepath.Join(t.TempDir(), "commands")

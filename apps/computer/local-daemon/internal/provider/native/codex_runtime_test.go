@@ -135,6 +135,27 @@ func TestCodexTurnOwnershipAndDedupe(t *testing.T) {
 	}
 }
 
+func TestCodexCompletionRacingInterrupt(t *testing.T) {
+	turn := codexFakeTurn{Items: []map[string]any{codexAgentMessage("m1", "done", "final_answer")}, Stall: true}
+	fake := newCodexFake(t, []codexFakeTurn{turn}, map[string]string{"FAKE_MODES": "complete_on_interrupt"})
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	run, err := fake.runtime(nil).Start(ctx, "go", fake.spec())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for event := range run.Events {
+		if event.Kind == EventText {
+			cancel()
+			break
+		}
+	}
+	out, _ := codexCollect(t, run)
+	if out.Status != statusCompleted || out.Output != "done" || !out.ExitConfirmed || out.ExitUnconfirmed || fake.count("turn/interrupt") != 1 {
+		t.Fatalf("outcome = %+v, methods = %v", out, fake.methods())
+	}
+}
+
 func TestCodexFirstProgressTimeoutInterrupts(t *testing.T) {
 	fake := newCodexFake(t, []codexFakeTurn{{Stall: true}}, nil)
 	spec := fake.spec()

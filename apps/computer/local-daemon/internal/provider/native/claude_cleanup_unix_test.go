@@ -61,7 +61,7 @@ func TestClaudeInitRejectionCleansUpTermIgnoringTree(t *testing.T) {
 
 func TestClaudeCallerCancelDuringTurn(t *testing.T) {
 	claudeLowerGrace(t, 300*time.Millisecond)
-	for _, policy := range []string{"report", "normal", "ignore", "child"} {
+	for _, policy := range []string{"report", "normal", "ignore", "child", "completed"} {
 		t.Run(policy, func(t *testing.T) {
 			dir := t.TempDir()
 			profile := claudeFakeProfile(t, "signal", map[string]string{"CLAUDE_FAKE_DIR": dir, "CLAUDE_FAKE_POLICY": policy})
@@ -81,7 +81,11 @@ func TestClaudeCallerCancelDuringTurn(t *testing.T) {
 					t.Fatalf("leader %d alive when the Outcome was published", pid)
 				}
 			}
-			if outcome.Status != statusAborted || outcome.Output != "" || !outcome.ExitConfirmed ||
+			wantStatus, wantOutput := statusAborted, ""
+			if policy == "completed" {
+				wantStatus, wantOutput = statusCompleted, "done"
+			}
+			if outcome.Status != wantStatus || outcome.Output != wantOutput || !outcome.ExitConfirmed ||
 				outcome.Diagnostics.ExitCode != nil || outcome.Diagnostics.Signal != "" || time.Since(started) > 8*time.Second {
 				t.Fatalf("outcome = %+v", outcome)
 			}

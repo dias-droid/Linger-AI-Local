@@ -215,6 +215,11 @@ func (s *codexFakeServer) handle(line []byte) (int, bool) {
 	case "turn/steer":
 		return s.steer(request.ID, request.Params)
 	case "turn/interrupt":
+		if s.modes["complete_on_interrupt"] {
+			s.reject(request.ID, -32600, "no active turn to interrupt")
+			s.send(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": s.thread, "turn": map[string]any{"id": s.current, "status": "completed"}}})
+			return 0, false
+		}
 		s.result(request.ID, map[string]any{})
 		s.send(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": s.thread, "turn": map[string]any{"id": s.current, "status": "interrupted"}}})
 	case "thread/backgroundTerminals/list":
