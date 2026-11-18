@@ -99,7 +99,10 @@ describe("Direct Agent runtime settings", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "5.4 Sol Medium" }),
     );
-    expect(screen.getByRole("button", { name: "Save Runtime" })).toBeDisabled();
+    // The settings dialog is a lazy chunk on its first open.
+    expect(
+      await screen.findByRole("button", { name: "Save Runtime" }),
+    ).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(updateTenantAgent).not.toHaveBeenCalled();
   });

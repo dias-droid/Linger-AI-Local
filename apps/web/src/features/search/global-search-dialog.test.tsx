@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider, useLocation } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { defineGlobalProperty } from "@/test/global-properties";
 
 import { createAppQueryClient } from "@/app/query-client";
 import {
@@ -48,7 +49,7 @@ const results = () => within(screen.getByRole("listbox"));
 
 describe("Global search dialog", () => {
   beforeEach(() => {
-    Object.defineProperty(window, "localStorage", {
+    defineGlobalProperty(window, "localStorage", {
       configurable: true,
       value: createTestStorage(),
     });

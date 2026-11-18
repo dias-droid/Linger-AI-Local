@@ -90,6 +90,14 @@ async function setup(
   return { runtime, decision, connection };
 }
 
+// Actions render disabled until the connections load, and a click before then
+// is ignored; that happens whenever a test is the first to load the card.
+async function enabledButton(name: string) {
+  const button = await screen.findByRole("button", { name });
+  await waitFor(() => expect(button).toBeEnabled());
+  return button;
+}
+
 describe("Chat connection authorization", () => {
   afterEach(() => vi.restoreAllMocks());
 
@@ -108,9 +116,7 @@ describe("Chat connection authorization", () => {
     ).toHaveLength(1);
     expect(document.querySelector(".card-prompt")).toBeNull();
     expect(screen.queryByText(/Asks you|Authorizing/)).not.toBeInTheDocument();
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Allow Project Writer" }),
-    );
+    fireEvent.click(await enabledButton("Allow Project Writer"));
     await waitFor(() =>
       expect(decision).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -191,9 +197,7 @@ describe("Chat connection authorization", () => {
         status: "pending",
         connect_url: "https://connect.example.test/notion",
       });
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Connect Notion" }),
-    );
+    fireEvent.click(await enabledButton("Connect Notion"));
     await waitFor(() =>
       expect(decision).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -230,9 +234,7 @@ describe("Chat connection authorization", () => {
         id: "notion-2",
         connect_url: "https://connect.example.test/notion",
       });
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Connect Notion" }),
-    );
+    fireEvent.click(await enabledButton("Connect Notion"));
     await waitFor(() =>
       expect(decision).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -267,9 +269,7 @@ describe("Chat connection authorization", () => {
       connect_expires_at: "2999-01-01T00:00:00Z",
     });
     const create = vi.spyOn(runtime.client, "createExternalConnection");
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Connect Notion" }),
-    );
+    fireEvent.click(await enabledButton("Connect Notion"));
     await waitFor(() =>
       expect(window.open).toHaveBeenCalledWith(
         "https://connect.example.test/resume",
@@ -338,9 +338,7 @@ describe("Chat connection authorization", () => {
     fireEvent.click(
       screen.getByRole("option", { name: "Connect a new account" }),
     );
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Connect Notion" }),
-    );
+    fireEvent.click(await enabledButton("Connect Notion"));
     await waitFor(() =>
       expect(decision).toHaveBeenCalledWith(
         expect.objectContaining({ connectionId: "notion-new" }),
@@ -388,9 +386,7 @@ describe("Chat connection authorization", () => {
     expect(
       screen.queryByRole("combobox", { name: "Notion account" }),
     ).not.toBeInTheDocument();
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Connect Notion" }),
-    );
+    fireEvent.click(await enabledButton("Connect Notion"));
     await waitFor(() =>
       expect(window.open).toHaveBeenCalledWith(
         "https://connect.example.test/open",
@@ -426,9 +422,7 @@ describe("Chat connection authorization", () => {
         status: "pending",
         connect_url: "https://connect.example.test/new",
       });
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Connect Notion" }),
-    );
+    fireEvent.click(await enabledButton("Connect Notion"));
     await waitFor(() =>
       expect(decision).toHaveBeenCalledWith(
         expect.objectContaining({ connectionId: "notion-new" }),
@@ -525,9 +519,7 @@ describe("Chat connection authorization", () => {
           accept = resolve;
         }),
     );
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Connect Notion" }),
-    );
+    fireEvent.click(await enabledButton("Connect Notion"));
     await waitFor(() => expect(decision).toHaveBeenCalledOnce());
     expect(window.open).not.toHaveBeenCalled();
     accept();

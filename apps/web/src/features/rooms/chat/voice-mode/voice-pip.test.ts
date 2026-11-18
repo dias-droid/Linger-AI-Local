@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { defineGlobalProperty } from "@/test/global-properties";
 
 import {
   closeVoicePip,
@@ -24,7 +25,7 @@ function installFakeVoicePip() {
     close: vi.fn(() => listeners.splice(0).forEach((listener) => listener())),
   };
   const requestWindow = vi.fn(async () => pipWindow as unknown as Window);
-  Object.defineProperty(window, "documentPictureInPicture", {
+  defineGlobalProperty(window, "documentPictureInPicture", {
     configurable: true,
     value: { requestWindow },
   });

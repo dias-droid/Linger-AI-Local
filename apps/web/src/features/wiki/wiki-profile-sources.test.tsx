@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { defineGlobalProperty } from "@/test/global-properties";
 
 import { createTestTeamHubRuntime } from "@/test/teamhub-test-runtime";
 import type { TeamHubPersonalProfileGeneration } from "@/features/teamhub/teamhub-types";
@@ -29,7 +30,7 @@ const generation: TeamHubPersonalProfileGeneration = {
 
 beforeEach(() => {
   const values = new Map<string, string>();
-  Object.defineProperty(window, "localStorage", {
+  defineGlobalProperty(window, "localStorage", {
     configurable: true,
     value: {
       clear: () => values.clear(),
@@ -722,7 +723,7 @@ describe("Wiki Profile sources", () => {
       .spyOn(runtime.client, "createPersonalProfileGeneration")
       .mockResolvedValue(generation);
     const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(window.navigator, "clipboard", {
+    defineGlobalProperty(window.navigator, "clipboard", {
       configurable: true,
       value: { writeText },
     });

@@ -1489,7 +1489,10 @@ describe("Unified Document page", () => {
       screen.queryByRole("button", { name: "Duplicate Document" }),
     ).not.toBeInTheDocument();
     await chooseDocumentAction("Page history");
-    expect(screen.getByRole("heading", { name: "Page history" })).toBeVisible();
+    // The history dialog is a lazy chunk on its first open.
+    expect(
+      await screen.findByRole("heading", { name: "Page history" }),
+    ).toBeVisible();
     expect(await screen.findByText("No page history saved yet.")).toBeVisible();
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();
   });

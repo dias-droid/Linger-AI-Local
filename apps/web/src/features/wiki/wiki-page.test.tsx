@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { defineGlobalProperty } from "@/test/global-properties";
 
 import {
   deferred,
@@ -17,9 +18,8 @@ afterEach(() => {
 });
 
 // jsdom supplies no scroll geometry for the Daily card track.
-Object.defineProperty(HTMLElement.prototype, "scrollTo", {
-  configurable: true,
-  value: vi.fn(),
+beforeEach(() => {
+  defineGlobalProperty(HTMLElement.prototype, "scrollTo", { value: vi.fn() });
 });
 
 describe("Wiki source commands and shared file tree", () => {

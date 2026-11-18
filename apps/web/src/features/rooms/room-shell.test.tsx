@@ -623,7 +623,8 @@ describe("Room shell Tenant transition", () => {
     );
 
     expect(await screen.findByText("Current Room content")).toBeVisible();
-    fireEvent.click(screen.getByRole("link", { name: "gtm-launch" }));
+    // The Room list is a lazy chunk that can settle after the Room content.
+    fireEvent.click(await screen.findByRole("link", { name: "gtm-launch" }));
     await waitFor(() =>
       expect(router.state.location.pathname).toBe(
         "/t/tenant-northstar/rooms/room-gtm-launch/chat",

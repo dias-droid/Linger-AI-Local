@@ -1,7 +1,9 @@
+import { focusManager, onlineManager } from "@tanstack/react-query";
 import { afterEach, vi } from "vitest";
 
 import { resetComposerAttachmentDraftsForTest } from "@/features/rooms/chat/composer-attachment-drafts";
 import { setRoomDiagnosticsEnabledForTest } from "@/lib/room-diagnostics";
+import { restoreGlobalProperties } from "@/test/global-properties";
 import { assertNoUnhandledTestRoutes } from "@/test/teamhub-test-server";
 
 // Tests assert the Room timing diagnostics, which are off by default in browsers.
@@ -9,6 +11,7 @@ setRoomDiagnosticsEnabledForTest(true);
 
 // Pure logic tests opt into Node and do not need the React/DOM harness.
 let cleanupRenderedComponents: (() => void) | undefined;
+let resetRoomTimelineReadingPositions: (() => void) | undefined;
 if (typeof document !== "undefined") {
   await import("@testing-library/jest-dom/vitest");
   // motion-utils owns the global config motion/react reads; loading all of
@@ -21,6 +24,11 @@ if (typeof document !== "undefined") {
   configure({ asyncUtilTimeout: 5_000 });
   MotionGlobalConfig.skipAnimations = true;
   cleanupRenderedComponents = cleanup;
+  // Reading positions are kept per Room in a module map; a test must not open
+  // a Room scrolled where an earlier test left it.
+  ({
+    resetRoomTimelineReadingPositionsForTest: resetRoomTimelineReadingPositions,
+  } = await import("@/features/rooms/chat/use-room-timeline-scroll"));
 
   // jsdom has no layout observer. Geometry tests supply measured entries;
   // other component tests only need the browser API's lifecycle.
@@ -73,12 +81,55 @@ vi.waitFor = (callback, options) =>
     typeof options === "number" ? options : { timeout: 5_000, ...options },
   );
 
+// Files without module mocks share one window per worker (see
+// vitest.config.ts), so each test returns the globals it may touch to the state
+// the next file expects from a fresh environment.
+const initialHeadNodes =
+  typeof document === "undefined" ? [] : [...document.head.childNodes];
+const initialUrl = typeof window === "undefined" ? "" : window.location.href;
+
+function resetDocumentGlobals() {
+  if (typeof document === "undefined") return;
+  // A test may stub storage with a plain object; vi.stubGlobal restores the
+  // real one afterwards, which that test never wrote to.
+  for (const storage of [localStorage, sessionStorage]) {
+    if (storage instanceof Storage) storage.clear();
+  }
+  document.body.replaceChildren();
+  for (const attribute of [...document.body.attributes]) {
+    document.body.removeAttribute(attribute.name);
+  }
+  for (const node of [...document.head.childNodes]) {
+    if (!initialHeadNodes.includes(node)) node.remove();
+  }
+  for (const attribute of [...document.documentElement.attributes]) {
+    document.documentElement.removeAttribute(attribute.name);
+  }
+  document.title = "";
+  if (window.location.href !== initialUrl) {
+    window.history.replaceState(null, "", initialUrl);
+  }
+}
+
 afterEach(() => {
   try {
     cleanupRenderedComponents?.();
+    // Shared modules such as Motion's frame loop keep a "frame requested" flag
+    // until their callback runs; dropping a fake frame or timer would stall
+    // them for every later file in this worker, so pending ones run first.
+    if (vi.isFakeTimers()) vi.runOnlyPendingTimers();
   } finally {
+    vi.useRealTimers();
     vi.unstubAllEnvs();
+    restoreGlobalProperties();
+    // TanStack Query keeps focus and network state in module singletons that a
+    // test drives through browser events; a stale "offline" or "unfocused"
+    // would pause every later file's queries in this worker.
+    focusManager.setFocused(undefined);
+    onlineManager.setOnline(true);
+    resetDocumentGlobals();
     resetComposerAttachmentDraftsForTest();
+    resetRoomTimelineReadingPositions?.();
     assertNoUnhandledTestRoutes();
   }
 });

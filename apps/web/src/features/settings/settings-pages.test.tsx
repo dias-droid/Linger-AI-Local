@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider, useLocation } from "react-router";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { defineGlobalProperty } from "@/test/global-properties";
 
 import {
   createTestTeamHubRuntime,
@@ -35,7 +36,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   const values = new Map<string, string>();
-  Object.defineProperty(window, "localStorage", {
+  defineGlobalProperty(window, "localStorage", {
     configurable: true,
     value: {
       clear: () => values.clear(),

@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { defineGlobalProperty } from "@/test/global-properties";
 
 import { createTestTeamHubRuntime } from "@/test/teamhub-test-runtime";
 import { TeamHubRuntimeProvider } from "@/features/teamhub/teamhub-runtime";
@@ -912,7 +913,7 @@ function stubPictureInPicture() {
     }),
   };
   const requestWindow = vi.fn(async () => pipWindow);
-  Object.defineProperty(window, "documentPictureInPicture", {
+  defineGlobalProperty(window, "documentPictureInPicture", {
     configurable: true,
     value: { requestWindow },
   });

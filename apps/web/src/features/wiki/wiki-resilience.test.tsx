@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { defineGlobalProperty } from "@/test/global-properties";
 
 import {
   deferred,
@@ -24,9 +25,8 @@ function moveDocumentToTenant(
 }
 
 // The seeded graph renders the Timeline cards; jsdom has no scroll geometry.
-Object.defineProperty(HTMLElement.prototype, "scrollTo", {
-  configurable: true,
-  value: vi.fn(),
+beforeEach(() => {
+  defineGlobalProperty(HTMLElement.prototype, "scrollTo", { value: vi.fn() });
 });
 
 afterEach(() => {
