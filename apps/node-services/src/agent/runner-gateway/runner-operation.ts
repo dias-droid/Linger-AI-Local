@@ -198,6 +198,11 @@ export class RunnerOperationInputError extends RunnerGatewayError {
 
 type CommandSender = (command: AgentToDaemonEnvelope) => Promise<void>;
 const MAX_OPERATION_PREPARE_MCP_RELAYS = 64;
+// An unaccepted start re-sent this many times across reconnects without an
+// acceptance or terminal is ended instead of re-sent again: its outcome on the
+// Computer cannot be learned, and re-sending it forever keeps the Run running.
+const MAX_UNACCEPTED_START_RESENDS = 3;
+export const OPERATION_OUTCOME_UNKNOWN = "OPERATION_OUTCOME_UNKNOWN";
 
 export type OperationEnvelope = Extract<
   DaemonToAgentEnvelope,
@@ -248,6 +253,11 @@ export class RunnerOperationState {
   readonly #createdAt: number;
   #lastStartSentAt: number | undefined;
   #startSentCount = 0;
+  #unacceptedStartResends = 0;
+  // Every connection epoch the start was sent with. A Daemon may report an
+  // Operation it recorded on an earlier connection, before the start was
+  // rebased, under that connection's epoch.
+  readonly #sentEpochs = new Set<number>();
   #inputReceiptTimer: ReturnType<typeof setTimeout> | undefined;
   #inputReceipts: Deferred<void> | undefined;
   #turnId: string | undefined;
@@ -328,6 +338,7 @@ export class RunnerOperationState {
     // Callers update Session checkpoints in place. Retain the original wire
     // command independently so reconnect never changes an admitted request.
     this.start = structuredClone({ ...start, ...operationIdentity(start) });
+    this.#sentEpochs.add(this.start.connection_epoch);
     this.#currentContextViewRef = this.start.context_view_ref;
   }
 
@@ -502,13 +513,31 @@ export class RunnerOperationState {
     readonly retainedByDaemon: boolean;
   }): readonly AgentToDaemonEnvelope[] {
     if (this.#terminal) return [];
-    if (
-      options &&
-      !this.#accepted &&
-      !options.retainedByDaemon &&
-      this.start.connection_epoch !== options.connectionEpoch
-    ) {
-      this.#rebaseConnectionEpoch(options.connectionEpoch);
+    // A Daemon that reports the Operation active still holds it and replays
+    // its acceptance, so only a start it does not report counts as a re-send.
+    if (options && !this.#accepted && !options.retainedByDaemon) {
+      if (this.#unacceptedStartResends >= MAX_UNACCEPTED_START_RESENDS) {
+        logAgentEvent("error", "runner.operation.outcome_unknown", {
+          operationId: this.start.operation_id,
+          computerId: this.start.runner_id,
+          agentId: this.start.agent_id,
+          resendCount: this.#unacceptedStartResends,
+        });
+        this.#complete(() =>
+          this.#outcome.reject(
+            new RunnerOperationError(
+              OPERATION_OUTCOME_UNKNOWN,
+              "The Computer never confirmed the Operation start; its outcome is unknown",
+              false,
+            ),
+          ),
+        );
+        return [];
+      }
+      this.#unacceptedStartResends++;
+      if (this.start.connection_epoch !== options.connectionEpoch) {
+        this.#rebaseConnectionEpoch(options.connectionEpoch);
+      }
     }
     const commands: AgentToDaemonEnvelope[] = [
       this.start,
@@ -533,6 +562,7 @@ export class RunnerOperationState {
       );
     }
     this.start = start;
+    this.#sentEpochs.add(connectionEpoch);
     for (const [commandId, pending] of this.#pendingInputs) {
       const command = parseAgentToDaemonEnvelope({
         ...pending.command,
@@ -608,7 +638,15 @@ export class RunnerOperationState {
   assertIdentity(
     value: ActiveOperation | OperationEnvelope | OperationInputClosed,
   ): void {
-    assertOperationIdentity(this.start, value);
+    assertOperationIdentity(this.#identityAt(value.connection_epoch), value);
+  }
+
+  // The start's identity under an epoch it was sent with; any other epoch
+  // keeps the current one and so fails the identity check.
+  #identityAt(connectionEpoch: number): OperationStart {
+    return this.#sentEpochs.has(connectionEpoch)
+      ? { ...this.start, connection_epoch: connectionEpoch }
+      : this.start;
   }
 
   async receive(
@@ -626,7 +664,7 @@ export class RunnerOperationState {
 
   async receiveClosedInput(envelope: OperationInputClosed): Promise<void> {
     return this.#serialize(async () => {
-      assertOperationIdentity(this.start, envelope);
+      this.assertIdentity(envelope);
       const pending = this.#pendingInputs.get(envelope.command_id);
       // The Daemon answers each input once from its ledger, and it never
       // commits a terminal while it holds an unanswered input, so a receipt
@@ -665,7 +703,9 @@ export class RunnerOperationState {
     envelope: OperationEnvelope,
     apply = true,
   ): Promise<OperationAck> {
-    assertOperationIdentity(this.start, envelope);
+    this.assertIdentity(envelope);
+    const ack = (throughSequence: number) =>
+      this.#ack(throughSequence, envelope.connection_epoch);
     // A restarted Daemon keeps no Operation: it numbers the terminal it
     // reports for one it lost from 1. This Operation has seen no terminal, so
     // the frame is not a replay; it ends the Operation.
@@ -676,7 +716,7 @@ export class RunnerOperationState {
     // A Computer that reconnects replays every event it has not seen
     // acknowledged; the ones already applied only need the acknowledgement.
     if (envelope.seq <= this.#lastSequence && !restartedTerminal)
-      return this.#ack(this.#lastSequence);
+      return ack(this.#lastSequence);
     if (this.#terminal) {
       // A Gateway-local terminal (cancel timeout, abandoned placement) does
       // not stop the Daemon from finishing the Operation it was asked to
@@ -685,7 +725,7 @@ export class RunnerOperationState {
       // every reconnect.
       if (!this.#outcomeEnvelope && envelope.seq === this.#lastSequence + 1) {
         this.#lastSequence = envelope.seq;
-        return this.#ack(this.#lastSequence);
+        return ack(this.#lastSequence);
       }
       throw new RunnerGatewayProtocolError(
         "Runner emitted after terminal state",
@@ -738,7 +778,7 @@ export class RunnerOperationState {
     // After a restarted Daemon's terminal the sequence is that Daemon's, so
     // its replays of the terminal are acknowledged at the same sequence.
     this.#lastSequence = envelope.seq;
-    return this.#ack(this.#lastSequence);
+    return ack(this.#lastSequence);
   }
 
   #acceptEnvelope(envelope: OperationEnvelope): void {
@@ -1008,8 +1048,14 @@ export class RunnerOperationState {
     settle();
   }
 
-  #ack(throughSequence: number): OperationAck {
-    return createOperationAck(this.start, this.#createId(), throughSequence);
+  // A frame recorded under an earlier epoch of the start is acknowledged
+  // under that epoch, the identity the Daemon's ledger holds it by.
+  #ack(throughSequence: number, connectionEpoch: number): OperationAck {
+    return createOperationAck(
+      this.#identityAt(connectionEpoch),
+      this.#createId(),
+      throughSequence,
+    );
   }
 }
 
