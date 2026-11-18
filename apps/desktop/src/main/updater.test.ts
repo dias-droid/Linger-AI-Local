@@ -329,7 +329,7 @@ describe("UpdaterModule with the Windows setup program", () => {
     expect(calls).toEqual([
       {
         file: path.join(downloads, SETUP),
-        args: ["/S", "/relaunch"],
+        args: ["/update", "/relaunch"],
         options: { detached: true, stdio: "ignore" },
       },
     ]);

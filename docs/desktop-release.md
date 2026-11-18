@@ -172,12 +172,23 @@ The app downloads the package from `releases/download/desktop-v<version>/` and
 checks its size and SHA-256 while downloading. What happens next depends on
 how Linger was installed:
 
-| Install                 | Update                                                                                                                                                                                                          |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS `Linger.app`      | The archive is unpacked beside the app. "Restart to Update" waits for running tasks, swaps the bundle and relaunches.                                                                                           |
-| Windows setup program   | The setup program is downloaded. "Restart to Update" waits for running tasks, checks the file again, starts it with `/S /relaunch` and quits; the installer stops the services, replaces the app and starts it. |
-| Windows portable folder | No download: the tray offers "Download Linger <version>…", which opens the release page.                                                                                                                        |
-| Linux                   | The same as the portable folder.                                                                                                                                                                                |
+| Install                 | Update                                                                                                                                                                                                                                                                 |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS `Linger.app`      | The archive is unpacked beside the app. "Restart to Update" waits for running tasks, swaps the bundle and relaunches.                                                                                                                                                  |
+| Windows setup program   | The setup program is downloaded. "Restart to Update" waits for running tasks, checks the file again, starts it with `/update /relaunch` and quits; the installer stops the services, replaces the app in the folder it was installed to and starts it (details below). |
+| Windows portable folder | No download: the tray offers "Download Linger <version>…", which opens the release page.                                                                                                                                                                               |
+| Linux                   | The same as the portable folder.                                                                                                                                                                                                                                       |
+
+On Windows, `/update` runs the setup program in passive mode: it shows only its
+progress page, titled "Updating Linger to <version>...", and needs no click.
+It closes by itself when the files are in place, and `/relaunch` starts the new
+Linger. If a file stays locked, the same "Linger is running ... Retry" question
+as in a normal install appears, and Retry stops Linger's services again. After
+Cancel, or a file the setup could not write, the setup says Linger was not
+updated: if it had not replaced any file yet it starts the earlier Linger,
+which offers the update again; otherwise it names the setup program to run
+again. The install stays per user without administrator rights. `/S` still
+installs with no window at all, for scripted installs.
 
 A system notification announces each new version once, and the tray shows the
 state; after a failure "Try Updating Again" checks at once. The account menu

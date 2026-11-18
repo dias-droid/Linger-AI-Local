@@ -91,8 +91,9 @@ export type SpawnSetup = (
   options: { detached: true; stdio: "ignore" },
 ) => SetupProcess;
 
-// installer.nsi: /S installs without pages, /relaunch starts Linger after.
-export const SETUP_ARGS = ["/S", "/relaunch"] as const;
+// installer.nsi: /update shows only its progress page and the questions about
+// a locked file, then closes; /relaunch starts Linger after.
+export const SETUP_ARGS = ["/update", "/relaunch"] as const;
 
 const CHECK_DELAY_MS = 60_000;
 const CHECK_INTERVAL_MS = 6 * 60 * 60_000;

@@ -1,14 +1,17 @@
 ; Per-user installer for Linger on Windows. package.py passes VERSION,
 ; NUMERIC_VERSION (VERSION without a prerelease suffix, for the X.X.X.X field),
-; STAGE (the app folder) and OUTPUT. No administrator rights are needed. The folder
-; is fixed: the uninstaller removes all of it.
+; STAGE (the app folder) and OUTPUT. No administrator rights are needed. There is
+; no folder page: the uninstaller removes all of the folder. An install goes where
+; the last one went, else to the default folder, unless /D= names another.
 Unicode true
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
 
 Name "Linger"
 OutFile "${OUTPUT}"
+!define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\Linger"
 InstallDir "$LOCALAPPDATA\Programs\Linger"
+InstallDirRegKey HKCU "${UNINSTALL_KEY}" "InstallLocation"
 ; Where installs from before the rename put the app, and the app id they
 ; named "Open at login" after. Only the upgrade below reads them.
 !define LEGACY_INSTDIR "$LOCALAPPDATA\Programs\Simplex"
@@ -17,7 +20,6 @@ InstallDir "$LOCALAPPDATA\Programs\Linger"
 !define RUN_KEY "Software\Microsoft\Windows\CurrentVersion\Run"
 RequestExecutionLevel user
 SetCompressor /SOLID lzma
-!define UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\Linger"
 
 VIProductVersion "${NUMERIC_VERSION}.0"
 VIAddVersionKey "ProductName" "Linger"
@@ -29,13 +31,47 @@ VIAddVersionKey "LegalCopyright" "Linger"
 
 !define MUI_ICON "${STAGE}\resources\linger.ico"
 !define MUI_UNICON "${STAGE}\resources\linger.ico"
+; The app's self-update runs this setup with /update /relaunch after it quit
+; (updater.ts): the progress page alone, which closes when done (the finish
+; page's MUI sets SetAutoClose true), then Linger starts. Unlike /S, the
+; questions below stay visible. /S still installs without any window.
+Var Updating
+Var Relaunch
+; Set once the install starts replacing files: the earlier app can no longer
+; start after a failure.
+Var Replacing
 !define MUI_FINISHPAGE_RUN "$INSTDIR\Linger.exe"
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW ShowProgress
 !insertmacro MUI_PAGE_INSTFILES
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipWhenUpdating
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "English"
 !insertmacro MUI_LANGUAGE "SimpChinese"
+
+Function .onInit
+  ${GetParameters} $0
+  ClearErrors
+  ${GetOptions} $0 "/update" $1
+  IfErrors +2
+  StrCpy $Updating 1
+  ClearErrors
+  ${GetOptions} $0 "/relaunch" $1
+  IfErrors +2
+  StrCpy $Relaunch 1
+FunctionEnd
+
+Function ShowProgress
+  StrCmp $Updating 1 0 done
+  !insertmacro MUI_HEADER_TEXT "Updating Linger" "Updating Linger to ${VERSION}..."
+  done:
+FunctionEnd
+
+Function SkipWhenUpdating
+  StrCmp $Updating 1 0 +2
+  Abort
+FunctionEnd
 
 ; A running Linger holds its files open. Its services, run on Linger.exe, are
 ; stopped again on Retry, in case it started them before it quit.
@@ -145,6 +181,7 @@ Section "Linger"
   Call CloseLinger
   Call RemoveLegacyInstall
   ; An update replaces the whole app folder.
+  StrCpy $Replacing 1
   RMDir /r "$INSTDIR\resources"
   File /r "${STAGE}\*"
   FileOpen $0 "${STOP_MARKER}" w
@@ -162,14 +199,28 @@ Section "Linger"
   WriteRegDWORD HKCU "${UNINSTALL_KEY}" "NoRepair" 1
 SectionEnd
 
-; The app's self-update runs this setup with /S /relaunch after it quit
-; (updater.ts): a silent install shows no finish page to start Linger from.
+; Neither a silent install nor an update shows the finish page to start
+; Linger from.
 Function .onInstSuccess
-  ${GetParameters} $0
-  ClearErrors
-  ${GetOptions} $0 "/relaunch" $1
-  IfErrors done
+  StrCmp $Relaunch 1 0 done
   Exec '"$INSTDIR\Linger.exe"'
+  done:
+FunctionEnd
+
+; Runs after Cancel on a question, or Abort on a file that could not be
+; written, once the person closes the window. An update that stopped before
+; replacing files starts the earlier app again, which offers the update again;
+; otherwise only this setup can bring Linger back.
+Function .onInstFailed
+  StrCmp $Updating 1 0 done
+  StrCmp $Replacing 1 rerun
+  IfFileExists "$INSTDIR\Linger.exe" 0 rerun
+  MessageBox MB_OK|MB_ICONEXCLAMATION "Linger was not updated. It will start again and offer the update again." /SD IDOK
+  StrCmp $Relaunch 1 0 done
+  Exec '"$INSTDIR\Linger.exe"'
+  Goto done
+  rerun:
+  MessageBox MB_OK|MB_ICONEXCLAMATION "Linger was not updated and cannot start until it is. Run this setup again to finish the update:$\r$\n$EXEPATH" /SD IDOK
   done:
 FunctionEnd
 
