@@ -58,6 +58,11 @@ build:assets` to check the initial JS budget.
   uses the red panda portrait on its warm brown tile.
 - The login header uses the transparent horizontal Linger wordmark in
   `public/linger-wordmark.svg`, with the proportions of `assets/logo-horizontal.svg`.
+- The compact primary rail reveals labels on hover and keyboard focus without
+  moving link hit areas or neighbouring links. A stationary pointer at an edge
+  must not trigger repeated hover enter/leave; sidebar expansion and Chat list
+  collapse remain explicit button actions. Pointer movement only resizes during
+  an active drag; keyboard resizing and double-click reset remain available.
 - Gmail and Outlook message approvals show the subject and recipients once.
   The subject row toggles the preview and owns its hover highlight; the
   recipient line stays outside the control. The shared AutoHeight transition

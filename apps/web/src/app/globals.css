@@ -4746,8 +4746,7 @@ button.question-choice:focus-visible {
     width var(--app-emphasized-duration) var(--app-out-quint),
     background-color var(--app-micro-duration) var(--app-out-quint),
     color var(--app-micro-duration) var(--app-out-quint),
-    box-shadow var(--app-floating-duration) var(--app-out-quint),
-    transform var(--app-floating-duration) var(--app-out-quint);
+    box-shadow var(--app-floating-duration) var(--app-out-quint);
 }
 
 .primary-navigation-items .room-rail-link[aria-current="page"] {
@@ -4819,6 +4818,8 @@ button.question-choice:focus-visible {
 }
 
 @media (hover: hover) and (pointer: fine) {
+  /* Keep targets anchored: moving a hovered link or its neighbours can move
+     an edge out from under a stationary pointer and toggle hover endlessly. */
   .app-navigation[data-expanded="false"] .room-rail-link:hover {
     width: max-content;
     padding-right: 10px;
@@ -4826,7 +4827,6 @@ button.question-choice:focus-visible {
     color: hsl(var(--town-primary-foreground));
     font-size: 12px;
     font-weight: 400;
-    transform: translateY(-2px);
     box-shadow: var(--town-shadow-md);
   }
   .app-navigation[data-expanded="false"] .room-rail-link:hover > svg {
@@ -4838,15 +4838,6 @@ button.question-choice:focus-visible {
     position: static;
     transform: none;
     opacity: 1;
-  }
-  .app-navigation[data-expanded="false"]
-    .room-rail-link:has(~ .room-rail-link:hover) {
-    transform: translateY(-4px);
-  }
-  .app-navigation[data-expanded="false"]
-    .room-rail-link:hover
-    ~ .room-rail-link {
-    transform: translateY(4px);
   }
   .app-navigation[data-expanded="true"]
     .room-rail-link:not([aria-current="page"]):hover {
