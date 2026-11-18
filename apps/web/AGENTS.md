@@ -116,6 +116,8 @@ build:assets` to check the initial JS budget.
 - Input hints use `--app-placeholder` / `text-app-placeholder` across native
   fields, chat composers, select prompts, and editable empty states. Keep
   entered text and adjacent labels on their own text tokens.
+- Room avatar stacks give each tile an opaque surface behind the member's
+  portrait or initials so overlapping members never show through one another.
 - Compose conditional class names with `cn` from `src/lib/cn.ts`.
 - Do not add CSS Modules or feature-level `.css` files, and do not add new hex
   colors in TSX. Use inline `style` only for runtime-computed values.

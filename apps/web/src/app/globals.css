@@ -2974,6 +2974,8 @@ a[href][aria-disabled="true"],
   height: calc(18 * var(--room-avatar-unit));
   overflow: hidden;
   border-radius: calc(6 * var(--room-avatar-unit));
+  /* Translucent initials and uploaded images must not reveal faces behind them. */
+  background: var(--room-avatar-ring);
   box-shadow: 0 0 0 calc(1.5 * var(--room-avatar-unit)) var(--room-avatar-ring);
 }
 
