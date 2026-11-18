@@ -70,7 +70,8 @@
   the sources it never ran as deferred,
   `agent-wiki-backend.ts` generates with the memory Agent (`src/memory-agent.ts`):
   routing over candidate entities, meeting Session pages, one consolidation
-  call that merges the new entities parallel routing named more than once,
+  call per entity type, run in parallel and retried once on failure, that
+  merges the new entities parallel routing named more than once,
   entity pages written in batches, one correction round; `wiki-candidate-*.ts` validate and recover
   candidates. Room chats get no Session page.
 - `actor-wiki/` holds the operation directory state and the candidate tree
