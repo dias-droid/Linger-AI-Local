@@ -20,6 +20,8 @@ import {
 } from "@/test/teamhub-test-runtime";
 import { teamHubErrorResponse } from "@/test/teamhub-test-server";
 
+import { localComputersQueryOptions } from "@/features/local-computer/local-computer-queries";
+
 import { ModelsPage } from "./local-models-page";
 import type { LocalModelsView } from "./local-models-queries";
 import {
@@ -113,10 +115,16 @@ function CurrentSearch() {
   return <p>Address search: {useLocation().search}</p>;
 }
 
-function renderPage(fixture: Fixture, search = "") {
+// The page suspends until the Computer inventory loads, and React holds a
+// revealed Suspense boundary for 300 ms; loading the inventory first renders
+// the page at once.
+async function renderPage(fixture: Fixture, search = "") {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  await queryClient.ensureQueryData(
+    localComputersQueryOptions(fixture.runtime.client, tenantId),
+  );
   render(
     <QueryClientProvider client={queryClient}>
       <TeamHubRuntimeProvider runtime={fixture.runtime}>
@@ -235,7 +243,7 @@ afterEach(() => {
 
 describe("LocalModelsPage", () => {
   it("lists every model once with its status, as the Computer reported it", async () => {
-    renderPage(setup());
+    await renderPage(setup());
     await findModels();
 
     expect(statuses()).toEqual([
@@ -288,7 +296,7 @@ describe("LocalModelsPage", () => {
         models: [absent("qwen3.5-9b:Q4_K_M", "Qwen3.5 9B", "system", true)],
       }),
     ]);
-    renderPage(fixture, "?computer=computer-mac");
+    await renderPage(fixture, "?computer=computer-mac");
     await findModels();
     expect(statuses()).toEqual([
       "Spark-X2.6 4B: Not downloaded · 2.6 GB · Recommended",
@@ -296,7 +304,7 @@ describe("LocalModelsPage", () => {
     ]);
 
     cleanup();
-    renderPage(fixture, "?computer=computer-win");
+    await renderPage(fixture, "?computer=computer-win");
     await waitFor(() =>
       expect(statuses()).toEqual([
         "Qwen3.5 9B: Not downloaded · 2.6 GB · Recommended",
@@ -305,7 +313,7 @@ describe("LocalModelsPage", () => {
   });
 
   it("expands one row at a time to show a model's details", async () => {
-    renderPage(setup());
+    await renderPage(setup());
     await findModels();
 
     fireEvent.click(screen.getByRole("button", { name: "Qwen3 Coder 30B" }));
@@ -330,7 +338,7 @@ describe("LocalModelsPage", () => {
   });
 
   it("shows the Computer's pools and hardware in Details", async () => {
-    renderPage(setup());
+    await renderPage(setup());
     await findModels();
 
     fireEvent.click(screen.getByRole("button", { name: "Details" }));
@@ -349,7 +357,7 @@ describe("LocalModelsPage", () => {
   it("shows memory other apps use in a pool's bar", async () => {
     const shared = gpuPool(0, 24, [{ gb: 4, id: "small", name: "Small" }]);
     // Another process holds 15 GB of the card next to the model.
-    renderPage(
+    await renderPage(
       setup([labView({ pools: [{ ...shared, used_bytes: gb(19) }] })]),
     );
     await findModels();
@@ -366,7 +374,7 @@ describe("LocalModelsPage", () => {
 
   it("downloads on click and follows the snapshots the Computer sends", async () => {
     const fixture = setup();
-    renderPage(fixture);
+    await renderPage(fixture);
     await findModels();
 
     fireEvent.click(
@@ -436,7 +444,7 @@ describe("LocalModelsPage", () => {
           error: { code, detail: "retries exhausted" },
         }),
       ]);
-      renderPage(fixture);
+      await renderPage(fixture);
       await findModels();
 
       expect(statusOf("Llama 3.3 70B")).toBe("Download stopped");
@@ -465,7 +473,7 @@ describe("LocalModelsPage", () => {
       }),
     ]);
     const answer = holdActions(fixture, () => accepted("download"));
-    renderPage(fixture);
+    await renderPage(fixture);
     await findModels();
 
     fireEvent.click(
@@ -483,7 +491,7 @@ describe("LocalModelsPage", () => {
         error: { code: "DOWNLOAD_FAILED" },
       }),
     ]);
-    renderPage(fixture);
+    await renderPage(fixture);
     await findModels();
 
     fireEvent.click(screen.getByRole("button", { name: "Llama 3.3 70B" }));
@@ -516,7 +524,7 @@ describe("LocalModelsPage", () => {
         memory_bytes: gb(10),
       }),
     ]);
-    renderPage(fixture);
+    await renderPage(fixture);
     await findModels();
 
     expect(statusOf("Llama 3.3 70B")).toBe("Couldn't load");
@@ -548,7 +556,7 @@ describe("LocalModelsPage", () => {
 
   it("loads at once when the pool has room", async () => {
     const fixture = setup();
-    renderPage(fixture);
+    await renderPage(fixture);
     await findModels();
 
     fireEvent.click(screen.getByRole("button", { name: "Load Gemma 3 27B" }));
@@ -566,7 +574,7 @@ describe("LocalModelsPage", () => {
 
   it("offers to unload the model holding the memory before loading another", async () => {
     const fixture = setup();
-    renderPage(fixture, "?computer=computer-mac");
+    await renderPage(fixture, "?computer=computer-mac");
     await findModels();
 
     expect(statuses()).toContain("Llama 3.3 70B: Couldn't load");
@@ -616,7 +624,7 @@ describe("LocalModelsPage", () => {
 
   it("says so when nothing else in the pool can be unloaded", async () => {
     const mac = macView();
-    renderPage(
+    await renderPage(
       setup([
         {
           ...mac,
@@ -644,7 +652,7 @@ describe("LocalModelsPage", () => {
 
   it("asks before unloading a model an Agent uses, and not otherwise", async () => {
     const fixture = setup();
-    renderPage(fixture);
+    await renderPage(fixture);
     await findModels();
 
     expect(
@@ -695,7 +703,7 @@ describe("LocalModelsPage", () => {
 
   it("warns which Agents lose their model before removing it", async () => {
     const fixture = setup();
-    renderPage(fixture);
+    await renderPage(fixture);
     await findModels();
 
     fireEvent.click(screen.getByRole("button", { name: "Qwen3 Coder 30B" }));
@@ -733,7 +741,7 @@ describe("LocalModelsPage", () => {
       used_by: [{ agent_id: "agent-writer", name: "Writer" }],
     };
     const fixture = setup([view]);
-    renderPage(fixture);
+    await renderPage(fixture);
     await findModels();
 
     fireEvent.click(screen.getByRole("button", { name: "Gemma 3 27B" }));
@@ -752,7 +760,7 @@ describe("LocalModelsPage", () => {
   it("opens a Computer the viewer may read but does not own", async () => {
     // The owned-Computer inventory is empty; the library API allows the read.
     const fixture = setup([labView({ viewer_is_owner: false })], []);
-    renderPage(fixture, "?computer=computer-lab");
+    await renderPage(fixture, "?computer=computer-lab");
     await findModels();
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
@@ -776,7 +784,7 @@ describe("LocalModelsPage", () => {
       [labView({ viewer_is_owner: false }), macView()],
       [inventoryComputer(macView())],
     );
-    renderPage(fixture, "?computer=computer-lab");
+    await renderPage(fixture, "?computer=computer-lab");
     await findModels();
 
     // Not the viewer's own Mac: lab-118, read-only.
@@ -795,7 +803,7 @@ describe("LocalModelsPage", () => {
     "disables an open %s confirmation once the Computer goes offline",
     async (opener, title, confirm) => {
       const fixture = setup([labView()]);
-      renderPage(fixture);
+      await renderPage(fixture);
       await findModels();
       if (opener === "Remove from computer")
         fireEvent.click(
@@ -820,7 +828,7 @@ describe("LocalModelsPage", () => {
 
   it("disables an open Unload confirmation once the model is no longer loaded", async () => {
     const fixture = setup([labView()]);
-    renderPage(fixture);
+    await renderPage(fixture);
     await findModels();
     fireEvent.click(
       screen.getByRole("button", { name: "Unload Qwen3 Coder 30B" }),
@@ -851,7 +859,7 @@ describe("LocalModelsPage", () => {
       reads += 1;
       return fixture.views[params.computerId!];
     });
-    renderPage(fixture);
+    await renderPage(fixture);
     await findModels();
 
     fireEvent.click(screen.getByRole("button", { name: "Load Gemma 3 27B" }));
@@ -878,7 +886,7 @@ describe("LocalModelsPage", () => {
   it("spins and disables the row's button while an unload is sent", async () => {
     const fixture = setup();
     const answer = holdActions(fixture, () => accepted("unload"));
-    renderPage(fixture);
+    await renderPage(fixture);
     await findModels();
 
     fireEvent.click(
@@ -913,7 +921,7 @@ describe("LocalModelsPage", () => {
     const answer = holdActions(fixture, () =>
       teamHubErrorResponse(409, "LOCAL_MODEL_NO_ROOM", "raw refusal detail"),
     );
-    renderPage(fixture);
+    await renderPage(fixture);
     await findModels();
 
     fireEvent.click(screen.getByRole("button", { name: "Load Gemma 3 27B" }));
@@ -934,7 +942,7 @@ describe("LocalModelsPage", () => {
     fixture.runtime.server.on("POST", actionPath, () =>
       teamHubErrorResponse(409, "LOCAL_MODEL_NO_ROOM", "raw refusal detail"),
     );
-    renderPage(fixture);
+    await renderPage(fixture);
     await findModels();
 
     fireEvent.click(screen.getByRole("button", { name: "Load Gemma 3 27B" }));
@@ -945,7 +953,7 @@ describe("LocalModelsPage", () => {
   });
 
   it("shows what an offline Computer last reported with every action off", async () => {
-    renderPage(
+    await renderPage(
       setup([
         labView({
           computer: {
@@ -976,7 +984,7 @@ describe("LocalModelsPage", () => {
   });
 
   it("lets only the owner act and tells everyone else why", async () => {
-    renderPage(setup([labView({ viewer_is_owner: false })]));
+    await renderPage(setup([labView({ viewer_is_owner: false })]));
     await findModels();
 
     expect(screen.getByRole("status")).toHaveTextContent(
@@ -1009,7 +1017,7 @@ describe("LocalModelsPage", () => {
   ] as const)(
     "explains a Computer without a model library (%s)",
     async (code, title, body) => {
-      renderPage(
+      await renderPage(
         setup([
           labView({
             available: false,
@@ -1033,7 +1041,7 @@ describe("LocalModelsPage", () => {
   );
 
   it("sends a Tenant without Computers to Computers", async () => {
-    renderPage(setup([], []));
+    await renderPage(setup([], []));
 
     const empty = await screen.findByRole("region", {
       name: "No computers yet",
@@ -1043,7 +1051,7 @@ describe("LocalModelsPage", () => {
   });
 
   it("renders a model that fits nowhere without a placement", async () => {
-    renderPage(setup());
+    await renderPage(setup());
     await findModels();
 
     expect(statuses()).toContain(
@@ -1060,7 +1068,7 @@ describe("LocalModelsPage", () => {
 
   it("shows a loaded model's endpoint without a gateway model id", async () => {
     const lab = labView();
-    renderPage(
+    await renderPage(
       setup([
         withModel(lab, "qwen3-coder-30b:Q4_K_M", {
           endpoint: { base_url: "http://127.0.0.1:18100/v1" },
@@ -1077,7 +1085,7 @@ describe("LocalModelsPage", () => {
   });
 
   it("keeps the chosen Computer in the address", async () => {
-    renderPage(setup(), "?computer=computer-mac");
+    await renderPage(setup(), "?computer=computer-mac");
     await findModels();
     expect(statuses()[0]).toBe("GPT-OSS 20B: Loaded · Memory · 14.3 GB");
     expect(screen.getByText("14.3 GB of 51.2 GB memory in use")).toBeVisible();
@@ -1109,7 +1117,7 @@ describe("LocalModelsPage", () => {
         onStatus: () => () => undefined,
       },
     };
-    renderPage(setup());
+    await renderPage(setup());
 
     await waitFor(() =>
       expect(
@@ -1137,7 +1145,7 @@ describe("LocalModelsPage", () => {
       family: "gemma",
       vision: true,
     });
-    renderPage(setup([visionLab]));
+    await renderPage(setup([visionLab]));
     await findModels();
 
     const coderCard = card("Qwen3 Coder 30B");
@@ -1193,7 +1201,7 @@ describe("LocalModelsPage", () => {
         state: "failed",
       },
     );
-    renderPage(setup([view]));
+    await renderPage(setup([view]));
     await findModels();
 
     const loadedCard = card("Qwen3 Coder 30B");
@@ -1225,7 +1233,7 @@ describe("LocalModelsPage", () => {
 
   it("shows live download rate and ETA when bytes_per_second is reported", async () => {
     const mb = 1024 * 1024;
-    renderPage(
+    await renderPage(
       setup([
         withModel(labView(), "gpt-oss-20b:Q4_K_M", {
           download: {
@@ -1305,7 +1313,7 @@ describe("Model source", () => {
   it("opens on the source in use and explains BYOK on hover", async () => {
     const fixture = setup([labView()]);
     withSource(fixture, byokStatus);
-    renderPage(fixture);
+    await renderPage(fixture);
 
     const tabs = await screen.findByRole("tablist", { name: "Model source" });
     expect(
@@ -1360,7 +1368,7 @@ describe("Model source", () => {
         viewer_is_owner: true,
       });
     });
-    renderPage(fixture);
+    await renderPage(fixture);
 
     fireEvent.click(await screen.findByRole("tab", { name: "Subscription" }));
     fireEvent.click(
@@ -1414,7 +1422,7 @@ describe("Model source", () => {
           { status: 504 },
         ),
       );
-    renderPage(fixture);
+    await renderPage(fixture);
 
     fireEvent.click(await screen.findByRole("tab", { name: "Subscription" }));
     fireEvent.click(
@@ -1449,7 +1457,7 @@ describe("Model source", () => {
         viewer_is_owner: true,
       });
     });
-    renderPage(fixture);
+    await renderPage(fixture);
 
     fireEvent.click(await screen.findByRole("tab", { name: /BYOK/u }));
     expect(
@@ -1509,7 +1517,7 @@ describe("Model source", () => {
       runtime: "claude",
       runtime_model: "",
     });
-    renderPage(fixture);
+    await renderPage(fixture);
 
     fireEvent.click(await screen.findByRole("tab", { name: /BYOK/u }));
     const baseUrl = screen.getByLabelText("Base URL");
@@ -1558,7 +1566,7 @@ describe("Model source", () => {
   it("lists the models again on request with the key as typed", async () => {
     const fixture = setup([labView()]);
     const { listings } = withSource(fixture, byokStatus);
-    renderPage(fixture);
+    await renderPage(fixture);
 
     expect(await screen.findByText("2 models listed.")).toBeInTheDocument();
     expect(listings).toEqual([
@@ -1594,7 +1602,7 @@ describe("Model source", () => {
         { status: 409 },
       ),
     );
-    renderPage(fixture);
+    await renderPage(fixture);
 
     expect(
       await screen.findByText(
@@ -1612,7 +1620,7 @@ describe("Model source", () => {
       runtime: "claude",
       runtime_model: "",
     });
-    renderPage(fixture);
+    await renderPage(fixture);
 
     fireEvent.click(await screen.findByRole("tab", { name: /BYOK/u }));
     fireEvent.change(screen.getByLabelText("Base URL"), {
@@ -1642,7 +1650,7 @@ describe("Model source", () => {
         viewer_is_owner: true,
       });
     });
-    renderPage(fixture);
+    await renderPage(fixture);
 
     fireEvent.click(await screen.findByRole("tab", { name: "Local model" }));
     fireEvent.click(

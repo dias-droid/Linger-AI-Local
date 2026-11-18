@@ -1,3 +1,4 @@
+import { defineGlobalProperty } from "@/test/global-properties";
 import { acceptRoomCreation } from "@/test/teamhub-test-runtime";
 import { teamHubErrorResponse } from "@/test/teamhub-test-server";
 import {
@@ -23,53 +24,15 @@ import {
   servePeerActive,
   readTenantAgents,
   readAgentAvailability,
+  openPanelTab,
 } from "./room-chat.fixtures";
 
-const openPanelTab = vi.fn();
-
-vi.mock("../room-connectivity", async () => {
-  const actual = await vi.importActual<typeof import("../room-connectivity")>(
-    "../room-connectivity",
-  );
-  return {
-    ...actual,
-    // Keep the standalone Chat defaults; only spy panel opens from message entities.
-    useRoomOutletContext: () => ({
-      focusPanelMessageId: null,
-      lastAppliedRoomSeq: 0,
-      messagePresentations: {},
-      openPanelTab,
-      recordMessagePresentation: () => undefined,
-      status: "connected" as const,
-    }),
-  };
-});
-
 beforeEach(() => {
-  Object.defineProperty(window, "localStorage", {
+  defineGlobalProperty(window, "localStorage", {
     configurable: true,
     value: createTestStorage(),
   });
 });
-
-vi.mock("@/components/read-only-blocknote-document-loader", () => ({
-  ReadOnlyBlockNoteDocumentLoader: ({
-    ariaLabel,
-    markdown,
-  }: {
-    ariaLabel: string;
-    markdown: string;
-  }) => (
-    <article aria-label={ariaLabel} data-editable="false">
-      {markdown
-        .split(/\n+/)
-        .filter(Boolean)
-        .map((line) => (
-          <p key={line}>{line.replace(/^#+\s*/, "")}</p>
-        ))}
-    </article>
-  ),
-}));
 
 describe("Room Chat", () => {
   beforeEach(async () => {

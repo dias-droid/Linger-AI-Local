@@ -1,5 +1,10 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { createRef, type ReactNode } from "react";
+import {
+  fireEvent,
+  render as renderUi,
+  screen,
+  within,
+} from "@testing-library/react";
+import { createRef, type ReactElement, type ReactNode } from "react";
 import {
   afterEach,
   beforeAll,
@@ -9,6 +14,11 @@ import {
   it,
   vi,
 } from "vitest";
+
+import {
+  VoiceMaterialsContext,
+  type VoiceMaterials,
+} from "../chat/voice-mode/voice-materials-context";
 
 import { DocumentVoiceSelectionControl } from "./document-voice-selection-control";
 
@@ -20,15 +30,28 @@ const context = vi.hoisted(() => ({
   addSelection: vi.fn(),
 }));
 
-vi.mock("../chat/voice-mode/voice-materials-context", () => ({
-  useOptionalVoiceMaterials: () => (context.enabled ? context : undefined),
-}));
+// Read on every render, so a test configures the context before rendering.
+function VoiceMaterialsFromTest({ children }: { children: ReactNode }) {
+  return (
+    <VoiceMaterialsContext
+      value={
+        context.enabled ? (context as unknown as VoiceMaterials) : undefined
+      }
+    >
+      {children}
+    </VoiceMaterialsContext>
+  );
+}
+
+function render(ui: ReactElement) {
+  return renderUi(ui, { wrapper: VoiceMaterialsFromTest });
+}
 
 // React binds its own document selectionchange listener on its first render.
 // Render once before any test so a test that counts document listeners counts
 // only the control's, whichever test runs first.
 beforeAll(() => {
-  render(<span />).unmount();
+  renderUi(<span />).unmount();
 });
 
 beforeEach(() => {

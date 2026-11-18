@@ -9,7 +9,7 @@ import {
   QueryClientProvider,
 } from "@tanstack/react-query";
 import { act, render } from "@testing-library/react";
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { vi } from "vitest";
 
@@ -34,6 +34,10 @@ import {
   roomQueryOptions,
   teamHubIdentityQueryOptions,
 } from "../room-queries";
+import {
+  RoomChromeProvider,
+  type RoomOutletContext,
+} from "../room-connectivity";
 
 import { RoomChat } from "./room-chat";
 import { roomMessageSender } from "./room-message-sender";
@@ -78,6 +82,26 @@ export function repliedRunScenario() {
   };
 }
 
+// Panel opens from message entities go to this spy; the rest is the standalone
+// Chat context.
+export const openPanelTab = vi.fn<RoomOutletContext["openPanelTab"]>();
+
+const testRoomChrome: RoomOutletContext = {
+  focusPanelMessageId: null,
+  lastAppliedRoomSeq: 0,
+  messagePresentations: {},
+  openPanelTab,
+  openProfile: () => undefined,
+  recordMessagePresentation: () => undefined,
+  status: "connected",
+};
+
+export function TestRoomChrome({ children }: { children: ReactNode }) {
+  return (
+    <RoomChromeProvider value={testRoomChrome}>{children}</RoomChromeProvider>
+  );
+}
+
 export function renderRoomChat(
   runtime: TeamHubRuntime,
   queryClient: QueryClient,
@@ -112,6 +136,7 @@ export function renderRoomChat(
         </Suspense>
       </TeamHubRuntimeProvider>
     </QueryClientProvider>,
+    { wrapper: TestRoomChrome },
   );
 
   return router;

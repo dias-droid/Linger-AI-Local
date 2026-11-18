@@ -1,3 +1,4 @@
+import { defineGlobalProperty } from "@/test/global-properties";
 import { seedRoomUpload } from "@/test/document-scenarios";
 import { QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -35,53 +36,16 @@ import {
   loadedRoomChatQueryClient,
   testQueryClient,
   createTestTeamHubRuntime,
+  openPanelTab,
+  TestRoomChrome,
 } from "./room-chat.fixtures";
 
-const openPanelTab = vi.fn();
-
-vi.mock("../room-connectivity", async () => {
-  const actual = await vi.importActual<typeof import("../room-connectivity")>(
-    "../room-connectivity",
-  );
-  return {
-    ...actual,
-    // Keep the standalone Chat defaults; only spy panel opens from message entities.
-    useRoomOutletContext: () => ({
-      focusPanelMessageId: null,
-      lastAppliedRoomSeq: 0,
-      messagePresentations: {},
-      openPanelTab,
-      recordMessagePresentation: () => undefined,
-      status: "connected" as const,
-    }),
-  };
-});
-
 beforeEach(() => {
-  Object.defineProperty(window, "localStorage", {
+  defineGlobalProperty(window, "localStorage", {
     configurable: true,
     value: createTestStorage(),
   });
 });
-
-vi.mock("@/components/read-only-blocknote-document-loader", () => ({
-  ReadOnlyBlockNoteDocumentLoader: ({
-    ariaLabel,
-    markdown,
-  }: {
-    ariaLabel: string;
-    markdown: string;
-  }) => (
-    <article aria-label={ariaLabel} data-editable="false">
-      {markdown
-        .split(/\n+/)
-        .filter(Boolean)
-        .map((line) => (
-          <p key={line}>{line.replace(/^#+\s*/, "")}</p>
-        ))}
-    </article>
-  ),
-}));
 
 describe("Room Chat", () => {
   beforeEach(async () => {
@@ -293,6 +257,7 @@ describe("Room Chat", () => {
           </Suspense>
         </TeamHubRuntimeProvider>
       </QueryClientProvider>,
+      { wrapper: TestRoomChrome },
     );
 
     await screen.findByText(/Reviewed the checklist/);
@@ -328,6 +293,7 @@ describe("Room Chat", () => {
           </Suspense>
         </TeamHubRuntimeProvider>
       </QueryClientProvider>,
+      { wrapper: TestRoomChrome },
     );
 
     await screen.findByLabelText("Message Room");

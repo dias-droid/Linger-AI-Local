@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
-import { expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import { createTestTeamHubRuntime } from "@/test/teamhub-test-runtime";
 import { TeamHubRuntimeProvider } from "@/features/teamhub/teamhub-runtime";
 import { WikiHomePage } from "./wiki-home-page";
@@ -10,12 +10,6 @@ import {
   serveWikiStatus,
   wikiDocument,
 } from "./wiki.test-support";
-
-vi.mock("@/components/read-only-blocknote-document-loader", () => ({
-  ReadOnlyBlockNoteDocumentLoader: ({ markdown }: { markdown: string }) => (
-    <article>{markdown}</article>
-  ),
-}));
 
 it("shows real collection pages on the Wiki tab and returns to Profile", async () => {
   const runtime = createTestTeamHubRuntime();

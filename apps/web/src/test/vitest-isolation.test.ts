@@ -14,9 +14,7 @@ describe("Vitest isolation partition", () => {
   it("splits the real test files without losing any", () => {
     const root = fileURLToPath(new URL("../..", import.meta.url));
     const { isolated, shared } = partitionTestFiles(root, "src/**/*.test.tsx");
-    expect(isolated).toContain(
-      "src/features/rooms/documents/document-voice-selection-control.test.tsx",
-    );
+    expect(isolated).toContain("src/features/rooms/room-surface.test.tsx");
     expect(shared).toContain("src/features/rooms/room-navigation.test.tsx");
     expect(isolated.filter((file) => shared.includes(file))).toEqual([]);
   });
