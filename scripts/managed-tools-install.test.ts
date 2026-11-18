@@ -452,22 +452,27 @@ describe("managed tools transaction", () => {
         { stdio: ["ignore", "pipe", "pipe"] },
       );
       await once(unrelated.stdout, "data");
-      const started = Date.now();
       const operation = installer.update("hung");
       let watchdog: ReturnType<typeof setTimeout> | undefined;
       try {
+        // The smoke ignores SIGTERM and never exits, so only the SIGKILL
+        // escalation settles it. The watchdog separates that from a hang
+        // without a wall-clock bound that host load can break.
         await expect(
           Promise.race([
             operation,
             new Promise((_, reject) => {
               watchdog = setTimeout(
-                () => reject(new Error("Smoke did not meet hard deadline")),
-                5000,
+                () => reject(new Error("Smoke was never hard-killed")),
+                20_000,
               );
             }),
           ]),
-        ).rejects.toThrow(/timed out/i);
-        expect(Date.now() - started).toBeLessThan(4500);
+        ).rejects.toMatchObject({
+          message: expect.stringMatching(/timed out after 1500ms/i),
+          killed: true,
+          signal: "SIGKILL",
+        });
         expect(await readFile(termFile, "utf8")).toBe("received");
         const pids: number[] = JSON.parse(await readFile(pidFile, "utf8"));
         for (const pid of pids) {
