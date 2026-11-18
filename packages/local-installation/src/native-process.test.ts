@@ -24,6 +24,7 @@ import {
   nativeConfigurationChanged,
   startNativeProcess,
   inspectNativeProcess,
+  reclaimNativeOrphans,
   stopNativeProcess,
 } from "./native-process.js";
 
@@ -242,6 +243,39 @@ test("stops descendants that ignore SIGINT after the service leader exits", asyn
     expect(second.pid).not.toBe(first.pid);
     await expect.poll(() => exited(orphan)).toBe(true);
     expect((await inspectNativeProcess(root, "web")).running).toBe(true);
+  },
+);
+
+(process.platform === "win32" ? test.skip : test)(
+  "reclaims a service an earlier attempt left under a lease no record holds",
+  async (context) => {
+    const { expect } = context;
+    const root = await fixture(context);
+    const service = (name: "web" | "teamhub") => ({
+      root,
+      name,
+      executable: process.execPath,
+      args: [
+        "-e",
+        `require('node:fs').writeFileSync('${name}.pid',String(process.pid));setInterval(()=>{},1000)`,
+      ],
+      cwd: root,
+      env: process.env,
+    });
+    const lost = await startNativeProcess(service("web"));
+    const kept = await startNativeProcess(service("teamhub"));
+    const pid = async (name: string) =>
+      Number(await readFile(path.join(root, `${name}.pid`), "utf8"));
+    await expect.poll(() => pid("web").catch(() => 0)).not.toBe(0);
+    await expect.poll(() => pid("teamhub").catch(() => 0)).not.toBe(0);
+    // The attempt that started it failed before its record was kept.
+    await rm(path.join(root, "native/processes/web.json"));
+    const ended = await reclaimNativeOrphans(root, { ports: [], paths: [] });
+    expect(ended).toContain(lost.pid);
+    await expect.poll(async () => exited(await pid("web"))).toBe(true);
+    expect(exited(lost.pid!)).toBe(true);
+    expect(exited(kept.pid!)).toBe(false);
+    expect(exited(await pid("teamhub"))).toBe(false);
   },
 );
 

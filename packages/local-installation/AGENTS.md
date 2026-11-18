@@ -137,7 +137,15 @@ program fails the start after 15 seconds instead of at the deadline.
 On POSIX, a start that finds the recorded supervisor gone but processes
 still carrying its lease (the app was killed with it) ends them as a stop
 does and starts the service again. A live recorded PID or process group
-without the lease proves nothing and is refused, never signalled.
+without the lease proves nothing and is refused, never signalled. A start
+that fails before its record is kept ends what it launched: by the lease,
+or, when the lease cannot be proved, by the group of the supervisor it has
+not reaped yet, whose PID cannot belong to another program. Before the
+services start, `reclaimNativeOrphans` also ends, on POSIX, a supervisor
+whose command line names a job file in this instance's process directory
+under a lease no record holds, once its environment proves that lease; an
+attempt that failed or was killed before keeping a record would otherwise
+leave PostgreSQL holding `postmaster.pid` against every retry.
 
 Move a freshly downloaded or unpacked file or folder into place with
 `renameRetrying` from `fs-retry.ts`: on Windows antivirus and indexing hold

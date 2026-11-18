@@ -1121,9 +1121,10 @@ async function runNativeSource(
   }
 }
 /**
- * Windows: ends the processes of this instance an earlier run lost track of
- * (an earlier release's stop left them, or their supervisor died), so they
- * neither hold the ports nor answer health checks for the new services.
+ * Ends the processes of this instance an earlier run lost track of (an
+ * earlier release's stop left them, their supervisor died, or a failed
+ * attempt kept no record of them), so they neither hold the ports and data
+ * files nor answer health checks for the new services.
  */
 async function reclaimEarlierProcesses(
   instance: Instance,

@@ -228,7 +228,7 @@ export async function prepareSourceConfiguration(
         (await portFree(port))
       )
         continue;
-      // On Windows the program may be one an earlier run left behind.
+      // The program may be one an earlier run left behind.
       await reclaimNativeOrphans(instance.root, {
         ports: [port],
         paths: [path.resolve(instance.root, "../.."), instance.root, repo],

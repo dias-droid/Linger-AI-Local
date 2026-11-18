@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { createHash, randomBytes } from "node:crypto";
@@ -396,11 +396,43 @@ export async function startNativeProcess(options: {
           { cause: error },
         );
     }
+    // When the lease could not be proved, the supervisor this call spawned
+    // and has not reaped is still provably its own, and so is the group it
+    // leads: end them, or the service keeps its files (postmaster.pid) and
+    // ports against every retry.
+    await endUnreapedGroup(child);
     if (child.connected) child.disconnect();
     child.unref();
     throw error;
   } finally {
     await rm(job, { force: true });
+  }
+}
+
+/**
+ * Ends the process group a detached child leads while the child is not yet
+ * reaped: until then its PID, and so its group, cannot belong to another
+ * program.
+ */
+async function endUnreapedGroup(child: ChildProcess): Promise<void> {
+  if (child.pid === undefined) return;
+  const exited = new Promise<void>((resolve) => child.once("exit", resolve));
+  if (child.exitCode === null && child.signalCode === null) {
+    try {
+      process.kill(-child.pid, "SIGKILL");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+    }
+    await Promise.race([exited, delay(5_000)]);
+  }
+  // The leader's exit does not wait for the rest of its group.
+  for (let count = 0; count < 50 && (await groupLive(child.pid)); count++) {
+    try {
+      process.kill(-child.pid, "SIGKILL");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+    }
+    await delay(100);
   }
 }
 
@@ -417,11 +449,20 @@ export async function stopNativeProcess(
 ): Promise<void> {
   const record = await stored(root, name);
   if (!record) return;
-  if (process.platform === "win32") {
+  if (process.platform === "win32")
     await stopWindowsTree(name, record.lease, record);
-    await rm(paths(root, name).record, { force: true });
-    return;
-  }
+  else await stopLease(name, record, interruptMs);
+  await rm(paths(root, name).record, { force: true });
+}
+/**
+ * macOS and Linux: ends the supervisor holding the lease and everything
+ * under it, SIGINT first and SIGKILL for what outlives `interruptMs`.
+ */
+async function stopLease(
+  name: NativeService,
+  record: Pick<Lease, "pid" | "birth" | "lease">,
+  interruptMs: number,
+): Promise<void> {
   const current = await observed(record.pid, record.lease);
   let owned = await nativeLeaseProcesses(record.lease);
   if (current !== record.birth && !owned.length) {
@@ -432,7 +473,6 @@ export async function stopNativeProcess(
         ),
         { code: NATIVE_PROCESS_REPLACED },
       );
-    await rm(paths(root, name).record, { force: true });
     return;
   }
   const signalOwned = async (
@@ -496,7 +536,6 @@ export async function stopNativeProcess(
     (await nativeLeaseProcesses(record.lease)).length
   )
     throw new Error(`Native ${name} did not stop; identity record retained.`);
-  await rm(paths(root, name).record, { force: true });
 }
 
 function terminate(pid: number) {
@@ -664,14 +703,14 @@ export function windowsOrphans(
   return order;
 }
 /**
- * Ends what `windowsOrphans` finds for this instance; nothing elsewhere.
+ * Ends what `windowsOrphans` finds for this instance on Windows, and what
+ * `reclaimUnrecordedLeases` finds on macOS and Linux; nothing elsewhere.
  * Returns the PIDs it ended.
  */
 export async function reclaimNativeOrphans(
   root: string,
   options: { ports: number[]; paths: string[] },
 ): Promise<number[]> {
-  if (process.platform !== "win32") return [];
   const records: Lease[] = [];
   for (const name of services)
     try {
@@ -680,6 +719,8 @@ export async function reclaimNativeOrphans(
     } catch {
       // A damaged record proves nothing; its supervisor counts as unrecorded.
     }
+  if (process.platform !== "win32")
+    return reclaimUnrecordedLeases(root, records);
   const ended: number[] = [];
   const deadline = Date.now() + 12_000;
   for (;;) {
@@ -708,4 +749,64 @@ export async function reclaimNativeOrphans(
       );
     await delay(100);
   }
+}
+
+/** Each process of this user with its command line (macOS and Linux). */
+async function ownCommands(): Promise<Array<{ pid: number; command: string }>> {
+  if (process.platform === "linux") {
+    const listed = await Promise.all(
+      (await linuxProcessStates(true)).map(async ({ pid, state }) => {
+        if (state === "Z") return undefined;
+        const command = await readFile(`/proc/${pid}/cmdline`, "utf8").catch(
+          () => "",
+        );
+        return { pid, command: command.split("\0").join(" ") };
+      }),
+    );
+    return listed.filter((entry) => entry !== undefined);
+  }
+  const result = await runProcess("/bin/ps", ["-axo", "pid=,uid=,command="], {
+    timeoutMs: 5_000,
+  });
+  if (result.code !== 0)
+    throw new Error("Native processes could not be enumerated.");
+  return result.stdout.split("\n").flatMap((line) => {
+    const match = /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line);
+    return match && Number(match[2]) === process.getuid?.()
+      ? [{ pid: Number(match[1]), command: match[3]! }]
+      : [];
+  });
+}
+/**
+ * macOS and Linux: ends the services an earlier attempt started and kept no
+ * record of (it failed or was killed before writing one), which otherwise
+ * keep their files and ports, such as PostgreSQL's postmaster.pid, against
+ * every retry. A supervisor is this instance's own when its command line
+ * names a job file in this instance's process directory and its environment
+ * carries that job's unguessable lease. Returns the supervisors it ended.
+ */
+async function reclaimUnrecordedLeases(
+  root: string,
+  records: Array<Pick<Lease, "lease">>,
+): Promise<number[]> {
+  const recorded = new Set(records.map((record) => record.lease));
+  const jobs = path.join(root, "native", "processes") + path.sep;
+  const ended: number[] = [];
+  for (const { pid, command } of await ownCommands()) {
+    if (!command.includes(SUPERVISOR)) continue;
+    const at = command.indexOf(jobs);
+    const job =
+      at < 0
+        ? undefined
+        : /^([a-z-]+)\.([a-f0-9]{64})\.job(?:\s|$)/.exec(
+            command.slice(at + jobs.length),
+          );
+    if (!job || !services.has(job[1]!) || recorded.has(job[2]!)) continue;
+    const [, name, lease] = job as unknown as [string, NativeService, string];
+    const birth = await observed(pid, lease);
+    if (!birth) continue;
+    await stopLease(name, { pid, birth, lease }, 12_000);
+    ended.push(pid);
+  }
+  return ended;
 }
