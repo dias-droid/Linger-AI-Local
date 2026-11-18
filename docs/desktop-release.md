@@ -41,7 +41,10 @@ git push origin desktop-v0.16.36
 The workflow runs for `desktop-v*` tags and from Actions → Desktop release →
 Run workflow. Its `build` jobs
 run on `ubuntu-24.04` (the macOS and Windows runners have no Docker) and keep
-the files as workflow artifacts for 14 days; `release` writes `SHA256SUMS.txt`
+the files as workflow artifacts for 14 days: `desktop-<target>`, a zip of
+every file for the platform, and the installer on its own, not zipped (the
+`.dmg`, the `-setup.exe`, the Linux `.tar.gz`), for testers to download
+directly. `release` writes `SHA256SUMS.txt`
 and creates the GitHub Release, or uploads the files again to an existing one.
 A manual run publishes only with `publish` set.
 

@@ -77,6 +77,14 @@ jobs:
       fail-fast: false
       matrix:
         target: [darwin-arm64, linux-x64, win32-x64]
+        # The file a tester downloads and runs, uploaded on its own below.
+        include:
+          - target: darwin-arm64
+            installer: macos-arm64.dmg
+          - target: linux-x64
+            installer: linux-x64.tar.gz
+          - target: win32-x64
+            installer: windows-x64-setup.exe
     env:
       DESKTOP_VERSION: ${{ needs.prepare.outputs.version }}
       RELEASE_OUT: ${{ github.workspace }}/.linger-runtime/desktop-release
@@ -166,6 +174,14 @@ jobs:
           path: ${{ env.RELEASE_OUT }}/assets/
           if-no-files-found: error
           compression-level: 0
+          retention-days: 14
+      # The installer again on its own, not zipped, so a tester downloads
+      # only the file they run instead of every package for the platform.
+      - uses: actions/upload-artifact@v7
+        with:
+          path: ${{ env.RELEASE_OUT }}/assets/Linger-${{ env.DESKTOP_VERSION }}-${{ matrix.installer }}
+          archive: false
+          if-no-files-found: error
           retention-days: 14
 
   release:
