@@ -337,7 +337,12 @@ SELECT message.id,message.author_actor_id,author.display_name AS author,author.k
  ARRAY(SELECT DISTINCT reference->>'document_id' FROM agent_history_messages history
   CROSS JOIN LATERAL jsonb_array_elements(history.resource_references) reference
   WHERE history.message_id=message.id AND history.tenant_id=message.tenant_id
-  ORDER BY reference->>'document_id')::text[] AS document_ids
+  ORDER BY reference->>'document_id')::text[] AS document_ids,
+ -- A recording's meeting summary is a card whose text lives on its Capture;
+ -- the live voice reads it here instead of only the card's label.
+ coalesce((SELECT capture.quick_notes FROM jsonb_array_elements(message.segments) segment
+  JOIN capture_sessions capture ON capture.id=segment->>'capture_id' AND capture.tenant_id=message.tenant_id
+  WHERE segment->>'type'='meeting_notes' AND capture.quick_notes_state='ready' LIMIT 1),'null'::jsonb)::jsonb AS meeting_summary
 FROM messages message JOIN actors author ON author.id=message.author_actor_id
 WHERE message.room_id=sqlc.arg(room_id)::text AND message.message_kind='conversation'
 ORDER BY message.created_at DESC,message.id DESC LIMIT 20;
