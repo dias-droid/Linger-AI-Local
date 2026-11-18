@@ -196,7 +196,7 @@ export default function RecordingWindow() {
   const pinched = usePinchZoom();
   const [moved, setMoved] = useState<{ left: number; top: number }>();
   const frameRef = useRef<HTMLDivElement>(null);
-  // Dragging the hover title bar moves the window, kept inside the viewport.
+  // Keep the window inside the viewport when dragging its title bar.
   const startMove = (event: PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || (event.target as Element).closest("button"))
       return;

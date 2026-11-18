@@ -47,16 +47,19 @@ export function RecordingEntry({
     status === "finalizing" ||
     (status === "recovering" &&
       !(voice && isTranscriptRecoveryPaused(voice.captureState)));
+  const switchFromLive = Boolean(voiceMode?.session);
   const standby = voice?.listenerStatus === "standby";
   // Until voice connects, including while it reconnects, the icon spins.
   const connecting = !voice && !connectionFailed && !needsKey;
   const label = recording
     ? "Return to recording"
-    : saving
-      ? "View save progress"
-      : connectionFailed
-        ? "Retry voice connection"
-        : "Meetings";
+    : saving && switchFromLive
+      ? "Start a new Meeting"
+      : saving
+        ? "View save progress"
+        : connectionFailed
+          ? "Retry voice connection"
+          : "Meetings";
   const hint =
     error ??
     (connectionFailed
@@ -91,7 +94,7 @@ export function RecordingEntry({
         await voice.selectTargetRoom?.(anotherMeRoomId);
         await opened;
         openRecordingWindow({
-          autoStart: !saving || Boolean(voiceMode?.session),
+          autoStart: !saving || switchFromLive,
         });
       } catch (cause) {
         await opened;
@@ -137,12 +140,14 @@ export function RecordingEntry({
         title={hint}
         type="button"
       >
-        {saving || connecting ? (
+        {(saving && !switchFromLive) || connecting ? (
           <Icon icon={Loading03Icon} className="animate-spin" size={16} />
         ) : (
           <Icon icon={AiTranscribeAudioIcon} size={16} />
         )}
-        <span className="xs-nav-btn-label">Meetings</span>
+        <span className="xs-nav-btn-label">
+          {saving && switchFromLive ? "New Meeting" : "Meetings"}
+        </span>
         {recording || connectionFailed ? (
           <span
             aria-hidden="true"

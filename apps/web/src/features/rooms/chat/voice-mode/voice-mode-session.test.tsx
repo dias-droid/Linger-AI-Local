@@ -156,60 +156,69 @@ describe("Voice Mode session", () => {
     },
   );
 
-  it("allows the Meetings button during Voice Mode and waits for its microphone to close", async () => {
-    let floated!: () => void;
-    const floating = new Promise<void>((resolve) => {
-      floated = resolve;
-    });
-    let released!: () => void;
-    transport.close.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          released = resolve;
-        }),
-    );
-    const selectTargetRoom = vi.fn(async () => undefined);
-    const hardware = {
-      captureState: { status: "idle" },
-      composerMicrophoneActive: true,
-      selectTargetRoom,
-    } as unknown as VoiceControlContextValue;
-    render(
-      <TeamHubRuntimeProvider runtime={runtime}>
-        <VoiceControlContext value={hardware}>
-          <VoiceModeSessionProvider>
-            <CaptureApi />
-            <RecordingEntry
-              anotherMeRoomId="room-meeting"
-              tenantId={target.tenantId}
-            />
-          </VoiceModeSessionProvider>
-        </VoiceControlContext>
-      </TeamHubRuntimeProvider>,
-    );
-    act(() => {
-      void api.start(
-        target,
-        prefix,
-        { dictation: false, live: true },
-        () => floating,
+  it.each([
+    ["idle", "Meetings"],
+    ["finalizing", "Start a new Meeting"],
+  ])(
+    "switches from Voice Mode with Meeting %s using %s",
+    async (status, label) => {
+      let floated!: () => void;
+      const floating = new Promise<void>((resolve) => {
+        floated = resolve;
+      });
+      let released!: () => void;
+      transport.close.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            released = resolve;
+          }),
       );
-    });
-    await waitFor(() => expect(transport.openLive).toHaveBeenCalledOnce());
-    const meetings = screen.getByRole("button", { name: "Meetings" });
-    expect(meetings).toBeEnabled();
-    fireEvent.click(meetings);
-    expect(transport.close).not.toHaveBeenCalled();
-    await act(async () => floated());
-    expect(transport.close).toHaveBeenCalledOnce();
-    expect(selectTargetRoom).not.toHaveBeenCalled();
+      const selectTargetRoom = vi.fn(async () => undefined);
+      const hardware = {
+        captureState: { status },
+        composerMicrophoneActive: true,
+        leavePage: vi.fn(async () => undefined),
+        selectTargetRoom,
+      } as unknown as VoiceControlContextValue;
+      render(
+        <TeamHubRuntimeProvider runtime={runtime}>
+          <VoiceControlContext value={hardware}>
+            <VoiceModeSessionProvider>
+              <CaptureApi />
+              <RecordingEntry
+                anotherMeRoomId="room-meeting"
+                tenantId={target.tenantId}
+              />
+            </VoiceModeSessionProvider>
+          </VoiceControlContext>
+        </TeamHubRuntimeProvider>,
+      );
+      act(() => {
+        void api.start(
+          target,
+          prefix,
+          { dictation: false, live: true },
+          () => floating,
+        );
+      });
+      await waitFor(() => expect(transport.openLive).toHaveBeenCalledOnce());
+      const meetings = screen.getByRole("button", { name: label });
+      expect(meetings).toBeEnabled();
+      fireEvent.click(meetings);
+      expect(transport.close).not.toHaveBeenCalled();
+      await act(async () => floated());
+      expect(transport.close).toHaveBeenCalledOnce();
+      expect(selectTargetRoom).not.toHaveBeenCalled();
 
-    await act(async () => released());
-    await waitFor(() =>
-      expect(selectTargetRoom).toHaveBeenCalledExactlyOnceWith("room-meeting"),
-    );
-    expect(api.session).toBeUndefined();
-  });
+      await act(async () => released());
+      await waitFor(() =>
+        expect(selectTargetRoom).toHaveBeenCalledExactlyOnceWith(
+          "room-meeting",
+        ),
+      );
+      expect(api.session).toBeUndefined();
+    },
+  );
 
   it("keeps one transport across Room navigation and sends there directly", async () => {
     const dispatch = vi.fn(async () => undefined);

@@ -5561,3 +5561,10 @@ button.question-choice:focus-visible {
   width: 2.25rem;
   height: 2.25rem;
 }
+
+.voice-window-title {
+  background-color: #242527;
+  color: #f8f8f8;
+  font-size: 12px;
+  font-weight: 500;
+}

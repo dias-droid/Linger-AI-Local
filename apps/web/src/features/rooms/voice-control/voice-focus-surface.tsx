@@ -62,7 +62,7 @@ export function VoiceFocusSurface({
   onExit: () => void;
   /** Returns the page window to the always-on-top browser window. */
   onFloat?: () => void;
-  /** Starts moving the page window from its hover title bar. */
+  /** Starts moving the in-page window from its title bar. */
   onMoveStart?: (event: PointerEvent<HTMLDivElement>) => void;
   onViewChange?: (view: RecordingView | undefined) => void;
   /** Present once a recording runs; before that only the transcript shows. */
@@ -230,11 +230,9 @@ export function VoiceFocusSurface({
     if (captureActive) setConfirmingStop(true);
     else void run(leave);
   };
-  // The picture-in-picture window cannot reveal a bar on hover, so it keeps
-  // the bar docked on top.
   const titleBar = (
     <div
-      className={`${styles.titleBar} ${pip ? styles.titleBarDocked : ""}`}
+      className={`${styles.titleBar} ${pip ? "bg-app-canvas" : "voice-window-title rounded-t-2xl"}`}
       onPointerDown={pip ? undefined : onMoveStart}
     >
       {panels ? (
@@ -252,7 +250,7 @@ export function VoiceFocusSurface({
           )}
         </button>
       ) : null}
-      <span className="flex-1" />
+      <span className="flex-1">{pip ? null : "Meeting"}</span>
       {onFloat ? (
         <button
           aria-label="Float recording window"
@@ -274,7 +272,7 @@ export function VoiceFocusSurface({
         className={
           pip
             ? "relative flex min-h-0 flex-1 flex-col bg-app-canvas text-app-ink"
-            : `relative flex max-h-[min(720px,calc(100dvh-96px))] min-h-0 flex-col overflow-hidden rounded-2xl bg-app-canvas text-app-ink ${styles.window}`
+            : `relative flex max-h-[min(720px,calc(100dvh-132px))] min-h-0 flex-col overflow-hidden rounded-b-2xl bg-app-canvas text-app-ink ${styles.window}`
         }
         data-paused={paused || undefined}
       >

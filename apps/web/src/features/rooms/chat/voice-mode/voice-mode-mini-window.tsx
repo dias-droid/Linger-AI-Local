@@ -245,8 +245,16 @@ function MiniWindow({
       }
       data-pip={pip ? true : undefined}
       data-size={size}
-      style={pip ? undefined : { ...position, maxHeight: height, width }}
+      style={pip ? undefined : { ...position, maxHeight: height + 36, width }}
     >
+      {pip ? null : (
+        <div
+          className="voice-window-title flex h-9 shrink-0 cursor-grab touch-none select-none items-center px-3 active:cursor-grabbing"
+          {...dragHandlers}
+        >
+          Voice Mode
+        </div>
+      )}
       <header
         className={`flex shrink-0 select-none items-center gap-2 border-b border-app-border px-3 py-2 ${
           pip ? "" : "cursor-grab touch-none active:cursor-grabbing"
