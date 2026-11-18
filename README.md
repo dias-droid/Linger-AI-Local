@@ -77,7 +77,7 @@ One command detects your hardware, recommends the best model, installs it and ch
     <th align="center" width="1200">SimplexAI</th>
     <th align="left" width="2700">Compares with</th>
   </tr>
-  <tr><td>Mac 16 GB</td><td>Spark-X2.6-4B Q4_K_M</td><td align="center">37.6 short (37.4–37.8); 13.3 after a 126K prompt (13.30–13.31)</td><td align="center">Not ranked</td><td>—</td></tr>
+  <tr><td>Mac 16 GB</td><td>Spark-X2.6-4B Q4_K_M</td><td align="center">32.99–37.24 for the slower of two concurrent sessions with short prompts; 24.61–26.23 after one 56,978-token prompt</td><td align="center">Not ranked</td><td>—</td></tr>
   <tr><td>Mac 24 GB</td><td>Qwen3.8-27B UD-IQ3_S</td><td align="center">46.06 single session (median of 3); 48.43 for 2 sessions together</td><td align="center">51.9</td><td>≈ Claude Opus 4.5</td></tr>
   <tr><td>Mac 32 GB</td><td>Qwen3.8-27B UD-Q4_K_M</td><td align="center">45.44 single session (median of 3)</td><td align="center">54.0</td><td>≈ Claude Sonnet 4.6</td></tr>
   <tr><td>Linux NVIDIA 8 GB + 32 GB</td><td>Qwen3.6-35B-A3B UD-Q3_K_M</td><td align="center">121–146 short; 88–103 after a 62K prompt</td><td align="center">35.4</td><td>≈ Gemini 2.5 Pro</td></tr>

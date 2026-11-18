@@ -24,20 +24,20 @@ packed around it.
 
 <!-- BEGIN GENERATED: public-tiers tiers, from llm-inference-lab docs/public-tiers.json; run scripts/public_tiers_sync.py there, do not edit here -->
 
-| Machine                    | Model               | Quant        | Context | Decode, tok/s                                                                                  | SimplexAI  | Compares with       |
-| -------------------------- | ------------------- | ------------ | ------- | ---------------------------------------------------------------------------------------------- | ---------- | ------------------- |
-| Mac 16 GB                  | Spark-X2.6-4B       | Q4_K_M       | 64K     | 37.6 short (37.4–37.8); 13.3 after a 126K prompt (13.30–13.31)                                 | Not ranked | —                   |
-| Mac 24 GB                  | Qwen3.8-27B         | UD-IQ3_S     | 64K     | 46.06 single session (median of 3); 48.43 for 2 sessions together                              | 51.9       | ≈ Claude Opus 4.5   |
-| Mac 32 GB                  | Qwen3.8-27B         | UD-Q4_K_M    | 128K    | 45.44 single session (median of 3)                                                             | 54.0       | ≈ Claude Sonnet 4.6 |
-| Linux NVIDIA 8 GB + 32 GB  | Qwen3.6-35B-A3B     | UD-Q3_K_M    | 64K     | 121–146 short; 88–103 after a 62K prompt                                                       | 35.4       | ≈ Gemini 2.5 Pro    |
-| Linux NVIDIA 12 GB + 32 GB | Qwen3.8-Flash-Next† | GSQ-RCO Q2_0 | 64K     | 21.3 short (19.8–25.4); 34.1 after a 62K prompt (12.0–37.3), first token after about 3 minutes | 57.3       | ≈ Claude Opus 4.6   |
-| Linux NVIDIA 24 GB + 64 GB | Qwen3.8-27B         | UD-Q4_K_M    | 128K    | 32.5–33.2 single session at 130K; 28–41 per session with two sessions at about 8K              | 54.0       | ≈ Claude Sonnet 4.6 |
+| Machine                    | Model               | Quant        | Context | Decode, tok/s                                                                                                       | SimplexAI  | Compares with       |
+| -------------------------- | ------------------- | ------------ | ------- | ------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------- |
+| Mac 16 GB                  | Spark-X2.6-4B       | Q4_K_M       | 64K     | 32.99–37.24 for the slower of two concurrent sessions with short prompts; 24.61–26.23 after one 56,978-token prompt | Not ranked | —                   |
+| Mac 24 GB                  | Qwen3.8-27B         | UD-IQ3_S     | 64K     | 46.06 single session (median of 3); 48.43 for 2 sessions together                                                   | 51.9       | ≈ Claude Opus 4.5   |
+| Mac 32 GB                  | Qwen3.8-27B         | UD-Q4_K_M    | 128K    | 45.44 single session (median of 3)                                                                                  | 54.0       | ≈ Claude Sonnet 4.6 |
+| Linux NVIDIA 8 GB + 32 GB  | Qwen3.6-35B-A3B     | UD-Q3_K_M    | 64K     | 121–146 short; 88–103 after a 62K prompt                                                                            | 35.4       | ≈ Gemini 2.5 Pro    |
+| Linux NVIDIA 12 GB + 32 GB | Qwen3.8-Flash-Next† | GSQ-RCO Q2_0 | 64K     | 21.3 short (19.8–25.4); 34.1 after a 62K prompt (12.0–37.3), first token after about 3 minutes                      | 57.3       | ≈ Claude Opus 4.6   |
+| Linux NVIDIA 24 GB + 64 GB | Qwen3.8-27B         | UD-Q4_K_M    | 128K    | 32.5–33.2 single session at 130K; 28–41 per session with two sessions at about 8K                                   | 54.0       | ≈ Claude Sonnet 4.6 |
 
 Decode speeds were measured in our lab, mostly on a simulated tier (a larger card held to the tier's memory budget, or a larger Mac planned as the tier), so a real machine of the tier can be slower. SimplexAI scores sit on the third-party AIHOT scale, where 50 is the reference average, and scores within 3 points count as the same level.
 
 Test conditions:
 
-- Mac 16 GB: An Apple M6 Mac mini with 24 GB, not a 16 GB machine; llama.cpp b12167 Metal, KV q8_0, one session.
+- Mac 16 GB: An Apple M6 Mac mini with 24 GB of unified memory, not a 16 GB machine. llama.cpp b12167 Metal with q8_0 KV, a 64K window shared by two slots, and the RAM prompt cache disabled.
 - Mac 24 GB: Simulated 24 GB tier on an M5 Ultra with 256 GB: only the planner's memory figures were lowered, the physical memory and page cache were not; installed with a 128K window shared by two sessions, KV q4_0, short prompts; the installer now plans 64K; the chips in common 24 GB Macs are much slower.
 - Mac 32 GB: Short prompts on an M5 Ultra with 256 GB, using the 48 GB tier's setup (200K window, two sessions, KV q8_0); the 32 GB setup (128K, KV q4_0) is not measured yet; common 32 GB Macs are slower.
 - Linux NVIDIA 8 GB + 32 GB: Simulated: a 96 GB card limited to an 8 GB budget, memory capped at 28 GB for a 32 GB machine; strata-poly poly.7, one request per start; not a real 8 GB card.
