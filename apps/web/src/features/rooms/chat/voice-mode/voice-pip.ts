@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react";
 
+import { isDesktopShell } from "@/app/desktop-shell";
+
 /** Chrome and Edge 116+ only; TypeScript's DOM library does not declare it yet. */
 interface DocumentPictureInPicture {
   requestWindow(options?: { height?: number; width?: number }): Promise<Window>;
@@ -27,6 +29,9 @@ function noteShown() {
 }
 
 function api(): DocumentPictureInPicture | undefined {
+  // Electron exposes the API but cannot open its window, so voice windows in
+  // the desktop app stay in the page and offer no float button.
+  if (isDesktopShell()) return undefined;
   return (
     window as Window & { documentPictureInPicture?: DocumentPictureInPicture }
   ).documentPictureInPicture;

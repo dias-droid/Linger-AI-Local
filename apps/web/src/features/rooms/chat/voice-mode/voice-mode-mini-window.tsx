@@ -241,7 +241,7 @@ function MiniWindow({
       className={
         pip
           ? "flex h-dvh w-full flex-col overflow-hidden bg-app-canvas"
-          : "app-floating-enter fixed z-[90] flex flex-col overflow-hidden rounded-xl bg-app-canvas shadow-xl transition-[width,max-height] duration-200 ease-out motion-reduce:transition-none"
+          : "voice-mode-window app-floating-enter fixed z-[90] flex flex-col overflow-hidden rounded-xl bg-app-canvas shadow-xl transition-[width,max-height] duration-200 ease-out motion-reduce:transition-none"
       }
       data-pip={pip ? true : undefined}
       data-size={size}

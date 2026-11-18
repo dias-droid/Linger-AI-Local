@@ -7,6 +7,7 @@ import {
   openVoicePip,
   resetVoicePipForTest,
   returnedToOpener,
+  voicePipSupported,
 } from "./voice-pip";
 
 /** A stand-in for the browser's picture-in-picture window. */
@@ -48,6 +49,19 @@ afterEach(() => {
 describe("Voice Mode picture-in-picture window", () => {
   it("is unavailable where the browser lacks it", async () => {
     await expect(openVoicePip("voice-mode")).resolves.toBeUndefined();
+  });
+
+  it("stays in the page inside the desktop app", async () => {
+    const fake = installFakeVoicePip();
+    const desktop = window as { lingerDesktop?: unknown };
+    desktop.lingerDesktop = {};
+    try {
+      expect(voicePipSupported()).toBe(false);
+      await expect(openVoicePip("voice-mode")).resolves.toBeUndefined();
+      expect(fake.requestWindow).not.toHaveBeenCalled();
+    } finally {
+      delete desktop.lingerDesktop;
+    }
   });
 
   it("carries the page's styles and theme, including later ones", async () => {

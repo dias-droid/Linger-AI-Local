@@ -5568,3 +5568,18 @@ button.question-choice:focus-visible {
   font-size: 12px;
   font-weight: 500;
 }
+/* The desktop app cannot float voice windows into picture-in-picture, so they
+   always stay in the page; there the bar takes the window's own surface
+   instead of a browser-style dark frame. */
+:root[data-desktop-shell] .voice-window-title {
+  background-color: var(--app-canvas);
+  color: var(--app-ink);
+  box-shadow: var(--town-shadow-outline);
+  clip-path: inset(-1px -1px 0 -1px);
+}
+/* Voice windows can be dragged up under the macOS window drag strip; they
+   keep their own drag and controls there instead of moving the app window. */
+:root[data-desktop-chrome="inset"]
+  :is(.voice-mode-window, .recording-window-frame) {
+  -webkit-app-region: no-drag;
+}

@@ -64,7 +64,10 @@ build:assets` to check the initial JS budget.
   switch, the new mode opens in the page and can be floated from there.
   During Live, the Meeting entry offers to start a new Meeting even while an
   earlier one is saving. Both in-page voice windows retain a visible, draggable
-  title bar. Picture-in-picture keeps the browser title bar.
+  title bar: dark in browsers, the window's own surface colour in the desktop
+  app. Picture-in-picture keeps the browser title bar. The desktop app cannot
+  open picture-in-picture, so there voice windows stay in the page, offer no
+  float button, and on macOS stay out of the window drag strip.
 - The compact primary rail reveals labels on hover and keyboard focus without
   moving link hit areas or neighbouring links. A stationary pointer at an edge
   must not trigger repeated hover enter/leave; sidebar expansion and Chat list
