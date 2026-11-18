@@ -120,7 +120,8 @@ func TestRunnerWireContractFixtures(t *testing.T) {
 			protocol.CommandDebugInspect, protocol.CommandCapabilitySkillsScan, protocol.CommandCapabilityBrowserConnect,
 			protocol.CommandCapabilityComputerPermission, protocol.CommandCapabilityLocalModels, protocol.CommandOperationPrepare, protocol.CommandOperationStart, protocol.CommandOperationInput,
 			protocol.CommandOperationCancel, protocol.CommandOperationAck, protocol.CommandProviderPrepare,
-			protocol.CommandSessionCompact, protocol.CommandModelInvoke, protocol.CommandComputerToolCall} {
+			protocol.CommandSessionCompact, protocol.CommandModelInvoke, protocol.CommandModelInvokeCancel,
+			protocol.CommandComputerToolCall} {
 			if !seen[kind] {
 				t.Errorf("Agent fixture missing %s", kind)
 			}
@@ -344,6 +345,34 @@ func TestGatewayModelInvocationKeepsIdentityAndRawRequest(t *testing.T) {
 		frame := strings.Replace(valid, change[0], change[1], 1)
 		if _, err := decodeGatewayCommand([]byte(frame)); err == nil {
 			t.Fatalf("incomplete model invocation accepted: %s", frame)
+		}
+	}
+}
+
+func TestGatewayModelInvocationCancelNamesTheCall(t *testing.T) {
+	const valid = `{"type":"cancel","target":"model_invoke","command_id":"command-2","invoke_id":"invoke-1","protocol_version":"2","runner_id":"computer-1","connection_epoch":3,"reason":"scheduler_yield"}`
+	command, err := decodeGatewayCommand([]byte(valid))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cancel struct {
+		InvokeID string `json:"invoke_id"`
+		Reason   string `json:"reason"`
+	}
+	if err := json.Unmarshal(command.Payload, &cancel); err != nil {
+		t.Fatal(err)
+	}
+	if command.Type != protocol.CommandModelInvokeCancel || command.ConnectionEpoch != 3 ||
+		cancel.InvokeID != "invoke-1" || cancel.Reason != "scheduler_yield" {
+		t.Fatalf("command = %+v cancel = %+v", command, cancel)
+	}
+	for _, change := range [][2]string{
+		{`"invoke_id":"invoke-1",`, ""},
+		{`"connection_epoch":3,`, ""},
+	} {
+		frame := strings.Replace(valid, change[0], change[1], 1)
+		if _, err := decodeGatewayCommand([]byte(frame)); err == nil {
+			t.Fatalf("accepted %s", frame)
 		}
 	}
 }

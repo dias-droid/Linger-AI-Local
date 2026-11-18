@@ -4,7 +4,10 @@ import {
   type RuntimeModelGateway,
 } from "../../runtime-model-call.js";
 import { LocalComputerOfflineError } from "./local-computer-management.js";
-import { RunnerModelInvokeUnavailableError } from "./runner-model-invocation.js";
+import {
+  RunnerModelInvokeUnavailableError,
+  RunnerModelInvokeYieldedError,
+} from "./runner-model-invocation.js";
 
 /** The Runner Gateway's model invocation with its failures as ModelCallError,
  * so the host-level model call never depends on agent role modules. */
@@ -46,6 +49,8 @@ function modelCallFailure(error: unknown): unknown {
     return new ModelCallError("runtime_unavailable", error.message, {
       cause: error,
     });
+  if (error instanceof RunnerModelInvokeYieldedError)
+    return new ModelCallError("yielded", error.message, { cause: error });
   if (error instanceof RangeError)
     return new ModelCallError("invalid_request", error.message, {
       cause: error,

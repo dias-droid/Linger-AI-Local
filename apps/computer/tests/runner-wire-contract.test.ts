@@ -211,6 +211,16 @@ const agentFrames = [
     workspace_files: [{ path: "raw/notes.md", content_base64: "bm90ZXM=" }],
     timeout_ms: 4 * 60 * 60_000,
   },
+  {
+    type: "cancel",
+    target: "model_invoke",
+    protocol_version: "2",
+    command_id: "invoke-cancel-1",
+    invoke_id: "invoke-1",
+    runner_id: assignment.runner_id,
+    connection_epoch: 1,
+    reason: "scheduler_yield",
+  },
   ...[
     {
       kind: "run.start",

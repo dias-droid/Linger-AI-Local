@@ -1,5 +1,6 @@
 import type {
   ModelInvoke,
+  ModelInvokeCancel,
   ModelInvoked,
   OperationStart,
   RunnerHello,
@@ -14,6 +15,7 @@ import type {
   RunnerModelInvokeRequest,
 } from "../../../src/agent/runner-gateway/runner-gateway.js";
 import { RunnerModelInvokeUnavailableError } from "../../../src/agent/runner-gateway/runner-gateway.js";
+import { RunnerModelInvokeYieldedError } from "../../../src/agent/runner-gateway/runner-model-invocation.js";
 import {
   modelCallPolicies,
   type ModelCallKind,
@@ -70,10 +72,16 @@ const sentInvocations = (peer: RecordingPeer): ModelInvoke[] =>
       envelope.type === "execute" && envelope.kind === "model_invoke",
   );
 
+const sentCancels = (peer: RecordingPeer): ModelInvokeCancel[] =>
+  peer.sent.filter(
+    (envelope): envelope is ModelInvokeCancel =>
+      envelope.type === "cancel" && envelope.target === "model_invoke",
+  );
+
 const invoked = (
   connection: RunnerGatewayConnection,
   command: Pick<ModelInvoke, "command_id" | "invoke_id">,
-  outcome: "completed" | "unavailable" = "completed",
+  outcome: "completed" | "unavailable" | "canceled" = "completed",
   usage?: ModelInvoked["usage"],
 ) =>
   connection.receive({
@@ -215,8 +223,81 @@ describe("RunnerGateway model invocation", () => {
     }
   });
 
-  it("keeps recording work queued at hard one while a background call owns the endpoint", async () => {
+  it("swaps out a background call holding the only place so recording work starts", async () => {
     const { gateway, peer, connection } = await connect();
+    try {
+      const memory = gateway.invokeModel(
+        "runner-local",
+        request({ input: "memory" }),
+      );
+      memory.catch(() => undefined);
+      await vi.waitFor(() => expect(sentInvocations(peer)).toHaveLength(1));
+      const background = sentInvocations(peer)[0]!;
+      const notes = gateway.invokeModel(
+        "runner-local",
+        request({ input: "notes", queue: queued("meeting_notes") }),
+      );
+      const ask = gateway.invokeModel(
+        "runner-local",
+        request({ input: "voice", queue: queued("voice_ask") }),
+      );
+      await vi.waitFor(() =>
+        expect(sentCancels(peer)).toEqual([
+          expect.objectContaining({
+            invoke_id: background.invoke_id,
+            connection_epoch: background.connection_epoch,
+            reason: "scheduler_yield",
+          }),
+        ]),
+      );
+      // The place frees once the Computer answers that the call stopped.
+      expect(sentInvocations(peer)).toHaveLength(1);
+      await invoked(connection, background, "canceled");
+      await expect(memory).rejects.toBeInstanceOf(
+        RunnerModelInvokeYieldedError,
+      );
+      await vi.waitFor(() => expect(sentInvocations(peer)).toHaveLength(2));
+      expect(sentInvocations(peer)[1]!.input).toBe("notes");
+      await invoked(connection, sentInvocations(peer)[1]!);
+      await vi.waitFor(() => expect(sentInvocations(peer)).toHaveLength(3));
+      expect(sentInvocations(peer)[2]!.input).toBe("voice");
+      await invoked(connection, sentInvocations(peer)[2]!);
+      await Promise.all([notes, ask]);
+      // Recording work never swaps out other recording work.
+      expect(sentCancels(peer)).toHaveLength(1);
+    } finally {
+      connection.disconnect();
+    }
+  });
+
+  it("keeps the answer of a background call that finished before its cancel", async () => {
+    const { gateway, peer, connection } = await connect();
+    try {
+      const memory = gateway.invokeModel(
+        "runner-local",
+        request({ input: "memory" }),
+      );
+      await vi.waitFor(() => expect(sentInvocations(peer)).toHaveLength(1));
+      const notes = gateway.invokeModel(
+        "runner-local",
+        request({ input: "notes", queue: queued("meeting_notes") }),
+      );
+      await vi.waitFor(() => expect(sentCancels(peer)).toHaveLength(1));
+      await invoked(connection, sentInvocations(peer)[0]!);
+      await expect(memory).resolves.toMatchObject({ outcome: "completed" });
+      await vi.waitFor(() => expect(sentInvocations(peer)).toHaveLength(2));
+      await invoked(connection, sentInvocations(peer)[1]!);
+      await notes;
+    } finally {
+      connection.disconnect();
+    }
+  });
+
+  it("keeps recording work queued behind a background call a Computer before 0.53.0 cannot stop", async () => {
+    const { gateway, peer, connection } = await connect({
+      ...invokingHello(),
+      daemon_version: "0.52.0",
+    });
     try {
       const memory = gateway.invokeModel(
         "runner-local",
@@ -240,6 +321,7 @@ describe("RunnerGateway model invocation", () => {
       expect(sentInvocations(peer)[2]!.input).toBe("voice");
       await invoked(connection, sentInvocations(peer)[2]!);
       await Promise.all([memory, notes, ask]);
+      expect(sentCancels(peer)).toEqual([]);
     } finally {
       connection.disconnect();
     }
@@ -421,6 +503,62 @@ describe("RunnerGateway model invocation", () => {
       }
     },
   );
+
+  it("runs a swapped-out Wiki step again without spending one of its attempts", async () => {
+    const { gateway, peer, connection } = await connect();
+    const model = createRuntimeModelCall({
+      gateway: runtimeModelGateway(gateway),
+      placements: async () => [],
+    });
+    const target = sessionTarget();
+    const wiki = model.chain(
+      {
+        kind: "wiki",
+        key: "wiki:yield",
+        placement: {
+          tenantId: target.tenantId,
+          ownerActorId: target.ownerActorId,
+          agentId: target.agentId,
+          computerId: target.runnerId,
+          runtimeType: "codex",
+        },
+      },
+      async (chain) =>
+        (await chain.text({ step: "write", input: "page" })).output,
+    );
+    try {
+      // More swaps than the kind's attempts: a swap is not a failed attempt.
+      const swaps = modelCallPolicies.wiki.attempts + 1;
+      for (let swap = 0; swap < swaps; swap += 1) {
+        await vi.waitFor(() =>
+          expect(sentInvocations(peer)).toHaveLength(2 * swap + 1),
+        );
+        const step = sentInvocations(peer)[2 * swap]!;
+        expect(step.input).toBe("page");
+        const ask = gateway.invokeModel(
+          "runner-local",
+          request({ input: `ask ${swap}`, queue: queued("voice_ask") }),
+        );
+        await vi.waitFor(() =>
+          expect(sentCancels(peer)).toHaveLength(swap + 1),
+        );
+        await invoked(connection, step, "canceled");
+        await vi.waitFor(() =>
+          expect(sentInvocations(peer)).toHaveLength(2 * swap + 2),
+        );
+        await invoked(connection, sentInvocations(peer)[2 * swap + 1]!);
+        await ask;
+      }
+      await vi.waitFor(() =>
+        expect(sentInvocations(peer)).toHaveLength(2 * swaps + 1),
+      );
+      await invoked(connection, sentInvocations(peer)[2 * swaps]!);
+      await expect(wiki).resolves.toBe('{"summary":"ok"}');
+    } finally {
+      model.close();
+      connection.disconnect();
+    }
+  });
 
   it("holds the chain's place for a sent step after the caller stops waiting", async () => {
     const { gateway, peer, connection } = await connect();

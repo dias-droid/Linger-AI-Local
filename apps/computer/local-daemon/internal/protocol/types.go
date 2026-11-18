@@ -131,6 +131,7 @@ const (
 	CommandOperationPrepare             = wire.TypePrepare + ":" + wire.TargetOperation
 	CommandProviderPrepare              = wire.TypePrepare + ":" + wire.TargetProvider
 	CommandOperationCancel              = wire.TypeCancel + ":" + wire.TargetOperation
+	CommandModelInvokeCancel            = wire.TypeCancel + ":" + wire.TargetModelInvoke
 	CommandOperationStart               = wire.TypeOperationStart
 	CommandOperationInput               = wire.TypeOperationInput
 	CommandOperationAck                 = wire.TypeOperationAck

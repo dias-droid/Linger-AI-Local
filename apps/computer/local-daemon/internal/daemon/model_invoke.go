@@ -157,6 +157,29 @@ func (d *Daemon) runModelInvoke(ctx context.Context, stream transport.Stream, co
 	}
 }
 
+// cancelModelInvoke cancels one in-flight model call; its canceled receipt
+// follows unless it finished first. A call that is not running is already
+// answered, so the cancel does nothing.
+func (d *Daemon) cancelModelInvoke(command protocol.Command) error {
+	var cancel wire.ModelInvokeCancel
+	if err := json.Unmarshal(command.Payload, &cancel); err != nil {
+		return fmt.Errorf("decode model invocation cancel: %w", err)
+	}
+	if cancel.InvokeID == "" {
+		return errors.New("model invocation cancel is incomplete")
+	}
+	d.modelInvokeMu.Lock()
+	defer d.modelInvokeMu.Unlock()
+	entry := d.modelInvokes[cancel.InvokeID]
+	if entry == nil {
+		slog.Info("runner.model.invoke", "phase", "cancel_ignored", "invoke_id", cancel.InvokeID, "cancellation_source", cancel.Reason)
+		return nil
+	}
+	entry.cancel()
+	slog.Info("runner.model.invoke", "phase", "cancel_requested", "invoke_id", entry.id, "cancellation_source", cancel.Reason)
+	return nil
+}
+
 // cancelModelInvokes cancels every in-flight model call; each still sends its
 // canceled receipt if the connection is open.
 func (d *Daemon) cancelModelInvokes(source string) {

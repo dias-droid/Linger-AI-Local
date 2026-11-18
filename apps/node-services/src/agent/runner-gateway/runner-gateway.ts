@@ -180,7 +180,11 @@ export class RunnerGateway
           this.runtimeModels(endpoint.computerId, endpoint.runtimeType),
         ),
       Date.now,
-      (endpoint, priority) => this.#operations.yieldFor(endpoint, priority),
+      // A background model call is below every Run, so it is swapped out first.
+      (endpoint, priority) => {
+        if (!this.#modelInvocation.yieldCall(endpoint, priority))
+          this.#operations.yieldFor(endpoint, priority);
+      },
     );
     this.#computerTools = new RunnerComputerTools(context, owners);
     this.#localModels = new RunnerLocalModels(context, owners);

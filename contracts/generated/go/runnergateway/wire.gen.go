@@ -60,6 +60,7 @@ const (
 	TargetProvider         = "provider"
 	KindSessionCompact     = "session_compact"
 	KindModelInvoke        = "model_invoke"
+	TargetModelInvoke      = "model_invoke"
 	KindComputerTool       = "computer_tool"
 	StateReady             = "ready"
 	StateRemoved           = "removed"
@@ -100,6 +101,7 @@ var AgentToDaemonMessages = []Message{
 	{Name: "OperationStart", Type: "operation.start", Match: nil},
 	{Name: "OperationInput", Type: "operation.input", Match: nil},
 	{Name: "OperationCancel", Type: "cancel", Match: map[string]string{"target": "operation"}},
+	{Name: "ModelInvokeCancel", Type: "cancel", Match: map[string]string{"target": "model_invoke"}},
 	{Name: "OperationAck", Type: "operation.ack", Match: nil},
 	{Name: "ComputerToolCall", Type: "execute", Match: map[string]string{"kind": "computer_tool"}},
 }
@@ -2078,6 +2080,28 @@ func (OperationCancel) FixedFields() map[string]string {
 // RequiredFields lists the keys a OperationCancel must carry.
 func (OperationCancel) RequiredFields() []string {
 	return []string{"protocol_version", "host_access", "execution_context_key", "runtime_instance_id", "context_view_ref", "tenant_id", "registration_id", "assignment_revision", "runner_id", "agent_id", "operation_id", "connection_epoch", "runner_revision", "generation", "execution_lease_id", "workspace_grant_id", "runtime_type", "type", "command_id", "reason", "target"}
+}
+
+// ModelInvokeCancel mirrors the ModelInvokeCancel schema shape.
+type ModelInvokeCancel struct {
+	Type            string `json:"type"`
+	Target          string `json:"target"`
+	CommandID       string `json:"command_id"`
+	InvokeID        string `json:"invoke_id"`
+	ProtocolVersion string `json:"protocol_version"`
+	RunnerID        string `json:"runner_id"`
+	ConnectionEpoch uint64 `json:"connection_epoch"`
+	Reason          string `json:"reason"`
+}
+
+// FixedFields lists the keys whose value the schema fixes for a ModelInvokeCancel.
+func (ModelInvokeCancel) FixedFields() map[string]string {
+	return map[string]string{"type": "cancel", "target": "model_invoke", "protocol_version": "2"}
+}
+
+// RequiredFields lists the keys a ModelInvokeCancel must carry.
+func (ModelInvokeCancel) RequiredFields() []string {
+	return []string{"type", "target", "command_id", "invoke_id", "protocol_version", "runner_id", "connection_epoch", "reason"}
 }
 
 // OperationAck mirrors the OperationAck schema shape.

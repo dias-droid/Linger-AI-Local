@@ -19,7 +19,7 @@ info:
     operation reconciliation; runner.welcome alone is not readiness.
     Messages come in coarse families distinguished by one field: prepare and
     prepared (target operation or provider), cancel (target operation or
-    provider), execute and executed (kind session_compact, model_invoke,
+    model_invoke), execute and executed (kind session_compact, model_invoke,
     computer_tool, skills_scan, browser_connect, computer_permission,
     local_models, debug_history or
     cli_credential), agent_runner.state (state ready, removed or failed) and
@@ -46,6 +46,9 @@ info:
     decides when a call is sent; the Daemon runs every call it receives. Its
     optional session_key lets a Daemon answer the structured Codex calls of
     one session in one resident thread; the result is the same either way.
+    cancel with target model_invoke stops one running call so the scheduler
+    can swap it out; the call's executed model_invoke still follows. The
+    service sends it only to a Computer release that decodes it.
     execute with kind
     computer_tool runs native browser actions and retained Task output reads.
     TeamHub resolves the owner, Agent and Task scope; the Computer checks its

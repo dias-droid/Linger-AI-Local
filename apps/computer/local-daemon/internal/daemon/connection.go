@@ -191,6 +191,13 @@ func (d *Daemon) handleConnectionCommand(ctx, connectionCtx context.Context, str
 		if err := d.handleModelInvoke(connectionCtx, stream, command); err != nil {
 			return err
 		}
+	case protocol.CommandModelInvokeCancel:
+		if !d.welcomeSeen || command.ConnectionEpoch != d.connectionEpoch {
+			return errors.New("Model invocation cancel uses a stale connection epoch")
+		}
+		if err := d.cancelModelInvoke(command); err != nil {
+			return err
+		}
 	case protocol.CommandOperationStart:
 		if !d.welcomeSeen {
 			return errors.New("operation uses a stale connection epoch")

@@ -70,6 +70,9 @@ export const runnerGatewayEnvelopeSchema = {
           $ref: "#/$defs/OperationCancel",
         },
         {
+          $ref: "#/$defs/ModelInvokeCancel",
+        },
+        {
           $ref: "#/$defs/OperationAck",
         },
         {
@@ -3945,6 +3948,48 @@ export const runnerGatewayEnvelopeSchema = {
         },
       ],
       unevaluatedProperties: false,
+    },
+    ModelInvokeCancel: {
+      description:
+        "Stops one model_invoke the Daemon is running. Its executed model_invoke follows as usual, canceled unless the call finished first; a cancel for a call that is not running does nothing. The Agent Service sends it only to a Computer release that decodes it.",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "type",
+        "target",
+        "command_id",
+        "invoke_id",
+        "protocol_version",
+        "runner_id",
+        "connection_epoch",
+        "reason",
+      ],
+      properties: {
+        type: {
+          const: "cancel",
+        },
+        target: {
+          const: "model_invoke",
+        },
+        command_id: {
+          $ref: "#/$defs/Id",
+        },
+        invoke_id: {
+          $ref: "#/$defs/Id",
+        },
+        protocol_version: {
+          $ref: "#/$defs/ProtocolVersion",
+        },
+        runner_id: {
+          $ref: "#/$defs/Id",
+        },
+        connection_epoch: {
+          $ref: "#/$defs/PositiveInteger",
+        },
+        reason: {
+          enum: ["scheduler_yield"],
+        },
+      },
     },
     OperationAck: {
       type: "object",

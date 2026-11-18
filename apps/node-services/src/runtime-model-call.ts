@@ -231,6 +231,9 @@ export type ModelCallErrorKind =
   /** Background work still queued or running when the caller stopped
    * waiting; the same request later joins it or receives its result. */
   | "pending"
+  /** Swapped out for interactive work; the attempt runs again once admitted
+   * and does not count as one. */
+  | "yielded"
   | "failed";
 
 /** Shared by every offline ModelCallError, so a failure that only survives as
@@ -770,6 +773,7 @@ async function invokeAttempt(
     | undefined;
   let lease: ModelLease | undefined;
   let stopBudget: (() => void) | undefined;
+  let yielded = false;
   const timeoutMs = call.timeoutMs ?? policy.timeoutMs;
   try {
     if (entry.chain) lease = await entry.chain.acquire(call.key, signal);
@@ -808,11 +812,12 @@ async function invokeAttempt(
       signal,
     });
   } catch (error) {
+    yielded = error instanceof ModelCallError && error.kind === "yielded";
     callLog?.finished({
       kind: call.kind,
       key: call.key,
       attempt,
-      outcome: signal.aborted ? "abandoned" : "failed",
+      outcome: signal.aborted ? "abandoned" : yielded ? "yielded" : "failed",
       durationMs: state.now() - startedAt,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -829,7 +834,9 @@ async function invokeAttempt(
   } finally {
     stopBudget?.();
     lease?.release({
-      outcome: outcome?.outcome ?? (signal.aborted ? "aborted" : "failed"),
+      outcome:
+        outcome?.outcome ??
+        (signal.aborted ? "aborted" : yielded ? "yielded" : "failed"),
       ...(outcome?.usage === undefined ? {} : { usage: outcome.usage }),
     });
   }
@@ -935,6 +942,8 @@ async function executeCall(
     } catch (error) {
       if (signal.aborted) throw signal.reason;
       if (!(error instanceof ModelCallError)) throw error;
+      // It queues again at once behind the work it yielded to.
+      if (error.kind === "yielded") continue;
       if (!retryableKinds.has(error.kind) || attempt >= attempts) throw error;
       attempt += 1;
       await sleep(RETRY_DELAY_MS, signal);

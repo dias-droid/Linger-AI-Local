@@ -732,6 +732,8 @@ const modelCallFailures: Record<
   output_limited: [502, "model_call_failed"],
   invalid_output: [502, "model_output_invalid"],
   invalid_request: [400, "invalid_model_call"],
+  // A yielded attempt runs again, so a caller never receives it.
+  yielded: [502, "model_call_failed"],
   failed: [502, "model_call_failed"],
 };
 

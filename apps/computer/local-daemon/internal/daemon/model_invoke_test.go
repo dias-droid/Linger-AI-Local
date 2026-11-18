@@ -178,6 +178,37 @@ func TestModelInvokeIsCanceledByDisconnectAndDrain(t *testing.T) {
 	}
 }
 
+func TestModelInvokeCancelStopsOnlyThatCall(t *testing.T) {
+	invoker := newFakeModelInvoker()
+	d, stream := modelInvokeFixture(t, invoker)
+	for _, id := range []string{"invoke-keep", "invoke-yield"} {
+		if err := d.handleModelInvoke(context.Background(), stream, modelInvokeCommand(id, nil)); err != nil {
+			t.Fatal(err)
+		}
+		<-invoker.started
+	}
+	cancel := func(id string) protocol.Command {
+		return protocol.Command{
+			Type: protocol.CommandModelInvokeCancel, CommandID: "cancel-" + id, RunnerID: "computer-1", ConnectionEpoch: 1,
+			Payload: mustJSON(map[string]any{"invoke_id": id, "reason": "scheduler_yield"}),
+		}
+	}
+	if err := d.cancelModelInvoke(cancel("invoke-yield")); err != nil {
+		t.Fatal(err)
+	}
+	if payload := waitForModelInvoked(t, stream, "invoke-yield"); payload["outcome"] != "canceled" {
+		t.Fatalf("payload = %v", payload)
+	}
+	// A cancel that arrives after its call was answered does nothing.
+	if err := d.cancelModelInvoke(cancel("invoke-yield")); err != nil {
+		t.Fatal(err)
+	}
+	close(invoker.release)
+	if payload := waitForModelInvoked(t, stream, "invoke-keep"); payload["outcome"] != "completed" {
+		t.Fatalf("payload = %v", payload)
+	}
+}
+
 func TestModelInvokeRefusesWithoutRunningTheCall(t *testing.T) {
 	for name, test := range map[string]struct {
 		setup   func(*Daemon)

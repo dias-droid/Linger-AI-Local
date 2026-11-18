@@ -24,6 +24,7 @@ import {
   LocalComputerPlacementError,
   LocalRuntimeAdmissionUnavailableError,
   MINIMUM_CURRENT_COMPUTER_VERSION,
+  FIRST_MODEL_INVOKE_CANCEL_COMPUTER_VERSION,
   FIRST_SERVICE_FEATURES_COMPUTER_VERSION,
   type LocalPlacementRequirement,
   type LocalReasoningEffort,
@@ -779,6 +780,22 @@ export class RunnerConnections {
       (runtimeType === "codex" || runtimeType === "claude") &&
       connection.hello.runtime_diagnostics.some(
         ({ type, status }) => type === runtimeType && status === "ready",
+      )
+    );
+  }
+
+  /** Whether the Computer on this connection can stop one model invocation. */
+  supportsModelInvokeCancel(
+    runnerId: string,
+    connectionEpoch: number,
+  ): boolean {
+    const connection = this.#connections.get(runnerId);
+    return (
+      isServingConnection(connection) &&
+      connection.connectionEpoch === connectionEpoch &&
+      isComputerVersionAtLeast(
+        connection.hello.daemon_version,
+        FIRST_MODEL_INVOKE_CANCEL_COMPUTER_VERSION,
       )
     );
   }

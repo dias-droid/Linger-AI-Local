@@ -22,6 +22,7 @@ export type AgentToDaemonEnvelope =
   | OperationStart
   | OperationInput
   | OperationCancel
+  | ModelInvokeCancel
   | OperationAck
   | ComputerToolCall;
 export type ProtocolVersion = "2";
@@ -1054,6 +1055,19 @@ export interface LocalRunResources {
    * @maxItems 128
    */
   mcp_servers: LocalMcpRelayDescriptor[];
+}
+/**
+ * Stops one model_invoke the Daemon is running. Its executed model_invoke follows as usual, canceled unless the call finished first; a cancel for a call that is not running does nothing. The Agent Service sends it only to a Computer release that decodes it.
+ */
+export interface ModelInvokeCancel {
+  type: "cancel";
+  target: "model_invoke";
+  command_id: Id;
+  invoke_id: Id;
+  protocol_version: ProtocolVersion;
+  runner_id: Id;
+  connection_epoch: PositiveInteger;
+  reason: "scheduler_yield";
 }
 export interface ComputerToolCall {
   type: "execute";

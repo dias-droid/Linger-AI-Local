@@ -39,31 +39,37 @@ for an interactive Run when that capacity exceeds one.
 | Compaction                    | An idle conversation's session compaction. New work for that conversation cancels it.               |
 | Background                    | Agent memory, user memory, profile, insights and wiki refresh, in descending priority.              |
 
-When work at chat priority or above is first in line and cannot start, it asks
-the lowest-priority running Run below it on that endpoint or Computer to yield,
-one Run at a time and at any limit. A recording question can swap out a chat,
-and a chat can swap out a Task or a routine. A Run can yield once the Runtime
-has a resumable native session. On Codex, the Run must also have produced
-model output, its thinking included, or a tool event so that its original
-input is in its history. A pending tool approval or human interaction is
-answered before yielding. The waiting work starts after the Computer confirms
-cleanup. A Run that finishes on its own while it is asked to yield completes
-normally.
+When work at chat priority or above is first in line and cannot start, it
+swaps out the lowest-priority work below it on that endpoint, one unit at a
+time and at any limit. A background model call goes first: the Computer stops
+the call, the waiting work starts once the Computer confirms the stop, and
+the call queues again at its priority to run the same attempt later, without
+counting it as a failed try. A Computer before release 0.53.0 cannot stop one
+call, so there the waiting work waits for it. Otherwise the work asks the
+lowest-priority running Run below it on that endpoint or Computer to yield. A
+recording question can swap out a chat, and a chat can swap out a Task or a
+routine. A Run can yield once the Runtime has a resumable native session. On
+Codex, the Run must also have produced model output, its thinking included,
+or a tool event so that its original input is in its history. A pending tool
+approval or human interaction is answered before yielding. The waiting work
+starts after the Computer confirms cleanup. A Run that finishes on its own
+while it is asked to yield completes normally.
 The yielded Run keeps its ID, running status and claim while it waits, and
 continues in the same session when admitted again. A user stop still ends it.
 If a yielded Run's cleanup cannot be confirmed, the Computer refuses further
 work on that Runtime until it restarts. Other stops only report the unknown
-cleanup. A model attempt already sent and a compaction are never interrupted,
-so waiting work may still wait for one of them.
+cleanup. A recording question, its notes, an approval and a compaction are
+never interrupted, so waiting work may still wait for one of them.
 
 Each running Operation holds one place across its tool calls. Inputs merged
 into a queued Run take the highest priority among them. Eligible work at the same priority
 starts in arrival order.
 
 Wiki and Memory chains keep their steps in order on one endpoint. Each model
-attempt releases its place when the Runtime answers. A waiting chat can start
-before the next step, retry or correction, even at a hard limit of one. The
-chain then continues with the results of its completed steps.
+attempt releases its place when the Runtime answers or the step is swapped
+out. A waiting chat can start before the next step, retry or correction, even
+at a hard limit of one. The chain then continues with the results of its
+completed steps.
 
 Time limits count running time. A model call's timeout starts when the
 Runtime starts the attempt, so waiting for a place, also while other work was

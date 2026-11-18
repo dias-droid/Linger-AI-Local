@@ -150,6 +150,7 @@ var agentShapes = map[string]func() wire.Shape{
 	"OperationStart":               func() wire.Shape { return &wire.OperationStart{} },
 	"OperationInput":               func() wire.Shape { return &wire.OperationInput{} },
 	"OperationCancel":              func() wire.Shape { return &wire.OperationCancel{} },
+	"ModelInvokeCancel":            func() wire.Shape { return &wire.ModelInvokeCancel{} },
 	"OperationAck":                 func() wire.Shape { return &wire.OperationAck{} },
 	"ComputerToolCall":             func() wire.Shape { return &wire.ComputerToolCall{} },
 }
@@ -266,7 +267,8 @@ func decodeGatewayCommand(encoded []byte) (protocol.Command, error) {
 			return protocol.Command{}, fmt.Errorf("encode Agent Runner lifecycle payload: %w", err)
 		}
 	case protocol.CommandProviderPrepare,
-		protocol.CommandSessionCompact, protocol.CommandModelInvoke, protocol.CommandComputerToolCall,
+		protocol.CommandSessionCompact, protocol.CommandModelInvoke, protocol.CommandModelInvokeCancel,
+		protocol.CommandComputerToolCall,
 		protocol.CommandDebugInspect, protocol.CommandAgentCLICredentialPut,
 		protocol.CommandCapabilitySkillsScan, protocol.CommandCapabilityBrowserConnect,
 		protocol.CommandCapabilityComputerPermission, protocol.CommandCapabilityLocalModels:
