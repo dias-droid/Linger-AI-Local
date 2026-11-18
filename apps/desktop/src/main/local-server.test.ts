@@ -2853,6 +2853,45 @@ describe("LocalServerModule after a restart", () => {
     await f.host.stop("quit");
   });
 
+  it("unpacks the source package again when its folder is damaged", async () => {
+    const root = tempDirectory();
+    const archive = sourceArchive(root);
+    const repo = (home: string) =>
+      path.join(home, "desktop", "source", archive.sha256.slice(0, 16));
+    const f = fixture(
+      {
+        sourceArchive: {
+          url: "https://cdn.example/linger.tar.gz",
+          sha256: archive.sha256,
+        },
+        fetch: (async () => new Response(archive.bytes)) as typeof fetch,
+      },
+      enrolled,
+      (home) => {
+        // This app's own folder: the marker is there, package.json is gone.
+        mkdirSync(path.join(repo(home), "scripts"), { recursive: true });
+        writeFileSync(path.join(repo(home), "scripts/source-native.mjs"), "");
+        writeFileSync(
+          path.join(home, "desktop", "local-server.json"),
+          JSON.stringify({
+            home,
+            repo: repo(home),
+            origin: "http://localhost:3000",
+            version: APP_VERSION,
+          }),
+        );
+      },
+    );
+    await f.host.start();
+    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    const args = installerArgs(f.home);
+    expect(args[args.indexOf("--source-repo") + 1]).toBe(repo(f.home));
+    expect(
+      JSON.parse(readFileSync(path.join(repo(f.home), "package.json"), "utf8")),
+    ).toEqual({ name: "linger" });
+    await f.host.stop("quit");
+  });
+
   it("moves to the source package when the earlier Simplex app unpacked the one in use", async () => {
     const root = tempDirectory();
     const archive = sourceArchive(root);

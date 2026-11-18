@@ -1590,13 +1590,27 @@ export class LocalServerModule implements Module {
       archive.sha256.slice(0, 16),
     );
     if (await isFile(path.join(directory, SOURCE_MARKER))) {
-      await this.#timed("teamhub_binaries", () =>
-        this.#ensureTeamhubBinaries(directory, archive.sha256, signal),
-      );
-      await this.#timed("native_runtime", () =>
-        this.#ensureNativeRuntime(directory, archive.sha256, signal),
-      );
-      return directory;
+      if (
+        await validateSourceRepository(directory).then(
+          () => true,
+          () => false,
+        )
+      ) {
+        await this.#timed("teamhub_binaries", () =>
+          this.#ensureTeamhubBinaries(directory, archive.sha256, signal),
+        );
+        await this.#timed("native_runtime", () =>
+          this.#ensureNativeRuntime(directory, archive.sha256, signal),
+        );
+        return directory;
+      }
+      // This package's own folder, damaged since it was unpacked (files
+      // removed by hand or by a cleanup): the installer would refuse it, so
+      // it is unpacked again in its place.
+      this.#ctx?.log.warn("local_server.source_damaged", {
+        source: path.basename(directory),
+      });
+      await removeRetrying(directory);
     }
     if ("file" in archive)
       await this.#extract(archive, directory, SOURCE_MARKER, signal);

@@ -174,8 +174,9 @@ Gateway and runs Agents. The daemon exits with the app.
   services on launch with `installer.js --resume`, which also restarts them
   when the instance's `user.env` changed. A source folder removed since, or
   one the installer no longer accepts as a Linger checkout (such as one the
-  earlier Simplex app unpacked), is unpacked again from the app's package
-  first and replaces the recorded one. The record also names the app
+  earlier Simplex app unpacked, or this package's own folder with files
+  missing since), is unpacked again from the app's package first and
+  replaces the recorded one. The record also names the app
   version that unpacked the source; when this app brings another source
   package (it was installed over an older one), that launch unpacks it and
   resumes on it, with the "Updating Linger" page instead of the older
