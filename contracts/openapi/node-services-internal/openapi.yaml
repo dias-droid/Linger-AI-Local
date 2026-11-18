@@ -1424,9 +1424,9 @@ components:
         - ModelCallKindInsight
       description: >-
         An approval borrows its Run's place on the same endpoint or queues first.
-        Voice questions share chat priority and can use the reserved place.
-        Meeting notes share task priority. All three calls stop waiting when
-        their caller leaves and return a result or an error within their deadline.
+        Recording questions and notes go before chat, can use the reserved
+        place and swap out a running Run of lower priority. All three calls
+        stop waiting when their caller leaves and never answer pending.
     ModelCallErrorCode:
       type: string
       description: Stable error codes of POST /v1/model-calls.
@@ -1505,8 +1505,9 @@ components:
           minimum: 1000
           maximum: 600000
           description:
-            The budget of one Runtime attempt, each correction getting its
-            own; omitted, the kind's default.
+            The budget of one Runtime attempt from its start, each correction
+            getting its own; waiting for a place does not count. Omitted, the
+            kind's default.
         sessionKey:
           type: string
           minLength: 1

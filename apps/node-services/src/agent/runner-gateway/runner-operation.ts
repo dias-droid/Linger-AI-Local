@@ -1,4 +1,8 @@
-import type { RunKind, CapacityPriority } from "../../model-tasks.js";
+import {
+  runPriorities,
+  type RunKind,
+  type CapacityPriority,
+} from "../../model-tasks.js";
 import { EventEmitter, once } from "node:events";
 import { isDeepStrictEqual } from "node:util";
 
@@ -250,6 +254,7 @@ export class RunnerOperationState {
   #terminal = false;
   #cancelCommand?: OperationCancel;
   readonly #delegatedTask: boolean;
+  readonly #priority: number;
   #yieldSessionId?: string;
   #yieldRequested = false;
   #observedNativeWork = false;
@@ -303,6 +308,7 @@ export class RunnerOperationState {
   }) {
     this.#epoch = options.target.executionEpoch;
     this.#delegatedTask = options.target.runKind === "task";
+    this.#priority = runPriorities[options.target.runKind ?? "chat"];
     this.#createId = options.createId;
     this.#send = options.send;
     this.#cancelTimeoutMs = options.cancelTimeoutMs;
@@ -598,24 +604,35 @@ export class RunnerOperationState {
     }
   }
 
-  get resumableTask(): boolean {
-    // Codex announces its thread before the first task input is durably in its history.
+  /** The queue priority of the Run's kind; smaller goes first. */
+  get priority(): number {
+    return this.#priority;
+  }
+
+  get resumable(): boolean {
+    // Codex announces its thread before the first input is durably in its history.
     return (
       Boolean(this.#yieldSessionId) &&
       (this.start.runtime_type !== "codex" || this.#observedNativeWork)
     );
   }
 
-  /** Only a native terminal can hand a running Task's slot to another caller. */
-  requestYield(): void {
+  /** A yield was asked and the Computer has not reported its terminal. */
+  get yielding(): boolean {
+    return this.#yieldRequested && !this.#terminal;
+  }
+
+  /** Only a native terminal can hand a running Run's place to another
+   * caller. Answers whether this call asked the Run to yield. */
+  requestYield(): boolean {
     if (
-      !this.resumableTask ||
+      !this.resumable ||
       this.#terminal ||
       this.#cancelCommand ||
       this.#interactions.size ||
       [...this.#pendingInputs.values()].some((input) => !input.settled)
     )
-      return;
+      return false;
     this.#yieldRequested = true;
     this.#cancelCommand = createCancel(
       this.start,
@@ -624,6 +641,7 @@ export class RunnerOperationState {
     );
     // Reconciliation resends this exact command if the Computer disconnected.
     void this.#send(this.#cancelCommand).catch(() => undefined);
+    return true;
   }
 
   retainCancellation(reason: string): void {
@@ -861,7 +879,6 @@ export class RunnerOperationState {
           this.#turnId = envelope.event.turn_id;
           const threadId = envelope.event.session?.threadId;
           if (
-            this.#delegatedTask &&
             envelope.event.session?.canYield === true &&
             typeof threadId === "string" &&
             threadId.trim()
@@ -869,16 +886,12 @@ export class RunnerOperationState {
             this.#yieldSessionId = threadId;
         }
         if (
-          this.#delegatedTask &&
-          (envelope.event.type === "tool.called" ||
-            envelope.event.type === "tool.returned" ||
-            envelope.event.type === "model.responded")
+          envelope.event.type === "tool.called" ||
+          envelope.event.type === "tool.returned" ||
+          envelope.event.type === "model.responded"
         )
           this.#observedNativeWork = true;
-        if (
-          this.#delegatedTask &&
-          envelope.event.type === "human_interaction.requested"
-        ) {
+        if (envelope.event.type === "human_interaction.requested") {
           // A prompt in transit belongs to the retiring Operation and cannot be answered on its successor.
           if (this.#yieldRequested) break;
           if (typeof envelope.event.request.request_id === "string")

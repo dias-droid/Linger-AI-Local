@@ -182,7 +182,13 @@ describe("ModelQueue limit", () => {
       signal,
     );
     const chat = await queue.acquire(codex, run(), signal);
-    const notes = track(queue.acquire(codex, call("meeting_notes"), signal));
+    const task = track(
+      queue.acquire(
+        codex,
+        { kind: "task", priority: runPriorities.task, key: "t" },
+        signal,
+      ),
+    );
     const doc = track(
       queue.acquire(
         codex,
@@ -193,7 +199,7 @@ describe("ModelQueue limit", () => {
     const ask = await queue.acquire(codex, call("voice_ask"), signal);
     const next = track(queue.acquire(codex, run(), signal));
     await flush();
-    expect([notes.value, doc.value, next.value]).toEqual([
+    expect([task.value, doc.value, next.value]).toEqual([
       undefined,
       undefined,
       undefined,
@@ -203,11 +209,41 @@ describe("ModelQueue limit", () => {
     expect(next.value).toBeDefined();
     chat.release(done);
     await flush();
-    expect(notes.value).toBeUndefined();
+    expect(task.value).toBeUndefined();
     routine.release(done);
     await flush();
-    expect(notes.value).toBeDefined();
+    expect(task.value).toBeDefined();
     expect(doc.value).toBeUndefined();
+  });
+
+  it("asks a lower Run to yield whenever interactive work first in line cannot start", async () => {
+    const asked = vi.fn();
+    const queue = new ModelQueue(() => fixed(2), Date.now, asked);
+    const task = await queue.acquire(
+      codex,
+      { kind: "task", priority: runPriorities.task, key: "t" },
+      signal,
+    );
+    const chat = await queue.acquire(codex, run(), signal);
+    const wiki = track(queue.acquire(codex, call("wiki"), signal));
+    await flush();
+    expect(asked).not.toHaveBeenCalled();
+    const notes = track(queue.acquire(codex, call("meeting_notes"), signal));
+    await flush();
+    expect(asked).toHaveBeenLastCalledWith(
+      codex,
+      modelCallPolicies.meeting_notes.priority,
+    );
+    task.release(done);
+    await flush();
+    expect(notes.value).toBeDefined();
+    expect(wiki.value).toBeUndefined();
+    asked.mockClear();
+    notes.value!.release(done);
+    chat.release(done);
+    await flush();
+    expect(wiki.value).toBeDefined();
+    expect(asked).not.toHaveBeenCalled();
   });
 
   it("tries one more unit while work waits and requests stay as fast", async () => {

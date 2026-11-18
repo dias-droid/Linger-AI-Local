@@ -70,9 +70,9 @@ interface EndpointState {
 /**
  * Admits model work per endpoint. A Run Operation, a model attempt and a
  * compaction each occupy one place. Smaller priority numbers start first,
- * in arrival order within a priority. When the
- * limit exceeds one, chat, voice asks and standalone approvals may fill the
- * last place.
+ * in arrival order within a priority. When the limit exceeds one, work up to
+ * chat priority may fill the last place. When it cannot start, it asks a
+ * lower-priority Run holding a place to yield.
  * The limit adapts to what finished requests report. Admission only; it
  * never picks, orders or retries a Run.
  */
@@ -85,7 +85,10 @@ export class ModelQueue {
   constructor(
     private readonly concurrency: (endpoint: ModelEndpoint) => ConcurrencyRange,
     private readonly now: () => number = Date.now,
-    private readonly onInteractiveWait?: (endpoint: ModelEndpoint) => void,
+    private readonly onInteractiveWait?: (
+      endpoint: ModelEndpoint,
+      priority: number,
+    ) => void,
   ) {}
 
   /** A model request on endpoint finished, whoever holds its place. */
@@ -166,17 +169,19 @@ export class ModelQueue {
     return this.#lease(state, work, queuedAt);
   }
 
-  /** A newly resumable Task can yield to chat already waiting on this endpoint. */
+  /** Interactive work first in line and out of places asks for a yield, also
+   * when a Run on this endpoint has just become able to yield. */
   recheckInteractiveWait(endpoint: ModelEndpoint): void {
     const state = this.#endpoints.get(endpointKey(endpoint));
+    const next = state?.waiting[0];
     if (
       state &&
-      state.active === 1 &&
-      state.waiting.length &&
-      this.#limit(state.key, endpoint).value === 1 &&
-      state.waiting[0]!.priority <= runPriorities.chat
+      next &&
+      next.priority <= runPriorities.chat &&
+      state.active >=
+        admissionLimit(this.#limit(state.key, endpoint).value, next.priority)
     )
-      this.onInteractiveWait?.(endpoint);
+      this.onInteractiveWait?.(endpoint, next.priority);
   }
 
   /** The Computer is gone; work waiting for it fails with error. */

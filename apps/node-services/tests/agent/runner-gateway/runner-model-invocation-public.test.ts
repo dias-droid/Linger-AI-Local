@@ -215,7 +215,7 @@ describe("RunnerGateway model invocation", () => {
     }
   });
 
-  it("keeps voice queued at hard one while a background call owns the endpoint", async () => {
+  it("keeps recording work queued at hard one while a background call owns the endpoint", async () => {
     const { gateway, peer, connection } = await connect();
     try {
       const memory = gateway.invokeModel(
@@ -234,12 +234,93 @@ describe("RunnerGateway model invocation", () => {
       expect(sentInvocations(peer)).toHaveLength(1);
       await invoked(connection, sentInvocations(peer)[0]!);
       await vi.waitFor(() => expect(sentInvocations(peer)).toHaveLength(2));
-      expect(sentInvocations(peer)[1]!.input).toBe("voice");
+      expect(sentInvocations(peer)[1]!.input).toBe("notes");
       await invoked(connection, sentInvocations(peer)[1]!);
       await vi.waitFor(() => expect(sentInvocations(peer)).toHaveLength(3));
-      expect(sentInvocations(peer)[2]!.input).toBe("notes");
+      expect(sentInvocations(peer)[2]!.input).toBe("voice");
       await invoked(connection, sentInvocations(peer)[2]!);
       await Promise.all([memory, notes, ask]);
+    } finally {
+      connection.disconnect();
+    }
+  });
+
+  it("swaps out a chat Run holding the only place so recording notes complete", async () => {
+    const { gateway, peer, connection } = await connect();
+    try {
+      const chat = await gateway.startOperation({
+        ...sessionTarget(),
+        runKind: "chat",
+      });
+      const start = peer.sent.find(
+        (envelope): envelope is OperationStart =>
+          envelope.type === "operation.start",
+      )!;
+      await connection.receive(
+        event(start, 1, {
+          type: "operation.accepted",
+          command_id: start.command_id,
+          runner_pid: 100,
+        }),
+      );
+      await connection.receive(
+        event(start, 2, {
+          type: "operation.event",
+          event: {
+            type: "run.started",
+            turn_id: "turn-chat",
+            session: { threadId: "chat-session", canYield: true },
+          },
+        }),
+      );
+      await connection.receive(
+        event(start, 3, {
+          type: "operation.event",
+          event: {
+            type: "tool.called",
+            call_id: "read",
+            tool_name: "read",
+            input: {},
+          },
+        }),
+      );
+      const notes = gateway.invokeModel(
+        "runner-local",
+        request({
+          input: "notes",
+          timeoutMs: 20_000,
+          queue: queued("meeting_notes"),
+        }),
+      );
+      await vi.waitFor(() =>
+        expect(
+          peer.sent.filter((command) => command.type === "cancel"),
+        ).toHaveLength(1),
+      );
+      expect(
+        peer.sent.find((command) => command.type === "cancel"),
+      ).toMatchObject({
+        operation_id: start.operation_id,
+        reason: "scheduler_yield",
+      });
+      expect(sentInvocations(peer)).toHaveLength(0);
+      const yielded = expect(chat.result).rejects.toMatchObject({
+        session: { threadId: "chat-session" },
+      });
+      await connection.receive(
+        event(start, 4, {
+          type: "operation.cancelled",
+          reason: "scheduler_yield",
+        }),
+      );
+      await yielded;
+      await vi.waitFor(() => expect(sentInvocations(peer)).toHaveLength(1));
+      expect(sentInvocations(peer)[0]).toMatchObject({
+        input: "notes",
+        timeout_ms: 20_000,
+      });
+      await invoked(connection, sentInvocations(peer)[0]!);
+      await expect(notes).resolves.toMatchObject({ outcome: "completed" });
     } finally {
       connection.disconnect();
     }

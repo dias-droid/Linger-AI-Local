@@ -96,9 +96,13 @@ describe("RunnerGateway", () => {
     await expect(operation.result).resolves.toMatchObject({ type: "run" });
   });
 
-  it.each([1, null])(
-    "waits for confirmed Task cleanup before starting chat (Computer capacity %s)",
-    async (capacity) => {
+  it.each([
+    ["task", 1],
+    ["task", null],
+    ["routine", 1],
+  ] as const)(
+    "waits for confirmed %s cleanup before starting chat (Computer capacity %s)",
+    async (runKind, capacity) => {
       const gateway = createTestRunnerGateway({
         createId: sequenceIds(),
         operationCancelTimeoutMs: 10,
@@ -111,7 +115,7 @@ describe("RunnerGateway", () => {
       try {
         const task = await gateway.startOperation({
           ...runTarget(),
-          runKind: "task",
+          runKind,
         });
         const start = peer.sent.find(
           (command) => command.type === "operation.start",

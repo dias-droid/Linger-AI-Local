@@ -212,13 +212,11 @@ export class RunnerOperations {
           };
         }
         if (
-          hard === 1 &&
           first === waiter &&
           waiter.rank !== undefined &&
-          rank <= runPriorities.chat &&
-          active.length === 1
+          rank <= runPriorities.chat
         )
-          active[0]!.requestYield();
+          yieldLowerRun(active, rank);
         await waitForCapacityChange(changed, signal);
       }
     } finally {
@@ -286,12 +284,14 @@ export class RunnerOperations {
     }
   }
 
-  /** A chat waiting on the model may already hold its Computer permit. */
-  yieldTaskForChat(endpoint: ModelEndpoint): void {
-    for (const operation of this.activeOperations(endpoint.computerId)) {
-      if (operation.start.runtime_type === endpoint.runtimeType)
-        operation.requestYield();
-    }
+  /** Interactive work waiting on the endpoint swaps out a lower Run there. */
+  yieldFor(endpoint: ModelEndpoint, priority: number): void {
+    yieldLowerRun(
+      this.activeOperations(endpoint.computerId).filter(
+        (operation) => operation.start.runtime_type === endpoint.runtimeType,
+      ),
+      priority,
+    );
   }
 
   /** Pins the reviewed Operation's place until its approval has settled. */
@@ -674,7 +674,7 @@ export class RunnerOperations {
         );
       return;
     }
-    const wasResumable = operation.resumableTask;
+    const wasResumable = operation.resumable;
     const acknowledgement = await operation.receive(envelope);
     if (
       envelope.type === "operation.event" &&
@@ -692,7 +692,7 @@ export class RunnerOperations {
       this.#recordRunOperation(operation);
     if (
       !operation.terminal &&
-      operation.resumableTask &&
+      operation.resumable &&
       (!wasResumable || envelope.type === "operation.input_result")
     ) {
       this.owners.queue().recheckInteractiveWait(operationEndpoint(operation));
@@ -823,4 +823,19 @@ function operationEndpoint(operation: RunnerOperationState): ModelEndpoint {
     computerId: operation.start.runner_id,
     runtimeType: operation.start.runtime_type,
   };
+}
+
+/**
+ * Asks the lowest-priority Run below priority that can yield to do so. One
+ * yield at a time: the place it frees goes to the waiter that asked.
+ */
+function yieldLowerRun(
+  operations: readonly RunnerOperationState[],
+  priority: number,
+): void {
+  if (operations.some((operation) => operation.yielding)) return;
+  const lower = operations
+    .filter((operation) => operation.priority > priority)
+    .sort((a, b) => b.priority - a.priority);
+  for (const operation of lower) if (operation.requestYield()) return;
 }

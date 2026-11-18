@@ -161,7 +161,7 @@ describe("Runtime model call", () => {
         },
       }),
     );
-    // Voice uses the interactive reserve.
+    // A recording question goes before chat.
     await modelCall.text({
       kind: "voice_ask",
       key: "ask",
@@ -171,22 +171,33 @@ describe("Runtime model call", () => {
     expect(invokeModel.mock.lastCall![1].queue).toEqual({
       kind: "voice_ask",
       key: "ask",
-      priority: 10,
+      priority: 5,
     });
   });
 
-  it("expires interactive work while waiting for model admission", async () => {
-    const { modelCall, invokeModel } = setup({ invoke: hanging });
-    await expect(
-      modelCall.text({
-        kind: "meeting_notes",
-        key: "recording",
-        owner: { tenantId: "tenant_1", ownerActorId: "alice" },
-        input: "Notes",
-        timeoutMs: 25,
-      }),
-    ).rejects.toMatchObject({ kind: "timed_out" });
-    expect(invokeModel.mock.lastCall![1].signal.aborted).toBe(true);
+  it("does not spend an interactive call's timeout while it waits for a place", async () => {
+    let admit!: () => void;
+    const admitted = new Promise<void>((resolve) => (admit = resolve));
+    const { modelCall, invokeModel } = setup({
+      invoke: async () => {
+        await admitted;
+        return completed("Notes");
+      },
+    });
+    const notes = modelCall.text({
+      kind: "meeting_notes",
+      key: "recording",
+      owner: { tenantId: "tenant_1", ownerActorId: "alice" },
+      input: "Notes",
+      timeoutMs: 25,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    admit();
+    await expect(notes).resolves.toMatchObject({ output: "Notes" });
+    expect(invokeModel.mock.lastCall![1]).toMatchObject({
+      timeoutMs: 25,
+      queue: { priority: 5, kind: "meeting_notes" },
+    });
   });
 
   it("runs a workspace call on a named Another Me and returns its files", async () => {

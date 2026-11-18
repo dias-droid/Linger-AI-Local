@@ -2043,7 +2043,7 @@ type MemoryRebuildStatusPhase string
 // ModelCallEffort Reasoning effort for the Runtime's default model; omitted, low.
 type ModelCallEffort string
 
-// ModelCallKind An approval borrows its Run's place on the same endpoint or queues first. Voice questions share chat priority and can use the reserved place. Meeting notes share task priority. All three calls stop waiting when their caller leaves and return a result or an error within their deadline.
+// ModelCallKind An approval borrows its Run's place on the same endpoint or queues first. Recording questions and notes go before chat, can use the reserved place and swap out a running Run of lower priority. All three calls stop waiting when their caller leaves and never answer pending.
 type ModelCallKind string
 
 // ModelCallRequest defines model for ModelCallRequest.
@@ -2060,7 +2060,7 @@ type ModelCallRequest struct {
 	// Key Names the work, for example profile:<generation_id>. A request with the same key and the same content joins the running execution or receives its cached result; the same key with other content is a new request.
 	Key string `json:"key"`
 
-	// Kind An approval borrows its Run's place on the same endpoint or queues first. Voice questions share chat priority and can use the reserved place. Meeting notes share task priority. All three calls stop waiting when their caller leaves and return a result or an error within their deadline.
+	// Kind An approval borrows its Run's place on the same endpoint or queues first. Recording questions and notes go before chat, can use the reserved place and swap out a running Run of lower priority. All three calls stop waiting when their caller leaves and never answer pending.
 	Kind ModelCallKind `json:"kind"`
 
 	// Output Asks for one JSON object; omitted, the answer is text.
@@ -2086,7 +2086,7 @@ type ModelCallRequest struct {
 	// SessionKey Names the session a structured call belongs to. Codex answers one session's calls in one resident thread that keeps the instructions and earlier calls, so only the new input is uncached; a schema correction and a Claude call run on their own.
 	SessionKey *string `json:"sessionKey,omitempty"`
 
-	// TimeoutMs The budget of one Runtime attempt, each correction getting its own; omitted, the kind's default.
+	// TimeoutMs The budget of one Runtime attempt from its start, each correction getting its own; waiting for a place does not count. Omitted, the kind's default.
 	TimeoutMs *int `json:"timeoutMs,omitempty"`
 }
 

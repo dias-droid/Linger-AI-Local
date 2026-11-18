@@ -727,12 +727,8 @@ async function invokeAttempt(
     | undefined;
   let lease: ModelLease | undefined;
   const timeoutMs = call.timeoutMs ?? policy.timeoutMs;
-  const deadline = policy.interactive
-    ? AbortSignal.timeout(timeoutMs)
-    : undefined;
-  const attemptSignal = deadline ? AbortSignal.any([signal, deadline]) : signal;
   try {
-    if (entry.chain) lease = await entry.chain.acquire(call.key, attemptSignal);
+    if (entry.chain) lease = await entry.chain.acquire(call.key, signal);
     if (call.startBefore !== undefined && Date.now() >= call.startBefore)
       throw new ModelCallStartDeadlineError(
         "The model step missed its start deadline",
@@ -766,7 +762,7 @@ async function invokeAttempt(
           : {}),
       },
       ...(lease ? { callLease: lease } : {}),
-      signal: attemptSignal,
+      signal,
     });
   } catch (error) {
     callLog?.finished({
@@ -778,11 +774,6 @@ async function invokeAttempt(
       error: error instanceof Error ? error.message : String(error),
     });
     if (signal.aborted) throw signal.reason;
-    if (deadline?.aborted)
-      throw new ModelCallError(
-        "timed_out",
-        "The model call did not finish in time",
-      );
     if (error instanceof ModelCallStartDeadlineError) throw error;
     if (error instanceof ModelCallError) {
       if (error.kind === "computer_offline" && key !== undefined)

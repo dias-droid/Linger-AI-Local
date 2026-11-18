@@ -23,32 +23,36 @@ hour. What it learns lasts until the service restarts or the runtime's models
 change.
 
 The current adaptive limit is the hard limit. Ordinary work can start while
-the total running count is below the soft limit, `max(1, hard - 1)`. Chat,
-recording questions and standalone approvals can use the last place. When
-the limit drops, new work respects the lower limit.
+the total running count is below the soft limit, `max(1, hard - 1)`.
+Recording questions and notes, chat and standalone approvals can use the last
+place. When the limit drops, new work respects the lower limit.
 A Computer with an explicit Operation capacity also reserves its last place
 for an interactive Run when that capacity exceeds one.
 
-| Work in priority order       | Unit                                                                                                |
-| ---------------------------- | --------------------------------------------------------------------------------------------------- |
-| Tool approval                | The review borrows the reviewed Run's place on the same endpoint. A standalone review queues first. |
-| Chat and recording questions | A chat Run or a question in a recording's Ask tab.                                                  |
-| Tasks and documents          | Tasks, task callbacks, agent messages, document Runs and recording notes share one priority.        |
-| Scheduled and proactive work | Routines, proactive Runs and automatic follow-ups share one priority.                               |
-| Compaction                   | An idle conversation's session compaction. New work for that conversation cancels it.               |
-| Background                   | Agent memory, user memory, profile, insights and wiki refresh, in descending priority.              |
+| Work in priority order        | Unit                                                                                                |
+| ----------------------------- | --------------------------------------------------------------------------------------------------- |
+| Tool approval                 | The review borrows the reviewed Run's place on the same endpoint. A standalone review queues first. |
+| Recording questions and notes | A question in a recording's Ask tab, and the quick notes written when a recording ends.             |
+| Chat                          | A chat Run.                                                                                         |
+| Tasks and documents           | Tasks, task callbacks, agent messages and document Runs share one priority.                         |
+| Scheduled and proactive work  | Routines, proactive Runs and automatic follow-ups share one priority.                               |
+| Compaction                    | An idle conversation's session compaction. New work for that conversation cancels it.               |
+| Background                    | Agent memory, user memory, profile, insights and wiki refresh, in descending priority.              |
 
-When a delegated Task occupies the only place on its endpoint or Computer,
-a waiting interactive request can ask it to yield once the Runtime has a
-resumable native session. On Codex, the Task must also have reached its first
-model response or tool event so that the original brief is in its history.
-Chat starts after the Computer confirms cleanup.
-The Task keeps its ID, running status and claim while it waits, and continues
-in the same session when admitted again. A user stop still ends the Task.
-A pending tool approval or human interaction is answered before yielding.
-If a yielded Task's cleanup cannot be confirmed, the Computer refuses further
+When work at chat priority or above is first in line and cannot start, it asks
+the lowest-priority running Run below it on that endpoint or Computer to yield,
+one Run at a time and at any limit. A recording question can swap out a chat,
+and a chat can swap out a Task or a routine. A Run can yield once the Runtime
+has a resumable native session. On Codex, the Run must also have reached its
+first model response or tool event so that its original input is in its
+history. A pending tool approval or human interaction is answered before
+yielding. The waiting work starts after the Computer confirms cleanup.
+The yielded Run keeps its ID, running status and claim while it waits, and
+continues in the same session when admitted again. A user stop still ends it.
+If a yielded Run's cleanup cannot be confirmed, the Computer refuses further
 work on that Runtime until it restarts. Other stops only report the unknown
-cleanup.
+cleanup. A model attempt already sent and a compaction are never interrupted,
+so waiting work may still wait for one of them.
 
 Each running Operation holds one place across its tool calls. Inputs merged
 into a queued Run take the highest priority among them. Eligible work at the same priority
@@ -58,6 +62,11 @@ Wiki and Memory chains keep their steps in order on one endpoint. Each model
 attempt releases its place when the Runtime answers. A waiting chat can start
 before the next step, retry or correction, even at a hard limit of one. The
 chain then continues with the results of its completed steps.
+
+Time limits count running time. A model call's timeout starts when the
+Runtime starts the attempt, so waiting for a place, also while other work was
+swapped in, does not count. A recording question or its notes may therefore
+wait for a place up to the five minutes TeamHub keeps any model call open.
 
 Every model call is retried and corrected in one place. A timeout, a reply past
 its length cap or a runtime failure is tried again after a pause, and an answer

@@ -180,7 +180,7 @@ export class RunnerGateway
           this.runtimeModels(endpoint.computerId, endpoint.runtimeType),
         ),
       Date.now,
-      (endpoint) => this.#operations.yieldTaskForChat(endpoint),
+      (endpoint, priority) => this.#operations.yieldFor(endpoint, priority),
     );
     this.#computerTools = new RunnerComputerTools(context, owners);
     this.#localModels = new RunnerLocalModels(context, owners);

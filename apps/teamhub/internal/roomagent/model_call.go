@@ -28,6 +28,11 @@ const (
 	transportGrace = 5 * time.Second
 )
 
+// ModelCallWait is the longest one model call keeps its caller waiting,
+// queueing included. A foreground call fails past it; a background call
+// answers ErrModelCallPending.
+const ModelCallWait = modelCallMaxWait + transportGrace
+
 var (
 	// ErrModelCallUnconfigured means TeamHub has no Agent Service URL or token.
 	ErrModelCallUnconfigured = errors.New("Agent Service model calls are not configured")

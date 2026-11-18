@@ -27,7 +27,8 @@ export type RunKind =
   | "follow_up"
   | "document";
 
-/** Smaller priorities go first; chat and its dependencies may use the last place. */
+/** Smaller priorities go first. Work up to chat may use the last place and
+ * swaps out a running Run of a lower priority when it cannot start. */
 export const runPriorities: Readonly<Record<RunKind, number>> = {
   chat: 10,
   task: 12,
@@ -60,6 +61,9 @@ export type CapacityPriority =
       resolve(): Promise<number>;
     };
 
+/** A question or the notes of a recording go before chat. */
+export const RECORDING_PRIORITY = 5;
+
 export const COMPACTION_PRIORITY = 20;
 
 export function softLimit(hard: number): number {
@@ -79,7 +83,8 @@ export interface ModelCallPolicy {
   /** Runtime attempts of one call, a lone call or a chain's, corrections
    * included. Callers do not retry a call themselves. */
   readonly attempts: number;
-  /** One Runtime attempt when the request names none. */
+  /** One Runtime attempt when the request names none. The Runtime counts it
+   * from the attempt's start, so waiting for a place never counts. */
   readonly timeoutMs: number;
 }
 
@@ -93,13 +98,13 @@ export const modelCallPolicies: Readonly<
     timeoutMs: 15_000,
   },
   voice_ask: {
-    priority: runPriorities.chat,
+    priority: RECORDING_PRIORITY,
     interactive: true,
     attempts: 1,
     timeoutMs: 45_000,
   },
   meeting_notes: {
-    priority: runPriorities.task,
+    priority: RECORDING_PRIORITY,
     interactive: true,
     attempts: 1,
     timeoutMs: 20_000,
