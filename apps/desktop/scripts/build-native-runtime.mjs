@@ -108,6 +108,12 @@ const OPTIONAL_IMPORTS = new Set([
   "utf-8-validate",
 ]);
 
+// Dependencies the services never load, left out with everything only they
+// need. officeparser imports tesseract.js (an OCR engine with about 40 MB of
+// wasm) only when a parse asks for OCR, and document-office-extract.ts
+// always passes `ocr: false`.
+const UNLOADED_PACKAGES = new Set(["tesseract.js"]);
+
 export const runtimeDirectory = (target) =>
   path.join(desktop, "dist/installer/native", `runtime-${target}`);
 
@@ -163,6 +169,7 @@ export async function copyExternals(
     }
   };
   const visit = async (name, from, required) => {
+    if (UNLOADED_PACKAGES.has(name)) return;
     const directory = find(name, from);
     if (!directory) {
       if (required)

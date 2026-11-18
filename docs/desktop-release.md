@@ -456,5 +456,7 @@ Node.js into its own folder, removing `com.apple.quarantine` on macOS;
 packages and needs no registry. On Linux the services need glibc 2.35
 (Ubuntu 22.04, Debian 12), like the PostgreSQL build; with an older glibc the
 desktop leaves them out and Native installs from the network. Model data
-(Voice) is not bundled: Node Services downloads it on first use.
+(Voice) is not bundled: Node Services downloads it on first use. Dependencies
+the services never load are left out too: officeparser imports its OCR
+engine, tesseract.js, only for OCR, which document extraction never asks for.
 Intel Macs have none of this and install from the network.
