@@ -66,7 +66,11 @@ chain then continues with the results of its completed steps.
 Time limits count running time. A model call's timeout starts when the
 Runtime starts the attempt, so waiting for a place, also while other work was
 swapped in, does not count. A recording question or its notes may therefore
-wait for a place up to the five minutes TeamHub keeps any model call open.
+wait for a place up to the five minutes TeamHub keeps any model call open. A
+Wiki refresh's 150-minute budget counts only the time at least one of its
+model attempts holds a place. Because TeamHub waits at most four hours for the
+whole refresh, a refresh also starts no new step after three and a half hours
+and publishes what it has accepted.
 
 Every model call is retried and corrected in one place. A timeout, a reply past
 its length cap or a runtime failure is tried again after a pause, and an answer

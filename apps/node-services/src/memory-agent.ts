@@ -7,10 +7,11 @@ import { isRecord } from "@linger/service-kit";
 
 import { packageRoot } from "./paths.js";
 import {
-  ModelCallStartDeadlineError,
+  ModelBudgetSpentError,
   schemaProblem,
   type ModelCallEffort,
   type ModelChain,
+  type ModelRunBudget,
 } from "./runtime-model-call.js";
 
 /**
@@ -217,9 +218,9 @@ export async function runAgentTask(request: {
   /** Tokens one step's call may hold; past 85% of it, older steps are
    * shortened. Omitted, half the default context window. */
   readonly maxInputTokens?: number;
-  /** Epoch milliseconds after which no further step starts; the task then
-   * ends unfinished, keeping its accepted proposals. */
-  readonly deadline?: number;
+  /** Once spent, no further step starts; the task then ends unfinished,
+   * keeping its accepted proposals. */
+  readonly budget?: ModelRunBudget;
   readonly environment: AgentEnvironment;
   readonly signal?: AbortSignal;
 }): Promise<AgentRunResult> {
@@ -237,7 +238,7 @@ export async function runAgentTask(request: {
   let rejected = 0;
   for (let index = 0; index < task.maxSteps; index += 1) {
     signal.throwIfAborted();
-    if (request.deadline !== undefined && Date.now() >= request.deadline) break;
+    if (request.budget?.spent) break;
     const output = await callStep(
       request,
       session,
@@ -247,7 +248,7 @@ export async function runAgentTask(request: {
       steps,
       index,
     ).catch((error: unknown) => {
-      if (error instanceof ModelCallStartDeadlineError) return undefined;
+      if (error instanceof ModelBudgetSpentError) return undefined;
       throw error;
     });
     if (output === undefined) break;
@@ -376,9 +377,7 @@ async function callStep(
         : undefined;
     },
     timeoutMs: request.task.timeoutMs,
-    ...(request.deadline === undefined
-      ? {}
-      : { startBefore: request.deadline }),
+    ...(request.budget ? { budget: request.budget } : {}),
     ...(request.task.maxOutputChars === undefined
       ? {}
       : { maxOutputChars: request.task.maxOutputChars }),

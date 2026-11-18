@@ -99,7 +99,7 @@ import {
 
 /** One step's model call. A normal step answers in one or two minutes; a
  * step past this is retried within the Wiki kind's attempts, then its batch
- * is skipped. The refresh deadline still bounds the whole generation. */
+ * is skipped. The refresh budget still bounds the whole generation. */
 const STEP_TIMEOUT_MS = 15 * 60_000;
 /** Characters one step may stream: three times its output budget at four
  * characters a token, so only a reply that runs away is stopped. */
@@ -303,7 +303,7 @@ class Generation {
   /** Sources a task over them failed to write, by id; TeamHub keeps them
    * pending and counts the try. */
   readonly #unsettled = new Set<string>();
-  /** Sources left unwritten only because the deadline passed; TeamHub keeps
+  /** Sources left unwritten only because the budget was spent; TeamHub keeps
    * them pending without counting a try. */
   readonly #deferred = new Set<string>();
   readonly #abort = new AbortController();
@@ -394,17 +394,15 @@ class Generation {
     };
   }
 
-  /** Past the refresh deadline no further task or step starts. */
+  /** Once the refresh budget is spent no further task or step starts. */
   #expired(): boolean {
-    return (
-      this.request.deadline !== undefined && Date.now() >= this.request.deadline
-    );
+    return this.request.budget?.spent ?? false;
   }
 
   /**
    * Leaves these sources out of the publication's settled sources: TeamHub
    * keeps them pending, so a later refresh writes what this one skipped. A
-   * skip only because the deadline passed is no failure of the source and
+   * skip only because the budget was spent is no failure of the source and
    * spends none of its tries.
    */
   #unsettle(
@@ -412,8 +410,7 @@ class Generation {
     sources: readonly EvidenceSource[],
     fields: Readonly<Record<string, unknown>>,
   ): void {
-    const left =
-      fields.reason === "deadline" ? this.#deferred : this.#unsettled;
+    const left = fields.reason === "budget" ? this.#deferred : this.#unsettled;
     for (const source of sources) left.add(source.id);
     writeWikiLog(
       event,
@@ -472,7 +469,7 @@ class Generation {
     splits: number,
   ): Promise<void> {
     if (this.#expired()) {
-      this.#unsettle("wiki_route_skipped", pack, { step, reason: "deadline" });
+      this.#unsettle("wiki_route_skipped", pack, { step, reason: "budget" });
       return;
     }
     const registry = this.#registryFor(pack);
@@ -484,7 +481,7 @@ class Generation {
         step,
         task: routeTask(),
         maxInputTokens: this.loopTokens,
-        deadline: this.request.deadline,
+        budget: this.request.budget,
         input: `${registry}\n# Evidence\n\n${pack.map((source) => renderSource(source)).join("\n\n")}`,
         environment: this.#todoEnvironment(refs),
         signal: this.signal,
@@ -493,7 +490,7 @@ class Generation {
       if (!result.finished && this.#expired())
         this.#unsettle("wiki_route_skipped", pack, {
           step,
-          reason: "deadline",
+          reason: "budget",
         });
     } catch (error) {
       if (tooLarge(error) && splits < MAX_SPLITS && pack.length > 1) {
@@ -694,7 +691,7 @@ ${transcript}`,
         pages: pages.map((page) => page.path),
       });
     if (this.#expired()) {
-      skip("deadline");
+      skip("budget");
       return;
     }
     const task = batchTask(batch.pages);
@@ -711,7 +708,7 @@ ${transcript}`,
           step: `${step}:${issues ? "fix" : "write"}:${splits}`,
           task,
           maxInputTokens: this.loopTokens,
-          deadline: this.request.deadline,
+          budget: this.request.budget,
           input: this.#batchInput(batch, evidenceTokens, issues),
           environment: this.#batchEnvironment(batch, done),
           signal: this.signal,
@@ -719,8 +716,7 @@ ${transcript}`,
         this.#logTask(task.name, result, startedAt);
         // Pages the task neither wrote nor skipped wait for a later refresh.
         const left = batch.pages.filter((page) => !done.has(page.path));
-        if (left.length)
-          skip(this.#expired() ? "deadline" : "unfinished", left);
+        if (left.length) skip(this.#expired() ? "budget" : "unfinished", left);
         return;
       } catch (error) {
         // A step that stalled or ran away past its attempts would do so
@@ -925,7 +921,7 @@ ${renderExcerpts(
         reason,
       });
     if (this.#expired()) {
-      skip("deadline");
+      skip("budget");
       return;
     }
     const previous = this.#previous(task.path);
@@ -953,14 +949,14 @@ ${renderExcerpts(
             step,
             task: agentTask,
             maxInputTokens: this.loopTokens,
-            deadline: this.request.deadline,
+            budget: this.request.budget,
             input: `${task.input(meetingPart(meeting, part, index, parts.length), issues)}\n\n# Current page\n\n${current ?? "This page does not exist yet."}`,
             environment: this.#meetingEnvironment(task, previous),
             signal: this.signal,
           });
           this.#logTask(agentTask.name, result, startedAt);
           if (!result.finished && this.#expired()) {
-            skip("deadline");
+            skip("budget");
             return;
           }
         }
@@ -1285,7 +1281,7 @@ ${renderExcerpts(
           step,
           task: consolidateTask(),
           maxInputTokens: this.loopTokens,
-          deadline: this.request.deadline,
+          budget: this.request.budget,
           input: `${registry}\n# New entities routed this run\n\n${listing}`,
           environment: {
             runTool: async (name, args) =>

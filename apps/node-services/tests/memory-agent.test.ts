@@ -12,7 +12,8 @@ import {
 } from "../src/memory-agent.js";
 import {
   ModelCallError,
-  ModelCallStartDeadlineError,
+  ModelBudgetSpentError,
+  ModelRunBudget,
   type ModelChain,
   type ModelChainCallRequest,
 } from "../src/runtime-model-call.js";
@@ -107,8 +108,8 @@ describe("agentInstructions", () => {
 });
 
 describe("runAgentTask", () => {
-  it("keeps an accepted proposal when the next step misses admission before the deadline", async () => {
-    const deadline = Date.now() + 60_000;
+  it("keeps an accepted proposal when the next step finds the budget spent", async () => {
+    const budget = new ModelRunBudget(60_000);
     const call = vi
       .fn<ModelChain["call"]>()
       .mockResolvedValueOnce({
@@ -124,19 +125,19 @@ describe("runAgentTask", () => {
           ],
         },
       })
-      .mockRejectedValueOnce(new ModelCallStartDeadlineError());
+      .mockRejectedValueOnce(new ModelBudgetSpentError());
     const result = await runAgentTask({
       model: stubChain({ call }),
       task,
       input: "evidence",
       step: "write",
       environment: environment(),
-      deadline,
+      budget,
       maxInputTokens: 20_000,
     });
-    expect(call.mock.calls.map(([request]) => request.startBefore)).toEqual([
-      deadline,
-      deadline,
+    expect(call.mock.calls.map(([request]) => request.budget)).toEqual([
+      budget,
+      budget,
     ]);
     expect(result).toMatchObject({ finished: false, accepted: 1 });
     expect(result.steps).toHaveLength(1);

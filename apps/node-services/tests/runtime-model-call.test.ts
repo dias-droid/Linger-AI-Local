@@ -5,7 +5,8 @@ import {
   createRuntimeModelCall,
   isComputerOffline,
   ModelCallError,
-  ModelCallStartDeadlineError,
+  ModelBudgetSpentError,
+  ModelRunBudget,
   type ModelPlacement,
   type RuntimeModelGateway,
   type RuntimeModelInfo,
@@ -714,66 +715,63 @@ describe("Model chains", () => {
     expect(invokeModel.mock.calls[0]![1].signal.aborted).toBe(true);
   });
 
-  it("starts its deadline after initial admission and includes later queue waits", async () => {
-    vi.useFakeTimers();
-    const firstPlace = deferred<ModelLease>();
-    const { modelCall, acquireModelCall, invokeModel } = setup({
-      placements: [alice],
-      outcomes: [completed("a")],
-    });
-    acquireModelCall
-      .mockReturnValueOnce(firstPlace.promise)
-      .mockImplementationOnce(
-        (_endpoint, _work, signal) =>
-          new Promise((_resolve, reject) =>
-            signal.addEventListener("abort", () => reject(signal.reason), {
-              once: true,
-            }),
-          ),
-      );
-    const chain = modelCall.chain(
-      { kind: "wiki", key: "wiki:timeout", owner, timeoutMs: 50 },
-      async (model) => {
-        await model.text({ step: "first", input: "a" });
-        return model.text({ step: "second", input: "b" });
-      },
-    );
-    const result = expect(chain).rejects.toMatchObject({ kind: "timed_out" });
-    await vi.advanceTimersByTimeAsync(100);
-    expect(invokeModel).not.toHaveBeenCalled();
-    firstPlace.resolve(lease());
-    await vi.advanceTimersByTimeAsync(49);
-    expect(acquireModelCall).toHaveBeenCalledTimes(2);
-    expect(invokeModel).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(1);
-    await result;
-  });
-
-  it("skips a step whose latest start passed while waiting for its place", async () => {
+  it("spends a step budget only while an attempt holds a place", async () => {
     vi.useFakeTimers();
     const { modelCall, invokeModel, acquireModelCall } = setup({
       placements: [alice],
-      outcomes: [completed("done")],
+      invoke: async () => {
+        vi.setSystemTime(Date.now() + 600);
+        return completed("x");
+      },
     });
-    acquireModelCall
-      .mockResolvedValueOnce(lease())
-      .mockImplementationOnce(async () => {
-        vi.setSystemTime(Date.now() + 2_000);
-        return lease();
-      });
+    // Every place, the chain's first included, comes after a long wait.
+    acquireModelCall.mockImplementation(async () => {
+      vi.setSystemTime(Date.now() + 5_000);
+      return lease();
+    });
+    const budget = new ModelRunBudget(1_000);
     const result = modelCall.chain(
-      { kind: "wiki", key: "wiki:deadline", owner },
+      { kind: "wiki", key: "wiki:budget", owner },
       async (chain) => {
-        await chain.text({ step: "first", input: "x" });
-        return chain.text({
-          step: "late",
-          input: "y",
-          startBefore: Date.now() + 1_000,
-        });
+        await chain.text({ step: "first", input: "a", budget });
+        await chain.text({ step: "second", input: "b", budget });
+        return chain.text({ step: "third", input: "c", budget });
       },
     );
-    await expect(result).rejects.toBeInstanceOf(ModelCallStartDeadlineError);
-    expect(invokeModel).toHaveBeenCalledTimes(1);
+    await expect(result).rejects.toBeInstanceOf(ModelBudgetSpentError);
+    expect(invokeModel).toHaveBeenCalledTimes(2);
+  });
+
+  it("counts overlapping attempts of one budget once", () => {
+    let now = 0;
+    const budget = new ModelRunBudget(100, { now: () => now });
+    const first = budget.run();
+    now = 40;
+    const second = budget.run();
+    now = 70;
+    first();
+    first();
+    now = 90;
+    second();
+    now = 500;
+    expect(budget.spent).toBe(false);
+    const third = budget.run();
+    now = 510;
+    expect(budget.spent).toBe(true);
+    third();
+  });
+
+  it("also spends a budget at its wall-clock cap however little ran", () => {
+    let now = 0;
+    const budget = new ModelRunBudget(100, {
+      wallClockMs: 1_000,
+      now: () => now,
+    });
+    budget.run()();
+    now = 999;
+    expect(budget.spent).toBe(false);
+    now = 1_000;
+    expect(budget.spent).toBe(true);
   });
 
   it("keeps its admitted Runtime when availability changes between steps", async () => {

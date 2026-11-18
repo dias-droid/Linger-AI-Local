@@ -26,6 +26,7 @@ import {
 import { renderSessionSource } from "../../src/llm-wiki/wiki-session-source.js";
 import {
   ModelCallError,
+  ModelRunBudget,
   type ModelChainCallRequest,
   type ModelChainSpec,
 } from "../../src/runtime-model-call.js";
@@ -467,13 +468,13 @@ describe("AgentWikiBackend", () => {
     expect(files).not.toContain("sessions/2026-11-03/rec1.md");
   });
 
-  it("starts no task past the refresh deadline and defers every source", async () => {
+  it("starts no task once the refresh budget is spent and defers every source", async () => {
     const model = fakeModel();
     const { files, result, request, requests } = await generate(
       async (directory) => [await chatInput(directory)],
       model,
       {},
-      { deadline: Date.now() - 1 },
+      { budget: new ModelRunBudget(0) },
     );
     expect(requests).toEqual([]);
     // Deferred, not unsettled: the source spends none of its tries.

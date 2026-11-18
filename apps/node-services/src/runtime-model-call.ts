@@ -132,8 +132,9 @@ export interface WorkspaceModelCallRequest
 /** One step of a chain; its key is `<chain key>/<step>`. */
 export interface ModelChainTextRequest extends ModelPrompt {
   readonly step: string;
-  /** A queued attempt may only start before this Unix timestamp in milliseconds. */
-  readonly startBefore?: number;
+  /** An attempt starts only while the budget lasts, and its run counts
+   * against it. */
+  readonly budget?: ModelRunBudget;
 }
 
 export interface ModelChainCallRequest
@@ -150,8 +151,6 @@ export interface ModelChainSpec extends ModelTarget {
   readonly kind: ModelCallKind;
   /** Names the whole chain, for example `wiki:<refresh id>/route:1`. */
   readonly key: string;
-  /** Bounds the chain from the moment it is admitted; omitted, unbounded. */
-  readonly timeoutMs?: number;
   /** Stops the chain and every call it started. */
   readonly signal?: AbortSignal;
 }
@@ -163,7 +162,7 @@ export interface ModelChainSpec extends ModelTarget {
  * lone call; a ModelCallError past them is the flow's to handle.
  */
 export interface ModelChain {
-  /** Aborts on the caller's signal, the chain deadline and process shutdown. */
+  /** Aborts on the caller's signal and process shutdown. */
   readonly signal: AbortSignal;
   call(
     request: ModelChainCallRequest,
@@ -391,7 +390,7 @@ interface CallRequest {
   readonly kind: ModelCallKind;
   readonly key: string;
   readonly target: ModelTarget;
-  readonly startBefore?: number;
+  readonly budget?: ModelRunBudget;
   readonly mode: "text" | "structured" | "workspace";
   readonly effort?: ModelCallEffort;
   readonly instructions?: string;
@@ -419,8 +418,53 @@ interface ChainAdmission {
   releaseUnused(outcome: string): void;
 }
 
-/** A queued chain step missed its latest start time. An already sent call can finish. */
-export class ModelCallStartDeadlineError extends Error {}
+/** A queued chain step found its budget spent. An already sent call can finish. */
+export class ModelBudgetSpentError extends Error {}
+
+/**
+ * Model time a flow may spend across its parallel chains. It runs only while
+ * at least one of its attempts holds a place, so waiting for a place, also
+ * behind interactive work or a swapped-in chat, costs nothing. A caller that
+ * itself waits by wall clock gives the budget a wall-clock cap below its wait.
+ */
+export class ModelRunBudget {
+  readonly #limitMs: number;
+  readonly #now: () => number;
+  readonly #endsAt: number;
+  #spentMs = 0;
+  #running = 0;
+  #since = 0;
+
+  constructor(
+    limitMs: number,
+    options: {
+      /** Also spent this long after it was made, however little ran. */
+      readonly wallClockMs?: number;
+      readonly now?: () => number;
+    } = {},
+  ) {
+    this.#limitMs = limitMs;
+    this.#now = options.now ?? Date.now;
+    this.#endsAt = this.#now() + (options.wallClockMs ?? Infinity);
+  }
+
+  get spent(): boolean {
+    const now = this.#now();
+    const running = this.#running ? now - this.#since : 0;
+    return this.#spentMs + running >= this.#limitMs || now >= this.#endsAt;
+  }
+
+  /** Counts an admitted attempt until the returned function is called. */
+  run(): () => void {
+    if (this.#running++ === 0) this.#since = this.#now();
+    let running = true;
+    return () => {
+      if (!running) return;
+      running = false;
+      if (--this.#running === 0) this.#spentMs += this.#now() - this.#since;
+    };
+  }
+}
 
 /** One execution of a call, shared by every caller asking the same. */
 interface Entry {
@@ -469,7 +513,6 @@ function callId(call: CallRequest): string {
       call.input,
       call.schemaName ?? null,
       call.outputSchema ?? null,
-      call.startBefore ?? null,
       call.sessionKey ?? null,
       (call.files ?? []).map((file) => [
         file.path,
@@ -726,13 +769,13 @@ async function invokeAttempt(
     | Awaited<ReturnType<RuntimeModelGateway["invokeModel"]>>
     | undefined;
   let lease: ModelLease | undefined;
+  let stopBudget: (() => void) | undefined;
   const timeoutMs = call.timeoutMs ?? policy.timeoutMs;
   try {
     if (entry.chain) lease = await entry.chain.acquire(call.key, signal);
-    if (call.startBefore !== undefined && Date.now() >= call.startBefore)
-      throw new ModelCallStartDeadlineError(
-        "The model step missed its start deadline",
-      );
+    if (call.budget?.spent)
+      throw new ModelBudgetSpentError("The model step's budget is spent");
+    stopBudget = call.budget?.run();
     outcome = await state.options.gateway.invokeModel(placement.computerId, {
       tenantId: placement.tenantId,
       ownerActorId: placement.ownerActorId,
@@ -774,7 +817,7 @@ async function invokeAttempt(
       error: error instanceof Error ? error.message : String(error),
     });
     if (signal.aborted) throw signal.reason;
-    if (error instanceof ModelCallStartDeadlineError) throw error;
+    if (error instanceof ModelBudgetSpentError) throw error;
     if (error instanceof ModelCallError) {
       if (error.kind === "computer_offline" && key !== undefined)
         state.placementCache.delete(key);
@@ -784,6 +827,7 @@ async function invokeAttempt(
       cause: error,
     });
   } finally {
+    stopBudget?.();
     lease?.release({
       outcome: outcome?.outcome ?? (signal.aborted ? "aborted" : "failed"),
       ...(outcome?.usage === undefined ? {} : { usage: outcome.usage }),
@@ -982,7 +1026,7 @@ function callRequest(
     ModelPrompt & {
       readonly kind: ModelCallKind;
       readonly runOperationId?: string;
-      readonly startBefore?: number;
+      readonly budget?: ModelRunBudget;
     },
   key: string,
   mode: CallRequest["mode"],
@@ -998,9 +1042,7 @@ function callRequest(
     kind: request.kind,
     key,
     target: targetOf(request),
-    ...(request.startBefore === undefined
-      ? {}
-      : { startBefore: request.startBefore }),
+    ...(request.budget ? { budget: request.budget } : {}),
     mode,
     ...(request.effort ? { effort: request.effort } : {}),
     ...(request.instructions ? { instructions: request.instructions } : {}),
@@ -1064,7 +1106,6 @@ async function runModelChain<T>(
   }
   state.chains.add(controller);
   let initialPlace: ModelLease | undefined;
-  let deadline: NodeJS.Timeout | undefined;
   const releaseUnused = (outcome: string) => {
     initialPlace?.release({ outcome });
     initialPlace = undefined;
@@ -1096,17 +1137,6 @@ async function runModelChain<T>(
       },
       releaseUnused,
     };
-    if (spec.timeoutMs !== undefined)
-      deadline = setTimeout(
-        () =>
-          controller.abort(
-            new ModelCallError(
-              "timed_out",
-              "The model chain did not finish in time",
-            ),
-          ),
-        spec.timeoutMs,
-      );
     const inChain = {
       kind: spec.kind,
       placement: { ...placement, runtimeType },
@@ -1152,7 +1182,6 @@ async function runModelChain<T>(
         ),
     });
   } finally {
-    clearTimeout(deadline);
     for (const signal of signals) signal.removeEventListener("abort", abort);
     state.chains.delete(controller);
     controller.abort();
