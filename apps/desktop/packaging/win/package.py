@@ -16,8 +16,8 @@ folder for running without installing.
 
 Neither is Authenticode-signed yet, so SmartScreen asks the user to confirm
 the first start. The desktop updater runs a newer setup program with
-/S /relaunch: it stops Linger, replaces the installed version and starts it
-again. The zip has no self-update.
+/update /relaunch: it stops Linger, replaces the installed version behind a
+progress page and starts it again. The zip has no self-update.
 
 The Go daemon goes to resources/computer/ and the browser and computer-control
 tools it loads to resources/cli/ and resources/runtime/ (../computer_tools.py);
