@@ -129,6 +129,6 @@ to absolute paths runs a local `localmodels` checkout instead of fetching the
 published kit, and `LOCALMODELS_DEBUG` (`simulate` or `tiny`, or
 `~/.config/localmodels/debug.json`) passes straight through to `localmodels`.
 
-Run `pnpm --filter @linger/local-installation check`; `make check-installer`
-also runs its consumer, the installer, and applies to changes that affect its
-public behavior.
+Run `pnpm --filter @linger/local-installation check` (`make check-packages`
+runs it too); `make check-installer` runs its consumer, the installer, and
+applies to changes that affect its public behavior.

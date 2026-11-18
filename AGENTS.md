@@ -20,7 +20,10 @@ Memory, and Voice services.
   Node Services test, including the Agent Service's under `tests/agent/`.
 - `make -C apps/teamhub test`: run TeamHub unit tests.
 - `pnpm contracts:generate && pnpm contracts:verify`: regenerate and verify OpenAPI consumers.
-- `make check BASE=<target-ref>`: run every app's fast check in parallel.
+- `make check BASE=<target-ref>`: run in parallel the fast checks that the
+  changes since the merge base (committed, uncommitted, and untracked)
+  select; it prints the plan first, and `ALL=1` runs every fast check.
+  `scripts/check-plan.mjs` holds the path-to-check map that CI also uses.
   Fast checks are local and need no Postgres, containers, or full suite.
   `BASE` is required because the built-in Skill immutability check compares
   against it; the repository assumes no default branch.

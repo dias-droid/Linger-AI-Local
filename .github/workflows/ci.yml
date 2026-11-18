@@ -6,7 +6,8 @@ name: CI
 # which GitHub reports as success for its required check; a failed path
 # filter makes every app check fail instead of skipping. A merge-queue build
 # checks the paths its whole group changes, on top of the latest main. Pushes
-# to main run every check. CI runs the
+# to main run every check. scripts/check-plan.mjs maps paths to checks, here
+# and in `make check`. CI runs the
 # computer daemon's Go unit tests; the rest of check-computer (TS and process
 # tests) and the heavier suites (node-services, voice-runtime, integration,
 # containers and E2E) stay local: run `make check BASE=<target-ref>` and the
@@ -58,23 +59,9 @@ jobs:
           else
             changed=ALL
           fi
-          # Files every Node check depends on.
-          node='^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|\.npmrc|\.node-version|patches/|eslint\.config\.mjs|tsconfig\.base\.json|vitest\.config\.ts|Makefile|\.github/)'
-          match() {
-            if [ "$changed" = ALL ] || grep -Eq "$1" <<<"$changed"; then
-              echo "$2=true" >>"$GITHUB_OUTPUT"
-            else
-              echo "$2=false" >>"$GITHUB_OUTPUT"
-            fi
-          }
-          match "$node|^(apps/web/|packages/|contracts/generated/typescript/)" web
-          match "$node|^(packages/|contracts/generated/typescript/|contracts/fixtures/)" packages
-          match "$node|^(apps/teamhub-cli/|packages/|contracts/)" teamhub-cli
-          match "$node|^(apps/linger-installer/|packages/|contracts/generated/typescript/)" installer
-          match "$node|^(apps/desktop/|apps/computer/local-daemon/|apps/computer/package\.json|packages/|contracts/generated/typescript/)" desktop
-          match "$node|^contracts/" contracts
-          match '^(apps/teamhub/|skills/|contracts/generated/go/|contracts/fixtures/|\.golangci\.yml|Makefile|\.github/)' teamhub
-          match '^(apps/computer/local-daemon/|apps/computer/run-test\.sh|contracts/generated/go/runnergateway/|contracts/runner-gateway/fixtures/|scripts/managed-tools-|scripts/local-computer-node-distributions\.mjs|scripts/test-fixtures/managed-tools-fixture\.mjs|Makefile|\.github/)' computer-go
+          # scripts/check-plan.mjs maps paths to checks for CI and `make
+          # check`; it uses only Node builtins, so the runner's Node runs it.
+          printf '%s\n' "$changed" | node scripts/check-plan.mjs --files-from - --format github >>"$GITHUB_OUTPUT"
 
   repository-gate:
     runs-on: ubuntu-latest
