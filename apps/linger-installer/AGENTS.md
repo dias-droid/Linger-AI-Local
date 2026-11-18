@@ -22,8 +22,14 @@ on stderr for the desktop to show.
 stopped services headless, reusing its saved choices; the desktop client runs it
 after a reboot and reads the outcome from the single JSON line on stdout. It
 also restarts running services when the instance's `user.env` no longer
-matches the configuration they started with. With `--external-computer`, a
-successful outcome carries `runtime`, the same instance runtime as
+matches the configuration they started with, or when `--source-repo` names
+another checkout than the instance's. An instance follows a new checkout only
+once its services are ready on it: until then `instance.json` keeps naming the
+checkout they run from, the new checkout's migrations run only after the
+runtime (the local model, for one) is ready, and a run that stops earlier
+leaves the running services and their schema as they were. A successful
+outcome's `details.source` names the checkout the services serve from. With
+`--external-computer`, a successful outcome carries `runtime`, the same instance runtime as
 `GET /api/instances/{name}/runtime` (runtime and localmodels tool paths), so
 the desktop's Computer follows them.
 

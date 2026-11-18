@@ -6,6 +6,7 @@ import { afterEach, expect, test } from "vitest";
 import { loadInstance } from "./instance.js";
 import { updateUserKeys } from "./user-environment.js";
 import { readLiveKitSettings } from "./native-livekit.js";
+import { saveSourceBinding } from "./source-checkout.js";
 import {
   checkNativeSourceEnvironment,
   nativeSourceInstanceName,
@@ -171,7 +172,12 @@ test("an owned native instance follows a new checkout and keeps its data", async
   expect(await readFile(path.join(first.instance.root, "kept"), "utf8")).toBe(
     "data",
   );
+  // The services still run from the first checkout until they restart.
   expect(
     (await loadInstance({ home: f.home, name: "desktop" }))?.releaseDir,
-  ).toBe(next);
+  ).toBe(f.repo);
+  await saveSourceBinding(moved.instance);
+  const saved = await loadInstance({ home: f.home, name: "desktop" });
+  expect(saved?.releaseDir).toBe(next);
+  expect(saved?.source).toEqual(moved.instance.source);
 });

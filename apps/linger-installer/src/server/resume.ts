@@ -67,8 +67,10 @@ export async function resumeSourceInstance(
   const repo = await realpath(options.sourceRepo).catch(() =>
     path.resolve(options.sourceRepo),
   );
+  // The instance names the checkout its services last became ready on, so
+  // services that still run from an earlier one never count as running.
   if (
-    (!instance.source || instance.source.repo === repo) &&
+    instance.source.repo === repo &&
     (await engine.probe(instance, options.signal)).every(
       (check) => check.ready,
     ) &&
@@ -78,7 +80,7 @@ export async function resumeSourceInstance(
       code: 0,
       state: "ready",
       message: "Services are already running.",
-      details: { origin: instance.origin },
+      details: { origin: instance.origin, source: instance.source.repo },
     };
   const outcome = await engine.run({
     name: instance.name,
@@ -90,13 +92,18 @@ export async function resumeSourceInstance(
       if (event.message) options.log(event.message);
     },
   });
-  return outcome.code === 0
-    ? {
-        ...outcome,
-        details: {
-          ...(outcome.details as object | undefined),
-          origin: instance.origin,
-        },
-      }
-    : outcome;
+  if (outcome.code !== 0) return outcome;
+  // The instance names a checkout only once its services serve from it.
+  const serving = await load({
+    name: options.instanceName,
+    home: options.home,
+  });
+  return {
+    ...outcome,
+    details: {
+      ...(outcome.details as object | undefined),
+      origin: instance.origin,
+      source: serving?.source?.repo,
+    },
+  };
 }

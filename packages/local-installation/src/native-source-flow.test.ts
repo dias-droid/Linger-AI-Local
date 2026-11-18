@@ -9,7 +9,15 @@ vi.mock("./model-gateway.js", () => ({
 }));
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { afterEach, expect, test, vi } from "vitest";
@@ -49,6 +57,7 @@ import {
 import { prepareNativeDatabase } from "./native-database.js";
 import { prepareSourceComputer } from "./source-computer.js";
 import { connectComputer } from "./computer.js";
+import { loadInstance } from "./instance.js";
 vi.mock("./process.js", () => ({ runProcess: vi.fn() }));
 vi.mock("./apple-developer-tools.js", () => ({
   needsAppleDeveloperTools: vi.fn(),
@@ -483,6 +492,64 @@ async function runFlow(f: Awaited<ReturnType<typeof fixture>>) {
     onEvent: () => {},
   });
 }
+
+test("a move to a new checkout that fails before the restart leaves the services on the old one", async () => {
+  const f = await fixture();
+  const install = (repo: string) =>
+    installNativeSource({
+      home: f.home,
+      repo,
+      name: "desktop",
+      setupChoice: "pi",
+      externalComputer: true,
+      signal: new AbortController().signal,
+      onEvent: () => {},
+    });
+  vi.mocked(prepareRuntime).mockResolvedValue({
+    code: 0,
+    state: "ready",
+    message: "ready",
+  });
+  expect((await install(f.repo)).code).toBe(0);
+  const old = await realpath(f.repo);
+  const next = path.join(f.home, "next");
+  await cp(f.repo, next, { recursive: true });
+  // The Runtime (the local model, for one) is not ready on the new checkout.
+  vi.mocked(prepareRuntime).mockResolvedValue({
+    code: 4,
+    state: "action_required",
+    message: "The upstream stack is not ready.",
+    details: { code: "LOCAL_MODELS_RECOVERY_REQUIRED" },
+  });
+  vi.mocked(runProcess).mockClear();
+  vi.mocked(startNativeProcess).mockClear();
+  expect(await install(next)).toMatchObject({ code: 4 });
+  const stored = await loadInstance({ home: f.home, name: "desktop" });
+  expect(stored?.source?.repo).toBe(old);
+  expect(startNativeProcess).not.toHaveBeenCalled();
+  expect(
+    vi
+      .mocked(runProcess)
+      .mock.calls.some(([, args]) => args.includes("migrate")),
+  ).toBe(false);
+  // Trying again once the Runtime is ready restarts them on the new one.
+  vi.mocked(prepareRuntime).mockResolvedValue({
+    code: 0,
+    state: "ready",
+    message: "ready",
+  });
+  expect((await install(next)).code).toBe(0);
+  const moved = await realpath(next);
+  expect(
+    (await loadInstance({ home: f.home, name: "desktop" }))?.source?.repo,
+  ).toBe(moved);
+  expect(
+    vi
+      .mocked(startNativeProcess)
+      .mock.calls.filter(([options]) => options.name !== "livekit")
+      .map(([options]) => options.cwd),
+  ).toEqual([moved, moved, moved]);
+});
 
 test("an unchanged TeamHub leaves a running node-services alone", async () => {
   const f = await fixture();

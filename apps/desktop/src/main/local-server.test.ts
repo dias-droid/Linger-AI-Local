@@ -125,7 +125,12 @@ if (args.includes("--resume")) {
   const code = fs.existsSync(path.join(home, "resume-fails")) ? 1 : 0;
   const runtimeFile = path.join(home, "resume-runtime.json");
   const runtime = fs.existsSync(runtimeFile) ? JSON.parse(fs.readFileSync(runtimeFile, "utf8")) : undefined;
-  process.stdout.write("noise\n" + JSON.stringify({ code, message: code ? "Native teamhub stopped" : "ok", ...(runtime ? { runtime } : {}) }) + "\n");
+  // The folder the services serve from: the one asked for, unless they
+  // were left running on another (resume-serving names it).
+  const repo = args[args.indexOf("--source-repo") + 1];
+  const servingFile = path.join(home, "resume-serving");
+  const source = fs.existsSync(servingFile) ? fs.readFileSync(servingFile, "utf8") : fs.existsSync(repo) ? fs.realpathSync(repo) : repo;
+  process.stdout.write("noise\n" + JSON.stringify({ code, message: code ? "Native teamhub stopped" : "ok", details: { source }, ...(runtime ? { runtime } : {}) }) + "\n");
   process.exit(code);
 }
 const origin = "http://127.0.0.1:4321";
@@ -2390,6 +2395,47 @@ describe("LocalServerModule after a restart", () => {
     expect(args[args.indexOf("--source-repo") + 1]).toBe(
       path.join(f.home, "desktop", "source", archive.sha256.slice(0, 16)),
     );
+    await f.host.stop("quit");
+  });
+
+  it("keeps the older source until the services serve from the newer one", async () => {
+    const root = tempDirectory();
+    const archive = sourceArchive(root);
+    const f = installedBy(archive);
+    const sources = path.join(f.home, "desktop", "source");
+    const previous = path.join(sources, "previous");
+    const current = path.join(sources, archive.sha256.slice(0, 16));
+    // The move stopped before the restart (the local model was not ready).
+    writeFileSync(path.join(f.home, "resume-fails"), "");
+    await f.host.start();
+    await vi.waitFor(() => expect(f.module.status().phase).toBe("failed"));
+    // Try Again: the installer answers but the services still run from the
+    // older folder.
+    rmSync(path.join(f.home, "resume-fails"));
+    writeFileSync(path.join(f.home, "resume-serving"), previous);
+    f.bus.emit("local-server.retry");
+    await vi.waitFor(() => expect(f.showStartFailed).toHaveBeenCalledTimes(2));
+    expect(f.module.status().phase).toBe("failed");
+    expect(f.setServer).not.toHaveBeenCalled();
+    expect(
+      JSON.parse(
+        readFileSync(path.join(f.home, "desktop", "local-server.json"), "utf8"),
+      ),
+    ).toMatchObject({ repo: previous });
+    expect(readdirSync(sources).sort()).toEqual(
+      [path.basename(current), "previous"].sort(),
+    );
+    // Once they restart on the newer folder, it is recorded and the older
+    // one goes.
+    rmSync(path.join(f.home, "resume-serving"));
+    f.bus.emit("local-server.retry");
+    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    expect(
+      JSON.parse(
+        readFileSync(path.join(f.home, "desktop", "local-server.json"), "utf8"),
+      ),
+    ).toMatchObject({ repo: current });
+    expect(readdirSync(sources)).toEqual([path.basename(current)]);
     await f.host.stop("quit");
   });
 

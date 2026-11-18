@@ -173,8 +173,11 @@ Gateway and runs Agents. The daemon exits with the app.
   version that unpacked the source; when this app brings another source
   package (it was installed over an older one), that launch unpacks it and
   resumes on it, with the "Updating Linger" page instead of the older
-  interface, then prunes the older folder. A failure shows the start failure
-  page, whose Retry tries again. An app older than the recorded version
+  interface. Only when the installer reports the services serving from the
+  new folder (`details.source`) and the origin answers does it record that
+  folder and prune the older one; otherwise the older services keep running
+  from their folder, the record keeps naming it, and the start failure page's
+  Retry moves them again. An app older than the recorded version
   (a downgrade) leaves the services on their newer source and logs
   `local_server.source_newer_than_app`. A Quick Install that stopped
   before the computer enrolled is not resumed: setup shows again and Install

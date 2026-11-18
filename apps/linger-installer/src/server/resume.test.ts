@@ -91,6 +91,30 @@ test("moves running services to a new source tree", async () => {
   );
 });
 
+test("reports the source the services serve from", async () => {
+  expect(
+    await resumeSourceInstance(options, {
+      load: async () => instance,
+      engines: native(vi.fn(), true),
+      pending: async () => false,
+    }),
+  ).toMatchObject({ code: 0, details: { source: "/source" } });
+  // The instance names a new checkout only once its services became ready
+  // on it, so a run that never restarted them reports the old one.
+  const run = vi.fn<ResumeEngine["run"]>(async () => ({
+    code: 0,
+    state: "ready",
+    message: "ok",
+  }));
+  const old = { ...instance, source: { repo: "/old-source" } } as Instance;
+  expect(
+    await resumeSourceInstance(options, {
+      load: async () => old,
+      engines: native(run, true),
+    }),
+  ).toMatchObject({ code: 0, details: { source: "/old-source" } });
+});
+
 test("needs an installed source instance", async () => {
   expect(
     await resumeSourceInstance(options, {

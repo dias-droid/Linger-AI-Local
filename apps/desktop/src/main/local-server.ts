@@ -2071,8 +2071,20 @@ export class LocalServerModule implements Module {
           )))
           ? await this.#ensureSource(record.home, signal)
           : record.repo;
-      await this.#runResume(record, repo, signal);
-      if (repo !== record.repo) await this.#moved(record, repo);
+      const serving = await this.#runResume(record, repo, signal);
+      if (repo !== record.repo) {
+        // The record moves, and the older folder goes, only once the
+        // services run from the new one and answer; until then the older
+        // services keep running from their folder, and Retry moves them.
+        if (
+          serving !== (await realpath(repo).catch(() => repo)) ||
+          !(await this.#reachable(record.origin))
+        )
+          throw new Error(
+            "Linger could not restart on this version. The earlier version is still installed; try again.",
+          );
+        await this.#moved(record, repo);
+      }
       if (update)
         this.#ctx?.log.info("local_server.source_updated", {
           source: path.basename(repo),
@@ -2149,16 +2161,19 @@ export class LocalServerModule implements Module {
     await this.#pruneSources(record.home, [repo]);
   }
 
+  // Resolves with the source folder the installer reports the services
+  // serving from.
   async #runResume(
     record: LocalRecord,
     repo: string,
     signal: AbortSignal,
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     await this.#adoptSourceKeys(record.home);
     const node = await this.#ensureNode(signal);
     const outcome = await new Promise<{
       code: number;
       message: string;
+      details?: { source?: unknown };
       runtime?: InstanceRuntime;
     }>((resolve, reject) => {
       const child = spawn(
@@ -2195,6 +2210,7 @@ export class LocalServerModule implements Module {
             JSON.parse(last) as {
               code: number;
               message: string;
+              details?: { source?: unknown };
               runtime?: InstanceRuntime;
             },
           );
@@ -2206,6 +2222,8 @@ export class LocalServerModule implements Module {
     if (outcome.code !== 0)
       throw new Error(outcome.message || "The installation stopped");
     this.#adoptRuntime(outcome.runtime);
+    const source = outcome.details?.source;
+    return typeof source === "string" ? source : undefined;
   }
 
   // Every resume reports the runtime and localmodels tool paths, so an

@@ -7,13 +7,12 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
   prepareSourceConfiguration,
+  saveSourceBinding,
   validateSourceRepository,
   type EnvironmentReport,
   type SourceInstallOptions,
 } from "./source-checkout.js";
 import {
-  atomicPrivate,
-  loadInstance,
   privateDirectory,
   readLocalIdentityKey,
   withInstanceLock,
@@ -91,32 +90,6 @@ export async function prepareNativeConfiguration(
 ) {
   const repo = await validateSourceRepository(repository);
   const name = options.name ?? (await nativeSourceInstanceName(repo));
-  const bound = (instance?: Instance) =>
-    instance?.mode === "source-native" &&
-    instance.source &&
-    instance.releaseDir !== repo;
-  const existing = options.rebindSource
-    ? await loadInstance({ name, home: options.home })
-    : undefined;
-  if (existing && bound(existing))
-    // Instance data lives under its root; services restart on the new
-    // checkout because their recorded configuration no longer matches.
-    await withInstanceLock(existing, async () => {
-      const instance = await loadInstance({ name, home: options.home });
-      if (!instance || !bound(instance)) return;
-      const previous = instance.releaseDir;
-      instance.releaseDir = repo;
-      instance.source!.repo = repo;
-      if (instance.computerExecutable.startsWith(previous + path.sep))
-        instance.computerExecutable = path.join(
-          repo,
-          path.relative(previous, instance.computerExecutable),
-        );
-      await atomicPrivate(
-        path.join(instance.root, "instance.json"),
-        JSON.stringify(instance, null, 2) + "\n",
-      );
-    });
   return prepareSourceConfiguration(repo, { ...options, name });
 }
 export async function checkNativeSourceEnvironment(options: {
@@ -812,9 +785,12 @@ async function runNativeSource(
             stage,
             message: `The data from the earlier Simplex app can't be upgraded to Linger, so Linger starts with a fresh workspace. The earlier data was moved, not deleted, to ${legacyBackup}.\n`,
           });
-        await command("migrate");
+        // The runtime is ready before the checkout's migrations run: when it is
+        // not, services still running from an earlier checkout keep the
+        // schema they know.
         await runtime;
         signal.throwIfAborted();
+        await command("migrate");
         await prepareFoundationServices(current, choice, {
           home,
           signal,
@@ -883,6 +859,7 @@ async function runNativeSource(
           await startNativeProcess(serviceOptions(name));
         }
         const checks = await waitHealthy(current, signal, emit, ends);
+        await saveSourceBinding(current);
         emit({
           kind: "stage",
           stage: "services",

@@ -90,6 +90,36 @@ async function allocatePort(reserved: Set<number>): Promise<number> {
     }
   }
 }
+// Points an instance at another checkout of the same source; its data and
+// ports stay.
+function rebind(instance: Instance, repo: string): void {
+  const previous = instance.releaseDir;
+  instance.releaseDir = repo;
+  instance.source!.repo = repo;
+  if (instance.computerExecutable.startsWith(previous + path.sep))
+    instance.computerExecutable = path.join(
+      repo,
+      path.relative(previous, instance.computerExecutable),
+    );
+}
+/**
+ * Records that the instance's services run from the checkout it was
+ * prepared with. Call it under the instance lock. Until then instance.json
+ * keeps naming the checkout the running services came from, so a resume
+ * never takes services left on an older checkout for the new one.
+ */
+export async function saveSourceBinding(instance: Instance): Promise<void> {
+  const stored = await loadInstance({
+    name: instance.name,
+    home: path.resolve(instance.root, "../.."),
+  });
+  if (!stored?.source || stored.releaseDir === instance.releaseDir) return;
+  rebind(stored, instance.releaseDir);
+  await atomicPrivate(
+    path.join(stored.root, "instance.json"),
+    JSON.stringify(stored, null, 2) + "\n",
+  );
+}
 export async function prepareSourceConfiguration(
   repository: string,
   options: {
@@ -98,6 +128,10 @@ export async function prepareSourceConfiguration(
     port?: number;
     computerName?: string;
     externalComputer?: boolean;
+    // A source instance bound to another checkout follows this one, in
+    // memory only: the caller saves the binding (saveSourceBinding) once
+    // the services run from it.
+    rebindSource?: boolean;
   },
 ): Promise<{
   instance: Instance;
@@ -107,6 +141,13 @@ export async function prepareSourceConfiguration(
   const repo = await validateSourceRepository(repository);
   const instance = await initializeInstance({ ...options, releaseDir: repo });
   return withInstanceLock(instance, async () => {
+    if (
+      options.rebindSource &&
+      instance.mode === "source-native" &&
+      instance.source &&
+      instance.releaseDir !== repo
+    )
+      rebind(instance, repo);
     if (
       instance.releaseDir !== repo ||
       (!instance.source &&
