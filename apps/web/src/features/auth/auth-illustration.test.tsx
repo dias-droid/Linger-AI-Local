@@ -21,9 +21,11 @@ beforeEach(() => {
   );
 });
 afterEach(() => {
+  // Restore timer spies first: restoring one after the fake clock is gone
+  // would put the fake function back on the shared window.
+  vi.restoreAllMocks();
   vi.useRealTimers();
   vi.unstubAllGlobals();
-  vi.restoreAllMocks();
 });
 
 function shownNudge() {

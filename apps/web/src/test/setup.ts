@@ -111,6 +111,46 @@ function resetDocumentGlobals() {
   }
 }
 
+// The worker's real timer functions, captured by the first file to load this
+// setup: a later file may already run with a leaked replacement.
+type TimerGlobal =
+  | "setTimeout"
+  | "clearTimeout"
+  | "setInterval"
+  | "clearInterval"
+  | "Date";
+const TIMER_GLOBALS: TimerGlobal[] = [
+  "setTimeout",
+  "clearTimeout",
+  "setInterval",
+  "clearInterval",
+  "Date",
+];
+const realTimers = ((
+  globalThis as { __lingerRealTimers?: Record<TimerGlobal, unknown> }
+).__lingerRealTimers ??= Object.fromEntries(
+  TIMER_GLOBALS.map((name) => [name, globalThis[name]]),
+) as Record<TimerGlobal, unknown>);
+
+// A spy created on a timer while fake timers are on records the fake clock's
+// function as the original; restoring it after useRealTimers writes that dead
+// function back, and every later timer in the worker never fires (waitFor
+// stops re-checking). Restore the real ones and fail the test that leaked.
+function assertRealTimerGlobals() {
+  vi.restoreAllMocks();
+  const leaked = TIMER_GLOBALS.filter(
+    (name) => globalThis[name] !== realTimers[name],
+  );
+  if (leaked.length === 0) return;
+  for (const name of leaked) {
+    Object.assign(globalThis, { [name]: realTimers[name] });
+  }
+  throw new Error(
+    `This test left fake ${leaked.join(", ")} on the global object. ` +
+      "Restore timer spies before vi.useRealTimers(), or spy on timers before vi.useFakeTimers().",
+  );
+}
+
 afterEach(() => {
   try {
     cleanupRenderedComponents?.();
@@ -131,5 +171,6 @@ afterEach(() => {
     resetComposerAttachmentDraftsForTest();
     resetRoomTimelineReadingPositions?.();
     assertNoUnhandledTestRoutes();
+    assertRealTimerGlobals();
   }
 });
