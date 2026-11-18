@@ -244,6 +244,133 @@ paths:
           $ref: ../components/common.yaml#/components/responses/ServiceUnavailable
       security:
         - agentManagementBearer: []
+  /v1/tenants/{tenantId}/owners/{ownerActorId}/local-computers/{computerId}/model-source:
+    parameters:
+      - $ref: "#/components/parameters/TenantId"
+      - $ref: "#/components/parameters/OwnerActorId"
+      - $ref: "#/components/parameters/ComputerId"
+    get:
+      summary: Read the active model source and redacted BYOK configuration of an owned Local Computer
+      operationId: getLocalComputerModelSource
+      responses:
+        "200":
+          description: Current model source status without secret API keys.
+          content:
+            application/json:
+              schema:
+                $ref: ../components/model-source.yaml#/components/schemas/ModelSourceStatus
+        "401":
+          $ref: ../components/common.yaml#/components/responses/Unauthenticated
+        "404":
+          $ref: ../components/common.yaml#/components/responses/NotFound
+        "409":
+          $ref: ../components/common.yaml#/components/responses/Conflict
+        "502":
+          $ref: ../components/common.yaml#/components/responses/BadGateway
+        "503":
+          $ref: ../components/common.yaml#/components/responses/ServiceUnavailable
+      security:
+        - agentManagementBearer: []
+    post:
+      summary: Switch the active model source on an owned Local Computer
+      operationId: applyLocalComputerModelSource
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../components/model-source.yaml#/components/schemas/ModelSourceApplyCommand
+      responses:
+        "200":
+          description: Updated model source status without secret API keys.
+          content:
+            application/json:
+              schema:
+                $ref: ../components/model-source.yaml#/components/schemas/ModelSourceStatus
+        "400":
+          $ref: ../components/common.yaml#/components/responses/BadRequest
+        "401":
+          $ref: ../components/common.yaml#/components/responses/Unauthenticated
+        "404":
+          $ref: ../components/common.yaml#/components/responses/NotFound
+        "409":
+          $ref: ../components/common.yaml#/components/responses/Conflict
+        "502":
+          $ref: ../components/common.yaml#/components/responses/BadGateway
+        "503":
+          $ref: ../components/common.yaml#/components/responses/ServiceUnavailable
+      security:
+        - agentManagementBearer: []
+  /v1/tenants/{tenantId}/owners/{ownerActorId}/local-computers/{computerId}/model-source/models:
+    parameters:
+      - $ref: "#/components/parameters/TenantId"
+      - $ref: "#/components/parameters/OwnerActorId"
+      - $ref: "#/components/parameters/ComputerId"
+    post:
+      summary: List the models a BYOK endpoint serves, from an owned Local Computer without saving credentials
+      operationId: listLocalComputerByokModels
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../components/model-source.yaml#/components/schemas/ByokEndpointInput
+      responses:
+        "200":
+          description: The endpoint's models.
+          content:
+            application/json:
+              schema:
+                $ref: ../components/model-source.yaml#/components/schemas/ByokModelList
+        "400":
+          $ref: ../components/common.yaml#/components/responses/BadRequest
+        "401":
+          $ref: ../components/common.yaml#/components/responses/Unauthenticated
+        "404":
+          $ref: ../components/common.yaml#/components/responses/NotFound
+        "409":
+          $ref: ../components/common.yaml#/components/responses/Conflict
+        "502":
+          $ref: ../components/common.yaml#/components/responses/BadGateway
+        "503":
+          $ref: ../components/common.yaml#/components/responses/ServiceUnavailable
+      security:
+        - agentManagementBearer: []
+  /v1/tenants/{tenantId}/owners/{ownerActorId}/local-computers/{computerId}/model-source/test:
+    parameters:
+      - $ref: "#/components/parameters/TenantId"
+      - $ref: "#/components/parameters/OwnerActorId"
+      - $ref: "#/components/parameters/ComputerId"
+    post:
+      summary: Verify a BYOK upstream endpoint from an owned Local Computer without saving credentials
+      operationId: testLocalComputerByok
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ../components/model-source.yaml#/components/schemas/ByokTestRequest
+      responses:
+        "200":
+          description: BYOK verification result.
+          content:
+            application/json:
+              schema:
+                $ref: ../components/model-source.yaml#/components/schemas/ByokTestResult
+        "400":
+          $ref: ../components/common.yaml#/components/responses/BadRequest
+        "401":
+          $ref: ../components/common.yaml#/components/responses/Unauthenticated
+        "404":
+          $ref: ../components/common.yaml#/components/responses/NotFound
+        "409":
+          $ref: ../components/common.yaml#/components/responses/Conflict
+        "502":
+          $ref: ../components/common.yaml#/components/responses/BadGateway
+        "503":
+          $ref: ../components/common.yaml#/components/responses/ServiceUnavailable
+      security:
+        - agentManagementBearer: []
   /v1/tenants/{tenantId}/owners/{ownerActorId}/local-computers/{computerId}/browser-connection:
     parameters:
       - $ref: "#/components/parameters/TenantId"

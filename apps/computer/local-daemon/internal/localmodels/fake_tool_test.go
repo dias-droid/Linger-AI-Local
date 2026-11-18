@@ -43,6 +43,9 @@ type fakeLine struct {
 
 func runFakeTool(args []string) int {
 	state := os.Getenv("LOCALMODELS_STATE")
+	if len(args) >= 6 && strings.Join(args[:5], " ") == "-P -s -m localmodels source" {
+		return runFakeSourceTool(state, args[5:])
+	}
 	if len(args) < 6 || strings.Join(args[:5], " ") != "-P -s -m localmodels library" {
 		fmt.Fprintln(os.Stderr, "unexpected invocation", args)
 		return 3

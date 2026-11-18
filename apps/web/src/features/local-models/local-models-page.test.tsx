@@ -20,7 +20,7 @@ import {
 } from "@/test/teamhub-test-runtime";
 import { teamHubErrorResponse } from "@/test/teamhub-test-server";
 
-import { LocalModelsPage } from "./local-models-page";
+import { ModelsPage } from "./local-models-page";
 import type { LocalModelsView } from "./local-models-queries";
 import {
   gb,
@@ -36,6 +36,8 @@ const viewPath =
   "/v0/tenants/{tenantId}/local-computers/{computerId}/local-models";
 const actionPath =
   "/v0/tenants/{tenantId}/local-computers/{computerId}/local-models/{modelId}/actions";
+const modelSourcePath =
+  "/v0/tenants/{tenantId}/local-computers/{computerId}/model-source";
 
 type InventoryComputer = TeamHubLocalComputerPage["items"][number];
 
@@ -67,6 +69,14 @@ function setup(
     ),
   };
   runtime.server
+    // A Computer that cannot switch sources reports none: the library alone.
+    .on("GET", modelSourcePath, ({ params }) =>
+      Response.json({
+        computer_id: params.computerId,
+        online: true,
+        viewer_is_owner: true,
+      }),
+    )
     .on("GET", viewPath, ({ params }) => {
       const view = fixture.views[params.computerId!];
       return view ?? teamHubErrorResponse(404, "LOCAL_COMPUTER_NOT_FOUND");
@@ -112,18 +122,18 @@ function renderPage(fixture: Fixture, search = "") {
       <TeamHubRuntimeProvider runtime={fixture.runtime}>
         <TeamHubEventSync />
         <MemoryRouter
-          initialEntries={[`/t/${tenantId}/settings/local-models${search}`]}
+          initialEntries={[`/t/${tenantId}/settings/models${search}`]}
         >
           <Suspense fallback={<p>Loading page</p>}>
             <Routes>
               <Route
                 element={
                   <>
-                    <LocalModelsPage />
+                    <ModelsPage />
                     <CurrentSearch />
                   </>
                 }
-                path="/t/:tenantId/settings/local-models"
+                path="/t/:tenantId/settings/models"
               />
               <Route
                 element={<p>Computers page</p>}
@@ -739,7 +749,7 @@ describe("LocalModelsPage", () => {
     await findModels();
 
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "Local models",
+      "Models",
     );
     expect(
       screen.getByText(
@@ -1176,5 +1186,416 @@ describe("LocalModelsPage", () => {
     expect(statuses()).toContain(
       "GPT-OSS 20B: Downloading · 25% · 50 MB/s · 5m left",
     );
+  });
+});
+
+describe("Model source", () => {
+  const switchPath =
+    "/v0/tenants/{tenantId}/local-computers/{computerId}/model-source";
+  const testPath =
+    "/v0/tenants/{tenantId}/local-computers/{computerId}/model-source/test";
+  const modelsPath =
+    "/v0/tenants/{tenantId}/local-computers/{computerId}/model-source/models";
+  const byokStatus = {
+    byok: {
+      base_url: "https://api.example.com/v1",
+      configured: true,
+      key_saved: true,
+      model_id: "vendor/model",
+      protocol: "openai-chat",
+    },
+    mode: "byok",
+    runtime: "codex",
+    runtime_model: "localmodels-byok",
+  };
+
+  function withSource(fixture: Fixture, status: object) {
+    const switches: unknown[] = [];
+    const tests: unknown[] = [];
+    const listings: unknown[] = [];
+    fixture.runtime.server
+      .on("POST", modelsPath, ({ body }) => {
+        listings.push(body);
+        return Response.json({
+          base_url: "https://api.example.com",
+          models: [
+            { context_window: 131_072, id: "vendor/model", name: "Vendor" },
+            { id: "vendor/other" },
+          ],
+        });
+      })
+      .on("GET", switchPath, ({ params }) =>
+        Response.json({
+          computer_id: params.computerId,
+          online: true,
+          status,
+          viewer_is_owner: true,
+        }),
+      )
+      .on("POST", testPath, ({ body }) => {
+        tests.push(body);
+        return Response.json({
+          base_url: "https://api.example.com",
+          context_window: 131_072,
+          model_id: "vendor/model",
+          ok: true,
+          protocol: "openai-chat",
+        });
+      });
+    return { listings, switches, tests };
+  }
+
+  it("opens on the source in use and explains BYOK on hover", async () => {
+    const fixture = setup([labView()]);
+    withSource(fixture, byokStatus);
+    renderPage(fixture);
+
+    const tabs = await screen.findByRole("tablist", { name: "Model source" });
+    expect(
+      within(tabs).getByRole("tab", { name: /BYOK/u, selected: true }),
+    ).toBeInTheDocument();
+    expect(
+      within(tabs).getByRole("img", { name: "In use" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Bring your own key");
+    expect(
+      screen.getByText("Agents on lab-118 use BYOK · vendor/model"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("In use, through OpenAI Chat Completions."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Stored privately/u)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("API format")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Base URL")).toHaveValue(
+      "https://api.example.com/v1",
+    );
+  });
+
+  it("asks before ending running tasks and switches only once confirmed", async () => {
+    const fixture = setup([labView()]);
+    const { switches } = withSource(fixture, byokStatus);
+    fixture.runtime.server.on("POST", switchPath, ({ body }) => {
+      switches.push(body);
+      if (!(body as { force_terminate?: boolean }).force_terminate)
+        return Response.json(
+          {
+            error: {
+              code: "AGENT_HAS_ACTIVE_RUNS",
+              details: [
+                {
+                  code: "AGENT_HAS_ACTIVE_RUNS",
+                  field: "agent",
+                  reason: "Research agent",
+                },
+              ],
+              message: "busy",
+              request_id: "test-busy",
+            },
+          },
+          { status: 409 },
+        );
+      return Response.json({
+        computer_id: "computer-lab",
+        online: true,
+        status: { ...byokStatus, mode: "subscription", runtime: "claude" },
+        terminated_run_count: 1,
+        updated_agent_count: 2,
+        viewer_is_owner: true,
+      });
+    });
+    renderPage(fixture);
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Subscription" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Switch to Claude Code" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "End running tasks?",
+    });
+    expect(dialog).toHaveTextContent("Research agent is working on tasks");
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Terminate tasks & Switch" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "Agents now use Subscription · Claude Code. 2 Agents were moved. 1 task was ended.",
+      ),
+    ).toBeInTheDocument();
+    expect(switches).toEqual([
+      { mode: "subscription", runtime: "claude" },
+      { force_terminate: true, mode: "subscription", runtime: "claude" },
+    ]);
+  });
+
+  it("shows what the Computer serves after a switch fails", async () => {
+    const fixture = setup([labView()]);
+    withSource(fixture, byokStatus);
+    let reads = 0;
+    fixture.runtime.server
+      .on("GET", switchPath, ({ params }) => {
+        reads += 1;
+        return Response.json({
+          computer_id: params.computerId,
+          online: true,
+          status:
+            reads === 1
+              ? byokStatus
+              : { ...byokStatus, mode: "subscription", runtime: "claude" },
+          viewer_is_owner: true,
+        });
+      })
+      .on("POST", switchPath, () =>
+        Response.json(
+          {
+            error: {
+              code: "MODEL_SOURCE_UNCONFIRMED",
+              message: "late",
+              request_id: "test-late",
+            },
+          },
+          { status: 504 },
+        ),
+      );
+    renderPage(fixture);
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Subscription" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Switch to Claude Code" }),
+    );
+
+    expect(
+      await screen.findByText(
+        "Agents on lab-118 use Subscription · Claude Code",
+      ),
+    ).toBeInTheDocument();
+    expect(reads).toBe(2);
+  });
+
+  it("tests and saves an endpoint, keeping the saved key when left blank", async () => {
+    const fixture = setup([labView()]);
+    const { switches, tests } = withSource(fixture, {
+      ...byokStatus,
+      mode: "local",
+      runtime: "pi",
+    });
+    fixture.runtime.server.on("POST", switchPath, ({ body }) => {
+      switches.push(body);
+      const { byok } = body as { byok: { model_id: string } };
+      return Response.json({
+        computer_id: "computer-lab",
+        online: true,
+        status: {
+          ...byokStatus,
+          byok: { ...byokStatus.byok, model_id: byok.model_id },
+        },
+        viewer_is_owner: true,
+      });
+    });
+    renderPage(fixture);
+
+    fireEvent.click(await screen.findByRole("tab", { name: /BYOK/u }));
+    expect(
+      await screen.findByRole("combobox", { name: "Model" }),
+    ).toHaveTextContent("vendor/model Vendor · 128K tokens");
+    fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+    expect(
+      await screen.findByText(
+        "Connected to https://api.example.com through OpenAI Chat Completions. vendor/model has 128K tokens of context.",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("combobox", { name: "Model" }));
+    fireEvent.click(
+      await screen.findByRole("option", { name: "vendor/other" }),
+    );
+    fireEvent.change(screen.getByLabelText("API key"), {
+      target: { value: "sk-new" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save & Switch to BYOK" }),
+    );
+
+    await waitFor(() => expect(switches).toHaveLength(1));
+    fireEvent.click(await screen.findByRole("tab", { name: "Subscription" }));
+    fireEvent.click(screen.getByRole("tab", { name: /BYOK/u }));
+    expect(
+      await screen.findByRole("combobox", { name: "Model" }),
+    ).toHaveTextContent("vendor/other");
+    expect(tests).toEqual([
+      {
+        byok: {
+          base_url: "https://api.example.com/v1",
+          model_id: "vendor/model",
+          reuse_saved_key: true,
+        },
+        runtime: "claude",
+      },
+    ]);
+    expect(switches).toEqual([
+      {
+        byok: {
+          api_key: "sk-new",
+          base_url: "https://api.example.com/v1",
+          model_id: "vendor/other",
+        },
+        mode: "byok",
+        runtime: "claude",
+      },
+    ]);
+  });
+
+  it("lists the endpoint's models once its address and key are entered", async () => {
+    const fixture = setup([labView()]);
+    const { listings, tests } = withSource(fixture, {
+      byok: { configured: false, key_saved: false },
+      mode: "subscription",
+      runtime: "claude",
+      runtime_model: "",
+    });
+    renderPage(fixture);
+
+    fireEvent.click(await screen.findByRole("tab", { name: /BYOK/u }));
+    const baseUrl = screen.getByLabelText("Base URL");
+    fireEvent.change(baseUrl, {
+      target: { value: "https://api.example.com/v1" },
+    });
+    expect(listings).toEqual([]);
+    fireEvent.blur(baseUrl);
+    const model = await screen.findByRole("combobox", { name: "Model" });
+    expect(model).toHaveTextContent("Choose a model");
+    fireEvent.click(model);
+    expect(
+      await screen.findByRole("option", {
+        name: "vendor/model Vendor · 128K tokens",
+      }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("option", { name: "vendor/other" }));
+    expect(screen.getByRole("combobox", { name: "Model" })).toHaveTextContent(
+      "vendor/other",
+    );
+
+    const apiKey = screen.getByLabelText("API key");
+    fireEvent.change(apiKey, { target: { value: "sk-listed" } });
+    fireEvent.blur(apiKey);
+    await waitFor(() => expect(listings).toHaveLength(2));
+    expect(listings).toEqual([
+      { base_url: "https://api.example.com/v1" },
+      { api_key: "sk-listed", base_url: "https://api.example.com/v1" },
+    ]);
+    fireEvent.blur(apiKey);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Test connection" }),
+    );
+    await waitFor(() => expect(tests).toHaveLength(1));
+    expect(tests[0]).toEqual({
+      byok: {
+        api_key: "sk-listed",
+        base_url: "https://api.example.com/v1",
+        model_id: "vendor/other",
+      },
+      runtime: "claude",
+    });
+    expect(listings).toHaveLength(2);
+  });
+
+  it("lists the models again on request with the key as typed", async () => {
+    const fixture = setup([labView()]);
+    const { listings } = withSource(fixture, byokStatus);
+    renderPage(fixture);
+
+    expect(await screen.findByText("2 models listed.")).toBeInTheDocument();
+    expect(listings).toEqual([
+      { base_url: "https://api.example.com/v1", reuse_saved_key: true },
+    ]);
+    fireEvent.change(screen.getByLabelText("API key"), {
+      target: { value: "sk-typed" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "List models" }));
+
+    await waitFor(() => expect(listings).toHaveLength(2));
+    expect(listings[1]).toEqual({
+      api_key: "sk-typed",
+      base_url: "https://api.example.com/v1",
+    });
+    expect(screen.getByRole("combobox", { name: "Model" })).toHaveTextContent(
+      "vendor/model Vendor · 128K tokens",
+    );
+  });
+
+  it("falls back to typing the model ID when the endpoint lists none", async () => {
+    const fixture = setup([labView()]);
+    withSource(fixture, byokStatus);
+    fixture.runtime.server.on("POST", modelsPath, () =>
+      Response.json(
+        {
+          error: {
+            code: "BYOK_MODEL_NOT_FOUND",
+            message: "not found",
+            request_id: "test-models",
+          },
+        },
+        { status: 409 },
+      ),
+    );
+    renderPage(fixture);
+
+    expect(
+      await screen.findByText(
+        "The endpoint didn't list its models. Type the model ID.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Model")).toHaveValue("vendor/model");
+  });
+
+  it("tests an endpoint on this computer without an API key", async () => {
+    const fixture = setup([labView()]);
+    const { tests } = withSource(fixture, {
+      byok: { configured: false, key_saved: false },
+      mode: "subscription",
+      runtime: "claude",
+      runtime_model: "",
+    });
+    renderPage(fixture);
+
+    fireEvent.click(await screen.findByRole("tab", { name: /BYOK/u }));
+    fireEvent.change(screen.getByLabelText("Base URL"), {
+      target: { value: "http://127.0.0.1:18486/v1" },
+    });
+    fireEvent.change(screen.getByLabelText("Model"), {
+      target: { value: "vendor/model" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+
+    await waitFor(() => expect(tests).toHaveLength(1));
+    expect(tests[0]).toEqual({
+      byok: { base_url: "http://127.0.0.1:18486/v1", model_id: "vendor/model" },
+      runtime: "claude",
+    });
+  });
+
+  it("switches back to a model already on the computer", async () => {
+    const fixture = setup([labView()]);
+    const { switches } = withSource(fixture, byokStatus);
+    fixture.runtime.server.on("POST", switchPath, ({ body }) => {
+      switches.push(body);
+      return Response.json({
+        computer_id: "computer-lab",
+        online: true,
+        status: { ...byokStatus, mode: "local", runtime: "pi" },
+        viewer_is_owner: true,
+      });
+    });
+    renderPage(fixture);
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Local model" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Switch to Local model" }),
+    );
+
+    await waitFor(() => expect(switches).toHaveLength(1));
+    expect(switches[0]).toMatchObject({ mode: "local" });
+    expect(
+      (switches[0] as { local_model_id?: string }).local_model_id,
+    ).toBeTruthy();
   });
 });

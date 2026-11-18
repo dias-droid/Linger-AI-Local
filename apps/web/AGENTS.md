@@ -23,8 +23,13 @@ build:assets` to check the initial JS budget.
 - `src/app`: routes, providers, route error boundaries, and global CSS.
 - `src/features/teamhub`: Human API, Session, error, and realtime adapters.
 - `src/features/rooms`: Room routes, Chat, Timeline, the right sidebar (Agent Info, Activity, Thread, Document) and membership UI.
-- `src/features/local-models`: Settings › Local models (`settings/local-models?computer=<id>`),
-  one Computer's model library as TeamHub last stored it. The Computer decides
+- `src/features/local-models`: Settings › Models (`settings/models?computer=<id>`).
+  Its tabs read and switch the Computer's model source (Local model,
+  Subscription, BYOK) through TeamHub's `model-source` API, which asks the
+  Computer live; the page never holds a saved API key, and a switch refused
+  with `AGENT_HAS_ACTIVE_RUNS` retries with `force_terminate` only after the
+  owner confirms. The Local model tab is one Computer's model library as
+  TeamHub last stored it. The Computer decides
   fit, availability, placement, the recommendation and memory; the page only
   orders and labels them, picks the Make room default, renders family icons,
   capability/parameter badges, download speed/ETA and model-card facts from

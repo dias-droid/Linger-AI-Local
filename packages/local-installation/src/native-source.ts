@@ -43,6 +43,7 @@ import {
   managedRuntimeEnvironment,
 } from "./managed-codex.js";
 import { prepareRuntime, runtimeVersionFailure } from "./managed-runtimes.js";
+import { applyNativeSource, prepareByokRuntime } from "./byok-source.js";
 import {
   readSetupChoice,
   writeGpuSharing,
@@ -424,8 +425,14 @@ async function runNativeSource(
   try {
     options.signal.throwIfAborted();
     validateLocalCredentials(options);
+    if (options.byok?.apiKey) secrets.push(options.byok.apiKey);
     if (options.setupChoice) validateSetupChoice(options.setupChoice);
-    const choice = options.setupChoice ?? (await readSetupChoice(options));
+    const choice = options.byok
+      ? (options.byok.runtime ??
+        (options.setupChoice && options.setupChoice !== "local-models"
+          ? options.setupChoice
+          : "claude"))
+      : (options.setupChoice ?? (await readSetupChoice(options)));
     if (!choice)
       return {
         code: 4,
@@ -471,21 +478,53 @@ async function runNativeSource(
       let runtimeError: unknown;
       const runtime = (async () => {
         try {
-          runtimeOutcome =
-            choice === "local-models"
-              ? await prepareLocalModels(current, {
-                  shareGpu: options.shareGpu,
-                  signal,
-                  onEvent: emit,
-                  localModelsApproval: options.localModelsApproval,
-                  localModelsReplan: options.localModelsReplan,
-                })
-              : await prepareRuntime(choice, {
+          if (options.byok) {
+            const byokRuntime =
+              choice === "local-models"
+                ? (options.byok.runtime ?? "claude")
+                : choice;
+            runtimeOutcome = await prepareByokRuntime(
+              { ...options.byok, runtime: byokRuntime },
+              {
+                home,
+                signal,
+                onEvent: emit,
+                env: await managedRuntimeEnvironment(home, current.root),
+              },
+            );
+          } else if (choice === "local-models") {
+            runtimeOutcome = await prepareLocalModels(current, {
+              shareGpu: options.shareGpu,
+              signal,
+              onEvent: emit,
+              localModelsApproval: options.localModelsApproval,
+              localModelsReplan: options.localModelsReplan,
+            });
+            if (runtimeOutcome?.code === 0)
+              runtimeOutcome =
+                (await applyNativeSource(home, "local", "pi", signal)) ??
+                runtimeOutcome;
+          } else {
+            runtimeOutcome = await prepareRuntime(choice, {
+              home,
+              signal,
+              onEvent: emit,
+              env: await managedRuntimeEnvironment(home, current.root),
+            });
+            if (
+              choice !== "pi" &&
+              (runtimeOutcome.code === 0 ||
+                (runtimeOutcome.details as { code?: string } | undefined)
+                  ?.code === "RUNTIME_AUTH_REQUIRED")
+            )
+              runtimeOutcome =
+                (await applyNativeSource(
                   home,
+                  "subscription",
+                  choice,
                   signal,
-                  onEvent: emit,
-                  env: await managedRuntimeEnvironment(home, current.root),
-                });
+                )) ?? runtimeOutcome;
+          }
           if (
             runtimeOutcome &&
             runtimeOutcome.code !== 0 &&
@@ -808,11 +847,17 @@ async function runNativeSource(
         });
         // Binds the local stack's gateway for local models; with a runtime's own
         // sign-in, retires one an earlier release started.
-        await prepareModelGateway(current, choice, {
-          home,
-          signal,
-          onEvent: emit,
-        });
+        await prepareModelGateway(
+          current,
+          options.byok && choice !== "local-models"
+            ? { runtime: choice, modelSource: "byok" }
+            : choice,
+          {
+            home,
+            signal,
+            onEvent: emit,
+          },
+        );
         step("services", "Starting native collaboration services…");
         const ends = await logEnds(current);
         const liveKit = voice && (await readLiveKitSettings(current.root));

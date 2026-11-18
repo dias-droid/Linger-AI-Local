@@ -15,6 +15,7 @@ export function parseInstallerArguments(args: string[]) {
     noOpen?: boolean;
     resume?: boolean;
     inspect?: boolean;
+    checkByok?: boolean;
     userKeys?: boolean;
     migrate?: boolean;
     stop?: boolean;
@@ -33,6 +34,10 @@ export function parseInstallerArguments(args: string[]) {
     }
     if (flag === "--inspect") {
       options.inspect = true;
+      continue;
+    }
+    if (flag === "--check-byok") {
+      options.checkByok = true;
       continue;
     }
     if (flag === "--migrate") {
@@ -74,6 +79,7 @@ export function parseInstallerArguments(args: string[]) {
   if (
     !options.sourceRepo &&
     !options.inspect &&
+    !options.checkByok &&
     !options.userKeys &&
     !options.migrate &&
     !options.stop
@@ -222,6 +228,27 @@ async function userKeys(options: ReturnType<typeof parseInstallerArguments>) {
     process.exit("error" in outcome ? 1 : 0),
   );
 }
+async function checkByok(options: ReturnType<typeof parseInstallerArguments>) {
+  let input = "";
+  for await (const chunk of process.stdin) input += String(chunk);
+  const { checkByokEndpoint, validateByokConfiguration } =
+    await import("@linger/local-installation/byok-source");
+  try {
+    const config = validateByokConfiguration(JSON.parse(input));
+    const result = await checkByokEndpoint(
+      options.home,
+      config,
+      AbortSignal.timeout(45_000),
+    );
+    process.stdout.write(`${JSON.stringify(result)}\n`, () => process.exit(0));
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Could not check BYOK endpoint.";
+    process.stdout.write(`${JSON.stringify({ ok: false, message })}\n`, () =>
+      process.exit(1),
+    );
+  }
+}
 // Headless stop for the desktop's uninstall: the outcome as one JSON line on
 // stdout. The uninstall waits for it, so it ends on its own after a while.
 async function stopInstallation(
@@ -324,6 +351,7 @@ if (
       process.exit(0),
     );
   else if (options?.userKeys) await userKeys(options);
+  else if (options?.checkByok) await checkByok(options);
   else if (options?.inspect) await inspect(options);
   else if (options?.resume) await resume(options);
   else if (options) await serve(options).catch(failedToStart);

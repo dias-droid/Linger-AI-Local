@@ -713,9 +713,9 @@ function createSettingsRoute(): RouteObject {
       {
         lazy: async () => ({
           Component: (await import("@/features/local-models/local-models-page"))
-            .LocalModelsPage,
+            .ModelsPage,
         }),
-        path: "local-models",
+        path: "models",
       },
       { loader: openProfile, path: "administration" },
     ],

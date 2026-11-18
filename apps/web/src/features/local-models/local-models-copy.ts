@@ -179,3 +179,47 @@ export function architectureCopy(
 ) {
   return architectureLabels[architecture];
 }
+
+const modelSourceRefusals: Record<Schemas["ModelSourceErrorCode"], string> = {
+  AGENT_HAS_ACTIVE_RUNS: "Agents on this computer are working on tasks.",
+  BYOK_AUTH_FAILED: "The endpoint rejected the API key.",
+  BYOK_INVALID_CONFIG:
+    "The computer can't use this endpoint. An HTTPS endpoint needs an API key; plain HTTP works only on this computer or your local network.",
+  BYOK_MODEL_NOT_FOUND: "The endpoint doesn't serve this model ID.",
+  BYOK_UNREACHABLE: "The computer couldn't reach the endpoint.",
+  BYOK_UPSTREAM_REJECTED: "The endpoint rejected the test request.",
+  LOCAL_COMPUTER_OFFLINE:
+    "The computer is offline. Reconnect it in Computers, then try again.",
+  LOCAL_MODEL_UNKNOWN: "The computer doesn't have this model anymore.",
+  MODEL_SOURCE_FAILED: "The computer couldn't switch. Try again.",
+  MODEL_SOURCE_FORBIDDEN:
+    "Only the person who connected this computer can change its models.",
+  MODEL_SOURCE_SERVICE_UNAVAILABLE:
+    "Linger couldn't reach the computer right now. Try again.",
+  MODEL_SOURCE_UNAVAILABLE:
+    "This computer can't switch models. Update Linger on it, then try again.",
+  MODEL_SOURCE_UNCONFIRMED:
+    "The computer didn't answer in time. It may still be switching; check again in a minute.",
+  RUNTIME_NOT_ENABLED: "This AI runtime isn't set up on the computer.",
+};
+
+/** Why a model-source switch or endpoint test failed. */
+export function modelSourceErrorCopy(code: string | undefined) {
+  return code && Object.hasOwn(modelSourceRefusals, code)
+    ? modelSourceRefusals[code as keyof typeof modelSourceRefusals]
+    : "Something went wrong. Try again.";
+}
+
+export const modelSourceModeLabels: Record<Schemas["ModelSourceMode"], string> =
+  { byok: "BYOK", local: "Local model", subscription: "Subscription" };
+
+export const modelSourceRuntimeLabels: Record<
+  Schemas["ModelSourceRuntime"],
+  string
+> = { claude: "Claude Code", codex: "Codex", pi: "Pi" };
+
+export const byokProtocolLabels: Record<Schemas["ByokProtocol"], string> = {
+  anthropic: "Anthropic Messages",
+  "openai-chat": "OpenAI Chat Completions",
+  "openai-responses": "OpenAI Responses",
+};

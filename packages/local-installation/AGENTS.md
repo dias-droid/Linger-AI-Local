@@ -106,6 +106,12 @@ existing Computer is rebound once on its next connect. A distribution without
 the tool writes none. External Computers (the Desktop's) get the same paths as
 the `LINGER_LOCALMODELS_*` keys of the installer's instance runtime.
 
+Setup sets the Computer's model source through `localmodels source apply`
+(`byok-source.ts`): BYOK after the Runtime is ready, a local model after the
+stack is, and a subscription after its Runtime installs, signed in or not.
+The installer reads `model-source.json` (`readByokEnvironment`) but never
+writes it.
+
 Each native service runs under a detached supervisor
 (`native-process-worker.mjs`) whose record holds its PID, birth and an
 unguessable lease. POSIX finds the service's processes by process group and

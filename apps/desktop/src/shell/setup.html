@@ -659,6 +659,128 @@
         overflow: hidden;
         padding: 0 4px 10px;
       }
+      .fold[data-open="true"] > div {
+        overflow: visible;
+      }
+      .choice[hidden],
+      .byok-box[hidden],
+      .signin-byok[hidden] {
+        display: none !important;
+      }
+      .byok-tip-btn {
+        position: relative;
+      }
+      .byok-tooltip {
+        position: absolute;
+        bottom: calc(100% + 8px);
+        right: 0;
+        z-index: 30;
+        width: 248px;
+        padding: 8px 10px;
+        border-radius: 9px;
+        background: #1f1f1d;
+        color: #f7f7f4;
+        font-size: 11.5px;
+        font-weight: 450;
+        line-height: 1.4;
+        text-align: left;
+        white-space: normal;
+        box-shadow: 0 10px 24px -8px rgba(20, 20, 16, 0.45);
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(3px);
+        transition:
+          opacity 150ms ease,
+          transform 150ms ease;
+      }
+      .byok-tip-btn:hover .byok-tooltip,
+      .byok-tip-btn:focus-visible .byok-tooltip {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      .choice.byok-box {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+      }
+      .byok-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .byok-row label {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .byok-grid {
+        display: grid;
+        gap: 7px;
+      }
+      .byok-grid input,
+      .signin-byok input,
+      .signin-byok select {
+        width: 100%;
+        height: 30px;
+        padding: 0 10px;
+        border: 1px solid #e2e2dc;
+        border-radius: 8px;
+        background: #fafaf8;
+        color: var(--ink);
+        font: inherit;
+        font-size: 12px;
+      }
+      .byok-grid input:focus,
+      .signin-byok input:focus,
+      .signin-byok select:focus {
+        outline: none;
+        border-color: var(--ink);
+        background: #fff;
+      }
+      .byok-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .byok-status {
+        flex: 1;
+        color: var(--faint);
+        font-size: 11.5px;
+        line-height: 1.35;
+      }
+      .byok-status[data-state="ready"] {
+        color: #2b7a3d;
+      }
+      .byok-status[data-state="failed"] {
+        color: var(--error);
+      }
+      .choice.optional-keys {
+        display: block;
+      }
+      .choice.optional-keys summary {
+        cursor: pointer;
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 500;
+        list-style: none;
+      }
+      .choice.optional-keys summary::-webkit-details-marker {
+        display: none;
+      }
+      .choice.optional-keys[open] summary {
+        margin-bottom: 8px;
+        color: var(--ink);
+      }
+      .signin-byok {
+        display: grid;
+        gap: 8px;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #ecece7;
+        text-align: left;
+      }
       .choices,
       .panel {
         border: 1px solid rgba(20, 20, 16, 0.07);
@@ -1167,6 +1289,22 @@
         border-radius: 8px;
         font: inherit;
       }
+      .signin-byok {
+        display: grid;
+        gap: 7px;
+        margin-top: 8px;
+        padding-top: 10px;
+        border-top: 1px solid var(--line);
+      }
+      .signin-byok .seg {
+        width: 100%;
+      }
+      .signin-byok .seg button {
+        flex: 1;
+      }
+      .signin-byok input {
+        width: 100%;
+      }
       .diagnostics {
         display: flex;
         flex-wrap: wrap;
@@ -1409,6 +1547,59 @@
             <div class="choices">
               <div class="choice">
                 <div class="text">
+                  <strong>Model source</strong
+                  ><span class="sub" id="source-sub"
+                    >Where your agents get their models.</span
+                  >
+                </div>
+                <div
+                  class="seg"
+                  role="radiogroup"
+                  aria-label="Model source"
+                  data-plan="source"
+                >
+                  <span class="knob"></span>
+                  <button type="button" role="radio" data-value="local">
+                    Local model
+                  </button>
+                  <button type="button" role="radio" data-value="subscription">
+                    Subscription
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    data-value="byok"
+                    class="byok-tip-btn"
+                    aria-describedby="byok-tip-text"
+                  >
+                    BYOK
+                    <span class="byok-tooltip" id="byok-tip-text" role="tooltip"
+                      >Bring Your Own Key — Connect your own OpenAI-compatible
+                      or Anthropic API endpoint, key, and model through Linger's
+                      local Bifrost gateway.</span
+                    >
+                  </button>
+                </div>
+              </div>
+              <div class="choice local" id="local-row" hidden>
+                <div class="text">
+                  <strong>Local model</strong
+                  ><span class="sub" id="local-sub"></span>
+                </div>
+                <button
+                  type="button"
+                  class="pick"
+                  id="local-model"
+                  role="checkbox"
+                  aria-label="Run tasks on a local model"
+                  hidden
+                >
+                  <span id="local-model-name"></span
+                  ><small id="local-model-needs"></small>
+                </button>
+              </div>
+              <div class="choice" id="subscription-row" hidden>
+                <div class="text">
                   <strong>AI runtime</strong
                   ><span class="sub" id="runtime-sub">Runs your tasks.</span>
                 </div>
@@ -1428,35 +1619,70 @@
                   <button type="button" role="radio" data-value="claude">
                     Claude Code
                   </button>
-                  <button type="button" role="radio" data-value="pi">Pi</button>
                 </div>
               </div>
-              <div class="choice local" id="local-row" hidden>
-                <div class="text">
-                  <strong>Local model</strong
-                  ><span class="sub" id="local-sub"></span
-                  ><span class="sub" id="local-pi-only" hidden
-                    >Local models are only available with the Pi runtime.</span
+              <div class="choice byok-box" id="byok-row" hidden>
+                <div class="byok-row">
+                  <label>AI runtime</label>
+                  <div
+                    class="seg"
+                    role="radiogroup"
+                    aria-label="BYOK runtime"
+                    data-byok="runtime"
                   >
+                    <span class="knob"></span>
+                    <button type="button" role="radio" data-value="claude">
+                      Claude Code
+                    </button>
+                    <button type="button" role="radio" data-value="codex">
+                      Codex
+                    </button>
+                    <button type="button" role="radio" data-value="pi">
+                      Pi
+                    </button>
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  class="pick"
-                  id="local-model"
-                  role="checkbox"
-                  aria-label="Run tasks on a local model"
-                  hidden
-                >
-                  <span id="local-model-name"></span
-                  ><small id="local-model-needs"></small>
-                </button>
+                <div class="byok-grid">
+                  <input
+                    id="byok-url"
+                    type="url"
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-label="BYOK endpoint URL"
+                    placeholder="Endpoint URL (https://… or http://192.168.…)"
+                  />
+                  <input
+                    id="byok-key"
+                    type="password"
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-label="BYOK API key"
+                    placeholder="API key (stored privately on this computer)"
+                  />
+                  <input
+                    id="byok-model"
+                    type="text"
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-label="BYOK model ID"
+                    placeholder="Model ID (e.g. gpt-5.4 or claude-sonnet-4-6)"
+                  />
+                </div>
+                <div class="byok-actions">
+                  <span class="byok-status" id="byok-status">
+                    Mounted on local Bifrost for all runtimes.
+                  </span>
+                  <button type="button" class="change" id="byok-check">
+                    Check
+                  </button>
+                </div>
               </div>
-              <div class="choice provider-keys">
+              <details class="choice optional-keys" id="optional-keys">
+                <summary>App integrations (optional)</summary>
                 <div class="text">
-                  <strong>API keys</strong
-                  ><span class="sub"
-                    >Optional. Composio connects apps; turn on voice inside the
-                    app. Keys stay on this computer.</span
+                  <span class="sub"
+                    >Composio connects apps; turn on voice inside the app. Keys
+                    stay on this computer.</span
                   >
                 </div>
                 <div class="keys">
@@ -1477,7 +1703,7 @@
                   </button>
                 </div>
                 <p class="keys-note" id="keys-note"></p>
-              </div>
+              </details>
               <div class="choice">
                 <div class="text">
                   <strong>Install location</strong
@@ -1584,6 +1810,13 @@
                 </button>
                 <button
                   class="link quiet"
+                  id="runtime-signin-byok-toggle"
+                  type="button"
+                >
+                  Use BYOK instead
+                </button>
+                <button
+                  class="link quiet"
                   id="runtime-signin-logs"
                   type="button"
                 >
@@ -1601,6 +1834,39 @@
                   Pi
                 </button>
               </div>
+              <form class="signin-byok" id="runtime-signin-byok" hidden>
+                <input
+                  id="signin-byok-url"
+                  type="url"
+                  autocomplete="off"
+                  spellcheck="false"
+                  aria-label="Sign-in BYOK endpoint URL"
+                  placeholder="Endpoint URL (https://… or http://192.168.…)"
+                />
+                <input
+                  id="signin-byok-key"
+                  type="password"
+                  autocomplete="off"
+                  spellcheck="false"
+                  aria-label="Sign-in BYOK API key"
+                  placeholder="API key (stored privately on this computer)"
+                />
+                <input
+                  id="signin-byok-model"
+                  type="text"
+                  autocomplete="off"
+                  spellcheck="false"
+                  aria-label="Sign-in BYOK model ID"
+                  placeholder="Model ID (e.g. gpt-5.4 or claude-sonnet-4-6)"
+                />
+                <button
+                  class="secondary"
+                  id="runtime-signin-byok-submit"
+                  type="submit"
+                >
+                  Continue with BYOK
+                </button>
+              </form>
             </div>
             <div class="row" id="runtime-signin-busy">
               <button class="link quiet" id="runtime-signin-open" type="button">
@@ -2019,15 +2285,47 @@
         const models = state.localServer.localModels;
         const pick = models.state === "checked" && models.recommendation;
         if (pick === "local-models" && models.eligible && models.model)
-          return { runtime: "pi", localModel: true };
-        if (pick && pick !== "local-models" && RUNTIMES[pick])
-          return { runtime: pick, localModel: false };
-        return { runtime: "recommended", localModel: false };
+          return { source: "local", runtime: "pi", localModel: true };
+        if (pick === "codex" || pick === "claude")
+          return { source: "subscription", runtime: pick, localModel: false };
+        return {
+          source: "subscription",
+          runtime: "recommended",
+          localModel: false,
+        };
       };
       let plan;
       // Whether the person changed the plan; until then it follows defaults().
       let picked = false;
+      let pickedAutoBeforeCheck = false;
       let customizing = false;
+      const emptyByok = () => ({
+        runtime: "claude",
+        baseUrl: "",
+        apiKey: "",
+        modelId: "",
+      });
+      let byok = emptyByok();
+      let signInByokOpen = false;
+      let signInByok = {
+        baseUrl: "",
+        apiKey: "",
+        modelId: "",
+      };
+      const byokProtocolLabels = {
+        anthropic: "Anthropic Messages",
+        "openai-chat": "OpenAI Chat Completions",
+        "openai-responses": "OpenAI Responses",
+      };
+      const trimByok = (value, runtime) => {
+        const apiKey = value.apiKey.trim();
+        return {
+          runtime,
+          baseUrl: value.baseUrl.trim(),
+          ...(apiKey ? { apiKey } : {}),
+          modelId: value.modelId.trim(),
+        };
+      };
       // Provider keys typed or removed here ("" removes the saved one); kept
       // only in the inputs and sent once with Install.
       let keys = {};
@@ -2220,6 +2518,7 @@
         $("runtime-signin").hidden = !open;
         if (!open) {
           otherRuntimes = false;
+          signInByokOpen = false;
           $("runtime-signin-trouble").open = false;
           return;
         }
@@ -2230,7 +2529,7 @@
         const pi = sign.runtime === "pi";
         $("runtime-signin-title").textContent = "Sign in to " + name;
         $("runtime-signin-lead").textContent = pi
-          ? "Pi needs a model provider. Run pi in a terminal to sign in; setup continues by itself."
+          ? "Pi needs a model provider. Run pi in a terminal to sign in, or use BYOK below; setup continues by itself."
           : "Your agents run on " +
             name +
             ". Authorize it with " +
@@ -2249,6 +2548,9 @@
         $("runtime-signin-logs").hidden = !failed;
         $("runtime-signin-runtimes").hidden = !otherRuntimes && !pi;
         $("runtime-signin-other").hidden = pi;
+        $("runtime-signin-byok").hidden = !signInByokOpen;
+        $("runtime-signin-byok-submit").disabled =
+          busy || !signInByok.baseUrl.trim() || !signInByok.modelId.trim();
         for (const option of document.querySelectorAll("[data-switch]")) {
           option.hidden = option.dataset.switch === sign.runtime;
           option.disabled = busy;
@@ -2262,6 +2564,7 @@
           ? "If your browser didn't open, choose Open browser again, then paste the code the page shows."
           : "If your browser didn't open, choose Open browser again.";
         $("runtime-signin-paste").hidden = !sign.acceptsCode;
+        requestAnimationFrame(placeKnobs);
       };
 
       const renderLocal = (busy) => {
@@ -2269,12 +2572,10 @@
         const recommended = defaults();
         // Auto, picked before the check named a pick, means that pick; once
         // it is known Auto no longer shows.
-        if (
-          picked &&
-          plan.runtime === "recommended" &&
-          recommended.runtime !== "recommended"
-        )
+        if (pickedAutoBeforeCheck && recommended.runtime !== "recommended") {
           picked = false;
+          pickedAutoBeforeCheck = false;
+        }
         if (!picked) plan = recommended;
         // The local model is offered only once this computer is known to
         // serve it; until then its row does not show.
@@ -2301,14 +2602,22 @@
                 size(free.vramFreeBytes) +
                 " is free"
               : "");
-        if (!model) plan.localModel = false;
+        plan.localModel = plan.source === "local" && !!model;
         const custom = !isDefaultPlan(local);
         // Quick Install waits for the check, so it installs what it shows.
         const checking = models.state === "checking";
-        const known = recommended.runtime !== "recommended";
+        const known =
+          recommended.source === "local" ||
+          recommended.runtime !== "recommended";
         const following = JSON.stringify(plan) === JSON.stringify(recommended);
         const named = (choice) =>
-          choice.localModel ? "Local model + Pi" : RUNTIMES[choice.runtime];
+          choice.source === "local"
+            ? "Local model + Pi"
+            : choice.source === "byok"
+              ? ["BYOK", RUNTIMES[byok.runtime], byok.modelId.trim()]
+                  .filter(Boolean)
+                  .join(" · ")
+              : RUNTIMES[choice.runtime];
         $("welcome-lead").textContent = local.available
           ? "Runs on this computer, just for you. Takes a few minutes."
           : "Connect this computer to your team's Linger.";
@@ -2336,19 +2645,19 @@
           $("local-install-label").innerHTML = label;
         document.querySelector('[data-step="welcome"]').dataset.customizing =
           String(customizing && local.available);
-        $("local-install").disabled ||= checking;
+        const byokIncomplete =
+          plan.source === "byok" &&
+          (!byok.baseUrl.trim() || !byok.modelId.trim());
+        const localUnavailable = plan.source === "local" && !model;
+        $("local-install").disabled ||=
+          checking || byokIncomplete || localUnavailable;
         $("local-install").dataset.busy = String(checking);
         $("local-install").setAttribute("aria-busy", String(checking));
         $("plan-summary").textContent = checking
           ? "Finding the best setup for this computer"
           : following && known
             ? "Recommended for this computer: " + named(plan)
-            : [
-                RUNTIMES[plan.runtime] || "Best AI runtime",
-                plan.localModel && "Local model",
-              ]
-                .filter(Boolean)
-                .join(" · ");
+            : named(plan) || "Best AI runtime";
         // Why, in the localmodels tool's facts and words.
         $("plan-why").textContent = fetching
           ? transferParts(fetching).join(" · ")
@@ -2417,10 +2726,17 @@
         }
         $("keys-note").textContent = "Applies when the installation runs.";
         const shown = model || held;
-        const runtime =
-          plan.runtime === "recommended" ? recommended.runtime : plan.runtime;
-        const piOnly = !!shown && runtime !== "pi";
-        $("local-row").hidden = !shown;
+        $("source-sub").textContent =
+          recommended.source === "local"
+            ? "Recommended: Local model on this computer."
+            : known
+              ? "Recommended: Subscription (" +
+                RUNTIMES[recommended.runtime] +
+                ")."
+              : "Choose how your agents run.";
+        $("local-row").hidden = plan.source !== "local";
+        $("subscription-row").hidden = plan.source !== "subscription";
+        $("byok-row").hidden = plan.source !== "byok";
         $("local-model").hidden = !shown;
         $("local-recheck").hidden = !held || !local.available;
         $("local-recheck").disabled = busy;
@@ -2435,8 +2751,8 @@
               : "On hold: close other programs, then Check again."
             : [
                 recommended.localModel
-                  ? "Recommended for this computer"
-                  : "Runs your tasks on this computer",
+                  ? "Recommended for this computer · Runs on Pi via Bifrost"
+                  : "Runs your tasks on this computer via Pi",
                 models.gpu,
               ]
                 .filter(Boolean)
@@ -2451,39 +2767,78 @@
           ]
             .filter(Boolean)
             .join(" · ");
-          $("local-model").setAttribute(
-            "aria-checked",
-            String(plan.localModel),
-          );
+          $("local-model").setAttribute("aria-checked", String(!!model));
           $("local-model").disabled = busy || !model;
-          // The local model runs only behind Pi: with another runtime it
-          // stays focusable, greyed and says so, but does not toggle.
-          $("local-pi-only").hidden = !piOnly;
-          $("local-model").setAttribute("aria-disabled", String(piOnly));
-          if (piOnly)
-            $("local-model").setAttribute("aria-describedby", "local-pi-only");
-          else $("local-model").removeAttribute("aria-describedby");
+        } else {
+          $("local-sub").textContent = checking
+            ? "Checking this computer…"
+            : models.reasons?.[0]?.message ||
+              "No local model fits this computer.";
         }
-        $("runtime-sub").textContent = known
+        const subKnown =
+          recommended.source === "subscription" &&
+          recommended.runtime !== "recommended";
+        $("runtime-sub").textContent = subKnown
           ? "Recommended: " + RUNTIMES[recommended.runtime] + "."
-          : plan.localModel
-            ? "Pi + local model."
-            : "Runs your tasks.";
+          : "Sign in with your ChatGPT or Claude subscription.";
         for (const seg of document.querySelectorAll("[data-plan]"))
           for (const option of seg.querySelectorAll("button")) {
+            const field = seg.dataset.plan;
             const value = option.dataset.value;
-            option.setAttribute(
-              "aria-checked",
-              String(plan[seg.dataset.plan] === value),
-            );
-            // With the tool's pick known, it is marked and Auto is not
-            // needed.
-            option.hidden = known && value === "recommended";
-            option.dataset.recommended = String(
-              known && value === recommended.runtime,
-            );
+            if (field === "source") {
+              option.setAttribute(
+                "aria-checked",
+                String(plan.source === value),
+              );
+              option.dataset.recommended = String(
+                known && value === recommended.source,
+              );
+              option.disabled = busy;
+            } else {
+              const subPick =
+                plan.runtime === "pi"
+                  ? subKnown
+                    ? recommended.runtime
+                    : "recommended"
+                  : plan.runtime;
+              option.setAttribute("aria-checked", String(subPick === value));
+              option.hidden = subKnown && value === "recommended";
+              option.dataset.recommended = String(
+                subKnown && value === recommended.runtime,
+              );
+              option.disabled = busy;
+            }
+          }
+        for (const seg of document.querySelectorAll("[data-byok]"))
+          for (const option of seg.querySelectorAll("button")) {
+            const field = seg.dataset.byok;
+            const value = option.dataset.value;
+            option.setAttribute("aria-checked", String(byok[field] === value));
             option.disabled = busy;
           }
+        $("byok-check").disabled =
+          busy || !byok.baseUrl.trim() || !byok.modelId.trim();
+        const byokCheck = local.byokCheck;
+        if (byokCheck?.state === "checking") {
+          $("byok-status").textContent = "Checking endpoint…";
+          $("byok-status").dataset.tone = "";
+        } else if (byokCheck?.state === "ready") {
+          $("byok-status").textContent =
+            "Ready · " +
+            byokCheck.modelId +
+            " (" +
+            Math.round(byokCheck.contextWindow / 1000) +
+            "k context) through " +
+            byokProtocolLabels[byokCheck.protocol];
+          $("byok-status").dataset.tone = "ok";
+        } else if (byokCheck?.state === "failed") {
+          $("byok-status").textContent = byokCheck.message;
+          $("byok-status").dataset.tone = "err";
+        } else {
+          $("byok-status").textContent =
+            "Mounted on local Bifrost for all runtimes.";
+          $("byok-status").dataset.tone = "";
+        }
         requestAnimationFrame(placeKnobs);
 
         // Installing. A restart after a reboot shows here as starting.
@@ -2801,11 +3156,22 @@
       });
       // The install runs on its own; this window follows its progress.
       const install = async () => {
+        const byokPayload =
+          plan.source === "byok" ? trimByok(byok, byok.runtime) : undefined;
+        const runtime =
+          plan.source === "local"
+            ? "local"
+            : plan.source === "byok"
+              ? byok.runtime
+              : plan.runtime === "pi"
+                ? "recommended"
+                : plan.runtime;
         const ok = await run(
           {
             op: "local.start",
             // The installer sets up Pi with the local model for "local".
-            runtime: plan.localModel ? "local" : plan.runtime,
+            runtime,
+            ...(byokPayload ? { byok: byokPayload } : {}),
             ...(customizing && Object.keys(keys).length ? { keys } : {}),
           },
           "local-error",
@@ -2838,6 +3204,31 @@
       $("runtime-signin-other").addEventListener("click", () => {
         otherRuntimes = !otherRuntimes;
         render();
+      });
+      $("runtime-signin-byok-toggle").addEventListener("click", () => {
+        signInByokOpen = !signInByokOpen;
+        render();
+      });
+      for (const [id, field] of [
+        ["signin-byok-url", "baseUrl"],
+        ["signin-byok-key", "apiKey"],
+        ["signin-byok-model", "modelId"],
+      ])
+        $(id).addEventListener("input", () => {
+          signInByok = { ...signInByok, [field]: $(id).value };
+          render();
+        });
+      $("runtime-signin-byok").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const runtime = state.localServer.signIn?.runtime ?? "claude";
+        if (!signInByok.baseUrl.trim() || !signInByok.modelId.trim()) return;
+        const payload = trimByok(signInByok, runtime);
+        $("signin-byok-key").value = "";
+        signInByok = { ...signInByok, apiKey: "" };
+        await run(
+          { op: "local.signin.byok", byok: payload },
+          "runtime-signin-error",
+        );
       });
       $("runtime-signin-logs").addEventListener("click", () =>
         run({ op: "logs.open" }, "runtime-signin-error"),
@@ -2883,6 +3274,10 @@
       );
       const clearKeys = () => {
         keys = {};
+        byok = { ...byok, apiKey: "" };
+        $("byok-key").value = "";
+        signInByok = { ...signInByok, apiKey: "" };
+        $("signin-byok-key").value = "";
         for (const input of document.querySelectorAll("[data-key]")) {
           input.value = "";
           input.type = "password";
@@ -2922,6 +3317,10 @@
         customizing = !customizing;
         if (!customizing) {
           picked = false;
+          pickedAutoBeforeCheck = false;
+          byok = emptyByok();
+          $("byok-url").value = "";
+          $("byok-model").value = "";
           clearKeys();
           const location = state.localServer.location;
           if (location.custom || location.error)
@@ -2933,11 +3332,61 @@
         for (const option of seg.querySelectorAll("button"))
           option.addEventListener("click", () => {
             picked = true;
-            plan = { ...plan, [seg.dataset.plan]: option.dataset.value };
-            // Another runtime than Pi does not run the local model.
-            if (plan.runtime !== "pi") plan.localModel = false;
+            const field = seg.dataset.plan;
+            const value = option.dataset.value;
+            pickedAutoBeforeCheck =
+              field === "runtime" &&
+              value === "recommended" &&
+              state.localServer.localModels.state === "checking";
+            if (field === "source") {
+              const rec = defaults();
+              plan = {
+                ...plan,
+                source: value,
+                runtime:
+                  value === "local"
+                    ? "pi"
+                    : plan.runtime === "pi"
+                      ? rec.source === "subscription"
+                        ? rec.runtime
+                        : "recommended"
+                      : plan.runtime,
+                localModel: value === "local",
+              };
+            } else {
+              plan = {
+                ...plan,
+                source: "subscription",
+                runtime: value,
+                localModel: false,
+              };
+            }
             render();
           });
+      for (const seg of document.querySelectorAll("[data-byok]"))
+        for (const option of seg.querySelectorAll("button"))
+          option.addEventListener("click", () => {
+            picked = true;
+            byok = { ...byok, [seg.dataset.byok]: option.dataset.value };
+            render();
+          });
+      for (const [id, field] of [
+        ["byok-url", "baseUrl"],
+        ["byok-key", "apiKey"],
+        ["byok-model", "modelId"],
+      ])
+        $(id).addEventListener("input", () => {
+          picked = true;
+          byok = { ...byok, [field]: $(id).value };
+          render();
+        });
+      $("byok-check").addEventListener("click", () => {
+        if (!byok.baseUrl.trim() || !byok.modelId.trim()) return;
+        run(
+          { op: "local.byok.check", byok: trimByok(byok, byok.runtime) },
+          "local-error",
+        );
+      });
       $("location-change").addEventListener("click", () =>
         run({ op: "local.location.pick" }),
       );
@@ -2945,10 +3394,9 @@
         run({ op: "local.recheck" }, "local-error"),
       );
       $("local-model").addEventListener("click", () => {
-        // Only Pi runs the local model; choose Pi first.
-        if ($("local-model").getAttribute("aria-disabled") === "true") return;
+        if ($("local-model").disabled) return;
         picked = true;
-        plan = { ...plan, localModel: !plan.localModel };
+        plan = { ...plan, source: "local", runtime: "pi", localModel: true };
         render();
       });
       $("open").addEventListener("click", () => run({ op: "finish" }));

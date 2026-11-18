@@ -16,6 +16,7 @@ import {
   type LocalBrowserConnectionStatus,
   type LocalComputerPermissionCommand,
   type LocalComputerPermissionStatus,
+  type LocalModelSourceCommand,
   type LocalPlacementRequirement,
   type LocalReasoningEffort,
   type LocalRuntimeModelDefinition,
@@ -336,6 +337,10 @@ export class RunnerGateway
     command: LocalModelActionCommand,
   ): Promise<LocalModelActionAck> {
     return this.#localModels.act(command);
+  }
+
+  async modelSource(command: LocalModelSourceCommand) {
+    return this.#capabilities.modelSource(command);
   }
 
   async runLocalComputerMutation<T>(

@@ -56,6 +56,7 @@ const (
 	KindBrowserConnect     = "browser_connect"
 	KindComputerPermission = "computer_permission"
 	KindLocalModels        = "local_models"
+	KindModelSource        = "model_source"
 	TargetOperation        = "operation"
 	TargetProvider         = "provider"
 	KindSessionCompact     = "session_compact"
@@ -94,6 +95,7 @@ var AgentToDaemonMessages = []Message{
 	{Name: "CapabilityBrowserConnect", Type: "execute", Match: map[string]string{"kind": "browser_connect"}},
 	{Name: "CapabilityComputerPermission", Type: "execute", Match: map[string]string{"kind": "computer_permission"}},
 	{Name: "CapabilityLocalModelsExecute", Type: "execute", Match: map[string]string{"kind": "local_models"}},
+	{Name: "CapabilityModelSource", Type: "execute", Match: map[string]string{"kind": "model_source"}},
 	{Name: "OperationPrepare", Type: "prepare", Match: map[string]string{"target": "operation"}},
 	{Name: "ProviderPrepare", Type: "prepare", Match: map[string]string{"target": "provider"}},
 	{Name: "SessionCompact", Type: "execute", Match: map[string]string{"kind": "session_compact"}},
@@ -127,6 +129,8 @@ var DaemonToAgentMessages = []Message{
 	{Name: "CapabilityComputerPermissionFailed", Type: "executed", Match: map[string]string{"kind": "computer_permission", "outcome": "failed"}},
 	{Name: "CapabilityLocalModelsAccepted", Type: "executed", Match: map[string]string{"kind": "local_models", "outcome": "accepted"}},
 	{Name: "CapabilityLocalModelsRefused", Type: "executed", Match: map[string]string{"kind": "local_models", "outcome": "refused"}},
+	{Name: "CapabilityModelSourceSucceeded", Type: "executed", Match: map[string]string{"kind": "model_source", "outcome": "succeeded"}},
+	{Name: "CapabilityModelSourceFailed", Type: "executed", Match: map[string]string{"kind": "model_source", "outcome": "failed"}},
 	{Name: "OperationPrepared", Type: "prepared", Match: map[string]string{"target": "operation"}},
 	{Name: "ProviderPrepared", Type: "prepared", Match: map[string]string{"target": "provider"}},
 	{Name: "SessionCompacted", Type: "executed", Match: map[string]string{"kind": "session_compact"}},
@@ -860,6 +864,179 @@ func (CapabilityBrowserFailed) FixedFields() map[string]string {
 // RequiredFields lists the keys a CapabilityBrowserFailed must carry.
 func (CapabilityBrowserFailed) RequiredFields() []string {
 	return []string{"protocol_version", "command_id", "runner_id", "tenant_id", "owner_actor_id", "connection_epoch", "expires_at", "type", "action", "error", "kind", "outcome"}
+}
+
+// ByokConfigInput mirrors the ByokConfigInput schema shape.
+type ByokConfigInput struct {
+	BaseURL       string  `json:"base_url"`
+	APIKey        string  `json:"api_key,omitempty"`
+	ModelID       string  `json:"model_id,omitempty"`
+	ContextWindow *uint64 `json:"context_window,omitempty"`
+	ReuseSavedKey *bool   `json:"reuse_saved_key,omitempty"`
+}
+
+// FixedFields lists the keys whose value the schema fixes for a ByokConfigInput.
+func (ByokConfigInput) FixedFields() map[string]string { return nil }
+
+// RequiredFields lists the keys a ByokConfigInput must carry.
+func (ByokConfigInput) RequiredFields() []string { return []string{"base_url"} }
+
+// ByokSummary mirrors the ByokSummary schema shape.
+type ByokSummary struct {
+	Configured    bool    `json:"configured"`
+	Protocol      string  `json:"protocol,omitempty"`
+	BaseURL       string  `json:"base_url,omitempty"`
+	ModelID       string  `json:"model_id,omitempty"`
+	ContextWindow *uint64 `json:"context_window,omitempty"`
+	KeySaved      bool    `json:"key_saved"`
+}
+
+// FixedFields lists the keys whose value the schema fixes for a ByokSummary.
+func (ByokSummary) FixedFields() map[string]string { return nil }
+
+// RequiredFields lists the keys a ByokSummary must carry.
+func (ByokSummary) RequiredFields() []string { return []string{"configured", "key_saved"} }
+
+// ModelSourceStatus mirrors the ModelSourceStatus schema shape.
+type ModelSourceStatus struct {
+	Mode            string      `json:"mode"`
+	Runtime         string      `json:"runtime"`
+	RuntimeModel    string      `json:"runtime_model"`
+	ReasoningEffort string      `json:"reasoning_effort,omitempty"`
+	GatewayURL      string      `json:"gateway_url,omitempty"`
+	Byok            ByokSummary `json:"byok"`
+}
+
+// FixedFields lists the keys whose value the schema fixes for a ModelSourceStatus.
+func (ModelSourceStatus) FixedFields() map[string]string { return nil }
+
+// RequiredFields lists the keys a ModelSourceStatus must carry.
+func (ModelSourceStatus) RequiredFields() []string {
+	return []string{"mode", "runtime", "runtime_model", "byok"}
+}
+
+// ByokModelListModelsItem mirrors the ByokModelListModelsItem schema shape.
+type ByokModelListModelsItem struct {
+	ID            string  `json:"id"`
+	Name          string  `json:"name,omitempty"`
+	ContextWindow *uint64 `json:"context_window,omitempty"`
+}
+
+// FixedFields lists the keys whose value the schema fixes for a ByokModelListModelsItem.
+func (ByokModelListModelsItem) FixedFields() map[string]string { return nil }
+
+// RequiredFields lists the keys a ByokModelListModelsItem must carry.
+func (ByokModelListModelsItem) RequiredFields() []string { return []string{"id"} }
+
+// ByokModelList mirrors the ByokModelList schema shape.
+type ByokModelList struct {
+	BaseURL string                    `json:"base_url"`
+	Models  []ByokModelListModelsItem `json:"models"`
+}
+
+// FixedFields lists the keys whose value the schema fixes for a ByokModelList.
+func (ByokModelList) FixedFields() map[string]string { return nil }
+
+// RequiredFields lists the keys a ByokModelList must carry.
+func (ByokModelList) RequiredFields() []string { return []string{"base_url", "models"} }
+
+// ByokTestResult mirrors the ByokTestResult schema shape.
+type ByokTestResult struct {
+	Ok            bool   `json:"ok"`
+	Protocol      string `json:"protocol"`
+	BaseURL       string `json:"base_url"`
+	ModelID       string `json:"model_id"`
+	ContextWindow uint64 `json:"context_window"`
+}
+
+// FixedFields lists the keys whose value the schema fixes for a ByokTestResult.
+func (ByokTestResult) FixedFields() map[string]string { return nil }
+
+// RequiredFields lists the keys a ByokTestResult must carry.
+func (ByokTestResult) RequiredFields() []string {
+	return []string{"ok", "protocol", "base_url", "model_id", "context_window"}
+}
+
+// CapabilityModelSource mirrors the CapabilityModelSource schema shape.
+type CapabilityModelSource struct {
+	ProtocolVersion string           `json:"protocol_version"`
+	CommandID       string           `json:"command_id"`
+	RunnerID        string           `json:"runner_id"`
+	TenantID        string           `json:"tenant_id"`
+	OwnerActorID    string           `json:"owner_actor_id"`
+	ConnectionEpoch uint64           `json:"connection_epoch"`
+	ExpiresAt       string           `json:"expires_at"`
+	Type            string           `json:"type"`
+	Kind            string           `json:"kind"`
+	Action          string           `json:"action"`
+	Mode            string           `json:"mode,omitempty"`
+	Runtime         string           `json:"runtime,omitempty"`
+	LocalModelID    string           `json:"local_model_id,omitempty"`
+	Byok            *ByokConfigInput `json:"byok,omitempty"`
+}
+
+// FixedFields lists the keys whose value the schema fixes for a CapabilityModelSource.
+func (CapabilityModelSource) FixedFields() map[string]string {
+	return map[string]string{"protocol_version": "2", "type": "execute", "kind": "model_source"}
+}
+
+// RequiredFields lists the keys a CapabilityModelSource must carry.
+func (CapabilityModelSource) RequiredFields() []string {
+	return []string{"protocol_version", "command_id", "runner_id", "tenant_id", "owner_actor_id", "connection_epoch", "expires_at", "type", "kind", "action"}
+}
+
+// CapabilityModelSourceSucceeded mirrors the CapabilityModelSourceSucceeded schema shape.
+type CapabilityModelSourceSucceeded struct {
+	ProtocolVersion string             `json:"protocol_version"`
+	CommandID       string             `json:"command_id"`
+	RunnerID        string             `json:"runner_id"`
+	TenantID        string             `json:"tenant_id"`
+	OwnerActorID    string             `json:"owner_actor_id"`
+	ConnectionEpoch uint64             `json:"connection_epoch"`
+	ExpiresAt       string             `json:"expires_at"`
+	Type            string             `json:"type"`
+	Kind            string             `json:"kind"`
+	Action          string             `json:"action"`
+	Outcome         string             `json:"outcome"`
+	Status          *ModelSourceStatus `json:"status,omitempty"`
+	TestResult      *ByokTestResult    `json:"test_result,omitempty"`
+	ModelList       *ByokModelList     `json:"model_list,omitempty"`
+}
+
+// FixedFields lists the keys whose value the schema fixes for a CapabilityModelSourceSucceeded.
+func (CapabilityModelSourceSucceeded) FixedFields() map[string]string {
+	return map[string]string{"protocol_version": "2", "type": "executed", "kind": "model_source", "outcome": "succeeded"}
+}
+
+// RequiredFields lists the keys a CapabilityModelSourceSucceeded must carry.
+func (CapabilityModelSourceSucceeded) RequiredFields() []string {
+	return []string{"protocol_version", "command_id", "runner_id", "tenant_id", "owner_actor_id", "connection_epoch", "expires_at", "type", "kind", "action", "outcome"}
+}
+
+// CapabilityModelSourceFailed mirrors the CapabilityModelSourceFailed schema shape.
+type CapabilityModelSourceFailed struct {
+	ProtocolVersion string           `json:"protocol_version"`
+	CommandID       string           `json:"command_id"`
+	RunnerID        string           `json:"runner_id"`
+	TenantID        string           `json:"tenant_id"`
+	OwnerActorID    string           `json:"owner_actor_id"`
+	ConnectionEpoch uint64           `json:"connection_epoch"`
+	ExpiresAt       string           `json:"expires_at"`
+	Type            string           `json:"type"`
+	Kind            string           `json:"kind"`
+	Action          string           `json:"action"`
+	Error           AgentRunnerError `json:"error"`
+	Outcome         string           `json:"outcome"`
+}
+
+// FixedFields lists the keys whose value the schema fixes for a CapabilityModelSourceFailed.
+func (CapabilityModelSourceFailed) FixedFields() map[string]string {
+	return map[string]string{"protocol_version": "2", "type": "executed", "kind": "model_source", "outcome": "failed"}
+}
+
+// RequiredFields lists the keys a CapabilityModelSourceFailed must carry.
+func (CapabilityModelSourceFailed) RequiredFields() []string {
+	return []string{"protocol_version", "command_id", "runner_id", "tenant_id", "owner_actor_id", "connection_epoch", "expires_at", "type", "kind", "action", "error", "outcome"}
 }
 
 // ComputerPermissionStatusSubjectsItemPermissionsItem mirrors the ComputerPermissionStatusSubjectsItemPermissionsItem schema shape.

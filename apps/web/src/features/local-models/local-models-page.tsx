@@ -19,6 +19,7 @@ import { localComputersQueryOptions } from "@/features/local-computer/local-comp
 import { requireRoomRouteParam } from "@/features/rooms/room-route-params";
 import { TeamHubError } from "@/features/teamhub/teamhub-error";
 import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
+import type { TeamHubLocalComputerPage } from "@/features/teamhub/teamhub-types";
 
 import { AdvancedDialog } from "./local-model-details";
 import { ModelRow } from "./local-model-row";
@@ -41,11 +42,24 @@ import {
   downloadStopped,
   formatGigabytes,
   loadCheck,
+  localSwitchTarget,
   memorySummary,
   modelEntries,
   type ModelEntry,
   type ModelStatus,
 } from "./local-models-rules";
+import {
+  activeSourceLabel,
+  ByokPanel,
+  ModelSourceTabs,
+  SubscriptionPanel,
+  SwitchToLocalNotice,
+  useModelSourceSwitch,
+} from "./model-source-panel";
+import {
+  type ModelSourceMode,
+  modelSourceQueryOptions,
+} from "./model-source-queries";
 
 type Dialog =
   | { kind: "advanced" }
@@ -67,11 +81,15 @@ function computersPath(tenantId: string) {
   return `/t/${tenantId}/settings/computers`;
 }
 
+type LocalComputerRuntime = InventoryComputer["runtimes"][number];
+type InventoryComputer = TeamHubLocalComputerPage["items"][number];
+
 /**
- * The model library of one Computer, chosen by `?computer=`. Without it the
- * desktop app opens its own Computer and a browser the first one.
+ * Where one Computer's Agents get their model, chosen by `?computer=`, and
+ * its local model library. Without it the desktop app opens its own Computer
+ * and a browser the first one.
  */
-export function LocalModelsPage() {
+export function ModelsPage() {
   const { client } = useTeamHubRuntime();
   const tenantId = requireRoomRouteParam(useParams().tenantId, "Tenant");
   const { data: inventory } = useSuspenseQuery(
@@ -112,6 +130,7 @@ export function LocalModelsPage() {
         <ComputerModels
           computerId={computer.computer_id}
           displayName={computer.display_name}
+          runtimes={computer.runtimes}
           computerPicker={
             computers.length > 1 ? (
               <Select
@@ -135,7 +154,7 @@ export function LocalModelsPage() {
         />
       ) : (
         <>
-          <h1 className="text-2xl text-foreground">Local models</h1>
+          <h1 className="text-2xl text-foreground">Models</h1>
           <EmptyState title="No computers yet">
             Connect a computer in{" "}
             <Link
@@ -193,12 +212,14 @@ function ComputerModels({
   computerId,
   computerPicker,
   displayName,
+  runtimes = [],
   tenantId,
 }: {
   computerId: string;
   computerPicker: ReactNode;
   /** Absent for a Computer outside the viewer's own inventory. */
   displayName?: string;
+  runtimes?: readonly LocalComputerRuntime[];
   tenantId: string;
 }) {
   const { client } = useTeamHubRuntime();
@@ -206,12 +227,34 @@ function ComputerModels({
   const view = query.data;
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const summary = view?.available ? memorySummary(view) : undefined;
+  // Only the owner switches sources, and only their own Computers carry a
+  // display name here.
+  const source = useQuery({
+    ...modelSourceQueryOptions(client, tenantId, computerId),
+    enabled: displayName !== undefined,
+  });
+  const status = source.data?.status;
+  const [tab, setTab] = useState<ModelSourceMode | null>(null);
+  const shownTab = tab ?? status?.mode ?? "local";
+  const computerName = displayName ?? "this computer";
+  const { feedback, switcher } = useModelSourceSwitch({
+    computerId,
+    computerName,
+    tenantId,
+  });
+  const switching = switcher.pending !== undefined;
+  const target = view?.available ? localSwitchTarget(view) : undefined;
 
   return (
     <>
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl text-foreground">Local models</h1>
+          <h1 className="text-2xl text-foreground">Models</h1>
+          {status ? (
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              Agents on {computerName} use {activeSourceLabel(status)}
+            </p>
+          ) : null}
           {summary?.totalBytes ? (
             <p className="mt-1.5 text-sm text-muted-foreground">
               {formatGigabytes(summary.usedBytes)} of{" "}
@@ -233,13 +276,57 @@ function ComputerModels({
         </div>
       </header>
 
-      {view ? (
-        <Library
-          dialog={dialog}
-          setDialog={setDialog}
-          tenantId={tenantId}
-          view={view}
+      {status ? (
+        <ModelSourceTabs
+          active={status.mode}
+          onChange={setTab}
+          value={shownTab}
         />
+      ) : null}
+      {switcher.failure ? (
+        <div className="mt-4">
+          <FormFeedback tone="danger">{switcher.failure}</FormFeedback>
+        </div>
+      ) : null}
+      {switching ? (
+        <p className="mt-4 text-sm text-muted-foreground" role="status">
+          Switching {computerName}. This can take a few minutes the first time.
+        </p>
+      ) : null}
+      {feedback}
+      {status && shownTab === "subscription" ? (
+        <SubscriptionPanel
+          disabled={switching}
+          runtimes={runtimes}
+          status={status}
+          switcher={switcher}
+        />
+      ) : status && shownTab === "byok" ? (
+        <ByokPanel
+          computerId={computerId}
+          disabled={switching}
+          key={status.mode}
+          status={status}
+          switcher={switcher}
+          tenantId={tenantId}
+        />
+      ) : view ? (
+        <>
+          {status && status.mode !== "local" ? (
+            <SwitchToLocalNotice
+              disabled={switching || view.computer.status === "offline"}
+              modelId={target?.id}
+              modelName={target?.name}
+              switcher={switcher}
+            />
+          ) : null}
+          <Library
+            dialog={dialog}
+            setDialog={setDialog}
+            tenantId={tenantId}
+            view={view}
+          />
+        </>
       ) : query.isError ? (
         <EmptyState
           action={

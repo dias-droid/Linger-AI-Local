@@ -118,7 +118,7 @@ func TestRunnerWireContractFixtures(t *testing.T) {
 		for _, kind := range []string{protocol.CommandRunnerWelcome, protocol.CommandRunnerReconciled, protocol.CommandRegistrationSnapshot,
 			protocol.CommandAgentRunnerEnsure, protocol.CommandAgentRunnerRemove, protocol.CommandAgentCLICredentialPut,
 			protocol.CommandDebugInspect, protocol.CommandCapabilitySkillsScan, protocol.CommandCapabilityBrowserConnect,
-			protocol.CommandCapabilityComputerPermission, protocol.CommandCapabilityLocalModels, protocol.CommandOperationPrepare, protocol.CommandOperationStart, protocol.CommandOperationInput,
+			protocol.CommandCapabilityComputerPermission, protocol.CommandCapabilityLocalModels, protocol.CommandCapabilityModelSource, protocol.CommandOperationPrepare, protocol.CommandOperationStart, protocol.CommandOperationInput,
 			protocol.CommandOperationCancel, protocol.CommandOperationAck, protocol.CommandProviderPrepare,
 			protocol.CommandSessionCompact, protocol.CommandModelInvoke, protocol.CommandModelInvokeCancel,
 			protocol.CommandComputerToolCall} {
@@ -236,6 +236,8 @@ func runnerWireDaemonEvents(t *testing.T) []protocol.Event {
 	capability(protocol.EventCapabilityComputerPermissionFailed, "computer_permission", "failed", map[string]any{"action": "relaunch", "error": failure})
 	capability(protocol.EventCapabilityLocalModelsAccepted, "local_models", "accepted", map[string]any{"action": "download", "model_id": "qwen3-4b:Q4_K_M"})
 	capability(protocol.EventCapabilityLocalModelsRefused, "local_models", "refused", map[string]any{"action": "refresh", "refusal": map[string]any{"code": "TOOL_NOT_INSTALLED"}})
+	capability(protocol.EventCapabilityModelSourceSucceeded, "model_source", "succeeded", map[string]any{"action": "test", "test_result": map[string]any{"ok": true, "protocol": "anthropic", "base_url": "https://api.example.com", "model_id": "vendor/model", "context_window": 200000}})
+	capability(protocol.EventCapabilityModelSourceFailed, "model_source", "failed", map[string]any{"action": "apply", "error": failure})
 	appendEvent(protocol.EventLocalModels, map[string]any{"type": "runner.local_models", "protocol_version": "2", "runner_id": "computer-1", "sent_at": "2026-10-28T00:00:00Z", "revision": 1, "local_models": map[string]any{"available": false, "reason": map[string]any{"code": "TOOL_NOT_INSTALLED"}, "observed_at": "2026-10-28T00:00:00Z", "pools": []any{}, "models": []any{}}})
 	appendEvent(protocol.EventOperationPrepared, map[string]any{"prepare_command_id": "prepare-1", "prepared": true, "outcome": "ready", "duration_ms": 1})
 	appendEvent(protocol.EventOperationAccepted, map[string]any{"runner_pid": 123})

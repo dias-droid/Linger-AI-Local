@@ -15,6 +15,7 @@ export type AgentToDaemonEnvelope =
   | CapabilityBrowserConnect
   | CapabilityComputerPermission
   | CapabilityLocalModelsExecute
+  | CapabilityModelSource
   | OperationPrepare
   | ProviderPrepare
   | SessionCompact
@@ -114,6 +115,15 @@ export type CapabilityLocalModelsExecute = LocalSkillCommandIdentity & {
  * Stable localmodels library id: catalog id and variant, such as qwen3-4b:Q4_K_M.
  */
 export type LocalModelId = string;
+export type CapabilityModelSource = LocalSkillCommandIdentity & {
+  type: "execute";
+  kind: "model_source";
+  action: "status" | "test" | "models" | "apply";
+  mode?: "local" | "subscription" | "byok";
+  runtime?: "claude" | "codex" | "pi";
+  local_model_id?: LocalModelId;
+  byok?: ByokConfigInput;
+};
 export type OperationPrepare = OperationIdentity & {
   type: "prepare";
   command_id: Id;
@@ -207,6 +217,8 @@ export type DaemonToAgentEnvelope =
   | CapabilityComputerPermissionFailed
   | CapabilityLocalModelsAccepted
   | CapabilityLocalModelsRefused
+  | CapabilityModelSourceSucceeded
+  | CapabilityModelSourceFailed
   | OperationPrepared
   | ProviderPrepared
   | SessionCompacted
@@ -478,6 +490,22 @@ export type LocalModelActionRefusalCode =
   | "CANCELLED"
   | "TOOL_NOT_INSTALLED"
   | "TOOL_FAILED";
+export type CapabilityModelSourceSucceeded = LocalSkillCommandIdentity & {
+  type: "executed";
+  kind: "model_source";
+  action: "status" | "test" | "models" | "apply";
+  outcome: "succeeded";
+  status?: ModelSourceStatus;
+  test_result?: ByokTestResult;
+  model_list?: ByokModelList;
+};
+export type CapabilityModelSourceFailed = LocalSkillCommandIdentity & {
+  type: "executed";
+  kind: "model_source";
+  action: "status" | "test" | "models" | "apply";
+  error: AgentRunnerError;
+  outcome: "failed";
+};
 export type OperationPrepared = OperationIdentity & {
   type: "prepared";
   command_id: Id;
@@ -898,6 +926,16 @@ export interface LocalSkillCommandIdentity {
   owner_actor_id: Id;
   connection_epoch: PositiveInteger;
   expires_at: Timestamp;
+}
+/**
+ * A BYOK endpoint; model_id is required except to list the endpoint's models.
+ */
+export interface ByokConfigInput {
+  base_url: string;
+  api_key?: string;
+  model_id?: string;
+  context_window?: number;
+  reuse_saved_key?: boolean;
 }
 export interface OperationScope {
   protocol_version: ProtocolVersion;
@@ -1834,6 +1872,53 @@ export interface LocalModelActionRefusal {
    * With LOAD_NO_ROOM, MEMORY_INSUFFICIENT or DISK_INSUFFICIENT.
    */
   free_bytes?: number;
+}
+export interface ModelSourceStatus {
+  mode: "local" | "subscription" | "byok";
+  runtime: "claude" | "codex" | "pi";
+  /**
+   * After apply, the model the Computer's Agents run: the target model when the active Runtime offers it, else that Runtime's default.
+   */
+  runtime_model: string;
+  /**
+   * After apply, the reasoning effort runtime_model needs; absent when it offers none.
+   */
+  reasoning_effort?:
+    | "none"
+    | "low"
+    | "medium"
+    | "high"
+    | "xhigh"
+    | "max"
+    | "ultra";
+  gateway_url?: string;
+  byok: ByokSummary;
+}
+export interface ByokSummary {
+  configured: boolean;
+  protocol?: "openai-chat" | "openai-responses" | "anthropic";
+  base_url?: string;
+  model_id?: string;
+  context_window?: number;
+  key_saved: boolean;
+}
+export interface ByokTestResult {
+  ok: boolean;
+  protocol: "openai-chat" | "openai-responses" | "anthropic";
+  base_url: string;
+  model_id: string;
+  context_window: number;
+}
+export interface ByokModelList {
+  base_url: string;
+  /**
+   * @maxItems 1000
+   */
+  models: {
+    id: string;
+    name?: string;
+    context_window?: number;
+  }[];
 }
 export interface NativeResumeMeasurement {
   duration_ms: NonNegativeInteger;

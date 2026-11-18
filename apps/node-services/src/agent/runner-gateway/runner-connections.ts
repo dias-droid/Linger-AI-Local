@@ -656,6 +656,12 @@ export class RunnerConnections {
       this.owners.capabilities().receivePermissionOutcome(connection, envelope);
       return;
     }
+    if (envelope.type === "executed" && envelope.kind === "model_source") {
+      this.owners
+        .capabilities()
+        .receiveModelSourceOutcome(connection, envelope);
+      return;
+    }
     if (envelope.type === "executed" && envelope.kind === "computer_tool") {
       this.owners.computerTools().receive(connection, envelope);
       return;

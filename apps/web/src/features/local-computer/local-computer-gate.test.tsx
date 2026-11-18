@@ -97,12 +97,12 @@ describe("Local Computer gate", () => {
       name: "Connect your computer",
     });
     fireEvent.click(
-      await within(gate).findByRole("link", { name: "Local models" }),
+      await within(gate).findByRole("link", { name: "Settings › Models" }),
     );
 
     await waitFor(() =>
       expect(fixture.router.state.location.pathname).toBe(
-        "/t/tenant-northstar/settings/local-models",
+        "/t/tenant-northstar/settings/models",
       ),
     );
     expect(fixture.router.state.location.search).toBe(
@@ -124,7 +124,7 @@ describe("Local Computer gate", () => {
       }),
     );
     expect(fixture.router.state.location.pathname).toBe(
-      "/t/tenant-northstar/settings/local-models",
+      "/t/tenant-northstar/settings/models",
     );
   });
 

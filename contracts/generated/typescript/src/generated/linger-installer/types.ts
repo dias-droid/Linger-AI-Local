@@ -283,6 +283,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/byok/check": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Validate BYOK upstream endpoint via localmodels */
+    post: operations["checkInstallerByok"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/runtime-login": {
     parameters: {
       query?: never;
@@ -398,6 +415,22 @@ export interface components {
     ModelCheckReport: {
       checks: components["schemas"]["CheckResult"][];
     };
+    ByokConfiguration: {
+      baseUrl: string;
+      apiKey?: string;
+      modelId: string;
+      contextWindow?: number;
+      /** @enum {string} */
+      runtime?: "claude" | "codex" | "pi";
+    };
+    ByokCheckReport: {
+      ok: boolean;
+      /** @enum {string} */
+      protocol: "openai-chat" | "openai-responses" | "anthropic";
+      baseUrl: string;
+      modelId: string;
+      contextWindow: number;
+    };
     /** @description Continue the private saved job input, replacing only model approval or explicit review. Omit both for an ordinary retry without spent authority. */
     LocalModelsAuthority: {
       localModelsApproval?: string;
@@ -429,6 +462,7 @@ export interface components {
        */
       preparation?: "codex" | "claude" | "pi";
       runtimeModel?: components["schemas"]["ModelConfiguration"];
+      byok?: components["schemas"]["ByokConfiguration"];
       /** @default default */
       instance: string;
       port?: number;
@@ -1506,6 +1540,48 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ModelCheckReport"];
+        };
+      };
+      /** @description Invalid request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InstallerError"];
+        };
+      };
+      /** @description Local installer session required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InstallerError"];
+        };
+      };
+    };
+  };
+  checkInstallerByok: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ByokConfiguration"];
+      };
+    };
+    responses: {
+      /** @description BYOK check result */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ByokCheckReport"];
         };
       };
       /** @description Invalid request */

@@ -287,6 +287,17 @@ func (d *Daemon) handleConnectionCommand(ctx, connectionCtx context.Context, str
 				slog.Warn("local_models.outcome_not_sent", "error", err)
 			}
 		}()
+	case protocol.CommandCapabilityModelSource:
+		if !d.welcomeSeen || command.ConnectionEpoch != d.connectionEpoch {
+			return errors.New("Model source command uses a stale connection epoch")
+		}
+		// Probing endpoints or mounting Bifrost can take seconds; Operation
+		// commands must not wait behind them.
+		go func() {
+			if err := d.handleModelSourceCommand(connectionCtx, stream, command); err != nil {
+				slog.Warn("model_source.outcome_not_sent", "error", err)
+			}
+		}()
 	case protocol.CommandOperationCancel:
 		if !dispatch.followOperation(command, func() error { return d.handleOperationCancel(command) }) {
 			if err := d.handleOperationCancel(command); err != nil {

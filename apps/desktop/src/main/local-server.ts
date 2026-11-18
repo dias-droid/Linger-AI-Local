@@ -69,6 +69,7 @@ import {
   savedProviderKeys,
   type ProviderKeyChanges,
 } from "./provider-keys.js";
+import type { SetupByokCheck, SetupByokConfig } from "../shared/setup.js";
 
 // The pinned linger source this build installs, written by the release build:
 // downloaded from `url` (or a mirror of it), or bundled in the app at `file`.
@@ -149,6 +150,8 @@ export interface Transfer {
 export interface LocalServerPlan {
   // "local" runs tasks on an inference model deployed on this computer.
   readonly runtime: "recommended" | "codex" | "claude" | "pi" | "local";
+  // Optional BYOK configuration mounted onto local Bifrost.
+  readonly byok?: SetupByokConfig;
   // Provider keys edited on the page, saved before the installer runs.
   readonly keys?: ProviderKeyChanges;
 }
@@ -274,6 +277,7 @@ export interface LocalServerStatus {
   readonly origin?: string;
   // While the "signin" step waits for the person.
   readonly signIn?: RuntimeSignIn;
+  readonly byokCheck?: SetupByokCheck;
   // Where this installation moved the data of the earlier Simplex app,
   // which it could not upgrade.
   readonly legacyBackup?: string;
@@ -426,12 +430,14 @@ export class LocalServerModule implements Module {
   #offDaemon: (() => void) | undefined;
   #daemonFailure: string | undefined;
   #signIn: RuntimeSignIn | undefined;
+  #byokCheck: SetupByokCheck | undefined;
   #legacyBackup: string | undefined;
   // The installer that runs the sign-in, and what the person asked for
   // while the step waits.
   #signInInstaller: InstallerApi | undefined;
   #signInWake: (() => void) | undefined;
   #switchTo: LocalRuntime | undefined;
+  #switchByok: SetupByokConfig | undefined;
   #opened: string | undefined;
   #serverCheck:
     | { readonly at: number; readonly ok: Promise<boolean> }
@@ -532,6 +538,7 @@ export class LocalServerModule implements Module {
       },
       ...(this.#origin ? { origin: this.#origin } : {}),
       ...(this.#signIn ? { signIn: this.#signIn } : {}),
+      ...(this.#byokCheck ? { byokCheck: this.#byokCheck } : {}),
       ...(this.#legacyBackup ? { legacyBackup: this.#legacyBackup } : {}),
     };
   }
@@ -623,6 +630,78 @@ export class LocalServerModule implements Module {
     if (this.#check.state === "checking" || this.#phase !== "idle") return;
     this.#check = { state: "unchecked" };
     this.inspect();
+  }
+
+  async checkByok(byok: SetupByokConfig): Promise<void> {
+    if (this.#byokCheck?.state === "checking") return;
+    this.#byokCheck = { state: "checking" };
+    this.#ctx?.bus.emit("local-server.changed");
+    const home = this.#location ?? this.#home;
+    try {
+      const output = await new Promise<string>((resolve, reject) => {
+        const child = spawn(
+          process.execPath,
+          [this.#installerScript(), "--home", home, "--check-byok"],
+          {
+            stdio: ["pipe", "pipe", "pipe"],
+            windowsHide: true,
+            env: {
+              ...process.env,
+              ELECTRON_RUN_AS_NODE: "1",
+              LINGER_HOME: home,
+            },
+            signal: AbortSignal.timeout(45_000),
+          },
+        );
+        let last = "";
+        createInterface({ input: child.stdout }).on("line", (line) => {
+          if (line.trim()) last = line;
+        });
+        child.once("error", reject);
+        child.once("close", () => resolve(last));
+        child.stdin.end(JSON.stringify(byok));
+      });
+      const parsed = JSON.parse(output) as {
+        ok?: unknown;
+        protocol?: unknown;
+        modelId?: unknown;
+        contextWindow?: unknown;
+        message?: unknown;
+      };
+      if (
+        parsed.ok === true &&
+        (parsed.protocol === "openai-chat" ||
+          parsed.protocol === "openai-responses" ||
+          parsed.protocol === "anthropic")
+      ) {
+        this.#byokCheck = {
+          state: "ready",
+          protocol: parsed.protocol,
+          modelId: String(parsed.modelId ?? byok.modelId),
+          contextWindow:
+            typeof parsed.contextWindow === "number"
+              ? parsed.contextWindow
+              : 131_072,
+        };
+      } else {
+        this.#byokCheck = {
+          state: "failed",
+          message:
+            typeof parsed.message === "string" && parsed.message
+              ? parsed.message
+              : "Could not verify BYOK endpoint.",
+        };
+      }
+    } catch (error) {
+      this.#byokCheck = {
+        state: "failed",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Could not verify BYOK endpoint.",
+      };
+    }
+    this.#ctx?.bus.emit("local-server.changed");
   }
 
   async #inspect(
@@ -853,18 +932,34 @@ export class LocalServerModule implements Module {
         );
       // Changed keys reach the services only when the installation runs
       // again, even after one that finished.
-      let job = await runInstaller(plan, keysChanged);
+      let job = await runInstaller(plan, keysChanged || Boolean(plan.byok));
       // The runtime is installed but has no sign-in here: the server would
       // never create the Another Me, so ask for it now. Another runtime
       // reruns the installation for it.
       for (;;) {
-        const switchTo = job.signInRequired
+        const nextChoice = job.signInRequired
           ? await this.#awaitSignIn(installer, signal)
           : undefined;
-        if (!switchTo) break;
+        if (!nextChoice) break;
         this.#endSignIn();
         this.#step = "services";
-        job = await runInstaller({ ...plan, runtime: switchTo }, true);
+        job =
+          typeof nextChoice === "string"
+            ? await runInstaller(
+                {
+                  runtime: nextChoice,
+                  ...(plan.keys ? { keys: plan.keys } : {}),
+                },
+                true,
+              )
+            : await runInstaller(
+                {
+                  runtime: nextChoice.byok.runtime,
+                  byok: nextChoice.byok,
+                  ...(plan.keys ? { keys: plan.keys } : {}),
+                },
+                true,
+              );
       }
       // The desktop's Computer runs the runtime this installer set up, with
       // its profile, rather than whatever its PATH finds.
@@ -955,14 +1050,16 @@ export class LocalServerModule implements Module {
   async #awaitSignIn(
     installer: InstallerApi,
     signal: AbortSignal,
-  ): Promise<LocalRuntime | undefined> {
+  ): Promise<LocalRuntime | { readonly byok: SetupByokConfig } | undefined> {
     const runtime =
       setupRuntime((await installer.runtime()).setupChoice) ?? "pi";
     this.#signInInstaller = installer;
     this.#switchTo = undefined;
+    this.#switchByok = undefined;
     try {
       for (;;) {
         signal.throwIfAborted();
+        if (this.#switchByok) return { byok: this.#switchByok };
         if (this.#switchTo) return this.#switchTo;
         const login = await installer.runtimeLogin();
         if (login.state === "ready") {
@@ -1192,6 +1289,12 @@ export class LocalServerModule implements Module {
   switchRuntime(runtime: LocalRuntime): void {
     if (!this.#signInInstaller || runtime === this.#signIn?.runtime) return;
     this.#switchTo = runtime;
+    this.#signInWake?.();
+  }
+
+  switchToByok(byok: SetupByokConfig): void {
+    if (!this.#signInInstaller) return;
+    this.#switchByok = byok;
     this.#signInWake?.();
   }
 
@@ -2626,8 +2729,9 @@ export class InstallerApi {
           `/api/jobs/${encodeURIComponent(latest.id)}/cancel`,
           {},
         );
-      const setupChoice =
-        plan.runtime === "local"
+      const setupChoice = plan.byok
+        ? plan.byok.runtime
+        : plan.runtime === "local"
           ? "local-models"
           : plan.runtime === "recommended"
             ? await this.#json<{ recommendation?: string }>("/api/setup").then(
@@ -2640,6 +2744,7 @@ export class InstallerApi {
       job = await this.#json<Job>("/api/jobs", {
         instance: LOCAL_INSTANCE,
         ...(setupChoice ? { setupChoice } : {}),
+        ...(plan.byok ? { byok: plan.byok } : {}),
       });
     }
     // The person chose the local model after seeing what it needs, so its

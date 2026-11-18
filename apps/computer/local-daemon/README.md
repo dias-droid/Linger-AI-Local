@@ -157,6 +157,18 @@ model.
   passed through as `localmodels` reports it; the endpoint keeps only the
   loaded engine's `base_url`.
 
+## Model source
+
+`internal/localmodels/source.go` runs `localmodels source status|check|models|apply`
+for `execute` commands of kind `model_source`, on their own goroutine so they
+never block Operation commands; `apply` is serialized. A BYOK key reaches the
+tool on stdin, never in argv or logs. `localmodels` writes
+`<state>/model-source.json`; the Daemon only adds the `runtime_paths` that the
+same `apply` reported. It re-reads the file on every discovery tick to overlay
+the Runtimes' environment (`OverlayEnvironment`) and executable paths
+(`OverlayRuntimePaths`), and under BYOK lists only the BYOK model in each
+Runtime's catalog.
+
 ## Codex models cache
 
 Signed in with ChatGPT, Codex blocks its first `thread/start` on a 4–5 s

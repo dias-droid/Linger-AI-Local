@@ -13,7 +13,7 @@ export type RuntimeChoice = Exclude<SetupChoice, "local-models">;
  * names one combination per runtime; "local-models" is the local source served
  * by Pi, the only runtime the local stack binds today.
  */
-export type ModelSource = "local" | "runtime";
+export type ModelSource = "local" | "runtime" | "byok";
 export interface SetupSelection {
   runtime: RuntimeChoice;
   modelSource: ModelSource;

@@ -282,13 +282,25 @@ describe("setup page Quick Install recommendation", () => {
     );
     expect($("local-recheck").hidden).toBe(false);
     $("local-customize").click();
+    // Subscription is active by default when the local model is on hold;
+    // selecting Local model reveals the held card and disables Install.
+    expect($("subscription-row").hidden).toBe(false);
+    expect($("local-row").hidden).toBe(true);
+    document
+      .querySelector<HTMLButtonElement>(
+        '[data-plan="source"] [data-value="local"]',
+      )!
+      .click();
     expect($("local-row").hidden).toBe(false);
+    expect($("subscription-row").hidden).toBe(true);
+    expect($("byok-row").hidden).toBe(true);
     expect($("local-model-name").textContent).toBe("qwen3-8b");
     expect($("local-sub").textContent).toBe(
       "On hold: close other programs, then Check again.",
     );
     expect(($("local-model") as HTMLButtonElement).disabled).toBe(true);
     expect($("local-model").getAttribute("aria-checked")).toBe("false");
+    expect(($("local-install") as HTMLButtonElement).disabled).toBe(true);
     $("local-recheck").click();
     await vi.waitFor(() =>
       expect(run).toHaveBeenCalledWith({ op: "local.recheck" }),
@@ -331,6 +343,11 @@ describe("setup page Quick Install recommendation", () => {
     );
     expect($("local-recheck").hidden).toBe(false);
     $("local-customize").click();
+    document
+      .querySelector<HTMLButtonElement>(
+        '[data-plan="source"] [data-value="local"]',
+      )!
+      .click();
     expect($("local-sub").textContent).toBe(
       "On hold: 12.7 GB memory needed, 2.7 GB free",
     );
@@ -406,14 +423,20 @@ describe("setup page Quick Install recommendation", () => {
       "welcome",
     );
     $("local-customize").click();
+    const source = (value: string) =>
+      document.querySelector<HTMLButtonElement>(
+        `[data-plan="source"] [data-value="${value}"]`,
+      )!;
     const option = (value: string) =>
       document.querySelector<HTMLButtonElement>(
         `[data-plan="runtime"] [data-value="${value}"]`,
       )!;
     option("recommended").click();
     push(welcome(capable));
-    expect(option("recommended").hidden).toBe(true);
-    expect(option("pi").getAttribute("aria-checked")).toBe("true");
+    expect(source("local").getAttribute("aria-checked")).toBe("true");
+    expect($("local-row").hidden).toBe(false);
+    expect($("subscription-row").hidden).toBe(true);
+    expect($("byok-row").hidden).toBe(true);
     expect($("local-model").getAttribute("aria-checked")).toBe("true");
     $("local-install").click();
     await vi.waitFor(() =>
@@ -421,24 +444,32 @@ describe("setup page Quick Install recommendation", () => {
     );
   });
 
-  it("marks the recommendation under Customize and installs the person's choice", async () => {
+  it("marks the recommendation under Customize and keeps model sources mutually exclusive", async () => {
     const { run } = await openPage(welcome(capable), "welcome");
     $("local-customize").click();
+    const source = (value: string) =>
+      document.querySelector<HTMLButtonElement>(
+        `[data-plan="source"] [data-value="${value}"]`,
+      )!;
     const option = (value: string) =>
       document.querySelector<HTMLButtonElement>(
         `[data-plan="runtime"] [data-value="${value}"]`,
       )!;
-    expect(option("pi").dataset.recommended).toBe("true");
-    expect(option("pi").getAttribute("aria-checked")).toBe("true");
-    expect(option("codex").dataset.recommended).toBe("false");
-    expect(option("recommended").hidden).toBe(true);
-    expect($("runtime-sub").textContent).toBe("Recommended: Pi.");
+    expect(source("local").dataset.recommended).toBe("true");
+    expect(source("local").getAttribute("aria-checked")).toBe("true");
+    expect(source("subscription").dataset.recommended).toBe("false");
+    expect($("local-row").hidden).toBe(false);
+    expect($("subscription-row").hidden).toBe(true);
+    expect($("byok-row").hidden).toBe(true);
     expect($("local-sub").textContent).toContain(
       "Recommended for this computer",
     );
     expect($("local-model").getAttribute("aria-checked")).toBe("true");
+    source("subscription").click();
+    expect($("local-row").hidden).toBe(true);
+    expect($("subscription-row").hidden).toBe(false);
+    expect($("byok-row").hidden).toBe(true);
     option("claude").click();
-    expect($("local-model").getAttribute("aria-checked")).toBe("false");
     expect($("local-install-label").textContent).toBe("Install");
     $("local-install").click();
     await vi.waitFor(() =>
@@ -452,69 +483,125 @@ describe("setup page Quick Install recommendation", () => {
       "Recommended for this computer: Local model + Pi",
     );
   });
-  it("offers the local model only with the Pi runtime", async () => {
-    const { run } = await openPage(welcome(capable), "welcome");
-    // Quick Install follows the tool's pick: Pi with the local model.
-    expect($("plan-summary").textContent).toBe(
-      "Recommended for this computer: Local model + Pi",
-    );
-    $("local-customize").click();
-    const option = (value: string) =>
-      document.querySelector<HTMLButtonElement>(
-        `[data-plan="runtime"] [data-value="${value}"]`,
-      )!;
-    const local = $("local-model") as HTMLButtonElement;
-    expect(local.getAttribute("aria-disabled")).toBe("false");
-    expect(local.hasAttribute("aria-describedby")).toBe(false);
-    expect($("local-pi-only").hidden).toBe(true);
-    for (const runtime of ["codex", "claude"]) {
-      option(runtime).click();
-      // Greyed, still focusable, and it says why.
-      expect(local.getAttribute("aria-checked")).toBe("false");
-      expect(local.getAttribute("aria-disabled")).toBe("true");
-      expect(local.disabled).toBe(false);
-      expect(local.getAttribute("aria-describedby")).toBe("local-pi-only");
-      expect($("local-pi-only").hidden).toBe(false);
-      expect($("local-pi-only").textContent).toBe(
-        "Local models are only available with the Pi runtime.",
-      );
-      // Clicking or pressing it does not pick it, nor switch the runtime.
-      local.click();
-      expect(local.getAttribute("aria-checked")).toBe("false");
-      expect(option(runtime).getAttribute("aria-checked")).toBe("true");
-    }
-    // Pi alone: the local model is off until chosen again.
-    option("pi").click();
-    expect(local.getAttribute("aria-disabled")).toBe("false");
-    expect($("local-pi-only").hidden).toBe(true);
-    expect(local.getAttribute("aria-checked")).toBe("false");
-    local.click();
-    expect(local.getAttribute("aria-checked")).toBe("true");
-    $("local-install").click();
-    await vi.waitFor(() =>
-      expect(installed(run)).toEqual([{ op: "local.start", runtime: "local" }]),
-    );
-  });
 
-  it("keeps a held local model on hold with Pi and says Pi is needed otherwise", async () => {
-    await openPage(welcome(held), "welcome");
+  it("configures BYOK across all runtimes with tooltip, Check, and secret scrubbing", async () => {
+    const { run, push } = await openPage(welcome(small), "welcome");
     $("local-customize").click();
-    const local = $("local-model") as HTMLButtonElement;
-    // Codex is the tool's pick here.
-    expect(local.disabled).toBe(true);
-    expect($("local-pi-only").hidden).toBe(false);
+    const byokSource = document.querySelector<HTMLButtonElement>(
+      '[data-plan="source"] [data-value="byok"]',
+    )!;
+    expect(byokSource.getAttribute("aria-describedby")).toBe("byok-tip-text");
+    expect($("byok-tip-text").textContent).toContain("Bring Your Own Key");
+    byokSource.click();
+    expect($("byok-row").hidden).toBe(false);
+    expect($("local-row").hidden).toBe(true);
+    expect($("subscription-row").hidden).toBe(true);
+    expect(($("local-install") as HTMLButtonElement).disabled).toBe(true);
+
     document
       .querySelector<HTMLButtonElement>(
-        '[data-plan="runtime"] [data-value="pi"]',
+        '[data-byok="runtime"] [data-value="codex"]',
       )!
       .click();
-    expect($("local-pi-only").hidden).toBe(true);
-    expect(local.getAttribute("aria-disabled")).toBe("false");
-    // Pi does not lift the hold: the model still waits for free memory.
-    expect(local.disabled).toBe(true);
-    expect($("local-sub").textContent).toBe(
-      "On hold: close other programs, then Check again.",
+    const urlInput = $("byok-url") as HTMLInputElement;
+    const keyInput = $("byok-key") as HTMLInputElement;
+    const modelInput = $("byok-model") as HTMLInputElement;
+    urlInput.value = "https://api.example.com/v1";
+    urlInput.dispatchEvent(new Event("input"));
+    keyInput.value = "sk-top-secret";
+    keyInput.dispatchEvent(new Event("input"));
+    modelInput.value = "gpt-5.4";
+    modelInput.dispatchEvent(new Event("input"));
+
+    expect(($("local-install") as HTMLButtonElement).disabled).toBe(false);
+    expect($("plan-summary").textContent).toBe("BYOK · Codex · gpt-5.4");
+
+    $("byok-check").click();
+    await vi.waitFor(() =>
+      expect(run).toHaveBeenCalledWith({
+        op: "local.byok.check",
+        byok: {
+          runtime: "codex",
+          baseUrl: "https://api.example.com/v1",
+          apiKey: "sk-top-secret",
+          modelId: "gpt-5.4",
+        },
+      }),
     );
+    const checkedState = welcome(small);
+    push({
+      ...checkedState,
+      localServer: {
+        ...checkedState.localServer,
+        byokCheck: {
+          state: "ready",
+          protocol: "openai-responses",
+          modelId: "gpt-5.4",
+          contextWindow: 200_000,
+        },
+      },
+    });
+    expect($("byok-status").textContent).toBe(
+      "Ready · gpt-5.4 (200k context) through OpenAI Responses",
+    );
+
+    $("local-install").click();
+    await vi.waitFor(() => {
+      expect(installed(run)).toEqual([
+        {
+          op: "local.start",
+          runtime: "codex",
+          byok: {
+            runtime: "codex",
+            baseUrl: "https://api.example.com/v1",
+            apiKey: "sk-top-secret",
+            modelId: "gpt-5.4",
+          },
+        },
+      ]);
+      expect(keyInput.value).toBe("");
+    });
+  });
+
+  it("offers Use BYOK instead inside the runtime OAuth sign-in modal", async () => {
+    const base = state("installing");
+    const { run } = await openPage({
+      ...base,
+      localServer: {
+        ...base.localServer,
+        steps: ["prepare", "services", "signin", "connect", "agents"],
+        step: "signin",
+        signIn: { runtime: "claude", state: "required" },
+      },
+    });
+    expect($("runtime-signin").hidden).toBe(false);
+    expect($("runtime-signin-byok").hidden).toBe(true);
+    $("runtime-signin-byok-toggle").click();
+    expect($("runtime-signin-byok").hidden).toBe(false);
+    const url = $("signin-byok-url") as HTMLInputElement;
+    const key = $("signin-byok-key") as HTMLInputElement;
+    const model = $("signin-byok-model") as HTMLInputElement;
+    url.value = "https://api.anthropic.com";
+    url.dispatchEvent(new Event("input"));
+    key.value = "sk-ant-fallback";
+    key.dispatchEvent(new Event("input"));
+    model.value = "claude-sonnet-4-6";
+    model.dispatchEvent(new Event("input"));
+    $("runtime-signin-byok").dispatchEvent(
+      new Event("submit", { cancelable: true }),
+    );
+    await vi.waitFor(() =>
+      expect(run).toHaveBeenCalledWith({
+        op: "local.signin.byok",
+        byok: {
+          runtime: "claude",
+          baseUrl: "https://api.anthropic.com",
+          apiKey: "sk-ant-fallback",
+          modelId: "claude-sonnet-4-6",
+        },
+      }),
+    );
+    expect(key.value).toBe("");
   });
 });
 

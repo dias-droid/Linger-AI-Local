@@ -50,7 +50,7 @@ describe("ComputersPage", () => {
       within(detail).getByRole("link", { name: /Manage local models/ }),
     ).toHaveAttribute(
       "href",
-      "/t/tenant-northstar/settings/local-models?computer=computer-offline-lab",
+      "/t/tenant-northstar/settings/models?computer=computer-offline-lab",
     );
     fireEvent.click(within(detail).getByRole("button", { name: "Advanced" }));
     fireEvent.click(within(detail).getByRole("button", { name: "Remove" }));

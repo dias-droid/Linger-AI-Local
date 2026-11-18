@@ -155,6 +155,14 @@ const agentFrames = [
     unload_first: ["gemma3-4b:Q4_K_M"],
   },
   {
+    type: "execute",
+    kind: "model_source",
+    ...localCapability,
+    action: "test",
+    runtime: "claude",
+    byok: { base_url: "https://api.example.com/v1", model_id: "vendor/model" },
+  },
+  {
     type: "prepare",
     target: "operation",
     ...operation,

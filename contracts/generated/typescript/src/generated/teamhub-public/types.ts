@@ -494,6 +494,67 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v0/tenants/{tenantId}/local-computers/{computerId}/model-source": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        tenantId: components["parameters"]["TenantId"];
+        computerId: components["parameters"]["ComputerId"];
+      };
+      cookie?: never;
+    };
+    /** Read the active model source and redacted BYOK configuration of one Local Computer. */
+    get: operations["getLocalComputerModelSource"];
+    put?: never;
+    /** Switch a Local Computer between local models, subscriptions, and BYOK on Bifrost. */
+    post: operations["switchLocalComputerModelSource"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/tenants/{tenantId}/local-computers/{computerId}/model-source/models": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        tenantId: components["parameters"]["TenantId"];
+        computerId: components["parameters"]["ComputerId"];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** List the models a BYOK endpoint serves, asked from an owned Local Computer without saving anything. */
+    post: operations["listLocalComputerByokModels"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/tenants/{tenantId}/local-computers/{computerId}/model-source/test": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        tenantId: components["parameters"]["TenantId"];
+        computerId: components["parameters"]["ComputerId"];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Verify a BYOK upstream endpoint from an owned Local Computer without saving credentials. */
+    post: operations["testLocalComputerModelSource"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v0/tenants/{tenantId}/local-computers/{computerId}/permissions": {
     parameters: {
       query?: never;
@@ -4775,6 +4836,129 @@ export interface components {
       error: components["schemas"]["LocalModelsError"];
     };
     /**
+     * @description Active model source mode on a Local Computer.
+     * @enum {string}
+     */
+    ModelSourceMode: "local" | "subscription" | "byok";
+    /**
+     * @description Agent runtime harness driving turns on the Computer.
+     * @enum {string}
+     */
+    ModelSourceRuntime: "claude" | "codex" | "pi";
+    /**
+     * @description Wire format the Computer found a BYOK upstream endpoint answers, trying the active Runtime's own format first.
+     * @enum {string}
+     */
+    ByokProtocol: "openai-chat" | "openai-responses" | "anthropic";
+    /** @description Redacted BYOK configuration metadata reported by the Computer. */
+    ByokSummary: {
+      configured: boolean;
+      protocol?: components["schemas"]["ByokProtocol"];
+      base_url?: string;
+      model_id?: string;
+      context_window?: number;
+      key_saved: boolean;
+    };
+    /** @description Active model source and redacted BYOK metadata on one Local Computer. */
+    ModelSourceStatus: {
+      mode: components["schemas"]["ModelSourceMode"];
+      runtime: components["schemas"]["ModelSourceRuntime"];
+      /** @description After a switch, the model the Computer's Agents run: the target model when the active Runtime offers it, else that Runtime's default. */
+      runtime_model: string;
+      reasoning_effort?: components["schemas"]["AgentReasoningEffort"];
+      gateway_url?: string;
+      byok: components["schemas"]["ByokSummary"];
+    };
+    /** @description Current model source state of one Local Computer as viewed from Settings. */
+    ModelSourceView: {
+      computer_id: components["schemas"]["Id"];
+      viewer_is_owner: boolean;
+      online: boolean;
+      status?: components["schemas"]["ModelSourceStatus"];
+      updated_agent_count?: number;
+      terminated_run_count?: number;
+    };
+    /**
+     * @description error.code of a refused model-source request (403, 409, 502, 503, 504); 400, 401, and 404 use the common codes. LOCAL_COMPUTER_OFFLINE: the Computer is not connected. MODEL_SOURCE_FORBIDDEN: the viewer is not the Computer owner. MODEL_SOURCE_UNAVAILABLE: the Computer has no localmodels tool or cannot switch model sources. AGENT_HAS_ACTIVE_RUNS: Agents on the Computer have running work and force_terminate was false; details carries one entry per such Agent, with field "agent" and the Agent's display name as reason. RUNTIME_NOT_ENABLED, LOCAL_MODEL_UNKNOWN, and the BYOK_ codes are the Computer's refusals (409). MODEL_SOURCE_FAILED: the Computer failed with an error that has no code of its own here (502). MODEL_SOURCE_SERVICE_UNAVAILABLE: Agent Service could not be reached (503). MODEL_SOURCE_UNCONFIRMED: the Computer had not answered by the deadline; it may still switch (504).
+     * @enum {string}
+     */
+    ModelSourceErrorCode:
+      | "LOCAL_COMPUTER_OFFLINE"
+      | "MODEL_SOURCE_FORBIDDEN"
+      | "MODEL_SOURCE_UNAVAILABLE"
+      | "AGENT_HAS_ACTIVE_RUNS"
+      | "RUNTIME_NOT_ENABLED"
+      | "LOCAL_MODEL_UNKNOWN"
+      | "BYOK_INVALID_CONFIG"
+      | "BYOK_AUTH_FAILED"
+      | "BYOK_MODEL_NOT_FOUND"
+      | "BYOK_UNREACHABLE"
+      | "BYOK_UPSTREAM_REJECTED"
+      | "MODEL_SOURCE_FAILED"
+      | "MODEL_SOURCE_SERVICE_UNAVAILABLE"
+      | "MODEL_SOURCE_UNCONFIRMED";
+    /** @description The common error body with error.code narrowed to ModelSourceErrorCode. */
+    ModelSourceError: {
+      code: components["schemas"]["ModelSourceErrorCode"];
+      /** @description Human-readable summary safe to display; clients branch on code, not message. */
+      message: string;
+      request_id: string;
+      details?: components["schemas"]["ErrorDetail"][];
+    };
+    ModelSourceErrorResponse: {
+      error: components["schemas"]["ModelSourceError"];
+    };
+    /** @description Upstream endpoint configuration supplied by the Computer owner. The API key is never persisted in TeamHub or Agent Service; only the Local Computer stores it in a private 0600 file. */
+    ByokInput: {
+      base_url: string;
+      api_key?: string;
+      model_id: string;
+      context_window?: number;
+      reuse_saved_key?: boolean;
+    };
+    /** @description Owner request to switch a Computer between local models, native subscriptions, and BYOK on Bifrost. When active Runs exist on the Computer's affected Agents and force_terminate is false, TeamHub refuses with 409 AGENT_HAS_ACTIVE_RUNS; retrying with force_terminate true terminates those Runs and applies the switch. */
+    ModelSourceSwitchRequest: {
+      mode: components["schemas"]["ModelSourceMode"];
+      runtime?: components["schemas"]["ModelSourceRuntime"];
+      local_model_id?: components["schemas"]["LocalModelId"];
+      byok?: components["schemas"]["ByokInput"];
+      /** @description True ends running work on the Computer's Agents; absent means false. */
+      force_terminate?: boolean;
+    };
+    /** @description A BYOK endpoint address and key, enough to list its models. The API key is never persisted in TeamHub or Agent Service. */
+    ByokEndpointInput: {
+      base_url: string;
+      api_key?: string;
+      reuse_saved_key?: boolean;
+    };
+    /** @description A model a BYOK endpoint lists. */
+    ByokModel: {
+      id: string;
+      /** @description The endpoint's display name, when it differs from id. */
+      name?: string;
+      context_window?: number;
+    };
+    /** @description The models a BYOK endpoint lists, sorted by id. */
+    ByokModelList: {
+      /** @description The address that listed them. */
+      base_url: string;
+      models: components["schemas"]["ByokModel"][];
+    };
+    /** @description A BYOK endpoint to verify from the Computer for the Runtime that would serve it, which decides the order wire formats are tried. */
+    ByokTestRequest: {
+      runtime: components["schemas"]["ModelSourceRuntime"];
+      byok: components["schemas"]["ByokInput"];
+    };
+    /** @description Outcome of probing an upstream BYOK endpoint from the Local Computer. */
+    ByokTestResult: {
+      ok: boolean;
+      protocol: components["schemas"]["ByokProtocol"];
+      /** @description The address that answered, which can add or drop the /anthropic of a gateway that serves OpenAI under /v1 and Anthropic under /anthropic. */
+      base_url: string;
+      model_id: string;
+      context_window: number;
+    };
+    /**
      * @description The app macOS grants the permission to. linger is the Linger desktop app, which owns shell commands such as screencapture; computer_use is CuaDriver, which owns the computer-use tools.
      * @enum {string}
      */
@@ -8101,6 +8285,15 @@ export interface components {
         "application/json": components["schemas"]["LocalModelsErrorResponse"];
       };
     };
+    /** @description The Computer or TeamHub refused the model-source request; error.code is one of ModelSourceErrorCode. */
+    ModelSourceRefused: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        "application/json": components["schemas"]["ModelSourceErrorResponse"];
+      };
+    };
     /** @description The resource existed but was explicitly removed and cannot be reused. */
     Gone: {
       headers: {
@@ -8949,6 +9142,138 @@ export interface operations {
       502: components["responses"]["LocalModelsRefused"];
       503: components["responses"]["LocalModelsRefused"];
       504: components["responses"]["LocalModelsRefused"];
+    };
+  };
+  getLocalComputerModelSource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        tenantId: components["parameters"]["TenantId"];
+        computerId: components["parameters"]["ComputerId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Current model source view. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ModelSourceView"];
+        };
+      };
+      401: components["responses"]["Unauthenticated"];
+      404: components["responses"]["NotFound"];
+      502: components["responses"]["ModelSourceRefused"];
+      503: components["responses"]["ModelSourceRefused"];
+    };
+  };
+  switchLocalComputerModelSource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        tenantId: components["parameters"]["TenantId"];
+        computerId: components["parameters"]["ComputerId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ModelSourceSwitchRequest"];
+      };
+    };
+    responses: {
+      /** @description Switched model source view. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ModelSourceView"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthenticated"];
+      403: components["responses"]["ModelSourceRefused"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["ModelSourceRefused"];
+      502: components["responses"]["ModelSourceRefused"];
+      503: components["responses"]["ModelSourceRefused"];
+      504: components["responses"]["ModelSourceRefused"];
+    };
+  };
+  listLocalComputerByokModels: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        tenantId: components["parameters"]["TenantId"];
+        computerId: components["parameters"]["ComputerId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ByokEndpointInput"];
+      };
+    };
+    responses: {
+      /** @description The endpoint's models. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ByokModelList"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthenticated"];
+      403: components["responses"]["ModelSourceRefused"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["ModelSourceRefused"];
+      502: components["responses"]["ModelSourceRefused"];
+      503: components["responses"]["ModelSourceRefused"];
+      504: components["responses"]["ModelSourceRefused"];
+    };
+  };
+  testLocalComputerModelSource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        tenantId: components["parameters"]["TenantId"];
+        computerId: components["parameters"]["ComputerId"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ByokTestRequest"];
+      };
+    };
+    responses: {
+      /** @description BYOK verification result. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ByokTestResult"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthenticated"];
+      403: components["responses"]["ModelSourceRefused"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["ModelSourceRefused"];
+      502: components["responses"]["ModelSourceRefused"];
+      503: components["responses"]["ModelSourceRefused"];
+      504: components["responses"]["ModelSourceRefused"];
     };
   };
   getLocalComputerPermissions: {

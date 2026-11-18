@@ -24,12 +24,14 @@ import {
 } from "./native-process.js";
 import { freePort, portFree } from "./ports.js";
 import type { SetupChoice } from "./setup-plan.js";
+import type { ByokConfiguration } from "./byok-source.js";
 import type { InstallerEvent } from "./events.js";
 
 // A Native installation of one Linger source checkout: the desktop client's
 // unpacked source package, or a developer's clone.
 export interface SourceInstallOptions {
   setupChoice?: SetupChoice;
+  byok?: ByokConfiguration;
   shareGpu?: boolean;
   localModelsApproval?: string;
   localModelsReplan?: boolean;

@@ -602,6 +602,27 @@ func (e BrowserConnectionStatusState) Valid() bool {
 	}
 }
 
+// Defines values for ByokProtocol.
+const (
+	ByokProtocolAnthropic       ByokProtocol = "anthropic"
+	ByokProtocolOpenaiChat      ByokProtocol = "openai-chat"
+	ByokProtocolOpenaiResponses ByokProtocol = "openai-responses"
+)
+
+// Valid indicates whether the value is a known member of the ByokProtocol enum.
+func (e ByokProtocol) Valid() bool {
+	switch e {
+	case ByokProtocolAnthropic:
+		return true
+	case ByokProtocolOpenaiChat:
+		return true
+	case ByokProtocolOpenaiResponses:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CaptureSessionChangedPayloadStatus.
 const (
 	CaptureSessionChangedPayloadStatusFinalized  CaptureSessionChangedPayloadStatus = "finalized"
@@ -2771,6 +2792,102 @@ func (e MessageKind) Valid() bool {
 	}
 }
 
+// Defines values for ModelSourceErrorCode.
+const (
+	ModelSourceErrorCodeAgentHasActiveRuns            ModelSourceErrorCode = "AGENT_HAS_ACTIVE_RUNS"
+	ModelSourceErrorCodeByokAuthFailed                ModelSourceErrorCode = "BYOK_AUTH_FAILED"
+	ModelSourceErrorCodeByokInvalidConfig             ModelSourceErrorCode = "BYOK_INVALID_CONFIG"
+	ModelSourceErrorCodeByokModelNotFound             ModelSourceErrorCode = "BYOK_MODEL_NOT_FOUND"
+	ModelSourceErrorCodeByokUnreachable               ModelSourceErrorCode = "BYOK_UNREACHABLE"
+	ModelSourceErrorCodeByokUpstreamRejected          ModelSourceErrorCode = "BYOK_UPSTREAM_REJECTED"
+	ModelSourceErrorCodeLocalComputerOffline          ModelSourceErrorCode = "LOCAL_COMPUTER_OFFLINE"
+	ModelSourceErrorCodeLocalModelUnknown             ModelSourceErrorCode = "LOCAL_MODEL_UNKNOWN"
+	ModelSourceErrorCodeModelSourceFailed             ModelSourceErrorCode = "MODEL_SOURCE_FAILED"
+	ModelSourceErrorCodeModelSourceForbidden          ModelSourceErrorCode = "MODEL_SOURCE_FORBIDDEN"
+	ModelSourceErrorCodeModelSourceServiceUnavailable ModelSourceErrorCode = "MODEL_SOURCE_SERVICE_UNAVAILABLE"
+	ModelSourceErrorCodeModelSourceUnavailable        ModelSourceErrorCode = "MODEL_SOURCE_UNAVAILABLE"
+	ModelSourceErrorCodeModelSourceUnconfirmed        ModelSourceErrorCode = "MODEL_SOURCE_UNCONFIRMED"
+	ModelSourceErrorCodeRuntimeNotEnabled             ModelSourceErrorCode = "RUNTIME_NOT_ENABLED"
+)
+
+// Valid indicates whether the value is a known member of the ModelSourceErrorCode enum.
+func (e ModelSourceErrorCode) Valid() bool {
+	switch e {
+	case ModelSourceErrorCodeAgentHasActiveRuns:
+		return true
+	case ModelSourceErrorCodeByokAuthFailed:
+		return true
+	case ModelSourceErrorCodeByokInvalidConfig:
+		return true
+	case ModelSourceErrorCodeByokModelNotFound:
+		return true
+	case ModelSourceErrorCodeByokUnreachable:
+		return true
+	case ModelSourceErrorCodeByokUpstreamRejected:
+		return true
+	case ModelSourceErrorCodeLocalComputerOffline:
+		return true
+	case ModelSourceErrorCodeLocalModelUnknown:
+		return true
+	case ModelSourceErrorCodeModelSourceFailed:
+		return true
+	case ModelSourceErrorCodeModelSourceForbidden:
+		return true
+	case ModelSourceErrorCodeModelSourceServiceUnavailable:
+		return true
+	case ModelSourceErrorCodeModelSourceUnavailable:
+		return true
+	case ModelSourceErrorCodeModelSourceUnconfirmed:
+		return true
+	case ModelSourceErrorCodeRuntimeNotEnabled:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelSourceMode.
+const (
+	ModelSourceModeByok         ModelSourceMode = "byok"
+	ModelSourceModeLocal        ModelSourceMode = "local"
+	ModelSourceModeSubscription ModelSourceMode = "subscription"
+)
+
+// Valid indicates whether the value is a known member of the ModelSourceMode enum.
+func (e ModelSourceMode) Valid() bool {
+	switch e {
+	case ModelSourceModeByok:
+		return true
+	case ModelSourceModeLocal:
+		return true
+	case ModelSourceModeSubscription:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ModelSourceRuntime.
+const (
+	ModelSourceRuntimeClaude ModelSourceRuntime = "claude"
+	ModelSourceRuntimeCodex  ModelSourceRuntime = "codex"
+	ModelSourceRuntimePi     ModelSourceRuntime = "pi"
+)
+
+// Valid indicates whether the value is a known member of the ModelSourceRuntime enum.
+func (e ModelSourceRuntime) Valid() bool {
+	switch e {
+	case ModelSourceRuntimeClaude:
+		return true
+	case ModelSourceRuntimeCodex:
+		return true
+	case ModelSourceRuntimePi:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for NotionResourceKind.
 const (
 	NotionResourceKindNotionDatabase NotionResourceKind = "notion_database"
@@ -4637,6 +4754,74 @@ type BrowserConnectionStatusState string
 
 // BrowserProfile A Chrome profile directory name inside the user's Chrome data directory.
 type BrowserProfile = string
+
+// ByokEndpointInput A BYOK endpoint address and key, enough to list its models. The API key is never persisted in TeamHub or Agent Service.
+type ByokEndpointInput struct {
+	ApiKey        *string `json:"api_key,omitempty"`
+	BaseUrl       string  `json:"base_url"`
+	ReuseSavedKey *bool   `json:"reuse_saved_key,omitempty"`
+}
+
+// ByokInput Upstream endpoint configuration supplied by the Computer owner. The API key is never persisted in TeamHub or Agent Service; only the Local Computer stores it in a private 0600 file.
+type ByokInput struct {
+	ApiKey        *string `json:"api_key,omitempty"`
+	BaseUrl       string  `json:"base_url"`
+	ContextWindow *int    `json:"context_window,omitempty"`
+	ModelId       string  `json:"model_id"`
+	ReuseSavedKey *bool   `json:"reuse_saved_key,omitempty"`
+}
+
+// ByokModel A model a BYOK endpoint lists.
+type ByokModel struct {
+	ContextWindow *int   `json:"context_window,omitempty"`
+	Id            string `json:"id"`
+
+	// Name The endpoint's display name, when it differs from id.
+	Name *string `json:"name,omitempty"`
+}
+
+// ByokModelList The models a BYOK endpoint lists, sorted by id.
+type ByokModelList struct {
+	// BaseUrl The address that listed them.
+	BaseUrl string      `json:"base_url"`
+	Models  []ByokModel `json:"models"`
+}
+
+// ByokProtocol Wire format the Computer found a BYOK upstream endpoint answers, trying the active Runtime's own format first.
+type ByokProtocol string
+
+// ByokSummary Redacted BYOK configuration metadata reported by the Computer.
+type ByokSummary struct {
+	BaseUrl       *string `json:"base_url,omitempty"`
+	Configured    bool    `json:"configured"`
+	ContextWindow *int    `json:"context_window,omitempty"`
+	KeySaved      bool    `json:"key_saved"`
+	ModelId       *string `json:"model_id,omitempty"`
+
+	// Protocol Wire format the Computer found a BYOK upstream endpoint answers, trying the active Runtime's own format first.
+	Protocol *ByokProtocol `json:"protocol,omitempty"`
+}
+
+// ByokTestRequest A BYOK endpoint to verify from the Computer for the Runtime that would serve it, which decides the order wire formats are tried.
+type ByokTestRequest struct {
+	// Byok Upstream endpoint configuration supplied by the Computer owner. The API key is never persisted in TeamHub or Agent Service; only the Local Computer stores it in a private 0600 file.
+	Byok ByokInput `json:"byok"`
+
+	// Runtime Agent runtime harness driving turns on the Computer.
+	Runtime ModelSourceRuntime `json:"runtime"`
+}
+
+// ByokTestResult Outcome of probing an upstream BYOK endpoint from the Local Computer.
+type ByokTestResult struct {
+	// BaseUrl The address that answered, which can add or drop the /anthropic of a gateway that serves OpenAI under /v1 and Anthropic under /anthropic.
+	BaseUrl       string `json:"base_url"`
+	ContextWindow int    `json:"context_window"`
+	ModelId       string `json:"model_id"`
+	Ok            bool   `json:"ok"`
+
+	// Protocol Wire format the Computer found a BYOK upstream endpoint answers, trying the active Runtime's own format first.
+	Protocol ByokProtocol `json:"protocol"`
+}
 
 // CaptureSessionChangedPayload defines model for CaptureSessionChangedPayload.
 type CaptureSessionChangedPayload struct {
@@ -7022,6 +7207,80 @@ type MessageThreadSummaryUpdatedPayload struct {
 	Thread    MessageThreadSummary `json:"thread"`
 }
 
+// ModelSourceError The common error body with error.code narrowed to ModelSourceErrorCode.
+type ModelSourceError struct {
+	// Code error.code of a refused model-source request (403, 409, 502, 503, 504); 400, 401, and 404 use the common codes. LOCAL_COMPUTER_OFFLINE: the Computer is not connected. MODEL_SOURCE_FORBIDDEN: the viewer is not the Computer owner. MODEL_SOURCE_UNAVAILABLE: the Computer has no localmodels tool or cannot switch model sources. AGENT_HAS_ACTIVE_RUNS: Agents on the Computer have running work and force_terminate was false; details carries one entry per such Agent, with field "agent" and the Agent's display name as reason. RUNTIME_NOT_ENABLED, LOCAL_MODEL_UNKNOWN, and the BYOK_ codes are the Computer's refusals (409). MODEL_SOURCE_FAILED: the Computer failed with an error that has no code of its own here (502). MODEL_SOURCE_SERVICE_UNAVAILABLE: Agent Service could not be reached (503). MODEL_SOURCE_UNCONFIRMED: the Computer had not answered by the deadline; it may still switch (504).
+	Code    ModelSourceErrorCode `json:"code"`
+	Details *[]ErrorDetail       `json:"details,omitempty"`
+
+	// Message Human-readable summary safe to display; clients branch on code, not message.
+	Message   string `json:"message"`
+	RequestId string `json:"request_id"`
+}
+
+// ModelSourceErrorCode error.code of a refused model-source request (403, 409, 502, 503, 504); 400, 401, and 404 use the common codes. LOCAL_COMPUTER_OFFLINE: the Computer is not connected. MODEL_SOURCE_FORBIDDEN: the viewer is not the Computer owner. MODEL_SOURCE_UNAVAILABLE: the Computer has no localmodels tool or cannot switch model sources. AGENT_HAS_ACTIVE_RUNS: Agents on the Computer have running work and force_terminate was false; details carries one entry per such Agent, with field "agent" and the Agent's display name as reason. RUNTIME_NOT_ENABLED, LOCAL_MODEL_UNKNOWN, and the BYOK_ codes are the Computer's refusals (409). MODEL_SOURCE_FAILED: the Computer failed with an error that has no code of its own here (502). MODEL_SOURCE_SERVICE_UNAVAILABLE: Agent Service could not be reached (503). MODEL_SOURCE_UNCONFIRMED: the Computer had not answered by the deadline; it may still switch (504).
+type ModelSourceErrorCode string
+
+// ModelSourceErrorResponse defines model for ModelSourceErrorResponse.
+type ModelSourceErrorResponse struct {
+	// Error The common error body with error.code narrowed to ModelSourceErrorCode.
+	Error ModelSourceError `json:"error"`
+}
+
+// ModelSourceMode Active model source mode on a Local Computer.
+type ModelSourceMode string
+
+// ModelSourceRuntime Agent runtime harness driving turns on the Computer.
+type ModelSourceRuntime string
+
+// ModelSourceStatus Active model source and redacted BYOK metadata on one Local Computer.
+type ModelSourceStatus struct {
+	// Byok Redacted BYOK configuration metadata reported by the Computer.
+	Byok       ByokSummary `json:"byok"`
+	GatewayUrl *string     `json:"gateway_url,omitempty"`
+
+	// Mode Active model source mode on a Local Computer.
+	Mode            ModelSourceMode       `json:"mode"`
+	ReasoningEffort *AgentReasoningEffort `json:"reasoning_effort,omitempty"`
+
+	// Runtime Agent runtime harness driving turns on the Computer.
+	Runtime ModelSourceRuntime `json:"runtime"`
+
+	// RuntimeModel After a switch, the model the Computer's Agents run: the target model when the active Runtime offers it, else that Runtime's default.
+	RuntimeModel string `json:"runtime_model"`
+}
+
+// ModelSourceSwitchRequest Owner request to switch a Computer between local models, native subscriptions, and BYOK on Bifrost. When active Runs exist on the Computer's affected Agents and force_terminate is false, TeamHub refuses with 409 AGENT_HAS_ACTIVE_RUNS; retrying with force_terminate true terminates those Runs and applies the switch.
+type ModelSourceSwitchRequest struct {
+	// Byok Upstream endpoint configuration supplied by the Computer owner. The API key is never persisted in TeamHub or Agent Service; only the Local Computer stores it in a private 0600 file.
+	Byok *ByokInput `json:"byok,omitempty"`
+
+	// ForceTerminate True ends running work on the Computer's Agents; absent means false.
+	ForceTerminate *bool `json:"force_terminate,omitempty"`
+
+	// LocalModelId Stable localmodels library id: catalog id and variant, such as qwen3-4b:Q4_K_M.
+	LocalModelId *LocalModelId `json:"local_model_id,omitempty"`
+
+	// Mode Active model source mode on a Local Computer.
+	Mode ModelSourceMode `json:"mode"`
+
+	// Runtime Agent runtime harness driving turns on the Computer.
+	Runtime *ModelSourceRuntime `json:"runtime,omitempty"`
+}
+
+// ModelSourceView Current model source state of one Local Computer as viewed from Settings.
+type ModelSourceView struct {
+	// ComputerId Opaque, case-sensitive identifier. Clients must not infer type or time from it.
+	ComputerId Id   `json:"computer_id"`
+	Online     bool `json:"online"`
+
+	// Status Active model source and redacted BYOK metadata on one Local Computer.
+	Status             *ModelSourceStatus `json:"status,omitempty"`
+	TerminatedRunCount *int               `json:"terminated_run_count,omitempty"`
+	UpdatedAgentCount  *int               `json:"updated_agent_count,omitempty"`
+	ViewerIsOwner      bool               `json:"viewer_is_owner"`
+}
+
 // MyDocumentTree defines model for MyDocumentTree.
 type MyDocumentTree struct {
 	Items []DocumentPlacementNode `json:"items"`
@@ -9253,6 +9512,9 @@ type InternalError = ErrorResponse
 // LocalModelsRefused defines model for LocalModelsRefused.
 type LocalModelsRefused = LocalModelsErrorResponse
 
+// ModelSourceRefused defines model for ModelSourceRefused.
+type ModelSourceRefused = ModelSourceErrorResponse
+
 // NotFound defines model for NotFound.
 type NotFound = ErrorResponse
 
@@ -9876,6 +10138,15 @@ type PutLocalComputerBrowserConnectionJSONRequestBody = BrowserConnectionConfigu
 
 // ActOnLocalComputerModelJSONRequestBody defines body for ActOnLocalComputerModel for application/json ContentType.
 type ActOnLocalComputerModelJSONRequestBody = LocalModelActionRequest
+
+// SwitchLocalComputerModelSourceJSONRequestBody defines body for SwitchLocalComputerModelSource for application/json ContentType.
+type SwitchLocalComputerModelSourceJSONRequestBody = ModelSourceSwitchRequest
+
+// ListLocalComputerByokModelsJSONRequestBody defines body for ListLocalComputerByokModels for application/json ContentType.
+type ListLocalComputerByokModelsJSONRequestBody = ByokEndpointInput
+
+// TestLocalComputerModelSourceJSONRequestBody defines body for TestLocalComputerModelSource for application/json ContentType.
+type TestLocalComputerModelSourceJSONRequestBody = ByokTestRequest
 
 // ActOnLocalComputerPermissionJSONRequestBody defines body for ActOnLocalComputerPermission for application/json ContentType.
 type ActOnLocalComputerPermissionJSONRequestBody = ComputerPermissionAction

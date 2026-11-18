@@ -203,6 +203,7 @@ export class JobManager {
       input.password,
       input.model?.apiKey,
       input.runtimeModel?.apiKey,
+      input.byok?.apiKey,
     ])
       if (secret) clean = clean.split(secret).join("[hidden]");
     clean = clean

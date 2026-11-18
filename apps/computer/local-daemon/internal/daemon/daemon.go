@@ -67,6 +67,8 @@ type Options struct {
 	// LocalModels runs owner-chosen localmodels library actions; nil
 	// refuses each with TOOL_NOT_INSTALLED.
 	LocalModels LocalModelLibrary
+	// ModelSource inspects, tests and switches the Computer's active model source.
+	ModelSource ModelSourceManager
 }
 
 type OperationResolver interface {
@@ -138,6 +140,7 @@ type Daemon struct {
 	modelInvokeMu      sync.Mutex
 	modelInvokes       map[string]*modelInvoke
 	localModels        LocalModelLibrary
+	modelSource        ModelSourceManager
 	// localModelsMu orders runner.local_models sends with their revision.
 	localModelsMu       sync.Mutex
 	localModelsRevision uint64
@@ -234,6 +237,7 @@ func New(options Options) (*Daemon, error) {
 		modelInvoker:         options.ModelInvoker,
 		modelInvokes:         make(map[string]*modelInvoke),
 		localModels:          options.LocalModels,
+		modelSource:          options.ModelSource,
 		contextDispatchLimit: defaultContextDispatchLimit,
 		retryDelay:           defaultRetryDelay(options.RetryDelay),
 		stableConnection:     stableGatewayConnection,

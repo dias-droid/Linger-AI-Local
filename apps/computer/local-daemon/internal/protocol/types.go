@@ -125,6 +125,7 @@ const (
 	CommandCapabilityBrowserConnect     = wire.TypeExecute + ":" + wire.KindBrowserConnect
 	CommandCapabilityComputerPermission = wire.TypeExecute + ":" + wire.KindComputerPermission
 	CommandCapabilityLocalModels        = wire.TypeExecute + ":" + wire.KindLocalModels
+	CommandCapabilityModelSource        = wire.TypeExecute + ":" + wire.KindModelSource
 	CommandSessionCompact               = wire.TypeExecute + ":" + wire.KindSessionCompact
 	CommandModelInvoke                  = wire.TypeExecute + ":" + wire.KindModelInvoke
 	CommandComputerToolCall             = wire.TypeExecute + ":" + wire.KindComputerTool
@@ -158,6 +159,8 @@ const (
 	EventCapabilityComputerPermissionFailed    = wire.TypeExecuted + ":" + wire.KindComputerPermission + ":" + wire.OutcomeFailed
 	EventCapabilityLocalModelsAccepted         = wire.TypeExecuted + ":" + wire.KindLocalModels + ":" + wire.OutcomeAccepted
 	EventCapabilityLocalModelsRefused          = wire.TypeExecuted + ":" + wire.KindLocalModels + ":" + wire.OutcomeRefused
+	EventCapabilityModelSourceSucceeded        = wire.TypeExecuted + ":" + wire.KindModelSource + ":" + wire.OutcomeSucceeded
+	EventCapabilityModelSourceFailed           = wire.TypeExecuted + ":" + wire.KindModelSource + ":" + wire.OutcomeFailed
 	EventSessionCompacted                      = wire.TypeExecuted + ":" + wire.KindSessionCompact
 	EventModelInvoked                          = wire.TypeExecuted + ":" + wire.KindModelInvoke
 	EventComputerToolResult                    = wire.TypeExecuted + ":" + wire.KindComputerTool

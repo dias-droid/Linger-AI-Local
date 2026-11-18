@@ -116,6 +116,13 @@ take precedence.
   `expires_at` (at most 30 seconds; the Daemon never answers after that
   deadline, so the outcome is unknown, not refused), or
   `LOCAL_COMPUTER_OFFLINE`.
+- A Computer's model source is the Daemon's too
+  (`runner-gateway/runner-local-capabilities.ts`, `modelSource`). Agent Service
+  sends `execute` `model_source` only to Computer 0.54.0 or later
+  (`FIRST_MODEL_SOURCE_COMPUTER_VERSION`), because an older one closes the
+  connection on a kind it cannot decode, and maps the Computer's refusals in
+  `executor/http/local-computer-http.ts`. A BYOK key stays inside the request
+  and the envelope; it is never logged, stored or returned.
 - Default unit, integration, and fixture smoke tests use deterministic adapters
   and do not call a live model provider. Explicitly named live suites such as
   `smoke:local-runner:live` may use an authenticated provider and must remain

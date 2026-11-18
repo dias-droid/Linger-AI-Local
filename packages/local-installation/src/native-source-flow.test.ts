@@ -75,6 +75,12 @@ vi.mock("./native-livekit.js", async (original) => ({
   readLiveKitSettings: vi.fn(),
   startNativeLiveKit: vi.fn(),
 }));
+// Setting the model source runs the localmodels tool, which these tests never
+// install.
+vi.mock("./byok-source.js", async (original) => ({
+  ...(await original<typeof import("./byok-source.js")>()),
+  applyNativeSource: vi.fn(async () => undefined),
+}));
 vi.mock("./managed-runtimes.js", () => ({
   runtimeVersionFailure: vi.fn(() => undefined),
   prepareRuntime: vi.fn(),

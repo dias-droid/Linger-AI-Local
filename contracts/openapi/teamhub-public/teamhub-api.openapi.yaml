@@ -810,6 +810,136 @@ paths:
           $ref: '../components/local-models.yaml#/components/responses/LocalModelsRefused'
         '504':
           $ref: '../components/local-models.yaml#/components/responses/LocalModelsRefused'
+  /v0/tenants/{tenantId}/local-computers/{computerId}/model-source:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/ComputerId'
+    get:
+      tags: [Local Computers]
+      operationId: getLocalComputerModelSource
+      summary: Read the active model source and redacted BYOK configuration of one Local Computer.
+      responses:
+        '200':
+          description: Current model source view.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/model-source.yaml#/components/schemas/ModelSourceView'
+        '401':
+          $ref: '../components/common.yaml#/components/responses/Unauthenticated'
+        '404':
+          $ref: '../components/common.yaml#/components/responses/NotFound'
+        '502':
+          $ref: '../components/model-source.yaml#/components/responses/ModelSourceRefused'
+        '503':
+          $ref: '../components/model-source.yaml#/components/responses/ModelSourceRefused'
+    post:
+      tags: [Local Computers]
+      operationId: switchLocalComputerModelSource
+      summary: Switch a Local Computer between local models, subscriptions, and BYOK on Bifrost.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../components/model-source.yaml#/components/schemas/ModelSourceSwitchRequest'
+      responses:
+        '200':
+          description: Switched model source view.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/model-source.yaml#/components/schemas/ModelSourceView'
+        '400':
+          $ref: '../components/common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '../components/common.yaml#/components/responses/Unauthenticated'
+        '403':
+          $ref: '../components/model-source.yaml#/components/responses/ModelSourceRefused'
+        '404':
+          $ref: '../components/common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: '../components/model-source.yaml#/components/responses/ModelSourceRefused'
+        '502':
+          $ref: '../components/model-source.yaml#/components/responses/ModelSourceRefused'
+        '503':
+          $ref: '../components/model-source.yaml#/components/responses/ModelSourceRefused'
+        '504':
+          $ref: '../components/model-source.yaml#/components/responses/ModelSourceRefused'
+  /v0/tenants/{tenantId}/local-computers/{computerId}/model-source/models:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/ComputerId'
+    post:
+      tags: [Local Computers]
+      operationId: listLocalComputerByokModels
+      summary: List the models a BYOK endpoint serves, asked from an owned Local Computer without saving anything.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../components/model-source.yaml#/components/schemas/ByokEndpointInput'
+      responses:
+        '200':
+          description: The endpoint's models.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/model-source.yaml#/components/schemas/ByokModelList'
+        '400':
+          $ref: '../components/common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '../components/common.yaml#/components/responses/Unauthenticated'
+        '403':
+          $ref: '../components/model-source.yaml#/components/responses/ModelSourceRefused'
+        '404':
+          $ref: '../components/common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: '../components/model-source.yaml#/components/responses/ModelSourceRefused'
+        '502':
+          $ref: '../components/model-source.yaml#/components/responses/ModelSourceRefused'
+        '503':
+          $ref: '../components/model-source.yaml#/components/responses/ModelSourceRefused'
+        '504':
+          $ref: '../components/model-source.yaml#/components/responses/ModelSourceRefused'
+  /v0/tenants/{tenantId}/local-computers/{computerId}/model-source/test:
+    parameters:
+      - $ref: '#/components/parameters/TenantId'
+      - $ref: '#/components/parameters/ComputerId'
+    post:
+      tags: [Local Computers]
+      operationId: testLocalComputerModelSource
+      summary: Verify a BYOK upstream endpoint from an owned Local Computer without saving credentials.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '../components/model-source.yaml#/components/schemas/ByokTestRequest'
+      responses:
+        '200':
+          description: BYOK verification result.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/model-source.yaml#/components/schemas/ByokTestResult'
+        '400':
+          $ref: '../components/common.yaml#/components/responses/BadRequest'
+        '401':
+          $ref: '../components/common.yaml#/components/responses/Unauthenticated'
+        '403':
+          $ref: '../components/model-source.yaml#/components/responses/ModelSourceRefused'
+        '404':
+          $ref: '../components/common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: '../components/model-source.yaml#/components/responses/ModelSourceRefused'
+        '502':
+          $ref: '../components/model-source.yaml#/components/responses/ModelSourceRefused'
+        '503':
+          $ref: '../components/model-source.yaml#/components/responses/ModelSourceRefused'
+        '504':
+          $ref: '../components/model-source.yaml#/components/responses/ModelSourceRefused'
   /v0/tenants/{tenantId}/local-computers/{computerId}/permissions:
     parameters:
       - $ref: '#/components/parameters/TenantId'

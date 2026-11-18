@@ -327,3 +327,15 @@ export function modelSourceLabel(url: string) {
   const parsed = new URL(url);
   return `${parsed.host}${parsed.pathname.replace(/\/+$/, "")}`;
 }
+
+/**
+ * The model a switch to Local model runs: a loaded one, else one on disk. None
+ * when the Computer has no model downloaded yet.
+ */
+export function localSwitchTarget(view: LocalModelsView) {
+  const models = view.models.map((item) => item.model);
+  return (
+    models.find((model) => model.state === "loaded") ??
+    models.find((model) => model.state === "idle")
+  );
+}

@@ -49,6 +49,9 @@ export const runnerGatewayEnvelopeSchema = {
           $ref: "#/$defs/CapabilityLocalModelsExecute",
         },
         {
+          $ref: "#/$defs/CapabilityModelSource",
+        },
+        {
           $ref: "#/$defs/OperationPrepare",
         },
         {
@@ -138,6 +141,12 @@ export const runnerGatewayEnvelopeSchema = {
         },
         {
           $ref: "#/$defs/CapabilityLocalModelsRefused",
+        },
+        {
+          $ref: "#/$defs/CapabilityModelSourceSucceeded",
+        },
+        {
+          $ref: "#/$defs/CapabilityModelSourceFailed",
         },
         {
           $ref: "#/$defs/OperationPrepared",
@@ -1682,6 +1691,264 @@ export const runnerGatewayEnvelopeSchema = {
             },
             kind: {
               const: "browser_connect",
+            },
+            outcome: {
+              const: "failed",
+            },
+          },
+        },
+      ],
+    },
+    ByokConfigInput: {
+      description:
+        "A BYOK endpoint; model_id is required except to list the endpoint's models.",
+      type: "object",
+      additionalProperties: false,
+      required: ["base_url"],
+      properties: {
+        base_url: {
+          type: "string",
+          minLength: 1,
+          maxLength: 2048,
+        },
+        api_key: {
+          type: "string",
+          maxLength: 4096,
+        },
+        model_id: {
+          type: "string",
+          minLength: 1,
+          maxLength: 256,
+        },
+        context_window: {
+          type: "integer",
+          minimum: 1,
+          maximum: 2147483647,
+        },
+        reuse_saved_key: {
+          type: "boolean",
+        },
+      },
+    },
+    ByokSummary: {
+      type: "object",
+      additionalProperties: false,
+      required: ["configured", "key_saved"],
+      properties: {
+        configured: {
+          type: "boolean",
+        },
+        protocol: {
+          enum: ["openai-chat", "openai-responses", "anthropic"],
+        },
+        base_url: {
+          type: "string",
+          maxLength: 2048,
+        },
+        model_id: {
+          type: "string",
+          maxLength: 256,
+        },
+        context_window: {
+          type: "integer",
+          minimum: 1,
+          maximum: 2147483647,
+        },
+        key_saved: {
+          type: "boolean",
+        },
+      },
+    },
+    ModelSourceStatus: {
+      type: "object",
+      additionalProperties: false,
+      required: ["mode", "runtime", "runtime_model", "byok"],
+      properties: {
+        mode: {
+          enum: ["local", "subscription", "byok"],
+        },
+        runtime: {
+          enum: ["claude", "codex", "pi"],
+        },
+        runtime_model: {
+          description:
+            "After apply, the model the Computer's Agents run: the target model when the active Runtime offers it, else that Runtime's default.",
+          type: "string",
+          maxLength: 256,
+        },
+        reasoning_effort: {
+          description:
+            "After apply, the reasoning effort runtime_model needs; absent when it offers none.",
+          enum: ["none", "low", "medium", "high", "xhigh", "max", "ultra"],
+        },
+        gateway_url: {
+          type: "string",
+          maxLength: 2048,
+        },
+        byok: {
+          $ref: "#/$defs/ByokSummary",
+        },
+      },
+    },
+    ByokModelList: {
+      type: "object",
+      additionalProperties: false,
+      required: ["base_url", "models"],
+      properties: {
+        base_url: {
+          type: "string",
+          minLength: 1,
+          maxLength: 2048,
+        },
+        models: {
+          type: "array",
+          maxItems: 1000,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["id"],
+            properties: {
+              id: {
+                type: "string",
+                minLength: 1,
+                maxLength: 256,
+              },
+              name: {
+                type: "string",
+                maxLength: 256,
+              },
+              context_window: {
+                type: "integer",
+                minimum: 1,
+                maximum: 2147483647,
+              },
+            },
+          },
+        },
+      },
+    },
+    ByokTestResult: {
+      type: "object",
+      additionalProperties: false,
+      required: ["ok", "protocol", "base_url", "model_id", "context_window"],
+      properties: {
+        ok: {
+          type: "boolean",
+        },
+        protocol: {
+          enum: ["openai-chat", "openai-responses", "anthropic"],
+        },
+        base_url: {
+          type: "string",
+          minLength: 1,
+          maxLength: 2048,
+        },
+        model_id: {
+          type: "string",
+          minLength: 1,
+          maxLength: 256,
+        },
+        context_window: {
+          type: "integer",
+          minimum: 1,
+          maximum: 2147483647,
+        },
+      },
+    },
+    CapabilityModelSource: {
+      type: "object",
+      unevaluatedProperties: false,
+      allOf: [
+        {
+          $ref: "#/$defs/LocalSkillCommandIdentity",
+        },
+        {
+          type: "object",
+          required: ["type", "kind", "action"],
+          properties: {
+            type: {
+              const: "execute",
+            },
+            kind: {
+              const: "model_source",
+            },
+            action: {
+              enum: ["status", "test", "models", "apply"],
+            },
+            mode: {
+              enum: ["local", "subscription", "byok"],
+            },
+            runtime: {
+              enum: ["claude", "codex", "pi"],
+            },
+            local_model_id: {
+              $ref: "#/$defs/LocalModelId",
+            },
+            byok: {
+              $ref: "#/$defs/ByokConfigInput",
+            },
+          },
+        },
+      ],
+    },
+    CapabilityModelSourceSucceeded: {
+      type: "object",
+      unevaluatedProperties: false,
+      allOf: [
+        {
+          $ref: "#/$defs/LocalSkillCommandIdentity",
+        },
+        {
+          type: "object",
+          required: ["type", "kind", "action", "outcome"],
+          properties: {
+            type: {
+              const: "executed",
+            },
+            kind: {
+              const: "model_source",
+            },
+            action: {
+              enum: ["status", "test", "models", "apply"],
+            },
+            outcome: {
+              const: "succeeded",
+            },
+            status: {
+              $ref: "#/$defs/ModelSourceStatus",
+            },
+            test_result: {
+              $ref: "#/$defs/ByokTestResult",
+            },
+            model_list: {
+              $ref: "#/$defs/ByokModelList",
+            },
+          },
+        },
+      ],
+    },
+    CapabilityModelSourceFailed: {
+      type: "object",
+      unevaluatedProperties: false,
+      allOf: [
+        {
+          $ref: "#/$defs/LocalSkillCommandIdentity",
+        },
+        {
+          type: "object",
+          required: ["type", "kind", "action", "error", "outcome"],
+          properties: {
+            type: {
+              const: "executed",
+            },
+            kind: {
+              const: "model_source",
+            },
+            action: {
+              enum: ["status", "test", "models", "apply"],
+            },
+            error: {
+              $ref: "#/$defs/AgentRunnerError",
             },
             outcome: {
               const: "failed",

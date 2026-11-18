@@ -249,9 +249,9 @@ function AppSetup({
         Or run a model on {computer.display_name} itself: load one in{" "}
         <Link
           className="text-foreground underline underline-offset-2"
-          to={`/t/${encodeURIComponent(tenantId)}/settings/local-models?computer=${encodeURIComponent(computer.computer_id)}`}
+          to={`/t/${encodeURIComponent(tenantId)}/settings/models?computer=${encodeURIComponent(computer.computer_id)}`}
         >
-          Local models
+          Settings › Models
         </Link>
         .
       </p>

@@ -28,6 +28,7 @@ import {
   LocalComputerHttpError,
   registerLocalComputerCompatibilityRoutes,
   registerLocalComputerModelRoutes,
+  registerLocalComputerModelSourceRoutes,
   registerLocalComputerPermissionRoutes,
 } from "./local-computer-http.js";
 import {
@@ -651,6 +652,7 @@ const createAgentManagerHttpApp = <TRuntimeSettings>(
   registerLocalComputerCompatibilityRoutes(app, handlers);
   registerLocalComputerPermissionRoutes(app, handlers);
   registerLocalComputerModelRoutes(app, handlers);
+  registerLocalComputerModelSourceRoutes(app, handlers);
 
   app.notFound((context) =>
     writeProtocolError(context, 404, "not_found", "Not found"),

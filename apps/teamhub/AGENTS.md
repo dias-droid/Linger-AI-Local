@@ -227,5 +227,13 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
   `LOCAL_MODEL_ACTION_UNCONFIRMED`: it may still act, and the snapshots show
   the outcome. The Computer's refusal codes map to `LocalModelsErrorCode` in
   `internal/app/handlers_local_models.go`.
+- A Computer's model source lives on the Computer
+  (`internal/app/handlers_model_source.go`); TeamHub never stores a BYOK key.
+  A switch checks for running work, runs `apply` on the Computer, then moves
+  the owner's Agents on it in one transaction
+  (`agentregistry.SwitchComputerRuntime`). Work found before `apply` refuses
+  the switch with `AGENT_HAS_ACTIVE_RUNS` unless the owner sent
+  `force_terminate`; work that starts during `apply` keeps only its Agent
+  behind, answered with the same code after the others moved.
 - Do not add write-only audit, event, or provenance tables. A new audit table
   needs a named product or compliance reader in the same pull request.
