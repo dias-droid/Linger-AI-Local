@@ -169,7 +169,14 @@ Gateway and runs Agents. The daemon exits with the app.
   when the instance's `user.env` changed. A source folder removed since, or
   one the installer no longer accepts as a Linger checkout (such as one the
   earlier Simplex app unpacked), is unpacked again from the app's package
-  first and replaces the recorded one. A Quick Install that stopped
+  first and replaces the recorded one. The record also names the app
+  version that unpacked the source; when this app brings another source
+  package (it was installed over an older one), that launch unpacks it and
+  resumes on it, with the "Updating Linger" page instead of the older
+  interface, then prunes the older folder. A failure shows the start failure
+  page, whose Retry tries again. An app older than the recorded version
+  (a downgrade) leaves the services on their newer source and logs
+  `local_server.source_newer_than_app`. A Quick Install that stopped
   before the computer enrolled is not resumed: setup shows again and Install
   finishes it, reusing a finished job only while its origin answers (a stopped
   server gets a new job, which starts the services again). The start failure

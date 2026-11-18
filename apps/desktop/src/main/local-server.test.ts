@@ -306,6 +306,7 @@ const installerApi = (
 };
 
 const TEAMHUB = "http://127.0.0.1:4100";
+const APP_VERSION = "0.17.0";
 const KEY = Buffer.from(Array.from({ length: 32 }, (_, i) => i));
 const server = (origin: string): LocalServerIdentity => ({
   origin,
@@ -372,6 +373,7 @@ const fixture = (
   }) as typeof fetch;
   const module = new LocalServerModule({
     home,
+    version: APP_VERSION,
     installerDirectory,
     platform: "linux",
     arch: "x64",
@@ -663,6 +665,7 @@ describe("LocalServerModule", () => {
       home: f.home,
       repo,
       origin: "http://localhost:3000",
+      version: APP_VERSION,
     });
     await f.host.stop("quit");
   });
@@ -1120,6 +1123,7 @@ describe("LocalServerModule", () => {
     const bundled = (sha256: string) =>
       new LocalServerModule({
         home: f.home,
+        version: APP_VERSION,
         installerDirectory: path.join(f.root, "installer"),
         platform: "linux",
         arch: "x64",
@@ -1180,6 +1184,7 @@ describe("LocalServerModule", () => {
     const install = async () => {
       await new LocalServerModule({
         home: f.home,
+        version: APP_VERSION,
         installerDirectory: path.join(f.root, "installer"),
         platform: "linux",
         arch: "x64",
@@ -1254,6 +1259,7 @@ describe("LocalServerModule", () => {
     const install = async (glibcVersion = "2.35") => {
       await new LocalServerModule({
         home: f.home,
+        version: APP_VERSION,
         installerDirectory: path.join(f.root, "installer"),
         platform: "linux",
         arch: "x64",
@@ -1353,6 +1359,7 @@ describe("LocalServerModule", () => {
     );
     await new LocalServerModule({
       home: f.home,
+      version: APP_VERSION,
       installerDirectory: installer,
       platform: "darwin",
       arch: "arm64",
@@ -2312,15 +2319,16 @@ describe("LocalServerModule after a restart", () => {
     await f.host.stop("quit");
   });
 
-  it("moves the services to the source package of an updated app when asked", async () => {
-    const root = tempDirectory();
-    const archive = sourceArchive(root);
-    const f = fixture(
+  // The services an app installed over this one unpacked: the record names
+  // their source folder and the app that unpacked it.
+  const installedBy = (archive: ReturnType<typeof sourceArchive>) =>
+    fixture(
       {
         sourceArchive: {
           url: "https://cdn.example/linger.tar.gz",
           sha256: archive.sha256,
         },
+        // The services still answer, as when only the app was replaced.
         fetch: (async () => new Response(archive.bytes)) as typeof fetch,
       },
       enrolled,
@@ -2337,27 +2345,144 @@ describe("LocalServerModule after a restart", () => {
         );
       },
     );
+
+  it("moves the services to the source package of an app installed over an older one", async () => {
+    const root = tempDirectory();
+    const archive = sourceArchive(root);
+    const f = installedBy(archive);
     await f.host.start();
     await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
     const sources = path.join(f.home, "desktop", "source");
-    const previous = path.join(sources, "previous");
     const current = path.join(sources, archive.sha256.slice(0, 16));
-    const before = installerArgs(f.home);
-    expect(before[before.indexOf("--source-repo") + 1]).toBe(previous);
-    expect(f.module.sourceUpdateAvailable()).toBe(true);
-    await f.module.updateSource();
-    expect(f.showUpdating).toHaveBeenCalledOnce();
-    expect(f.loadServer).toHaveBeenCalledOnce();
-    expect(f.module.sourceUpdateAvailable()).toBe(false);
-    expect(f.module.status().phase).toBe("ready");
     const args = installerArgs(f.home);
+    expect(args).toContain("--resume");
     expect(args[args.indexOf("--source-repo") + 1]).toBe(current);
+    // The window leaves the older interface while they restart.
+    expect(f.showUpdating).toHaveBeenCalledOnce();
+    expect(f.setServer).toHaveBeenCalledWith("http://localhost:3000");
     expect(
       JSON.parse(
         readFileSync(path.join(f.home, "desktop", "local-server.json"), "utf8"),
       ),
-    ).toMatchObject({ repo: current });
+    ).toEqual({
+      home: f.home,
+      repo: current,
+      origin: "http://localhost:3000",
+      version: APP_VERSION,
+    });
     expect(readdirSync(sources)).toEqual([path.basename(current)]);
+    await f.host.stop("quit");
+  });
+
+  it("shows the start failure when moving to the newer source package fails", async () => {
+    const root = tempDirectory();
+    const archive = sourceArchive(root);
+    const f = installedBy(archive);
+    writeFileSync(path.join(f.home, "resume-fails"), "");
+    await f.host.start();
+    await vi.waitFor(() => expect(f.module.status().phase).toBe("failed"));
+    expect(f.showStartFailed).toHaveBeenCalledWith("Native teamhub stopped");
+    // Try Again moves them once more.
+    rmSync(path.join(f.home, "resume-fails"));
+    f.bus.emit("local-server.retry");
+    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    const args = installerArgs(f.home);
+    expect(args[args.indexOf("--source-repo") + 1]).toBe(
+      path.join(f.home, "desktop", "source", archive.sha256.slice(0, 16)),
+    );
+    await f.host.stop("quit");
+  });
+
+  it("starts the services on their own source package when it is this app's", async () => {
+    const root = tempDirectory();
+    const archive = sourceArchive(root);
+    const repo = (home: string) =>
+      path.join(home, "desktop", "source", archive.sha256.slice(0, 16));
+    const download = vi.fn(
+      async (_url: string | URL | Request) =>
+        new Response(null, { status: 503 }),
+    );
+    const f = fixture(
+      {
+        sourceArchive: {
+          url: "https://cdn.example/linger.tar.gz",
+          sha256: archive.sha256,
+        },
+        fetch: download as typeof fetch,
+      },
+      enrolled,
+      (home) => {
+        unpackedSource(repo(home));
+        writeFileSync(
+          path.join(home, "desktop", "local-server.json"),
+          JSON.stringify({
+            home,
+            repo: repo(home),
+            origin: "http://localhost:3000",
+            version: APP_VERSION,
+          }),
+        );
+      },
+    );
+    await f.host.start();
+    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    const args = installerArgs(f.home);
+    expect(args[args.indexOf("--source-repo") + 1]).toBe(repo(f.home));
+    expect(f.showUpdating).not.toHaveBeenCalled();
+    expect(
+      download.mock.calls.some(([url]) =>
+        String(url).startsWith("https://cdn.example/"),
+      ),
+    ).toBe(false);
+    await f.host.stop("quit");
+  });
+
+  it("leaves services a newer app unpacked on their source package", async () => {
+    const warn = vi.spyOn(silentLog, "warn");
+    const root = tempDirectory();
+    const archive = sourceArchive(root);
+    const f = fixture(
+      {
+        sourceArchive: {
+          url: "https://cdn.example/linger.tar.gz",
+          sha256: archive.sha256,
+        },
+        fetch: (async () => new Response(archive.bytes)) as typeof fetch,
+      },
+      enrolled,
+      (home) => {
+        const sources = path.join(home, "desktop", "source");
+        unpackedSource(path.join(sources, "newer"));
+        writeFileSync(
+          path.join(home, "desktop", "local-server.json"),
+          JSON.stringify({
+            home,
+            repo: path.join(sources, "newer"),
+            origin: "http://localhost:3000",
+            version: "0.18.0",
+          }),
+        );
+      },
+    );
+    await f.host.start();
+    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    const newer = path.join(f.home, "desktop", "source", "newer");
+    const args = installerArgs(f.home);
+    expect(args[args.indexOf("--source-repo") + 1]).toBe(newer);
+    expect(f.showUpdating).not.toHaveBeenCalled();
+    expect(readdirSync(path.join(f.home, "desktop", "source"))).toEqual([
+      "newer",
+    ]);
+    expect(
+      JSON.parse(
+        readFileSync(path.join(f.home, "desktop", "local-server.json"), "utf8"),
+      ),
+    ).toMatchObject({ repo: newer, version: "0.18.0" });
+    expect(warn).toHaveBeenCalledWith("local_server.source_newer_than_app", {
+      installed: "0.18.0",
+      app: APP_VERSION,
+    });
+    warn.mockRestore();
     await f.host.stop("quit");
   });
 
@@ -2468,7 +2593,6 @@ describe("LocalServerModule after a restart", () => {
     expect(
       existsSync(path.join(repo(f.home), "scripts/source-native.mjs")),
     ).toBe(true);
-    expect(f.module.sourceUpdateAvailable()).toBe(false);
     await f.host.stop("quit");
   });
 
@@ -2510,7 +2634,6 @@ describe("LocalServerModule after a restart", () => {
       ),
     ).toMatchObject({ repo: current });
     expect(readdirSync(sources)).toEqual([path.basename(current)]);
-    expect(f.module.sourceUpdateAvailable()).toBe(false);
     await f.host.stop("quit");
   });
 
@@ -2564,7 +2687,12 @@ describe("LocalServerModule after a restart", () => {
       JSON.parse(
         readFileSync(path.join(f.home, "desktop", "local-server.json"), "utf8"),
       ),
-    ).toEqual({ home: chosen, repo: current, origin: "http://localhost:3000" });
+    ).toEqual({
+      home: chosen,
+      repo: current,
+      origin: "http://localhost:3000",
+      version: APP_VERSION,
+    });
     expect(readdirSync(path.dirname(current))).toEqual([
       path.basename(current),
     ]);

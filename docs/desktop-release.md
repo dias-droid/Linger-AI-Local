@@ -177,9 +177,10 @@ how Linger was installed:
 | Linux                   | The same as the portable folder.                                                                                                                                                                                |
 
 A system notification announces each new version once, and the tray shows the
-state; after a failure "Try Updating Again" checks at once. Without a newer app, the tray
-still offers to update the local services when they have a newer source; a
-newer app replaces that offer, because it brings its own source.
+state; after a failure "Try Updating Again" checks at once. The local
+services need no update of their own: the first launch of a newer app moves
+them to its source package (see LocalServer in
+[the desktop guide](../apps/desktop/AGENTS.md)).
 
 `updateFeedUrl` in the desktop config (`config.json` in the app's data
 folder) points the app at another releases URL with the same layout, such as
