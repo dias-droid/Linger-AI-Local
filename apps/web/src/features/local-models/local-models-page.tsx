@@ -38,6 +38,7 @@ import {
   type LocalModelsView,
 } from "./local-models-queries";
 import {
+  downloadStopped,
   formatGigabytes,
   loadCheck,
   memorySummary,
@@ -52,7 +53,10 @@ type Dialog =
   | { kind: "remove"; modelId: string }
   | { kind: "unload"; modelId: string };
 
-/** The model states each confirmed action applies to, as the row offers it. */
+/**
+ * The model states each confirmed action applies to, as the row offers it. A
+ * stopped download is failed too but offers none of them.
+ */
 const actionStatuses: Record<"load" | "remove" | "unload", ModelStatus[]> = {
   load: ["idle", "failed"],
   remove: ["loaded", "idle", "failed"],
@@ -354,6 +358,7 @@ function Library({
     !offline &&
     !readOnly &&
     !requests.has(entry.model.id) &&
+    !downloadStopped(entry.model) &&
     actionStatuses[action].includes(entry.status);
   const dialogEntry =
     dialog && dialog.kind !== "advanced" ? find(dialog.modelId) : undefined;

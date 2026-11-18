@@ -30,6 +30,8 @@ teamhub room collaborate --file ./team.md --json
 
 Messages go to the configured Room or Task by default; `--thread <thread-id>` picks a Thread in that Room, and `--alterego <task-id>` and `--meta <task-id>` are for permitted private collaboration. `message read --inbox` accepts `room:`, `thread:`, `task:`, `meta:` and `taskmeta:` addresses, so another authorized Room is read with `--inbox room:<room-id>`; a Meta reads a Task's public messages with `--inbox task:<task-id>`. Publishing files and submitting the message are one atomic operation. For complex ordered resources use `--message` or `--message-file` with an object holding the full `segments` array; private targets accept no uploads, media or segments. A structured mention in a message is written `[@name](user:actor_id)` or `[@name](agent:actor_id)`; a plain `@name` mentions no one.
 
+`room collaborate` publishes the Room's `team.md` and `room protocol` reads the current one. A Room where none has been published yet, the normal state of a new Room, is not an error: `room protocol` prints that no protocol has been published, and `--json` returns `published: false` with `revision: 0`.
+
 ## Documents and recovery
 
 `docs update` changes only the given heading, text or block; do not simulate a partial edit with a full replacement. Block operations need real stable IDs. `str_replace` accepts only a unique, exact single-line match; a missing or ambiguous match or a moved anchor returns a conflict. `docs replace` saves only a Native blocks/HTML working copy that carries its original revision baseline; after a conflict, download to another path and reconcile. Plain file downloads have no Native save command.

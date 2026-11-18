@@ -341,6 +341,7 @@ func (s *ViewStore) Ensure(ctx context.Context, request ViewRequest, source Cont
 		if err := validateWorkspaceLinks(current.WorkspacePath, current.View.Mappings); err != nil {
 			return ViewRecord{}, err
 		}
+		s.ensureAgentProject(current)
 		return current, nil
 	}
 	if readErr != nil && !errors.Is(readErr, sql.ErrNoRows) {
@@ -368,6 +369,7 @@ func (s *ViewStore) Ensure(ctx context.Context, request ViewRequest, source Cont
 	record, err := s.apply(ctx, view, source.ContentURL, timing)
 	if err == nil {
 		s.afterSharedTaskApply(record)
+		s.ensureAgentProject(record)
 	}
 	return record, s.observeStorage(ctx, "ensure", err)
 }

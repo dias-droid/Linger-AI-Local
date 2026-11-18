@@ -290,9 +290,11 @@ Gateway and runs Agents. The daemon exits with the app.
   stops the installation manager the desktop started (cancelling a running
   job) and the `desktop` instance's services in the default home and in the
   location `desktop/local-server.json` names; services already stopped are
-  left alone and it gives up after about two minutes. It keeps
-  `%APPDATA%\Linger` and the Linger home with all their data and asks nothing;
-  a later install starts the services again (resume, or setup's Install).
+  left alone and it gives up after about two minutes. When the stop fails,
+  the uninstaller offers Retry; Cancel (the default when silent) ends it with
+  exit code 1 before anything is removed, so the uninstall can be run again.
+  It keeps `%APPDATA%\Linger` and the Linger home with all their data; a
+  later install starts the services again (resume, or setup's Install).
   Setup over an installed release stops it the same way before it replaces
   the files, since the services run on `Linger.exe` and hold it open. Setup
   always stops them with its own `installer.js`, copied to the plugins

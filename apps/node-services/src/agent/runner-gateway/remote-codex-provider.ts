@@ -1,5 +1,6 @@
 import { displayText } from "@linger/service-kit";
 import {
+  OPERATION_OUTCOME_UNKNOWN,
   RunnerOperationInputError,
   RunnerGatewayError,
   type RunnerCapacityPermit,
@@ -1077,7 +1078,13 @@ const localRunFailure = (
       cause: error,
     });
   }
-  if (error.code === "cancelled" || error.code === "DAEMON_RESTARTED") {
+  // A restarted Daemon and a start the Computer never confirmed both leave
+  // the native outcome unknown: the Run was interrupted, not refused.
+  if (
+    error.code === "cancelled" ||
+    error.code === "DAEMON_RESTARTED" ||
+    error.code === OPERATION_OUTCOME_UNKNOWN
+  ) {
     return new ProviderRunInterruptedError(error.message, { cause: error });
   }
   return error;

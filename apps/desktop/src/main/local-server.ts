@@ -62,6 +62,7 @@ import {
   NODE_RUNTIME_VERSION,
   nodeRuntimeDownloadUrls,
 } from "../../../../scripts/local-computer-node-distributions.mjs";
+import type { Logger } from "./log.js";
 import type { Module, ModuleContext } from "./modules.js";
 import { sameOrigin } from "./navigation.js";
 import { humanTenant, type EnrollmentModule } from "./enrollment.js";
@@ -1954,6 +1955,7 @@ export class LocalServerModule implements Module {
       target,
       this.#options.fetch ?? fetch,
       this.#options.pollMs ?? 1000,
+      this.#ctx?.log,
     );
   }
 
@@ -2484,18 +2486,59 @@ const LOCAL_MODEL_FAILURES = new Set([
   "GPU_SHARING_REVOCATION_FAILED",
 ]);
 
+export interface Reconnect {
+  readonly windowMs: number;
+  readonly maxBackoffMs: number;
+}
+
+const RECONNECT: Reconnect = { windowMs: 60_000, maxBackoffMs: 5_000 };
+
+const TRANSIENT_CODES = new Set([
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "EPIPE",
+  "ETIMEDOUT",
+  "UND_ERR_SOCKET",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_CLOSED",
+]);
+
+// The code of a transport failure worth retrying, found on the error or its
+// causes; undefined for anything else, HTTP and JSON errors included.
+const transientCode = (error: unknown): string | undefined => {
+  for (let at = error, depth = 0; at && depth < 5; depth++) {
+    if (!(at instanceof Error)) return undefined;
+    // The per-request timeout; the caller's own abort is ruled out before.
+    if (at.name === "TimeoutError" || at.name === "AbortError") return at.name;
+    const code = (at as { code?: unknown }).code;
+    if (typeof code === "string" && TRANSIENT_CODES.has(code)) return code;
+    at = at.cause;
+  }
+  return undefined;
+};
+
 // The desktop is the installer's only client here: it starts the job and
 // follows it, and nothing of the installer UI is shown.
 export class InstallerApi {
   readonly #origin: string;
   readonly #fetch: typeof fetch;
   readonly #pollMs: number;
+  readonly #log: Logger | undefined;
+  readonly #reconnect: Reconnect;
   #cookie = "";
 
-  private constructor(origin: string, fetcher: typeof fetch, pollMs: number) {
+  private constructor(
+    origin: string,
+    fetcher: typeof fetch,
+    pollMs: number,
+    log: Logger | undefined,
+    reconnect: Reconnect,
+  ) {
     this.#origin = origin;
     this.#fetch = fetcher;
     this.#pollMs = pollMs;
+    this.#log = log;
+    this.#reconnect = reconnect;
   }
 
   // Exchanges the one-time token in the launcher URL for a session.
@@ -2503,11 +2546,19 @@ export class InstallerApi {
     url: string,
     fetcher: typeof fetch,
     pollMs: number,
+    log?: Logger,
+    reconnect: Reconnect = RECONNECT,
   ): Promise<InstallerApi> {
     const target = new URL(url);
     const token = new URLSearchParams(target.hash.slice(1)).get("token");
     if (!token) throw new Error("The installer did not provide a sign-in link");
-    const api = new InstallerApi(target.origin, fetcher, pollMs);
+    const api = new InstallerApi(
+      target.origin,
+      fetcher,
+      pollMs,
+      log,
+      reconnect,
+    );
     const response = await api.#call("/api/session", { token });
     if (!response.ok)
       throw new Error(`The installer refused the session (${response.status})`);
@@ -2583,6 +2634,8 @@ export class InstallerApi {
     // first; that is asked for once too.
     let approved: string | undefined;
     let replanned = false;
+    // Where the bar last stood, kept while the installer cannot be reached.
+    let shown: [LocalServerStep, number] | undefined;
     for (;;) {
       const at = job.stage ? STAGES[job.stage] : undefined;
       if (at) {
@@ -2606,9 +2659,10 @@ export class InstallerApi {
           counter.total
             ? counter
             : undefined;
+        shown = [at[0], at[1] + (at[2] - at[1]) * part];
         onStep(
-          at[0],
-          at[1] + (at[2] - at[1]) * part,
+          shown[0],
+          shown[1],
           job.message ?? "",
           bytes && {
             completed: bytes.completed,
@@ -2663,7 +2717,44 @@ export class InstallerApi {
               : job.message || "The installation stopped",
         );
       await delay(this.#pollMs, undefined, { signal });
-      job = await this.#json<Job>(`/api/jobs/${encodeURIComponent(job.id)}`);
+      job = await this.#poll(job.id, signal, () => {
+        if (shown) onStep(shown[0], shown[1], "Reconnecting to the installer…");
+      });
+    }
+  }
+
+  // Reads the job again. The read is idempotent, so a dropped connection is
+  // retried for a while: the job keeps running in the installer either way.
+  async #poll(
+    id: string,
+    signal: AbortSignal,
+    onReconnect: () => void,
+  ): Promise<Job> {
+    let since: number | undefined;
+    let wait = this.#pollMs;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await this.#json<Job>(`/api/jobs/${encodeURIComponent(id)}`);
+      } catch (error) {
+        if (signal.aborted) throw error;
+        const code = transientCode(error);
+        if (!code) throw error;
+        this.#log?.warn("local_server.installer_unreachable", {
+          stage: "poll_job",
+          job_id: id,
+          code,
+          attempt,
+        });
+        since ??= Date.now();
+        if (Date.now() - since >= this.#reconnect.windowMs)
+          throw new Error(
+            "Couldn't read the installation progress. Try again to reconnect to the running installation.",
+            { cause: error },
+          );
+        onReconnect();
+        await delay(wait, undefined, { signal });
+        wait = Math.min(wait * 2, this.#reconnect.maxBackoffMs);
+      }
     }
   }
 

@@ -196,13 +196,15 @@ export function renderBusinessResult(command: string, result: Json): string {
       ? `Added Agent ${singleLine(result.actor_id)} to Room ${singleLine(result.room_id)}. Wake it with an Agent reference in that Room.`
       : `Agent ${singleLine(result.actor_id)} is already a member of Room ${singleLine(result.room_id)}.`;
   if (command === "room protocol")
-    return [
-      `Room: ${singleLine(result.room_id)}`,
-      `Revision: ${String(result.revision)}`,
-      `Updated at: ${String(result.updated_at)}`,
-      "",
-      String(result.raw_markdown),
-    ].join("\n");
+    return result.published === false
+      ? "No team.md collaboration protocol has been published in this Room yet."
+      : [
+          `Room: ${singleLine(result.room_id)}`,
+          `Revision: ${String(result.revision)}`,
+          `Updated at: ${String(result.updated_at)}`,
+          "",
+          String(result.raw_markdown),
+        ].join("\n");
   if (command === "agent get")
     return [
       `Agent: ${singleLine(result.name)}`,

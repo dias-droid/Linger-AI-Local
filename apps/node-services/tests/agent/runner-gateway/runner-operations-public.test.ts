@@ -9,6 +9,7 @@ import {
   RunnerGatewayProtocolError,
   type RunnerGatewayConnection,
 } from "../../../src/agent/runner-gateway/runner-gateway.js";
+import { OPERATION_OUTCOME_UNKNOWN } from "../../../src/agent/runner-gateway/runner-operation.js";
 import { createTestRunnerGateway } from "../test-support/runner-gateway.js";
 import { readyContextScope } from "../test-support/ready-context-view.js";
 import { runtimeDiagnostics } from "./runtime-diagnostics-fixture.js";
@@ -869,6 +870,150 @@ describe("RunnerGateway", () => {
       session: { thread_id: "thread-rebased" },
     });
     second.disconnect();
+  });
+
+  it("ends a rebased start with the terminal the daemon recorded on its first epoch", async () => {
+    const gateway = createTestRunnerGateway({
+      heartbeatIntervalMs: 1_000,
+      createId: sequenceIds(),
+    });
+    const firstPeer = new RecordingPeer();
+    const first = await acceptReadyConnection(gateway, firstPeer);
+    const operation = await gateway.startOperation(sessionTarget());
+    void operation.result.catch(() => undefined);
+    const original = firstPeer.sent[1] as OperationStart;
+    first.disconnect();
+
+    const secondPeer = new RecordingPeer();
+    const second = await acceptReadyConnection(gateway, secondPeer);
+    expect(secondPeer.sent[1]).toMatchObject({
+      type: "operation.start",
+      connection_epoch: 2,
+    });
+    // The Daemon failed it on the first connection and replays that terminal.
+    await second.receive(
+      event(original, 1, {
+        type: "operation.failed",
+        stage: "operation_admission",
+        error: {
+          code: "EXECUTION_FAILED",
+          message: "Operation acceptance delivery failed",
+          retryable: false,
+        },
+      }),
+    );
+    await expect(operation.result).rejects.toMatchObject({
+      code: "EXECUTION_FAILED",
+    });
+    expect(secondPeer.sent.at(-1)).toMatchObject({
+      type: "operation.ack",
+      through_seq: 1,
+      connection_epoch: 1,
+    });
+    expect(secondPeer.closed).toEqual([]);
+  });
+
+  it("rejects a frame stamped with an epoch the start was never sent with", async () => {
+    const gateway = createTestRunnerGateway({
+      heartbeatIntervalMs: 1_000,
+      createId: sequenceIds(),
+    });
+    const firstPeer = new RecordingPeer();
+    const first = await acceptReadyConnection(gateway, firstPeer);
+    const operation = await gateway.startOperation(sessionTarget());
+    void operation.result.catch(() => undefined);
+    const original = firstPeer.sent[1] as OperationStart;
+    first.disconnect();
+
+    const secondPeer = new RecordingPeer();
+    const second = await acceptReadyConnection(gateway, secondPeer);
+    await expect(
+      second.receive(
+        event({ ...original, connection_epoch: 7 }, 1, {
+          type: "operation.failed",
+          stage: "operation_admission",
+          error: { code: "EXECUTION_FAILED", message: "x", retryable: false },
+        }),
+      ),
+    ).rejects.toThrow("identity mismatch at connection_epoch");
+  });
+
+  it("ends an unaccepted start with an unknown outcome after three re-sends", async () => {
+    const gateway = createTestRunnerGateway({
+      heartbeatIntervalMs: 1_000,
+      createId: sequenceIds(),
+    });
+    let peer = new RecordingPeer();
+    let connection = await acceptReadyConnection(gateway, peer);
+    const operation = await gateway.startOperation(sessionTarget());
+    void operation.result.catch(() => undefined);
+    const original = peer.sent[1] as OperationStart;
+    for (let resend = 1; resend <= 3; resend++) {
+      connection.disconnect();
+      peer = new RecordingPeer();
+      connection = await acceptReadyConnection(gateway, peer);
+      expect(peer.sent).toContainEqual(
+        expect.objectContaining({
+          type: "operation.start",
+          operation_id: original.operation_id,
+        }),
+      );
+    }
+    connection.disconnect();
+    peer = new RecordingPeer();
+    await acceptReadyConnection(gateway, peer);
+    expect(peer.sent).not.toContainEqual(
+      expect.objectContaining({ type: "operation.start" }),
+    );
+    await expect(operation.result).rejects.toMatchObject({
+      code: OPERATION_OUTCOME_UNKNOWN,
+      retryable: false,
+    });
+  });
+
+  it("keeps re-sending an unaccepted start the daemon reports active", async () => {
+    const gateway = createTestRunnerGateway({
+      heartbeatIntervalMs: 1_000,
+      createId: sequenceIds(),
+    });
+    let peer = new RecordingPeer();
+    let connection = await acceptReadyConnection(gateway, peer);
+    const operation = await gateway.startOperation(sessionTarget());
+    void operation.result.catch(() => undefined);
+    const start = peer.sent[1] as OperationStart;
+    const retained = hello([
+      {
+        tenant_id: start.tenant_id,
+        runner_id: start.runner_id,
+        protocol_version: start.protocol_version,
+        host_access: start.host_access,
+        registration_id: start.registration_id,
+        assignment_revision: start.assignment_revision,
+        execution_context_key: start.execution_context_key,
+        runtime_instance_id: start.runtime_instance_id,
+        context_view_ref: start.context_view_ref,
+        agent_id: start.agent_id,
+        operation_id: start.operation_id,
+        connection_epoch: start.connection_epoch,
+        runner_revision: start.runner_revision,
+        generation: start.generation,
+        execution_lease_id: start.execution_lease_id,
+        workspace_grant_id: start.workspace_grant_id,
+        runtime_type: start.runtime_type,
+        kind: start.request.kind,
+        last_emitted_seq: 0,
+        last_acked_seq: 0,
+      },
+    ]);
+    for (let reconnect = 1; reconnect <= 5; reconnect++) {
+      connection.disconnect();
+      peer = new RecordingPeer();
+      connection = await acceptReadyConnection(gateway, peer, retained);
+      expect(peer.sent).toContainEqual(start);
+    }
+    await expect(
+      Promise.race([operation.result, Promise.resolve("pending")]),
+    ).resolves.toBe("pending");
   });
 
   it("retires terminal state when acknowledgement delivery is indeterminate", async () => {

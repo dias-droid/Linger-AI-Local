@@ -460,12 +460,16 @@ export class RunnerOperations {
         ),
       );
       for (const operation of this.retainedOperations(connection.runnerId)) {
+        const wasTerminal = operation.terminal;
         for (const command of operation.reconnectCommands({
           connectionEpoch: connection.connectionEpoch,
           retainedByDaemon: retainedByDaemon.has(operation.start.operation_id),
         })) {
           await this.owners.connections().send(connection, command);
         }
+        // An unaccepted start past its re-send bound ends here instead.
+        if (!wasTerminal && operation.terminal)
+          this.#retireOperation(operation);
       }
       for (const orphan of connection.reportedActiveOperations) {
         if (

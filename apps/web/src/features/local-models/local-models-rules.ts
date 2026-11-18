@@ -39,6 +39,22 @@ export function modelStatus(model: LocalModel): ModelStatus {
   return model.availability.downloadable ? "available" : "unavailable";
 }
 
+/**
+ * Whether a failed model is a download that stopped rather than a load that
+ * failed. The library reports a failed model without a record only for a
+ * download job that ended and kept its partial, and gives it one of these
+ * download codes; such a model resumes with download and is discarded with
+ * cancel, while load and remove are refused. Decided by the structured code,
+ * never by the error detail.
+ */
+export function downloadStopped(model: LocalModel): boolean {
+  return (
+    model.state === "failed" &&
+    (model.error?.code === "DOWNLOAD_FAILED" ||
+      model.error?.code === "NETWORK_UNAVAILABLE")
+  );
+}
+
 const fitOrder: Record<LocalModel["fit"], number> = {
   gpu: 0,
   none: 2,

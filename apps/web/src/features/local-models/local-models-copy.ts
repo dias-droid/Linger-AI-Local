@@ -66,7 +66,7 @@ const modelErrors: Record<Schemas["LocalModelErrorCode"], string> = {
   PLATFORM_UNSUPPORTED: "This model doesn't run on this computer.",
 };
 
-/** Why the last load of a model failed. */
+/** Why the last load or download of a model failed. */
 export function modelErrorCopy(code: Schemas["LocalModelErrorCode"]) {
   return modelErrors[code];
 }

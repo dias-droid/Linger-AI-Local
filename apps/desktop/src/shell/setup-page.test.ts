@@ -46,11 +46,23 @@ const state = (
   },
 });
 
+// A loaded page keeps its timers, including a once-a-second render while
+// installing, so a page from an earlier test would redraw its own state into
+// the next test's document. Each test stops the previous page's timers first.
+let stopPage = () => {};
+
 // Loads the setup page with a fake main process, mid-install by default.
 const openPage = async (
   initial: SetupState = state("installing"),
   step = "installing",
 ) => {
+  stopPage();
+  const intervals: ReturnType<typeof setInterval>[] = [];
+  const timeouts: ReturnType<typeof setTimeout>[] = [];
+  stopPage = () => {
+    intervals.forEach(clearInterval);
+    timeouts.forEach(clearTimeout);
+  };
   const [, body] = /<body[^>]*>([\s\S]*)<\/body>/.exec(page)!;
   const [, script] = /<script>([\s\S]*)<\/script>/.exec(body!)!;
   document.body.innerHTML = body!.replace(/<script>[\s\S]*<\/script>/, "");
@@ -75,7 +87,18 @@ const openPage = async (
       run,
     },
   });
-  new Function(script!)();
+  new Function("setInterval", "setTimeout", script!)(
+    (...args: Parameters<typeof setInterval>) => {
+      const id = setInterval(...args);
+      intervals.push(id);
+      return id;
+    },
+    (...args: Parameters<typeof setTimeout>) => {
+      const id = setTimeout(...args);
+      timeouts.push(id);
+      return id;
+    },
+  );
   await vi.waitFor(() =>
     expect(
       document.querySelector(`section[data-step="${step}"].active`),
@@ -568,8 +591,7 @@ describe("setup page Send Diagnostics", () => {
 
   it("asks before sending and lists every file", async () => {
     const { run, push } = await openPage(failed({ phase: "idle" }));
-    // The failed step renders after openPage sees the installing step, so wait for it.
-    await vi.waitFor(() => expect($("send-diagnostics").hidden).toBe(false));
+    expect($("send-diagnostics").hidden).toBe(false);
     $("send-diagnostics").click();
     await vi.waitFor(() =>
       expect(run).toHaveBeenCalledWith({

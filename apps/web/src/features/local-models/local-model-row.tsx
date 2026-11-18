@@ -28,6 +28,7 @@ import type {
 import {
   downloadPercent,
   downloadStatusDetail,
+  downloadStopped,
   formatGigabytes,
   placeName,
   rowBadges,
@@ -119,8 +120,11 @@ export function ModelRow({
         ? "downloading"
         : entry.status;
   const started = status !== entry.status;
+  const stopped = status === "failed" && downloadStopped(model);
   const where = placeName(view, model.pool);
-  const tag = statusTags[status];
+  const tag = stopped
+    ? { ...statusTags.failed, label: "Download stopped" }
+    : statusTags[status];
   const progress = downloadPercent(model);
   const download = formatGigabytes(model.download_bytes);
   const badges = rowBadges(model);
@@ -147,15 +151,21 @@ export function ModelRow({
     {
       available: ["Download", handlers.onDownload, "download"],
       downloading: ["Cancel", handlers.onCancel, "cancel"],
-      failed: ["Retry", handlers.onLoad, "load"],
+      failed: stopped
+        ? (["Resume download", handlers.onDownload, "download"] as const)
+        : (["Retry", handlers.onLoad, "load"] as const),
       idle: ["Load", handlers.onLoad, "load"],
       loaded: ["Unload", handlers.onUnload, "unload"],
       loading: null,
       unavailable: null,
     } as const
   )[status];
+  // A stopped download has no record to remove; discarding it deletes the
+  // kept partial instead.
   const removable =
-    status === "loaded" || status === "idle" || status === "failed";
+    status === "loaded" ||
+    status === "idle" ||
+    (status === "failed" && !stopped);
 
   return (
     <article
@@ -290,6 +300,18 @@ export function ModelRow({
               tone="danger"
             >
               Remove from computer
+            </Button>
+          ) : null}
+          {stopped ? (
+            <Button
+              className="mt-2"
+              disabled={disabled}
+              loading={requested === "cancel"}
+              onClick={handlers.onCancel}
+              size="compact"
+              tone="danger"
+            >
+              Discard download
             </Button>
           ) : null}
         </div>

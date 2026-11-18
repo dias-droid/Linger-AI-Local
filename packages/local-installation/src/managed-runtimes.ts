@@ -1,5 +1,6 @@
 import { mkdtemp, readFile, rm, realpath } from "node:fs/promises";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { readSetupChoice } from "./setup-selection.js";
 import { privateDirectory } from "./instance.js";
 import { runLocalmodels } from "./localmodels-tool.js";
@@ -240,23 +241,47 @@ export async function installNativeRuntime(
       !/^[a-f0-9]{64}$/.test(plan.id)
     )
       throw unavailable();
-    options.signal.throwIfAborted();
-    const applied = await tool(
-      options.home,
-      ["harness", "apply", file, "--approve", plan.id, "--jsonl"],
-      {
-        signal: options.signal,
-        env: options.env,
-        timeoutMs: 20 * 60000,
-        onEvent: options.onEvent,
-      },
-    );
-    if (applied.code !== 0)
-      throw unavailable({
-        args: ["harness", "apply"],
-        result: applied,
-        onEvent: options.onEvent,
+    const apply = async () => {
+      options.signal.throwIfAborted();
+      const applied = await tool(
+        options.home,
+        ["harness", "apply", file, "--approve", plan.id, "--jsonl"],
+        {
+          signal: options.signal,
+          env: options.env,
+          timeoutMs: 20 * 60000,
+          onEvent: options.onEvent,
+        },
+      );
+      if (applied.code !== 0)
+        throw unavailable({
+          args: ["harness", "apply"],
+          result: applied,
+          onEvent: options.onEvent,
+        });
+    };
+    try {
+      await apply();
+    } catch (error) {
+      // On Windows the kit's version probe right after unpacking can fail
+      // to spawn the fresh executable (antivirus still holds it), which it
+      // reports as an execution failure. One later attempt usually succeeds;
+      // it downloads again because the kit discards its stage on failure.
+      if (
+        (options.platform ?? process.platform) !== "win32" ||
+        options.signal.aborted ||
+        (error as { code?: string })?.code !==
+          "RUNTIME_VERSION_EXECUTION_FAILED"
+      )
+        throw error;
+      options.onEvent?.({
+        kind: "log",
+        stage: "runtime",
+        message: `The ${runtime} version check failed right after install; retrying once.\n`,
       });
+      await delay(3_000, undefined, { signal: options.signal });
+      await apply();
+    }
     const state = await inspectRuntime(runtime, options, dependencies);
     if (!state.installed) throw unavailable();
     return {

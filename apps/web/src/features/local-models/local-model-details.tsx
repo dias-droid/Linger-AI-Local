@@ -20,6 +20,7 @@ import type { LocalModelPool, LocalModelsView } from "./local-models-queries";
 import {
   agentNames,
   contextLabel,
+  downloadStopped,
   formatGigabytes,
   modelCapabilities,
   modelSourceLabel,
@@ -77,10 +78,14 @@ export function ModelFacts({
   view: LocalModelsView;
 }) {
   const { model, status } = entry;
-  const onComputer = status !== "available" && status !== "unavailable";
+  // A stopped download holds only a partial file, so it reads like a model
+  // not yet on the Computer.
+  const stopped = downloadStopped(model);
+  const onComputer =
+    status !== "available" && status !== "unavailable" && !stopped;
   const pool = poolOf(view, model.pool);
   const plannedPlace =
-    status === "available" ? placeName(view, model.pool) : undefined;
+    status === "available" || stopped ? placeName(view, model.pool) : undefined;
   const capabilities = modelCapabilities(model);
   const parameters = parametersLabel(model);
   const speed = speedLabel(model);
@@ -144,7 +149,7 @@ export function ModelFacts({
         </Fact>
       ) : null}
       {model.error ? (
-        <Fact label="Last load">
+        <Fact label={stopped ? "Last download" : "Last load"}>
           <span className="text-app-danger">
             {modelErrorCopy(model.error.code)}
           </span>

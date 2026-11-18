@@ -29,6 +29,7 @@ import {
   checkLocation,
   followHttps,
   hasNativePostgres,
+  InstallerApi,
   installLocation,
   legacyMigrationResult,
   parseSetCookie,
@@ -3426,5 +3427,127 @@ describe("legacyMigrationResult", () => {
     expect(
       legacyMigrationResult({ code: 0, output: "", error: "" }, LOCAL_INSTANCE),
     ).toEqual({ skipped: [] });
+  });
+});
+
+describe("InstallerApi polling", () => {
+  const reset = () =>
+    new TypeError("fetch failed", {
+      cause: Object.assign(new Error("socket hang up"), {
+        code: "ECONNRESET",
+      }),
+    });
+  const job = (fields: Record<string, unknown>) =>
+    Response.json({
+      id: "job",
+      instance: LOCAL_INSTANCE,
+      createdAt: "2026-11-03T00:00:00Z",
+      stage: "images",
+      stages: [{ id: "images", state: "running" }],
+      ...fields,
+    });
+  // An installer whose job polls answer from `polls`, in order; a function
+  // entry throws, and the last entry repeats.
+  const installer = (polls: (Record<string, unknown> | (() => never))[]) => {
+    const created: unknown[] = [];
+    const posts: string[] = [];
+    let reads = 0;
+    const fetcher = (async (input: URL, init: RequestInit = {}) => {
+      if (init.method === "POST") posts.push(input.pathname);
+      if (input.pathname === "/api/session")
+        return new Response("{}", {
+          headers: { "set-cookie": "linger_installer_session=s1; Path=/api" },
+        });
+      if (input.pathname === "/api/jobs" && init.method === "POST") {
+        created.push(JSON.parse(String(init.body)));
+        return job({ state: "queued" });
+      }
+      if (input.pathname === "/api/jobs") return Response.json({ items: [] });
+      if (input.pathname === "/api/jobs/job") {
+        const next = polls[Math.min(reads++, polls.length - 1)]!;
+        return typeof next === "function" ? next() : job(next);
+      }
+      return Response.json({}, { status: 404 });
+    }) as unknown as typeof fetch;
+    return { fetcher, created, posts, reads: () => reads };
+  };
+  const warnings: Record<string, unknown>[] = [];
+  const log = {
+    info: () => {},
+    warn: (_: string, fields?: Record<string, unknown>) =>
+      warnings.push(fields!),
+    error: () => {},
+  };
+  const open = (fetcher: typeof fetch, windowMs = 60_000) =>
+    InstallerApi.open("http://127.0.0.1:9/#token=abc", fetcher, 1, log, {
+      windowMs,
+      maxBackoffMs: 5,
+    });
+  const plan = { runtime: "codex" } as Parameters<InstallerApi["run"]>[0];
+
+  it("reconnects after a dropped connection and follows the same job", async () => {
+    warnings.length = 0;
+    const fake = installer([
+      () => {
+        throw reset();
+      },
+      { state: "succeeded", origin: "http://localhost:3000" },
+    ]);
+    const messages: string[] = [];
+    const result = await (
+      await open(fake.fetcher)
+    ).run(plan, new AbortController().signal, (_s, _p, message) =>
+      messages.push(message),
+    );
+    expect(result.origin).toBe("http://localhost:3000");
+    expect(fake.created).toHaveLength(1);
+    expect(fake.posts).toEqual(["/api/session", "/api/jobs"]);
+    expect(messages).toContain("Reconnecting to the installer…");
+    expect(warnings).toEqual([
+      { stage: "poll_job", job_id: "job", code: "ECONNRESET", attempt: 1 },
+    ]);
+  });
+
+  it("gives up once the installer stays unreachable", async () => {
+    const fake = installer([
+      () => {
+        throw reset();
+      },
+    ]);
+    await expect(
+      (await open(fake.fetcher, 30)).run(
+        plan,
+        new AbortController().signal,
+        () => {},
+      ),
+    ).rejects.toThrow(
+      "Couldn't read the installation progress. Try again to reconnect to the running installation.",
+    );
+    expect(fake.created).toHaveLength(1);
+  });
+
+  it("reports a failed job as before", async () => {
+    const fake = installer([{ state: "failed", message: "Images broke" }]);
+    await expect(
+      (await open(fake.fetcher)).run(
+        plan,
+        new AbortController().signal,
+        () => {},
+      ),
+    ).rejects.toThrow("Images broke");
+  });
+
+  it("stops reconnecting when the caller aborts", async () => {
+    const controller = new AbortController();
+    const fake = installer([
+      () => {
+        controller.abort();
+        throw reset();
+      },
+    ]);
+    await expect(
+      (await open(fake.fetcher)).run(plan, controller.signal, () => {}),
+    ).rejects.toThrow();
+    expect(fake.reads()).toBe(1);
   });
 });

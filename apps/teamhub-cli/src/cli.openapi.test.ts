@@ -234,6 +234,7 @@ async function respond(request: Request): Promise<Response> {
   if (endpoint.endsWith("/team-md/query"))
     return Response.json({
       room_id: "room_one",
+      published: true,
       raw_markdown: "# Protocol",
       revision: 2,
       updated_at: "2026-10-12T00:00:00Z",

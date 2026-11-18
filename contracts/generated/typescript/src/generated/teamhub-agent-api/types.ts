@@ -1324,13 +1324,22 @@ export interface components {
       membership_revision: number;
       members: components["schemas"]["AgentContextMember"][];
     };
+    /** @description The Room's current team.md. A readable Room where none has been published yet, the normal state of a new Room, answers published false and revision 0 without raw_markdown or updated_at. */
     AgentTeamMdResponse: {
       room_id: components["schemas"]["Id"];
-      raw_markdown: string;
-      /** Format: int64 */
+      published: boolean;
+      /** @description Present exactly when published is true. */
+      raw_markdown?: string;
+      /**
+       * Format: int64
+       * @description 0 until the first publish, then 1 and up.
+       */
       revision: number;
-      /** Format: date-time */
-      updated_at: string;
+      /**
+       * Format: date-time
+       * @description Present exactly when published is true.
+       */
+      updated_at?: string;
     };
     AgentMessageCommitMultipart: {
       /** @description Strict AgentMessageCommitMetadata JSON, at most 5 MiB, sent before file parts. Uploads identify immutable file parts by upload_id; file part filename is that ID. Local filesystem paths and binary/base64 data do not belong in metadata. Like every Agent command, it carries no execution fields: the CLI names its Local Run in the X-TeamHub-Run-Id header, which TeamHub records on the Message only for a running Run of the same Tenant and Agent whose status shows in the target's collaboration Room. */
@@ -2885,7 +2894,7 @@ export interface operations {
       };
     };
     responses: {
-      /** @description Current collaboration state in one authorized database snapshot. */
+      /** @description Current collaboration protocol in one authorized database snapshot, or published false when the Room has none yet. */
       200: {
         headers: {
           [name: string]: unknown;

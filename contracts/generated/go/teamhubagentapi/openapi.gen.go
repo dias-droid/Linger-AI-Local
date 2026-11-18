@@ -2568,14 +2568,21 @@ type AgentTaskSummary struct {
 	UpdatedAt time.Time   `json:"updated_at"`
 }
 
-// AgentTeamMdResponse defines model for AgentTeamMdResponse.
+// AgentTeamMdResponse The Room's current team.md. A readable Room where none has been published yet, the normal state of a new Room, answers published false and revision 0 without raw_markdown or updated_at.
 type AgentTeamMdResponse struct {
-	RawMarkdown string `json:"raw_markdown"`
-	Revision    int64  `json:"revision"`
+	Published bool `json:"published"`
+
+	// RawMarkdown Present exactly when published is true.
+	RawMarkdown *string `json:"raw_markdown,omitempty"`
+
+	// Revision 0 until the first publish, then 1 and up.
+	Revision int64 `json:"revision"`
 
 	// RoomId Opaque, case-sensitive identifier. Clients must not infer type or time from it.
-	RoomId    Id        `json:"room_id"`
-	UpdatedAt time.Time `json:"updated_at"`
+	RoomId Id `json:"room_id"`
+
+	// UpdatedAt Present exactly when published is true.
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
 }
 
 // AgentTextMessageSegment Plain text segment. Include type: text and content.

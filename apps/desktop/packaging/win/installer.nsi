@@ -83,8 +83,11 @@ FunctionEnd
 ; Linger.exe as their Node): a running Linger quits (index.ts), then an
 ; installer script, run by the app's own Node, stops the installation manager
 ; and the services of the local installation (TeamHub, web, node-services,
-; LiveKit, PostgreSQL). The script ends on its own after a time limit; setup
-; goes on whatever it reports. Data stays and Linger starts the services again.
+; LiveKit, PostgreSQL). The script ends on its own after a time limit. An
+; install goes on whatever it reports, and Linger starts the services again.
+; An uninstall that cannot stop them asks to retry; cancelled (or silent), it
+; fails with exit code 1 and removes nothing, so it can be run again. Data
+; stays either way.
 !define INSTALLER_SCRIPT "$INSTDIR\resources\app\dist\installer\installer.js"
 ; Written by every install since --quit and --stop: an earlier Linger.exe
 ; starts on --quit instead of quitting, and its script has no --stop.
@@ -105,6 +108,11 @@ Function ${UN}StopLinger
   System::Call 'Kernel32::SetEnvironmentVariable(t "ELECTRON_RUN_AS_NODE", n)'
   StrCmp $0 "0" stopped
   DetailPrint "Some of Linger's services may still be running."
+!if "${UN}" == "un."
+  MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Linger couldn't stop all of its services. Close Linger and try again." /SD IDCANCEL IDRETRY stop
+  SetErrorLevel 1
+  Abort
+!endif
   stopped:
   ; Only a release that was asked to quit is waited for; a running earlier
   ; one never exits on its own and CloseLinger asks at once.

@@ -109,7 +109,7 @@ Your workspace
 - Packages go in this conversation's own project at ./agent:
   - Node: npm --prefix ./agent install <package>. Run CommonJS with NODE_PATH="$(pwd)/agent/node_modules" node ./playground/<scope>/script.cjs. In ES modules, load packages with createRequire(pathToFileURL(path.resolve('agent/package.json'))), and ESM-only packages with import(pathToFileURL(require.resolve('<package>')).href). Run local CLIs as ./agent/node_modules/.bin/<tool>.
   - Python: uv --directory ./agent add <package>, then uv --directory ./agent run python ....
-  - System tools: micromamba install --yes --override-channels --channel conda-forge --prefix ./agent/conda <package>, then micromamba run --prefix ./agent/conda <command>. Don't use apt, conda, or mamba. poppler, pandoc, qpdf, tesseract, and ffmpeg are preinstalled; LibreOffice is not.
+  - npm and uv are not always installed. If npm, uv, or a system tool you need is missing, ask the user whether to install it. Don't install anything globally (apt, brew, conda, pip --user, npm -g) without the user's yes: that changes the user's computer.
   - Extract archives with tar --no-same-owner.
 
 TeamHub commands

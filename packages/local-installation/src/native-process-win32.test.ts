@@ -29,6 +29,28 @@ vi.mock("./native-process-identity.js", async (original) => {
     windowsProcesses: async () => (await snapshot()).processes,
   };
 });
+const taskkill = vi.hoisted(() => ({
+  calls: [] as string[][],
+  ends: true,
+}));
+vi.mock("./process.js", async (original) => ({
+  ...(await original<typeof import("./process.js")>()),
+  runProcess: async (_command: string, args: string[]) => {
+    taskkill.calls.push(args);
+    if (taskkill.ends) {
+      const pid = Number(args[1]);
+      const tree = [pid];
+      for (let index = 0; index < tree.length; index++)
+        for (const entry of host.processes)
+          if (entry.parent === tree[index] && !tree.includes(entry.pid))
+            tree.push(entry.pid);
+      host.processes = host.processes.filter(
+        (entry) => !tree.includes(entry.pid),
+      );
+    }
+    return { stdout: "", stderr: "", code: 0 };
+  },
+}));
 vi.mock("./instance.js", async (original) => ({
   ...(await original<typeof import("./instance.js")>()),
   readPrivate: (file: string) => readFile(file, "utf8").catch(() => undefined),
@@ -49,6 +71,8 @@ beforeEach(async () => {
   host.listeners = new Map();
   host.ended = [];
   host.cascade = new Map();
+  taskkill.calls = [];
+  taskkill.ends = true;
   vi.spyOn(process, "kill").mockImplementation((pid: number) => {
     const gone = [pid, ...(host.cascade.get(pid) ?? [])];
     host.ended.push(pid);
@@ -170,4 +194,55 @@ test("reclaim ends an earlier release's leftovers on this instance's ports", asy
   });
   expect(ended.sort()).toEqual([30, 41, 42]);
   expect(host.processes.map((entry) => entry.pid)).toEqual([1, 10, 11, 50]);
+});
+
+// TerminateProcess that leaves a process running (access denied to a
+// handle, a process mid-exit) must not end the stop at its deadline.
+function stubbornTree() {
+  host.processes.push(
+    worker(10, "postgres"),
+    row(11, 10, 101, "postgres.exe -D data"),
+  );
+  vi.mocked(process.kill).mockImplementation(() => true);
+  let now = 0;
+  vi.spyOn(Date, "now").mockImplementation(() => (now += 1_000));
+}
+
+test("a tree TerminateProcess left alive is ended with taskkill on the recorded supervisor", async () => {
+  await record("postgres", 10);
+  stubbornTree();
+  await stopNativeProcess(root, "postgres");
+  expect(taskkill.calls).toEqual([["/PID", "10", "/T", "/F"]]);
+  expect(host.processes.map((entry) => entry.pid)).toEqual([1]);
+  await expect(
+    readFile(path.join(root, "native/processes/postgres.json")),
+  ).rejects.toThrow();
+});
+
+test("a tree taskkill cannot end still fails the stop", async () => {
+  await record("postgres", 10);
+  stubbornTree();
+  taskkill.ends = false;
+  await expect(stopNativeProcess(root, "postgres")).rejects.toThrow(
+    "Native postgres did not stop; identity record retained.",
+  );
+  expect(taskkill.calls).toEqual([["/PID", "10", "/T", "/F"]]);
+  await expect(
+    readFile(path.join(root, "native/processes/postgres.json")),
+  ).resolves.toBeTruthy();
+});
+
+test("taskkill never targets a supervisor whose identity no longer matches the record", async () => {
+  await record("postgres", 10);
+  host.processes.push(
+    { ...worker(10, "postgres"), created: 500 },
+    row(11, 10, 501, "postgres.exe -D data"),
+  );
+  vi.mocked(process.kill).mockImplementation(() => true);
+  let now = 0;
+  vi.spyOn(Date, "now").mockImplementation(() => (now += 1_000));
+  await expect(stopNativeProcess(root, "postgres")).rejects.toThrow(
+    "did not stop",
+  );
+  expect(taskkill.calls).toEqual([]);
 });

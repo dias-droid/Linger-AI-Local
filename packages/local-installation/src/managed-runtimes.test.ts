@@ -293,3 +293,81 @@ it("names the upstream cause of a failed Harness apply and logs its output", asy
   });
   expect(events.join("\n")).toContain("HARNESS_DOWNLOAD_FAILED");
 });
+
+function applyFailing(failures: string[]) {
+  return vi.fn(async (_home: string, args: string[]) => {
+    if (args[1] === "plan")
+      await writeFile(
+        args[args.indexOf("--out") + 1]!,
+        JSON.stringify({
+          schema: "localmodels.harness-plan/v1",
+          id: "a".repeat(64),
+          runtime: "pi",
+        }),
+      );
+    const code = args[1] === "apply" ? failures.shift() : undefined;
+    return {
+      code: code ? 1 : 0,
+      stdout: code
+        ? JSON.stringify({ schema: "localmodels.harness-error/v1", code })
+        : args[1] === "status"
+          ? JSON.stringify(status("pi", true))
+          : "",
+      stderr: "",
+    };
+  });
+}
+const applies = (localmodels: ReturnType<typeof applyFailing>) =>
+  localmodels.mock.calls.filter(([, args]) => args[1] === "apply");
+
+it("retries a Windows Runtime version execution failure once", async () => {
+  const options = { ...(await fixture()), platform: "win32" as const };
+  const localmodels = applyFailing(["RUNTIME_VERSION_EXECUTION_FAILED"]);
+  expect(
+    await installNativeRuntime("pi", options, { localmodels }),
+  ).toMatchObject({ state: "ready" });
+  expect(applies(localmodels)).toHaveLength(2);
+  expect(applies(localmodels)[1]![1]).toEqual(applies(localmodels)[0]![1]);
+  expect(options.onEvent).toHaveBeenCalledWith(
+    expect.objectContaining({ kind: "log", stage: "runtime" }),
+  );
+});
+
+it("surfaces the second Windows Runtime version execution failure", async () => {
+  const options = { ...(await fixture()), platform: "win32" as const };
+  const localmodels = applyFailing([
+    "RUNTIME_VERSION_EXECUTION_FAILED",
+    "RUNTIME_VERSION_EXECUTION_FAILED",
+  ]);
+  await expect(
+    installNativeRuntime("pi", options, { localmodels }),
+  ).rejects.toMatchObject({ code: "RUNTIME_VERSION_EXECUTION_FAILED" });
+  expect(applies(localmodels)).toHaveLength(2);
+});
+
+it.each([
+  ["linux", "RUNTIME_VERSION_EXECUTION_FAILED"],
+  ["win32", "RUNTIME_VERSION_MISMATCH"],
+] as const)("does not retry on %s for %s", async (platform, code) => {
+  const options = { ...(await fixture()), platform };
+  const localmodels = applyFailing([code]);
+  await expect(
+    installNativeRuntime("pi", options, { localmodels }),
+  ).rejects.toMatchObject({ code });
+  expect(applies(localmodels)).toHaveLength(1);
+});
+
+it("does not retry once the install is cancelled during the wait", async () => {
+  const controller = new AbortController();
+  const options = {
+    ...(await fixture()),
+    signal: controller.signal,
+    platform: "win32" as const,
+    onEvent: vi.fn(() => controller.abort()),
+  };
+  const localmodels = applyFailing(["RUNTIME_VERSION_EXECUTION_FAILED"]);
+  await expect(
+    installNativeRuntime("pi", options, { localmodels }),
+  ).rejects.toThrow();
+  expect(applies(localmodels)).toHaveLength(1);
+});
