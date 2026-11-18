@@ -235,7 +235,9 @@ Gateway and runs Agents. The daemon exits with the app.
   without a server says Back to Setup instead of Cancel.
 - `src/shell/*.html`: app-owned pages (title bar, offline/setup page). They
   have no network access and talk to the main process via `src/preload/shell.ts`.
-- `src/preload/index.ts`: the only SPA API, `window.lingerDesktop`.
+- `src/preload/index.ts`: the only SPA API, `window.lingerDesktop`. Its
+  `update` reads the Updater's state (without the release page URL) and runs
+  the tray's install and check, for the SPA's account menu.
 - `src/shared/api.ts`, `src/shared/shell.ts`: preload contract types and IPC
   channel names.
 - `src/main/computer-daemon.ts`: ComputerDaemon. While the computer is

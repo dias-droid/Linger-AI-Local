@@ -180,7 +180,12 @@ how Linger was installed:
 | Linux                   | The same as the portable folder.                                                                                                                                                                                |
 
 A system notification announces each new version once, and the tray shows the
-state; after a failure "Try Updating Again" checks at once. The local
+state; after a failure "Try Updating Again" checks at once. The account menu
+in the window (the avatar at the bottom left) shows the app's version and the
+same state through `window.lingerDesktop.update`: "Restart to Update",
+"Download Update" for the release page, and "Try Again" call the same updater,
+and a dot on the avatar marks an update that is ready or available. A browser
+shows none of this. The local
 services need no update of their own: the first launch of a newer app moves
 them to its source package (see LocalServer in
 [the desktop guide](../apps/desktop/AGENTS.md)).

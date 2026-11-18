@@ -53,6 +53,21 @@ export type DesktopPermissionStep =
     }
   | { readonly action: "relaunch"; readonly subject: "linger" };
 
+// The updater's progress as the page sees it; the same states the tray shows.
+export type DesktopUpdateState =
+  | { readonly kind: "idle" }
+  | { readonly kind: "checking" }
+  | {
+      readonly kind:
+        | "downloading"
+        | "ready"
+        | "waiting"
+        | "installing"
+        | "available";
+      readonly version: string;
+    }
+  | { readonly kind: "failed"; readonly error: string };
+
 export interface LingerDesktopApi {
   readonly version: string;
   readonly platform: "darwin" | "win32" | "linux";
@@ -77,6 +92,16 @@ export interface LingerDesktopApi {
     available(): Promise<boolean>;
     signIn(): Promise<LocalAccountSignIn>;
   };
+  // The app's own updates, as in the tray.
+  readonly update: {
+    getState(): Promise<DesktopUpdateState>;
+    onState(callback: (state: DesktopUpdateState) => void): () => void;
+    // Restart to Update, or open the release page of an update this
+    // installation cannot apply itself.
+    install(): Promise<void>;
+    // Try Again after a failure.
+    check(): Promise<void>;
+  };
   // macOS only.
   readonly permissions?: {
     act(step: DesktopPermissionStep): Promise<void>;
@@ -96,4 +121,8 @@ export const IPC = {
   permissionAct: "permission.act",
   localAccountAvailable: "local-account.available",
   localAccountSignIn: "local-account.sign-in",
+  updateState: "update.state",
+  updateStateEvent: "update.state.event",
+  updateInstall: "update.install",
+  updateCheck: "update.check",
 } as const;

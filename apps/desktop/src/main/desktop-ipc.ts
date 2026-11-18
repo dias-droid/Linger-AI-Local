@@ -5,6 +5,7 @@ import {
   IPC,
   type ComputerStatus,
   type DesktopSettings,
+  type DesktopUpdateState,
   type LocalAccountSignIn,
   type WorkspaceGrantView,
 } from "../shared/api.js";
@@ -19,6 +20,7 @@ import {
   runDesktopPermissionStep,
   type DesktopPermissionHost,
 } from "./system-permissions.js";
+import type { UpdaterModule, UpdateState } from "./updater.js";
 import type { WindowManagerModule } from "./window-manager.js";
 import type { WorkspaceGrantsModule } from "./workspace-grants.js";
 
@@ -52,6 +54,13 @@ const permissionStepInput = z.discriminatedUnion("action", [
 
 const view = (grant: WorkspaceGrant): WorkspaceGrantView => ({ ...grant });
 
+// The page learns what the tray shows; Install opens a release page itself,
+// so its URL stays in the main process.
+const updateView = (state: UpdateState): DesktopUpdateState =>
+  state.kind === "available"
+    ? { kind: state.kind, version: state.version }
+    : state;
+
 // The preload API handlers. Every call must come from a frame on
 // the configured server origin; inputs are validated with zod.
 export class DesktopIpcModule implements Module {
@@ -63,6 +72,7 @@ export class DesktopIpcModule implements Module {
     "ComputerDaemon",
     "WindowManager",
     "WorkspaceGrants",
+    "Updater",
   ];
   readonly #defaultDisplayName: string;
   // Set on macOS only.
@@ -84,6 +94,7 @@ export class DesktopIpcModule implements Module {
     const windows = ctx.get<WindowManagerModule>("WindowManager");
     const power = ctx.get<PowerGuardModule>("PowerGuard");
     const localServer = ctx.get<LocalServerModule>("LocalServer");
+    const updater = ctx.get<UpdaterModule>("Updater");
 
     const status = (): ComputerStatus => {
       const computerId = ctx.config.get().computerId;
@@ -153,6 +164,10 @@ export class DesktopIpcModule implements Module {
       }
     });
 
+    handle(IPC.updateState, () => updateView(updater.state()));
+    handle(IPC.updateInstall, () => updater.install());
+    handle(IPC.updateCheck, () => updater.check());
+
     const permissions = this.#permissions;
     if (permissions)
       handle(IPC.permissionAct, (step) =>
@@ -168,6 +183,11 @@ export class DesktopIpcModule implements Module {
       ctx.bus.on("runtime.activity", push),
       ctx.bus.on("power.changed", push),
       ctx.bus.on("computer.changed", push),
+      ctx.bus.on("update.changed", () =>
+        windows
+          .webContents()
+          ?.send(IPC.updateStateEvent, updateView(updater.state())),
+      ),
     );
   }
 
