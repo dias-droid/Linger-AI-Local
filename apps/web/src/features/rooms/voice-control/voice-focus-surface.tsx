@@ -6,6 +6,7 @@ import {
   Loading03Icon,
   Mic01Icon,
   PauseIcon,
+  PictureInPictureOnIcon,
   PlayIcon,
   StopIcon,
 } from "@hugeicons/core-free-icons";
@@ -49,6 +50,7 @@ export function VoiceFocusSurface({
   autoStart = false,
   floating = "page",
   onExit,
+  onFloat,
   onMoveStart,
   onViewChange,
   panels,
@@ -58,6 +60,8 @@ export function VoiceFocusSurface({
   /** A picture-in-picture window fills its own window instead of floating. */
   floating?: "page" | "pip";
   onExit: () => void;
+  /** Returns the page window to the always-on-top browser window. */
+  onFloat?: () => void;
   /** Starts moving the page window from its hover title bar. */
   onMoveStart?: (event: PointerEvent<HTMLDivElement>) => void;
   onViewChange?: (view: RecordingView | undefined) => void;
@@ -249,6 +253,17 @@ export function VoiceFocusSurface({
         </button>
       ) : null}
       <span className="flex-1" />
+      {onFloat ? (
+        <button
+          aria-label="Float recording window"
+          className={styles.windowButton}
+          onClick={onFloat}
+          title="Float over other tabs and apps"
+          type="button"
+        >
+          <Icon icon={PictureInPictureOnIcon} />
+        </button>
+      ) : null}
     </div>
   );
   return (
