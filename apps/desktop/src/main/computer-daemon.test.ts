@@ -630,4 +630,57 @@ describe.skipIf(process.platform === "win32")("spawnDaemon", () => {
     expect(reason).toBe("read Computer config: denied");
     expect(readFileSync(log, "utf8")).toContain("starting\n");
   });
+
+  const exitOf = async (script: string) => {
+    const directory = mkdtempSync(path.join(os.tmpdir(), "spawn-daemon-"));
+    const executable = path.join(directory, "daemon");
+    writeFileSync(executable, `#!/bin/sh\n${script}`);
+    chmodSync(executable, 0o755);
+    const log = path.join(directory, "logs", "computer-daemon.log");
+    const child = spawnDaemon(executable, log)("config.json", {});
+    return new Promise<[number | null, string?]>((resolve) =>
+      child.onExit((...exit) => resolve(exit)),
+    );
+  };
+
+  it("never takes a log record for the exit reason", async () => {
+    const [code, reason] = await exitOf(
+      [
+        'echo "2026/11/17 20:26:26 INFO local_models.job_finished action=download exit_code=0" >&2',
+        'echo "2026/11/17 20:29:38 WARN runtime.diagnostic type=pi status=ready" >&2',
+        "kill -9 $$",
+      ].join("\n"),
+    );
+    expect(code).toBeNull();
+    expect(reason).toBeUndefined();
+  });
+
+  it("keeps the error the daemon printed when log records follow it", async () => {
+    const [, reason] = await exitOf(
+      [
+        'echo "2026/11/17 20:26:26 INFO daemon.started" >&2',
+        'echo "read Computer config: private path is not owned by the current user" >&2',
+        'echo "2026/11/17 20:26:27 INFO runner.shutdown phase=completed" >&2',
+        "exit 1",
+      ].join("\n"),
+    );
+    expect(reason).toBe(
+      "read Computer config: private path is not owned by the current user",
+    );
+  });
+
+  it("reports a Go panic by its panic line, not its stack trace", async () => {
+    const [code, reason] = await exitOf(
+      [
+        'echo "panic: assignment to entry in nil map" >&2',
+        "echo >&2",
+        'echo "goroutine 1 [running]:" >&2',
+        'echo "main.main()" >&2',
+        'echo "\t/src/main.go:10 +0x1d" >&2',
+        "exit 2",
+      ].join("\n"),
+    );
+    expect(code).toBe(2);
+    expect(reason).toBe("panic: assignment to entry in nil map");
+  });
 });

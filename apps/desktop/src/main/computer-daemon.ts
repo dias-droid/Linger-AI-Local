@@ -545,6 +545,12 @@ export class ComputerDaemonModule implements Module {
 
 // Starts the daemon executable with only the given environment. Its stderr
 // (the daemon log) and any stdout that is not a status line go to logFile.
+// A record of the daemon's log: Go's log package prefix, then the level.
+const LOG_RECORD =
+  /^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)? (?:DEBUG|INFO|WARN|ERROR)\b/;
+// The first line of a Go runtime crash.
+const GO_CRASH = /^(?:panic|fatal error): /;
+
 export const spawnDaemon =
   (executable: string, logFile: string): SpawnDaemon =>
   (configFile, env) => {
@@ -576,9 +582,15 @@ export const spawnDaemon =
       });
     };
     child.stderr.pipe(log, { end: false });
+    // The daemon prints why it stopped as its last line outside its log;
+    // its log records (a timestamp, then the level) may come from any time
+    // before. A Go runtime crash leads with its panic line, then a trace.
+    let crashed = false;
     createInterface({ input: child.stderr }).on("line", (line) => {
       const text = line.trim();
-      if (text) reason = text.slice(0, 500);
+      if (!text || crashed || LOG_RECORD.test(text)) return;
+      crashed = GO_CRASH.test(text);
+      reason = text.slice(0, 500);
     });
     createInterface({ input: child.stdout }).on("line", (line) => {
       if (line.startsWith("{")) for (const listener of lines) listener(line);
