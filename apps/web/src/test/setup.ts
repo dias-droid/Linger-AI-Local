@@ -6,6 +6,10 @@ import { setRoomDiagnosticsEnabledForTest } from "@/lib/room-diagnostics";
 import { restoreGlobalProperties } from "@/test/global-properties";
 import { assertNoUnhandledTestRoutes } from "@/test/teamhub-test-server";
 
+// Marks a global this setup wrapped, so a file loading it again in a shared
+// environment does not wrap the wrapper.
+const SETUP_WRAPPED = Symbol.for("linger.test.setupWrapped");
+
 // Tests assert the Room timing diagnostics, which are off by default in browsers.
 setRoomDiagnosticsEnabledForTest(true);
 
@@ -45,9 +49,15 @@ if (typeof document !== "undefined") {
   // Node's, which starts with the process. Under the threads pool that is the
   // shared Vitest process, so frame-driven animations ran for minutes and kept
   // re-rendering until they starved pending Suspense retries.
-  const stampAnimationFrame = window.requestAnimationFrame.bind(window);
-  globalThis.requestAnimationFrame = (callback) =>
-    stampAnimationFrame(() => callback(performance.now()));
+  // Files sharing a window load this setup again; wrap the frame function once.
+  if (!(SETUP_WRAPPED in window.requestAnimationFrame)) {
+    const stampAnimationFrame = window.requestAnimationFrame.bind(window);
+    globalThis.requestAnimationFrame = Object.assign(
+      (callback: FrameRequestCallback) =>
+        stampAnimationFrame(() => callback(performance.now())),
+      { [SETUP_WRAPPED]: true },
+    );
+  }
 
   if (typeof window !== "undefined" && !window.matchMedia) {
     Object.defineProperty(window, "matchMedia", {
@@ -73,13 +83,19 @@ if (typeof document !== "undefined") {
   }
 }
 
-// vi.waitFor defaults to a 1s wall-clock budget; align it with the Testing Library wait.
-const waitForWithDefault = vi.waitFor;
-vi.waitFor = (callback, options) =>
-  waitForWithDefault(
-    callback,
-    typeof options === "number" ? options : { timeout: 5_000, ...options },
+// vi.waitFor defaults to a 1s wall-clock budget; align it with the Testing Library
+// wait. vi is shared by files sharing a worker, so it is wrapped once.
+if (!(SETUP_WRAPPED in vi.waitFor)) {
+  const waitForWithDefault = vi.waitFor;
+  vi.waitFor = Object.assign(
+    ((callback, options) =>
+      waitForWithDefault(
+        callback,
+        typeof options === "number" ? options : { timeout: 5_000, ...options },
+      )) as typeof vi.waitFor,
+    { [SETUP_WRAPPED]: true },
   );
+}
 
 // Files without module mocks share one window per worker (see
 // vitest.config.ts), so each test returns the globals it may touch to the state
@@ -170,7 +186,9 @@ afterEach(() => {
     resetDocumentGlobals();
     resetComposerAttachmentDraftsForTest();
     resetRoomTimelineReadingPositions?.();
-    assertNoUnhandledTestRoutes();
+    // Timers first: a later assertion that throws must not leave a leaked fake
+    // timer on the window the next file shares.
     assertRealTimerGlobals();
+    assertNoUnhandledTestRoutes();
   }
 });
