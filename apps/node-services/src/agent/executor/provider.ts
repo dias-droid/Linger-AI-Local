@@ -459,6 +459,7 @@ export interface RuntimeExecutionFailure {
     | "execution_failed"
     | "execution_outcome_unknown"
     | "reply_undelivered"
+    | "reply_not_sent"
     | "interrupted"
     | "computer_unavailable"
     | "cleanup_unconfirmed"

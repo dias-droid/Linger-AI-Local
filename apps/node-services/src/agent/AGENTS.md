@@ -66,6 +66,12 @@ take precedence.
   cancellation, and the only Runtime execution path. Do not add a second
   scheduler, execution store, or Runtime executor beside it, and do not
   restore TeamHub Run admission.
+- A Room Agent speaks only through TeamHub message writes, which the Computer
+  classifies as `message` activities (`reply-delivery.ts`). A Room Run whose
+  every write failed finishes failed with `reply_undelivered`. One that never
+  tried to write while a Human's Message that mentioned the Agent (a direct
+  chat always does) waits finishes failed with `reply_not_sent`. Its final
+  text is private scratch and is never posted for it.
 - Ordinary Room/Meta execution reads effective Agent configuration before a new
   Local Run. Skill saves do not activate idle Contexts. If versions changed,
   reuse graceful activation to resume the same native history; running/steered

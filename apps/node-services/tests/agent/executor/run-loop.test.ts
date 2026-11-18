@@ -332,6 +332,9 @@ describe("RunLoop", () => {
     const finishRun = async (
       events: readonly RunEvent[],
       executionContextRef?: ExecutionContextRef,
+      input: Message = message("introduce yourself"),
+      finalResponse = "I could not deliver the reply: TeamHub returned 404.",
+      steered?: Message,
     ) => {
       const harness = createHarness(
         undefined,
@@ -342,11 +345,19 @@ describe("RunLoop", () => {
       );
       const run = new FakeRun(events);
       harness.provider.runs.push(run);
-      const runId = enqueue(harness.state, message("introduce yourself"));
+      const runId = enqueue(harness.state, input);
       try {
         harness.execution.start();
         await vi.waitFor(() => expect(run.waitCalls).toBe(1));
-        run.complete("I could not deliver the reply: TeamHub returned 404.");
+        if (steered) {
+          const steer = selectSteer(harness.state, steered);
+          await harness.execution.steer(
+            steer.groupId,
+            steer.messages,
+            new AbortController().signal,
+          );
+        }
+        run.complete(finalResponse);
         await vi.waitFor(() =>
           expect(harness.state.getLocalRun(runId)?.status).not.toBe("running"),
         );
@@ -423,6 +434,125 @@ describe("RunLoop", () => {
         }),
       );
     });
+
+    // TeamHub freezes each Inbox Message's sender, kind and whether it
+    // mentioned this Agent into the queued input.
+    const inboxInput = (
+      inputId: string,
+      queued: {
+        readonly authorType: "agent" | "user";
+        readonly messageKind: string;
+        readonly mentioned: boolean;
+      },
+    ): Message =>
+      ({
+        ...message(inputId, "room:room-1"),
+        acceptedNotification: {
+          inboxId: "room:room-1",
+          after: "0",
+          through: "1",
+          targeted: queued.mentioned,
+          messages: [
+            {
+              id: `${inputId}-message`,
+              body: "how are you?",
+              author: "Leo",
+              authorActorId: "actor-leo",
+              ...queued,
+            },
+          ],
+        },
+      }) as Message;
+    const humanMention = (inputId: string) =>
+      inboxInput(inputId, {
+        authorType: "user",
+        messageKind: "conversation",
+        mentioned: true,
+      });
+
+    it("fails a Room Run that posted nothing while the Human who mentioned the Agent waits", async () => {
+      const { log, run } = await finishRun(
+        failedRead,
+        undefined,
+        humanMention("mention"),
+        "Doing well, you?",
+      );
+
+      expect(run).toMatchObject({
+        status: "failed",
+        terminal: {
+          type: "failed",
+          failure: { code: "reply_not_sent", runtime_type: "pi" },
+        },
+      });
+      expect(JSON.stringify(run?.terminal)).not.toContain("Doing well");
+      expect(log).toHaveBeenCalledWith(
+        "warn",
+        "local_run.reply_not_sent",
+        expect.objectContaining({
+          runId: run?.runId,
+          deliveredMessageWrites: 0,
+          finalResponseLength: "Doing well, you?".length,
+        }),
+      );
+    });
+
+    it("fails a Room Run that posted nothing after a Human mention was steered into it", async () => {
+      const { run } = await finishRun(
+        [],
+        undefined,
+        inboxInput("room-talk", {
+          authorType: "user",
+          messageKind: "conversation",
+          mentioned: false,
+        }),
+        "",
+        humanMention("steered-mention"),
+      );
+
+      expect(run?.terminal).toMatchObject({
+        type: "failed",
+        failure: { code: "reply_not_sent" },
+      });
+    });
+
+    it("keeps a Room Run succeeded when it answered a Human mention with a message", async () => {
+      const { run } = await finishRun(
+        messageWrite("send-1", "succeeded"),
+        undefined,
+        humanMention("mention"),
+        "",
+      );
+
+      expect(run?.terminal).toMatchObject({ type: "succeeded" });
+    });
+
+    it.each([
+      [
+        "Room talk that did not mention the Agent",
+        { authorType: "user", messageKind: "conversation", mentioned: false },
+      ],
+      [
+        "a routine wake that mentions the Agent",
+        { authorType: "user", messageKind: "agent_runtime", mentioned: true },
+      ],
+      [
+        "another Agent's mention",
+        { authorType: "agent", messageKind: "conversation", mentioned: true },
+      ],
+    ] as const)(
+      "keeps a Room Run that stayed silent on %s succeeded",
+      async (_label, queued) => {
+        const { run } = await finishRun(
+          [],
+          undefined,
+          inboxInput("wake", queued),
+          "Nothing to add.",
+        );
+
+        expect(run?.terminal).toMatchObject({ type: "succeeded" });
+      },
+    );
 
     it("leaves a Task Run, which reports through its final response, succeeded", async () => {
       const { run } = await finishRun(messageWrite("send-1", "failed"), {

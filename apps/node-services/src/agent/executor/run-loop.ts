@@ -239,6 +239,7 @@ interface ActiveExecution {
   readonly runId: string;
   readonly sourceInboxIds: Set<string>;
   readonly steerOperations: Set<Promise<void>>;
+  readonly replyDelivery: ReplyDelivery;
   acceptingSteers: boolean;
 }
 
@@ -1005,6 +1006,7 @@ export class RunLoop {
       );
     }
     const replyDelivery = new ReplyDelivery();
+    replyDelivery.observeInputs(execution.messages);
     let resumeStartRetries = 0;
     for (;;) {
       controller.signal.throwIfAborted();
@@ -1052,7 +1054,12 @@ export class RunLoop {
     execution.run = run;
     const providerReadyAt = performance.now();
     this.#logProviderReady(execution, run, providerStartAt, providerReadyAt);
-    const active = await this.#activateExecution(execution, run, input);
+    const active = await this.#activateExecution(
+      execution,
+      run,
+      input,
+      replyDelivery,
+    );
 
     execution.runtimeStatus ??= await this.#openRuntimeStatus(
       runId,
@@ -1291,6 +1298,7 @@ export class RunLoop {
     execution: LocalRunExecution,
     run: AgentRun,
     input: AgentInput,
+    replyDelivery: ReplyDelivery,
   ): Promise<ActiveExecution> {
     const { runId, controller } = execution;
     if ((await this.#state.getLocalRun(runId))?.cancellationRequested) {
@@ -1322,6 +1330,7 @@ export class RunLoop {
         this.#activeExecution?.sourceInboxIds ??
         new Set(execution.provenance.sourceInboxIds),
       steerOperations: new Set(),
+      replyDelivery,
     };
     this.#activeExecution = active;
     execution.intent.resolveProviderReady(active);
@@ -1717,19 +1726,19 @@ export class RunLoop {
   }
 
   /**
-   * A Room Agent speaks only through TeamHub message writes. When it tried to
-   * post and none landed, the Room has nothing to show, so a finished Provider
-   * turn is not a succeeded Run. Task Runs report through their final
-   * response and keep it.
+   * A Room Agent speaks only through TeamHub message writes, so a finished
+   * Provider turn is not a succeeded Run when the Room has nothing to show:
+   * the Agent tried to post and none landed, or a Human who mentioned it is
+   * waiting and it never tried. Its final text is private scratch and is not
+   * posted for it. Task Runs report through their final response and keep it.
    */
   #completedTerminal(
     runId: string,
     finalResponse: string,
     replyDelivery: ReplyDelivery,
   ): LocalRunTerminal {
-    const undelivered =
-      this.#executionContextRef?.kind === "meta" &&
-      replyDelivery.replyUndelivered;
+    const roomRun = this.#executionContextRef?.kind === "meta";
+    const undelivered = roomRun && replyDelivery.replyUndelivered;
     if (replyDelivery.hasFailures) {
       this.#logger.log("warn", "local_run.teamhub_messages_failed", {
         runId,
@@ -1738,14 +1747,26 @@ export class RunLoop {
         finalResponseLength: finalResponse.length,
       });
     }
-    if (!undelivered) {
-      return { type: "succeeded", finalResponse };
+    if (undelivered) {
+      return {
+        type: "failed",
+        error: "Agent reply was not delivered to the Room",
+        failure: runFailure("reply_undelivered", this.#runtimeType),
+      };
     }
-    return {
-      type: "failed",
-      error: "Agent reply was not delivered to the Room",
-      failure: runFailure("reply_undelivered", this.#runtimeType),
-    };
+    if (roomRun && replyDelivery.replyNotSent) {
+      this.#logger.log("warn", "local_run.reply_not_sent", {
+        runId,
+        ...replyDelivery.counts(),
+        finalResponseLength: finalResponse.length,
+      });
+      return {
+        type: "failed",
+        error: "Agent ended its turn without sending a reply to the Room",
+        failure: runFailure("reply_not_sent", this.#runtimeType),
+      };
+    }
+    return { type: "succeeded", finalResponse };
   }
 
   #reportTerminal(runId: string, terminal: LocalTurnTerminal): void {
@@ -1839,6 +1860,7 @@ export class RunLoop {
         target.sourceInboxIds.add(inboxId);
       }
       target.inputs.push(input);
+      target.replyDelivery.observeInputs(messages);
       this.#reportActiveRunContext({
         runId: target.runId,
         sourceInboxIds: Object.freeze([...target.sourceInboxIds]),
