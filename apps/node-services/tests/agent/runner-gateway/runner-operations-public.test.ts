@@ -445,7 +445,7 @@ describe("RunnerGateway", () => {
     };
     const stop = new AbortController();
     const wiki = (index: number) =>
-      gateway.acquireModelChain(
+      gateway.acquireModelCall(
         endpoint,
         { kind: "wiki", priority: 70, key: String(index) },
         stop.signal,
@@ -499,7 +499,7 @@ describe("RunnerGateway", () => {
     });
     const codex = { computerId: "runner-local", runtimeType: "codex" as const };
     try {
-      const wiki = await gateway.acquireModelChain(
+      const wiki = await gateway.acquireModelCall(
         codex,
         { priority: 70, kind: "wiki", key: "wiki:test" },
         new AbortController().signal,
@@ -515,7 +515,7 @@ describe("RunnerGateway", () => {
       expect(
         peer.sent.some((command) => command.type === "operation.start"),
       ).toBe(false);
-      const memory = gateway.acquireModelChain(
+      const memory = gateway.acquireModelCall(
         codex,
         { priority: 40, kind: "memory", key: "memory:test" },
         new AbortController().signal,
@@ -623,7 +623,7 @@ describe("RunnerGateway", () => {
       const { gateway, connection, start } = await startRun();
       try {
         const waiting = admittedLater(
-          gateway.acquireModelChain(
+          gateway.acquireModelCall(
             codex,
             approval,
             new AbortController().signal,
@@ -641,7 +641,7 @@ describe("RunnerGateway", () => {
     it("halves the limit when the Run fails rate limited", async () => {
       const { gateway, connection, start } = await startRun();
       try {
-        const alongside = gateway.acquireModelChain(
+        const alongside = gateway.acquireModelCall(
           codex,
           approval,
           new AbortController().signal,
@@ -662,7 +662,7 @@ describe("RunnerGateway", () => {
         );
         // Two places would admit it beside the running chain; one does not.
         const next = admittedLater(
-          gateway.acquireModelChain(
+          gateway.acquireModelCall(
             codex,
             approval,
             new AbortController().signal,

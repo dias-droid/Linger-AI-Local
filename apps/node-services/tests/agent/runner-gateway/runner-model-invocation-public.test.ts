@@ -4,6 +4,8 @@ import type {
   OperationStart,
   RunnerHello,
 } from "@linger/wire-contracts/runner-gateway/types";
+import { createRuntimeModelCall } from "../../../src/runtime-model-call.js";
+import { runtimeModelGateway } from "../../../src/agent/runner-gateway/runtime-model-gateway.js";
 import { describe, expect, it, vi } from "vitest";
 import { LocalComputerOfflineError } from "../../../src/agent/runner-gateway/local-computer-management.js";
 import type {
@@ -22,6 +24,7 @@ import {
   acceptReadyConnection,
   hello,
   RecordingPeer,
+  event,
   settlesWithin,
   sequenceIds,
   sessionTarget,
@@ -242,11 +245,107 @@ describe("RunnerGateway model invocation", () => {
     }
   });
 
+  it.each(["next step", "schema correction"] as const)(
+    "at one place a chat runs before the Wiki chain's %s",
+    async (next) => {
+      const { gateway, peer, connection } = await connect();
+      const model = createRuntimeModelCall({
+        gateway: runtimeModelGateway(gateway),
+        placements: async () => [],
+      });
+      const target = sessionTarget();
+      const wiki = model.chain(
+        {
+          kind: "wiki",
+          key: "wiki:interleave",
+          placement: {
+            tenantId: target.tenantId,
+            ownerActorId: target.ownerActorId,
+            agentId: target.agentId,
+            computerId: target.runnerId,
+            runtimeType: "codex",
+          },
+        },
+        async (chain) => {
+          if (next === "schema correction") {
+            return (
+              await chain.call({
+                step: "write",
+                input: "first",
+                schemaName: "page",
+                outputSchema: { type: "object", required: ["summary"] },
+              })
+            ).output;
+          }
+          const first = await chain.text({ step: "read", input: "first" });
+          return (await chain.text({ step: "write", input: first.output }))
+            .output;
+        },
+      );
+      try {
+        await vi.waitFor(() => expect(sentInvocations(peer)).toHaveLength(1));
+        const chat = gateway.startOperation({ ...target, runKind: "chat" });
+        expect(await settlesWithin(chat, 10)).toBe(false);
+        const first = sentInvocations(peer)[0]!;
+        await connection.receive({
+          type: "executed",
+          kind: "model_invoke",
+          command_id: first.command_id,
+          invoke_id: first.invoke_id,
+          runner_id: first.runner_id,
+          outcome: "completed",
+          text: next === "schema correction" ? "{}" : "first result",
+          duration_ms: 900,
+        });
+        const operation = await chat;
+        const start = peer.sent.find(
+          (envelope): envelope is OperationStart =>
+            envelope.type === "operation.start" &&
+            envelope.operation_id === operation.operationId,
+        )!;
+        expect(start.request.run_context.execution_run_ref).toBe(
+          target.request.run_context.execution_run_ref,
+        );
+        expect(sentInvocations(peer)).toHaveLength(1);
+        await connection.receive(
+          event(start, 1, {
+            type: "operation.accepted",
+            command_id: start.command_id,
+            runner_pid: 100,
+          }),
+        );
+        await connection.receive(
+          event(start, 2, {
+            type: "operation.completed",
+            result: {
+              type: "run",
+              final_response: "done",
+              session: { thread_id: "thread-chat" },
+            },
+          }),
+        );
+        await operation.result;
+        await vi.waitFor(() => expect(sentInvocations(peer)).toHaveLength(2));
+        const second = sentInvocations(peer)[1]!;
+        expect(second.input).toContain(
+          next === "schema correction" ? "Required Correction" : "first result",
+        );
+        await invoked(connection, second);
+        await expect(wiki).resolves.toEqual(
+          next === "schema correction" ? { summary: "ok" } : '{"summary":"ok"}',
+        );
+      } finally {
+        model.close();
+        connection.disconnect();
+      }
+    },
+  );
+
   it("holds the chain's place for a sent step after the caller stops waiting", async () => {
     const { gateway, peer, connection } = await connect();
     try {
       const stop = new AbortController();
-      const chain = await gateway.acquireModelChain(
+      const chain = await gateway.acquireModelCall(
         { computerId: "runner-local", runtimeType: "codex" },
         queued("wiki"),
         stop.signal,
@@ -254,7 +353,7 @@ describe("RunnerGateway model invocation", () => {
       const step = gateway.invokeModel(
         "runner-local",
         request({
-          chainLease: chain,
+          callLease: chain,
           queue: queued("wiki"),
           signal: stop.signal,
         }),

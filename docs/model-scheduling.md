@@ -43,8 +43,10 @@ Each Run holds one place across its tool calls. Inputs merged into a queued
 Run take the highest priority among them. Eligible work at the same priority
 starts in arrival order.
 
-A wiki refresh is many units, not one: each routing pack, meeting, page batch
-and correction queues on its own, so other work can run between them.
+Wiki and Memory chains keep their steps in order on one endpoint. Each model
+attempt releases its place when the Runtime answers. A waiting chat can start
+before the next step, retry or correction, even at a hard limit of one. The
+chain then continues with the results of its completed steps.
 
 Every model call is retried and corrected in one place. A timeout, a reply past
 its length cap or a runtime failure is tried again after a pause, and an answer

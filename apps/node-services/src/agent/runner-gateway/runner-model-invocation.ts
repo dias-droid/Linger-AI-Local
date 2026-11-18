@@ -44,7 +44,7 @@ export interface RunnerModelInvokeRequest {
   readonly sessionKey?: ModelInvoke["session_key"];
   readonly timeoutMs: number;
   readonly maxOutputChars?: ModelInvoke["max_output_chars"];
-  readonly chainLease?: ModelLease;
+  readonly callLease?: ModelLease;
   readonly queue: ModelWork & {
     /** The Run Operation an approval reviews. While that Operation holds its
      * place on the same endpoint, the approval runs in it: the Run waits for
@@ -116,7 +116,7 @@ export class RunnerModelInvocation {
     const endpoint = { computerId, runtimeType: request.runtimeType };
     const { queue } = request;
     const borrowed =
-      request.chainLease?.borrow() ??
+      request.callLease?.borrow() ??
       (queue.kind === "approval"
         ? this.owners
             .operations()
@@ -281,8 +281,7 @@ export class RunnerModelInvocation {
     if (!call) return;
     this.#inFlight.delete(invokeId);
     clearTimeout(call.timer);
-    // Chain steps and approvals hold no lease of their own but still tell
-    // how fast the endpoint answers.
+    // Each Runtime reply supplies a latency sample, including a borrowed approval.
     const signal =
       "outcome" in result ? modelSignal(result.outcome) : undefined;
     if (signal)

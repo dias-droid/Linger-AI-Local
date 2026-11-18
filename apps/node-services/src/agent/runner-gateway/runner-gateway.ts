@@ -407,8 +407,8 @@ export class RunnerGateway
     return this.#modelInvocation.invokeModel(computerId, request);
   }
 
-  /** Admits a chain, which then holds its place on the endpoint until it ends. */
-  acquireModelChain(
+  /** Reserves a place for one model call on this endpoint. */
+  acquireModelCall(
     endpoint: ModelEndpoint,
     work: ModelWork,
     signal: AbortSignal,

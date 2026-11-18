@@ -16,9 +16,9 @@ export function runtimeModelGateway(
       gateway.supportsModelInvoke(computerId, runtimeType),
     runtimeModels: (computerId, runtimeType) =>
       gateway.runtimeModels(computerId, runtimeType),
-    acquireModelChain: async (endpoint, work, signal) => {
+    acquireModelCall: async (endpoint, work, signal) => {
       try {
-        return await gateway.acquireModelChain(endpoint, work, signal);
+        return await gateway.acquireModelCall(endpoint, work, signal);
       } catch (error) {
         if (signal.aborted) throw error;
         throw modelCallFailure(error);

@@ -7,6 +7,7 @@ import { isRecord } from "@linger/service-kit";
 
 import { packageRoot } from "./paths.js";
 import {
+  ModelCallStartDeadlineError,
   schemaProblem,
   type ModelCallEffort,
   type ModelChain,
@@ -245,7 +246,11 @@ export async function runAgentTask(request: {
       actionsSchema,
       steps,
       index,
-    );
+    ).catch((error: unknown) => {
+      if (error instanceof ModelCallStartDeadlineError) return undefined;
+      throw error;
+    });
+    if (output === undefined) break;
     const actions = parseActions(output, task);
     const calls: string[] = [];
     const results: AgentObservation[] = [];
@@ -371,6 +376,9 @@ async function callStep(
         : undefined;
     },
     timeoutMs: request.task.timeoutMs,
+    ...(request.deadline === undefined
+      ? {}
+      : { startBefore: request.deadline }),
     ...(request.task.maxOutputChars === undefined
       ? {}
       : { maxOutputChars: request.task.maxOutputChars }),

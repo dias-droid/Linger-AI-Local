@@ -181,8 +181,8 @@ Core configuration:
   windows of at most 3,000 characters, extracted with `apps/node-services/prompts/memory/facts/fact-extraction.md`
   (the Hindsight concise prompt) at low reasoning effort. Up to 16 windows form one batch, and each batch runs as one
   ModelCall chain of kind `memory`, keyed `memory.facts:<sha256 of the batch's sorted window hashes>` so a restart
-  asks the same key. The chain is queued once and holds its place in the queue; its calls run one at a time, each
-  corrected within the `memory` kind's attempts. An answer still invalid after them is split into two halves, and windows whose facts drift into another
+  asks the same key. Its calls run in order. Each model attempt queues separately, so chat can start before the next
+  step, retry or correction. An answer still invalid after them is split into two halves, and windows whose facts drift into another
   language are extracted once more; both are steps of the same chain (`first`, `split-<n>`, `<step>-drift`). Each
   sync keeps at most two batches on the queue at once. Backfill write transactions are short and share Memory's connection pool
   with recall. Windows are recorded by content hash in `memory_index.session_fact_windows`, so only new or changed

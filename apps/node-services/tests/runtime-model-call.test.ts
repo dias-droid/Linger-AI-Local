@@ -5,6 +5,7 @@ import {
   createRuntimeModelCall,
   isComputerOffline,
   ModelCallError,
+  ModelCallStartDeadlineError,
   type ModelPlacement,
   type RuntimeModelGateway,
   type RuntimeModelInfo,
@@ -70,7 +71,7 @@ function setup(
       }),
   );
   const supportsModelInvoke = vi.fn(options.ready ?? (() => true));
-  const acquireModelChain = vi.fn<RuntimeModelGateway["acquireModelChain"]>(
+  const acquireModelCall = vi.fn<RuntimeModelGateway["acquireModelCall"]>(
     async () =>
       options.lease ?? {
         release: () => {},
@@ -85,7 +86,7 @@ function setup(
       invokeModel,
       supportsModelInvoke,
       runtimeModels: options.runtimeModels ?? (() => []),
-      acquireModelChain,
+      acquireModelCall,
     },
     placements,
     logger,
@@ -96,7 +97,7 @@ function setup(
     modelCall,
     logger,
     invokeModel,
-    acquireModelChain,
+    acquireModelCall,
     supportsModelInvoke,
     placements,
     advance: (ms: number) => {
@@ -623,16 +624,18 @@ describe("Model chains", () => {
     borrow: () => ({ release: vi.fn() }),
   });
 
-  it("runs its calls in the one place it was admitted to", async () => {
-    const chainLease = lease();
-    const { modelCall, invokeModel, acquireModelChain } = setup({
+  it("takes a new place for each call on the same Runtime", async () => {
+    const first = lease();
+    const second = lease();
+    const { modelCall, invokeModel, acquireModelCall } = setup({
       placements: [alice],
-      lease: chainLease,
+      lease: second,
       outcomes: [
         { ...completed("one"), usage: { input_tokens: 3 } } as Outcome,
         completed('{"answer":"two"}'),
       ],
     });
+    acquireModelCall.mockResolvedValueOnce(first);
     const result = await modelCall.chain(
       { kind: "wiki", key: "wiki:refresh:1", owner },
       async (task) => [
@@ -648,25 +651,142 @@ describe("Model chains", () => {
       ],
     );
     expect(result).toEqual(["one", { answer: "two" }]);
-    expect(acquireModelChain).toHaveBeenCalledTimes(1);
-    expect(acquireModelChain).toHaveBeenCalledWith(
-      { computerId: "computer_alice", runtimeType: "codex" },
-      { priority: 70, kind: "wiki", key: "wiki:refresh:1" },
-      expect.any(AbortSignal),
-    );
     expect(
-      invokeModel.mock.calls.map(([, request]) => [
-        request.runtimeType,
-        request.chainLease,
+      acquireModelCall.mock.calls.map(([endpoint, work]) => [
+        endpoint.runtimeType,
+        work.key,
       ]),
     ).toEqual([
-      ["codex", chainLease],
-      ["codex", chainLease],
+      ["codex", "wiki:refresh:1"],
+      ["codex", "wiki:refresh:1/b"],
     ]);
-    expect(chainLease.release).toHaveBeenCalledWith({
+    expect(
+      invokeModel.mock.calls.map(([, request]) => request.callLease),
+    ).toEqual([first, second]);
+    expect(first.release).toHaveBeenCalledExactlyOnceWith({
       outcome: "completed",
-      usage: { calls: 2, per_call: [[{ input_tokens: 3 }]] },
+      usage: { input_tokens: 3 },
     });
+    expect(second.release).toHaveBeenCalledExactlyOnceWith({
+      outcome: "completed",
+    });
+  });
+
+  it("releases a joined chain's unused place and keeps the shared call alive for the other waiter", async () => {
+    const first = lease();
+    const joined = lease();
+    const { modelCall, acquireModelCall, invokeModel } = setup({
+      placements: [alice],
+      invoke: hanging,
+    });
+    acquireModelCall.mockResolvedValueOnce(first).mockResolvedValueOnce(joined);
+    const left = new AbortController();
+    const right = new AbortController();
+    const execute = (signal: AbortSignal) =>
+      modelCall.chain(
+        { kind: "wiki", key: "wiki:duplicate", owner, signal },
+        (chain) => chain.text({ step: "a", input: "one" }),
+      );
+    const a = execute(left.signal);
+    const b = execute(right.signal);
+    await vi.waitFor(() =>
+      expect(joined.release).toHaveBeenCalledExactlyOnceWith({
+        outcome: "joined",
+      }),
+    );
+    expect(invokeModel).toHaveBeenCalledTimes(1);
+    left.abort(new Error("left"));
+    await expect(a).rejects.toThrow("left");
+    expect(invokeModel.mock.calls[0]![1].signal.aborted).toBe(false);
+    right.abort(new Error("right"));
+    await expect(b).rejects.toThrow("right");
+    expect(invokeModel.mock.calls[0]![1].signal.aborted).toBe(true);
+  });
+
+  it("starts its deadline after initial admission and includes later queue waits", async () => {
+    vi.useFakeTimers();
+    const firstPlace = deferred<ModelLease>();
+    const { modelCall, acquireModelCall, invokeModel } = setup({
+      placements: [alice],
+      outcomes: [completed("a")],
+    });
+    acquireModelCall
+      .mockReturnValueOnce(firstPlace.promise)
+      .mockImplementationOnce(
+        (_endpoint, _work, signal) =>
+          new Promise((_resolve, reject) =>
+            signal.addEventListener("abort", () => reject(signal.reason), {
+              once: true,
+            }),
+          ),
+      );
+    const chain = modelCall.chain(
+      { kind: "wiki", key: "wiki:timeout", owner, timeoutMs: 50 },
+      async (model) => {
+        await model.text({ step: "first", input: "a" });
+        return model.text({ step: "second", input: "b" });
+      },
+    );
+    const result = expect(chain).rejects.toMatchObject({ kind: "timed_out" });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(invokeModel).not.toHaveBeenCalled();
+    firstPlace.resolve(lease());
+    await vi.advanceTimersByTimeAsync(49);
+    expect(acquireModelCall).toHaveBeenCalledTimes(2);
+    expect(invokeModel).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await result;
+  });
+
+  it("skips a step whose latest start passed while waiting for its place", async () => {
+    vi.useFakeTimers();
+    const { modelCall, invokeModel, acquireModelCall } = setup({
+      placements: [alice],
+      outcomes: [completed("done")],
+    });
+    acquireModelCall
+      .mockResolvedValueOnce(lease())
+      .mockImplementationOnce(async () => {
+        vi.setSystemTime(Date.now() + 2_000);
+        return lease();
+      });
+    const result = modelCall.chain(
+      { kind: "wiki", key: "wiki:deadline", owner },
+      async (chain) => {
+        await chain.text({ step: "first", input: "x" });
+        return chain.text({
+          step: "late",
+          input: "y",
+          startBefore: Date.now() + 1_000,
+        });
+      },
+    );
+    await expect(result).rejects.toBeInstanceOf(ModelCallStartDeadlineError);
+    expect(invokeModel).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps its admitted Runtime when availability changes between steps", async () => {
+    let codexReady = false;
+    const { modelCall, invokeModel, acquireModelCall } = setup({
+      placements: [alice],
+      ready: (_computer, runtime) =>
+        runtime === "codex" ? codexReady : !codexReady,
+      outcomes: [completed("a"), completed("b")],
+    });
+    await modelCall.chain(
+      { kind: "wiki", key: "wiki:pinned", owner },
+      async (chain) => {
+        await chain.text({ step: "first", input: "a" });
+        codexReady = true;
+        await chain.text({ step: "second", input: "b" });
+      },
+    );
+    expect(
+      acquireModelCall.mock.calls.map(([endpoint]) => endpoint.runtimeType),
+    ).toEqual(["claude", "claude"]);
+    expect(
+      invokeModel.mock.calls.map(([, request]) => request.runtimeType),
+    ).toEqual(["claude", "claude"]);
   });
 
   it("runs its calls one at a time in the order they are made", async () => {
@@ -795,10 +915,10 @@ describe("Model chains", () => {
     );
   });
 
-  it("retries a chain's call in its place within the kind's attempts, then hands the failure to the chain", async () => {
+  it("queues each retry and hands the final failure to the chain", async () => {
     vi.useFakeTimers();
     const timedOut = { outcome: "timed_out", duration_ms: 0 } as const;
-    const { modelCall, invokeModel } = setup({
+    const { modelCall, invokeModel, acquireModelCall } = setup({
       placements: [alice],
       outcomes: [timedOut, timedOut, timedOut],
     });
@@ -813,18 +933,19 @@ describe("Model chains", () => {
     await vi.advanceTimersByTimeAsync(10_000);
     expect(await kind).toBe("timed_out");
     expect(invokeModel).toHaveBeenCalledTimes(3);
+    expect(acquireModelCall).toHaveBeenCalledTimes(3);
     expect(
       invokeModel.mock.calls.every(
-        ([, request]) => request.chainLease !== undefined,
+        ([, request]) => request.callLease !== undefined,
       ),
     ).toBe(true);
   });
 
   it("stops its calls and frees its place when the caller stops it", async () => {
-    const chainLease = lease();
+    const callLease = lease();
     const { modelCall, invokeModel } = setup({
       placements: [alice],
-      lease: chainLease,
+      lease: callLease,
       invoke: hanging,
     });
     const stop = new AbortController();
@@ -836,7 +957,7 @@ describe("Model chains", () => {
     stop.abort(new Error("refresh canceled"));
     await expect(task).rejects.toThrow("refresh canceled");
     expect(invokeModel.mock.calls[0]![1].signal.aborted).toBe(true);
-    expect(chainLease.release).toHaveBeenCalledWith(
+    expect(callLease.release).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: "aborted" }),
     );
   });
@@ -936,7 +1057,7 @@ describe("Runner Gateway model invocation adapter", () => {
       invokeModel: async () => {
         throw thrown;
       },
-      acquireModelChain: async () => {
+      acquireModelCall: async () => {
         throw thrown;
       },
     });

@@ -243,8 +243,7 @@ export class AgentWikiBackend implements LlmWikiBackend {
       logGenerationStep("prepare_workspace", startedAt, {
         context_window: contextWindow,
       });
-      // Each routing pack, meeting, page batch and correction is its own
-      // queued chain, so other model work runs between them.
+      // A chain keeps one batch's steps in order while each model attempt queues.
       const key = `wiki:${request.generationId ?? `manual_${runId.replaceAll("-", "")}`}`;
       const result = await generation.run((step, body) =>
         modelCall.chain(
@@ -1518,8 +1517,8 @@ ${renderExcerpts(
     };
   }
 
-  /** Submits one chain per item at once, named by step; the queue decides
-   * how many run together. The first failure stops the rest. */
+  /** Submits one chain per item, named by step. The endpoint schedules their
+   * model calls. The first failure stops the rest. */
   async #each<T>(
     items: readonly T[],
     step: (item: T, index: number) => string,
