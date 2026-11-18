@@ -327,6 +327,47 @@ describe("Connected apps", () => {
     expect(screen.queryByRole("button", { name: "Facebook" })).toBeNull();
   });
 
+  it("shows an Outlook identity as the sign-in name", async () => {
+    const runtime = await testRuntime();
+    const catalog = await runtime.client.listExternalApps();
+    const gmailApp = catalog.apps.find((app) => app.key === "gmail")!;
+    vi.spyOn(runtime.client, "listExternalApps").mockResolvedValue({
+      ...catalog,
+      apps: [
+        ...catalog.apps,
+        { ...gmailApp, key: "outlook", display_name: "Outlook" },
+      ],
+    });
+    const existing = (await runtime.client.listExternalConnections())
+      .connections[0]!;
+    vi.spyOn(runtime.client, "listExternalConnections").mockResolvedValue({
+      connections: [
+        existing,
+        {
+          ...existing,
+          id: "outlook-1",
+          identity_label: "me@example.net",
+          provider: "outlook",
+        },
+      ],
+    });
+
+    renderPage(runtime, "/apps?app=outlook");
+    const outlook = await screen.findByRole("dialog", { name: "Outlook" });
+    expect(
+      await within(outlook).findByText("Signed in as me@example.net"),
+    ).toBeVisible();
+  });
+
+  it("shows a Gmail identity as the address itself", async () => {
+    const runtime = await testRuntime();
+
+    renderPage(runtime, "/apps?app=gmail");
+    const gmail = await screen.findByRole("dialog", { name: "Gmail" });
+    expect(await within(gmail).findByText("jenny@linger.test")).toBeVisible();
+    expect(within(gmail).queryByText(/Signed in as/)).toBeNull();
+  });
+
   it("counts active accounts and those that need reconnecting", async () => {
     const runtime = await testRuntime();
     const existing = (await runtime.client.listExternalConnections())

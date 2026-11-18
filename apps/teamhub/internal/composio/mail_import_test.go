@@ -395,16 +395,9 @@ func TestOutlookMailImportRejectsCursorWithoutSentFolder(t *testing.T) {
 }
 
 func TestIdentifyOutlookLabel(t *testing.T) {
-	for _, test := range []struct {
-		name, mail string
-		sent       any
-		want       string
-		fails      bool
-	}{
-		{"mail", "mailbox@example.test", map[string]any{"value": []any{map[string]any{"from": map[string]any{"emailAddress": map[string]string{"address": "other@example.test"}}}}}, "mailbox@example.test", false},
-		{"sent items sender", "", map[string]any{"value": []any{map[string]any{"from": map[string]any{"emailAddress": map[string]string{"address": "mailbox@example.test"}}}}}, "mailbox@example.test", false},
-		{"empty sent items", "", map[string]any{"value": []any{}}, "login@example.test", false},
-		{"sent items error", "", nil, "", true},
+	for _, test := range []struct{ name, mail, want string }{
+		{"primary mail", "mailbox@example.test", "mailbox@example.test"},
+		{"sign-in name without mail", "", "login@example.test"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -413,18 +406,11 @@ func TestIdentifyOutlookLabel(t *testing.T) {
 					t.Error(err)
 					return
 				}
-				switch request.Endpoint {
-				case "https://graph.microsoft.com/v1.0/me":
-					_ = json.NewEncoder(w).Encode(map[string]any{"status": 200, "data": map[string]string{"id": "graph-id", "mail": test.mail, "userPrincipalName": "login@example.test"}})
-				case "/v1.0/me/mailFolders/sentitems/messages":
-					if test.sent == nil {
-						w.WriteHeader(http.StatusInternalServerError)
-						return
-					}
-					_ = json.NewEncoder(w).Encode(map[string]any{"status": 200, "data": test.sent})
-				default:
+				if request.Endpoint != "https://graph.microsoft.com/v1.0/me" {
 					t.Errorf("unexpected endpoint %s", request.Endpoint)
+					return
 				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"status": 200, "data": map[string]string{"id": "graph-id", "mail": test.mail, "userPrincipalName": "login@example.test"}})
 			}))
 			defer server.Close()
 			client, err := New(Config{APIKey: "test", EnvironmentKey: "test", BaseURL: server.URL, HTTPClient: server.Client()})
@@ -435,12 +421,6 @@ func TestIdentifyOutlookLabel(t *testing.T) {
 				return ConnectionBinding{}, nil
 			})
 			identity, err := client.IdentifyOutlook(context.Background(), "account")
-			if test.fails {
-				if err == nil {
-					t.Fatalf("identity=%+v, want the Sent Items error", identity)
-				}
-				return
-			}
 			if err != nil {
 				t.Fatal(err)
 			}

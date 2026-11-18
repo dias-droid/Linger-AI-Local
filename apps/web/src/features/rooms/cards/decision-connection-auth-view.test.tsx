@@ -462,6 +462,39 @@ describe("Chat connection authorization", () => {
     ).toHaveTextContent("work@example.com");
   });
 
+  it("shows an Outlook account as the sign-in name in the picker", async () => {
+    await setup(
+      { ...card, connection_auth: { app_key: "outlook" } },
+      "alice",
+      false,
+      "active",
+      [
+        {
+          id: "outlook-1",
+          provider: "outlook",
+          identity_label: "me@example.net",
+        },
+        {
+          id: "outlook-2",
+          provider: "outlook",
+          identity_label: "other@example.net",
+        },
+      ],
+    );
+    expect(
+      await screen.findByRole("combobox", { name: /account/ }),
+    ).toHaveTextContent("Signed in as me@example.net");
+  });
+
+  it("shows a non-Outlook account label as it is in the picker", async () => {
+    await setup(card, "alice", true, "active", [
+      { id: "notion-2", identity_label: "Second Notion" },
+    ]);
+    expect(
+      await screen.findByRole("combobox", { name: "Notion account" }),
+    ).not.toHaveTextContent("Signed in as");
+  });
+
   it("offers a new account when the requested one is not connected", async () => {
     await setup({
       ...card,

@@ -1,4 +1,4 @@
-import { displayText } from "./display-text.js";
+import { accountIdentityText, displayText } from "./display-text.js";
 
 type Json = Record<string, unknown>;
 const singleLine = (value: unknown): string =>
@@ -271,7 +271,10 @@ export function renderBusinessResult(command: string, result: Json): string {
   if (command === "apps list")
     return list(
       "connection",
-      result.connections as Json[],
+      (result.connections as Json[]).map((item) => ({
+        ...item,
+        identityLabel: accountIdentityText(item.name, item.identityLabel),
+      })),
       [
         ["CONNECTION ID", "connectionId"],
         ["NAME", "name"],

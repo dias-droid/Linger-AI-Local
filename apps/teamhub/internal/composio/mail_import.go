@@ -379,10 +379,11 @@ type OutlookIdentity struct {
 	ID, Label string
 }
 
-// IdentifyOutlook returns the signed-in mailbox. The label is display only:
-// Graph leaves mail empty for a personal account signed in with another
-// provider's address, whose userPrincipalName is that sign-in address, so the
-// sender of the newest Sent Items message names the mailbox before it.
+// IdentifyOutlook returns the Microsoft account. The label is display only and
+// is what Microsoft names the account: its primary mail, or for a personal
+// account without one the sign-in name, which may be another provider's
+// address. A personal account owns several addresses, so none is inferred
+// from mail; mail direction comes from folders, never from this label.
 func (c *Client) IdentifyOutlook(ctx context.Context, accountID string) (OutlookIdentity, error) {
 	var wire struct {
 		ID        string `json:"id"`
@@ -394,39 +395,10 @@ func (c *Client) IdentifyOutlook(ctx context.Context, accountID string) (Outlook
 	}
 	label := wire.Mail
 	if label == "" {
-		// A failed read fails identification rather than falling back, so a
-		// throttled check keeps the stored label instead of the sign-in address.
-		var err error
-		if label, err = c.outlookSentAddress(ctx, accountID); err != nil {
-			return OutlookIdentity{}, err
-		}
-	}
-	if label == "" {
 		label = wire.Principal
 	}
 	if wire.ID == "" || label == "" {
 		return OutlookIdentity{}, errors.New("Outlook identity response was incomplete")
 	}
 	return OutlookIdentity{wire.ID, label}, nil
-}
-
-// outlookSentAddress returns the sender of the newest Sent Items message, or
-// "" when Sent Items is empty.
-func (c *Client) outlookSentAddress(ctx context.Context, accountID string) (string, error) {
-	var wire struct {
-		Value []struct {
-			From outlookRecipient `json:"from"`
-		} `json:"value"`
-	}
-	if err := c.proxy(ctx, proxyRequest{ConnectedAccountID: accountID, Endpoint: "/v1.0/me/mailFolders/sentitems/messages", Method: http.MethodGet, Parameters: []proxyParameter{
-		{Name: "$top", Value: "1", Type: "query"},
-		{Name: "$orderby", Value: "sentDateTime desc", Type: "query"},
-		{Name: "$select", Value: "from", Type: "query"},
-	}}, &wire, "read Outlook sent mailbox address"); err != nil {
-		return "", err
-	}
-	if len(wire.Value) == 0 {
-		return "", nil
-	}
-	return strings.TrimSpace(wire.Value[0].From.EmailAddress.Address), nil
 }

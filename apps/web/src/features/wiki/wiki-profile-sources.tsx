@@ -8,6 +8,7 @@ import { AppLogo } from "@/features/apps/app-logo";
 import {
   activeExternalConnections,
   externalConnectionNeedsAttention,
+  accountIdentityText,
 } from "@/features/apps/connection-state";
 import {
   externalAppsQueryOptions,
@@ -83,7 +84,7 @@ export function WikiProfileSourcesRow({
               app: app.display_name,
               connection,
               id: connection.id,
-              label: `${app.display_name} · ${connection.identity_label ?? "Connected account"} — connected`,
+              label: `${app.display_name} · ${accountIdentityText(app.key, connection.identity_label) ?? "Connected account"} — connected`,
               logoUrl: app.logo_url,
               provider: app.key,
               state: "connected",

@@ -99,3 +99,16 @@ export function reauthorizationConnectUrl(connection?: {
     connect_expires_at: connection.reauthorization_connect_expires_at,
   });
 }
+
+/**
+ * A connection's identity label as display text, or undefined when it has
+ * none. An Outlook label is the Microsoft account's sign-in name, which can
+ * belong to another mail provider, so it is never shown as the mailbox.
+ */
+export function accountIdentityText(
+  provider: string,
+  label: string | null | undefined,
+): string | undefined {
+  if (!label) return undefined;
+  return provider === "outlook" ? `Signed in as ${label}` : label;
+}
