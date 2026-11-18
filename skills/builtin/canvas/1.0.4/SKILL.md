@@ -91,10 +91,15 @@ Images live in the canvas as image blocks (PNG, JPEG, GIF or WebP, up to 10 MiB)
   `teamhub docs image get <document-id> <image-block-id> -o ./original.png`, make the new
   image, then `teamhub docs image put <document-id> ./new.png --replace <image-block-id>`.
   The image keeps its place and width.
-  - Crop, resize, rotate, recolor or compress with the `imagemagick` skill.
+  - Crop, resize, rotate, recolor or compress with Pillow in the Context's `./agent`
+    project (`uv --directory ./agent add pillow`), or with ImageMagick when
+    `command -v magick` finds it. Nothing here is preinstalled; if `uv` or a system
+    tool you need is missing, follow the install rule in your instructions: ask the
+    user whether to install it, and install nothing globally without their yes.
   - Generate an image, or change it by description (new background, new style), only
     with your model's own image generation, using the original as reference. If you
-    cannot generate images, say so plainly and offer what `imagemagick` can do.
+    cannot generate images, say so plainly and offer the crop, resize or recolor edits
+    above.
 - Undo a replacement: the previous image stays available for about a day. Find its Asset
   in the earlier `--format blocks` export and put it back with
   `teamhub docs update <document-id> --command image_replace --block-id <block-id> --asset-id <old-asset-id>`.
@@ -124,12 +129,13 @@ asked to change, follow the user's version.
 
 ## Deliver
 
-The conversation decides what happens; there are no buttons. Follow the
-target guide for the exact commands:
+Follow the target guide: it says whether the user delivers from the canvas
+card or you deliver with a command.
 
-- If the user has not said how to deliver, save it on the platform as a draft.
-- If the user says to send it, send it.
-- After delivering, update the header: `status`, `link` and `external_id`.
+- Without a Send button in the target guide: if the user has not said how to
+  deliver, save it on the platform as a draft; if the user says to send it,
+  send it. After delivering, update the header: `status`, `link` and
+  `external_id`.
 - Tell the user in one short sentence what you did and where to find it.
 
 Only report a draft or delivery as done after the command succeeded.

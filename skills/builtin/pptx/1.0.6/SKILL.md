@@ -11,7 +11,8 @@ visual, not just a title and bullets. Read this whole file before building.
 
 ## Runtime
 
-Install PptxGenJS into the current Context's `./agent` folder:
+Nothing here is preinstalled; set up what the task needs yourself. Install
+PptxGenJS into the current Context's `./agent` project:
 
 ```bash
 npm --prefix ./agent install pptxgenjs
@@ -28,7 +29,9 @@ scripts from the Context workspace:
 NODE_PATH="$(pwd)/agent/node_modules" node ./playground/<scope>/deck.js ./playground/<scope>/<Deck>.pptx
 ```
 
-Keep work under `./playground/<scope>/`.
+Keep work under `./playground/<scope>/`. If `npm` or a system tool named under
+Check is missing, follow the install rule in your instructions: ask the user
+whether to install it, and install nothing globally without their yes.
 
 ## Workflow
 
@@ -197,22 +200,24 @@ slides, leftover placeholder text and a photo used on more than one slide:
 NODE_PATH="$(pwd)/agent/node_modules" node <skill folder>/scripts/check_deck.js <deck.pptx> --slides <n>
 ```
 
-Then render to images:
+Then render to images with LibreOffice (`soffice`) and Poppler (`pdftoppm`).
+Both are system tools; check them first with `command -v soffice pdftoppm`:
 
 ```bash
-soffice --headless --convert-to pdf --outdir <dir> <deck.pptx>   # LibreOffice
+soffice --headless --convert-to pdf --outdir <dir> <deck.pptx>
 pdftoppm -png -r 80 <dir>/<deck>.pdf <dir>/slide
 ```
 
-If `soffice` is missing, try `micromamba install --yes --override-channels
---channel conda-forge --prefix ./agent/conda libreoffice` and run it with
-`micromamba run --prefix ./agent/conda soffice ...`. If no renderer works, say
-so in the report.
+PyMuPDF in `./agent` (`uv --directory ./agent add pymupdf`) can turn the PDF
+into images instead of `pdftoppm`. If `soffice` is missing, ask the user
+whether to install LibreOffice, as the Runtime section says. If no renderer is
+available, say so in the report.
 
 Check in two levels, so slide images do not fill your context:
 
-1. **Overview**: tile the slide images into contact sheets (e.g. with
-   ImageMagick `montage`, 4 per row, about 400 px wide each, up to 12 slides per sheet), open the
+1. **Overview**: tile the slide images into contact sheets (with ImageMagick
+   `montage` when `command -v montage` finds it, otherwise with Pillow in
+   `./agent`; 4 per row, about 400 px wide each, up to 12 slides per sheet), open the
    sheets, and list the slides that look wrong or uncertain against the
    checklist below.
 2. **Detail**: open the single-slide image only for those slides, fix them,

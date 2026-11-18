@@ -7,7 +7,7 @@ description: Read, create, or change PDF files with Python. Use for text and tab
 
 ## Runtime
 
-The active Context has an isolated project in `./agent`. Add packages for the operation at hand:
+Nothing here is preinstalled; set up what the task needs yourself. The active Context has an isolated project in `./agent`. Add packages for the operation at hand:
 
 ```bash
 uv --directory ./agent add pypdf
@@ -17,7 +17,7 @@ uv --directory ./agent add reportlab
 
 Use `uv --directory ./agent run python ...` for scripts. Resolve script, input, and output paths to absolute paths before calling `uv`, because `--directory` changes the command's working directory. Write working files to the current Context's `./playground/<scope>/` directory and publish the final PDF through the available delivery tool.
 
-The Runtime normally provides `poppler`, `qpdf`, and `tesseract` in `./agent/conda`; use `micromamba run --prefix ./agent/conda <command>` when one is needed. Add a missing native tool with `micromamba install --yes --override-channels --channel conda-forge --prefix ./agent/conda <package>`. Do not use `apt`, `pip`, `conda`, or `mamba` for setup.
+Command-line tools such as Poppler (`pdftotext`, `pdftoppm`), `qpdf`, and Tesseract are system tools that may be absent. Prefer the Python packages above when they can do the job, and check for a command before relying on it, for example `command -v pdftotext`. If `uv` or a system tool you need is missing, follow the install rule in your instructions: ask the user whether to install it, and install nothing globally without their yes.
 
 ## Choose the operation
 

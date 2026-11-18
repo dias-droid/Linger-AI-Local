@@ -198,8 +198,8 @@ func assertImportedBuiltinSkillDefaults(t *testing.T, catalog builtinCatalog) {
 	// Runtime directory nothing reads and reported as installed.
 	adapted := map[string]string{
 		"simplexai_builtin_docx":            "1.0.0",
-		"simplexai_builtin_pdf":             "1.0.0",
-		"simplexai_builtin_pptx":            "1.0.5",
+		"simplexai_builtin_pdf":             "1.0.1",
+		"simplexai_builtin_pptx":            "1.0.6",
 		"simplexai_builtin_xlsx":            "1.0.0",
 		"simplexai_builtin_skill_installer": "1.0.0",
 	}

@@ -30,8 +30,8 @@ sees it, then marks the header `status: sent`.
   short sentence to review it and click Send on the email card.
 - Never set `status`, `link` or `external_id` yourself.
 
-Images must stay under 5 MiB in total; shrink large ones first (for example
-with `imagemagick`). Attachments must stay under 15 MiB in total; for larger
+Images must stay under 5 MiB in total; shrink large ones first (see Images in
+`SKILL.md`). Attachments must stay under 15 MiB in total; for larger
 files, share a link in the body instead.
 
 ## Gmail not connected or not sent
