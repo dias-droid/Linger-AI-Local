@@ -37,6 +37,9 @@ status and `longest_line_bytes` (a PDF without a text layer has no text and stay
 refresh freezes the admitted ones by `document_text_version_id`. Texts come from text layers only; there is no OCR, so
 raster images have no text.
 Mail the whitelist filters out never becomes a source and is not recorded.
+An imported message's `wiki_source_items.source_key` is `mail:<mailbox>:<remote id>`, where the mailbox is its
+Connection's `remote_principal_key`, so reconnecting the same mailbox updates the Documents an earlier Connection
+wrote instead of adding a second copy of each message.
 The Wiki's Session sources are not Documents: `wiki_session_sources` reads the Human's Room and recording Sessions
 from the Memory index (`memory_index.sources` at their `source_versions` text), `wiki_current_sources` joins them
 to the bound Documents, and a refresh freezes each Session at the SHA-256 of its indexed text.
