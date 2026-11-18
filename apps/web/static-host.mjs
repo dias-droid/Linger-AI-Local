@@ -21,7 +21,12 @@ export function createStaticHost({ root } = {}) {
   const staticRoot = root ?? fileURLToPath(new URL("./dist", import.meta.url));
   const serveFiles = sirv(staticRoot, {
     brotli: true,
-    etag: true,
+    // sirv's ETag is W/"size-mtime", and the packaged source unpacks every
+    // file at the epoch: two releases' index.html of one size share it, so
+    // revalidation kept answering 304 with the older page and its assets.
+    // Without one, every revalidation sends the current file; fingerprinted
+    // assets are immutable and never revalidate.
+    etag: false,
     extensions: [],
     gzip: true,
     setHeaders(response, pathname) {
