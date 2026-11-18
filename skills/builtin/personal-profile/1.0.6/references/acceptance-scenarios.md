@@ -143,3 +143,4 @@ Review the scenarios against the agent's actual discovery and synthesis.
 ## Identity across the whole history
 
 83. **Affiliations found only in older material.** Recent mail is dominated by one product, while the subject's company and a concurrent academic appointment appear only in older correspondence, signatures, and formal records. Initial extraction runs identity discovery across the whole history, names the company behind the product and the academic role in Background, and keeps both current. A Profile that presents only the product, or only the most recent affiliation, fails.
+84. **No organization to find.** The subject works independently, studies, or builds a product with no company behind it. Identity discovery finds no employer and the Profile says nothing about a missing one; it does not invent an organization, guess one from a domain, or add a sentence that the company is unknown.
