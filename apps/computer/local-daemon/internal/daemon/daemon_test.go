@@ -1690,6 +1690,37 @@ func TestDaemonRetainsUpgradeRequiredStatus(t *testing.T) {
 	}
 }
 
+func TestDaemonRetainsIdentityConflictStatusWithoutRedialing(t *testing.T) {
+	device, err := transport.GenerateIdentity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream := &fakeStream{receiveErr: &transport.DaemonIdentityInUseError{Reason: "daemon_identity_in_use: reconnect this Computer"}}
+	controlPlane := &sequenceControlPlane{streams: []*fakeStream{stream}}
+	daemon, err := newTestDaemon(t, Options{
+		ComputerID: "computer-1", ControlPlane: controlPlane,
+		IdentityStore: fakeStore{value: device}, OperationResolver: fakeOperationResolver{},
+		RetryDelay: func(int) time.Duration { return 0 },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- daemon.Run(ctx) }()
+	waitForGatewayState(t, daemon, "identity-conflict")
+	controlPlane.mu.Lock()
+	calls := controlPlane.calls
+	controlPlane.mu.Unlock()
+	if calls != 1 {
+		t.Fatalf("identity-conflict connect attempts = %d, want 1", calls)
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("Run() error = %v, want context cancellation", err)
+	}
+}
+
 func TestDaemonDisconnectDoesNotCancelRunningOperation(t *testing.T) {
 	device, err := transport.GenerateIdentity()
 	if err != nil {

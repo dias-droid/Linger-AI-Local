@@ -108,6 +108,8 @@ export const connectionState = (gatewayState: string): string => {
       return "online";
     case "authentication-failed":
       return "auth_failed";
+    case "identity-conflict":
+      return "identity_conflict";
     case "upgrade-required":
       return "upgrade_required";
     default:

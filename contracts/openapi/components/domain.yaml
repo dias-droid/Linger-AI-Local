@@ -334,6 +334,14 @@ components:
       properties:
         computer_id:
           $ref: "./common.yaml#/components/schemas/Id"
+        daemon_id:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{43}$"
+          description: >-
+            SHA-256 of the local Daemon Ed25519 public key in base64url. When
+            supplied, TeamHub renews a live Computer already bound to this
+            Daemon Identity for the same owner and rejects claims by another
+            owner with 409 DAEMON_IDENTITY_IN_USE.
         display_name:
           type: string
           minLength: 1

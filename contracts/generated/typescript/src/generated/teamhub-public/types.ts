@@ -5011,6 +5011,8 @@ export interface components {
     };
     LocalComputerEnrollmentCreateRequest: {
       computer_id?: components["schemas"]["Id"];
+      /** @description SHA-256 of the local Daemon Ed25519 public key in base64url. When supplied, TeamHub renews a live Computer already bound to this Daemon Identity for the same owner and rejects claims by another owner with 409 DAEMON_IDENTITY_IN_USE. */
+      daemon_id?: string;
       display_name: string;
       /** Format: uri */
       redirect_uri: string;
@@ -9364,6 +9366,7 @@ export interface operations {
       400: components["responses"]["BadRequest"];
       401: components["responses"]["Unauthenticated"];
       404: components["responses"]["NotFound"];
+      409: components["responses"]["Conflict"];
       410: components["responses"]["Gone"];
       503: components["responses"]["ServiceUnavailable"];
     };

@@ -181,6 +181,17 @@ export class RunnerUpgradeRequiredError extends RunnerGatewayError {
   }
 }
 
+export class RunnerDaemonIdentityInUseError extends RunnerGatewayError {
+  readonly code = "daemon_identity_in_use";
+
+  constructor(
+    message = "Daemon Identity is already bound to another Local Computer",
+  ) {
+    super(message);
+    this.name = "RunnerDaemonIdentityInUseError";
+  }
+}
+
 export class RunnerOperationError extends RunnerGatewayError {
   constructor(
     readonly code: string,

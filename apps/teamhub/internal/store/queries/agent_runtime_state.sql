@@ -1033,6 +1033,13 @@ WHERE computer_id=sqlc.arg(computer_id)::text
   )
 RETURNING *;
 
+-- name: LockAgentRuntimeLocalComputerByDaemonID :one
+SELECT *
+FROM local_computers
+WHERE daemon_id=sqlc.arg(daemon_id)::text
+  AND status<>'removed'
+FOR UPDATE;
+
 -- name: DeletePendingAgentRuntimeLocalComputerEnrollments :exec
 DELETE FROM local_computer_enrollments
 WHERE tenant_id=sqlc.arg(tenant_id)::text

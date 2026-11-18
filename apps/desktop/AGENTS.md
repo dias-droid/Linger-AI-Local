@@ -189,17 +189,30 @@ Gateway and runs Agents. The daemon exits with the app.
   before the computer enrolled is not resumed: setup shows again and Install
   finishes it, reusing a finished job only while its origin answers (a stopped
   server gets a new job, which starts the services again). The start failure
-  page's Set Up Again forgets the record, unenrolls the computer, clears the
-  server address and shows setup; the instance and its data stay. Before installing or resuming it moves the
+  page's Set Up Again forgets the record (`local-server.json`), clears the
+  active enrollment while keeping per-origin `savedEnrollments` in
+  `config.json` (`legacy_data_set_aside` clears `savedEnrollments` as well),
+  clears the server address, and shows setup; the instance and its data stay.
+  `Enrollment` (`src/main/enrollment.ts`) sends the local `daemon_id` derived
+  from `<userData>/computer/state/daemon-identity.json`'s public key along
+  with any remembered `computerId` for that origin and owner so re-enrolling or
+  recovering an interrupted exchange renews the existing Computer ID and
+  surfaces `DAEMON_IDENTITY_IN_USE` / `DAEMON_IDENTITY_MISMATCH` conflicts.
+  Before installing or resuming it moves the
   `COMPOSIO_API_KEY`, `SONIOX_API_KEY`, `XAI_API_KEY` and `TZ` of an unpacked
   source package's `.env` into `<home>/instances/desktop/user.env` once and
   deletes that `.env` (never a `LINGER_CHECKOUT`'s), logging only the names
   of other values it drops; the installer reads only `user.env` for the
-  desktop. Setup then waits up to five minutes for the
-  server to create the Another Me; on timeout it reads `local-computers` and
-  says what is missing (offline computer, no writable folder, or no signed-in
-  runtime with each runtime's reported state) and logs
-  `local_server.another_me_missing`. Customize → API keys takes the
+  desktop. Setup fails immediately on `identity_conflict`, `auth_failed`, or
+  `upgrade_required` daemon connection states (`computer-daemon.ts` maps
+  `identity-conflict` to `identity_conflict`, and `status.ts` summarizes it as
+  an error asking to reconnect), then waits up to five minutes for the
+  server to create the Another Me and for the enrolled Computer to report
+  `online` when `local-computers` is served; on timeout it reads
+  `local-computers` and says what is missing (offline computer, no writable
+  folder, or no signed-in runtime with each runtime's reported state) and logs
+  `local_server.another_me_missing` or
+  `local_server.computer_offline_after_agents`. Customize → API keys takes the
   Composio key only (`provider-keys.ts`); voice keys are saved in the app,
   and a `SONIOX_API_KEY` or `XAI_API_KEY` written into `user.env` by hand
   still reaches the services and overrides the app's. Install saves the edits

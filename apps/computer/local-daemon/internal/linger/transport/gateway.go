@@ -113,9 +113,13 @@ func (s *gatewayStream) Receive(ctx context.Context) (protocol.Command, error) {
 	_, encoded, err := s.socket.ReadMessage()
 	if err != nil {
 		var closeError *websocket.CloseError
-		if errors.As(err, &closeError) && closeError.Code == websocket.ClosePolicyViolation &&
-			strings.HasPrefix(closeError.Text, "upgrade_required:") {
-			return protocol.Command{}, &UpgradeRequiredError{Reason: closeError.Text}
+		if errors.As(err, &closeError) && closeError.Code == websocket.ClosePolicyViolation {
+			if strings.HasPrefix(closeError.Text, "upgrade_required:") {
+				return protocol.Command{}, &UpgradeRequiredError{Reason: closeError.Text}
+			}
+			if strings.HasPrefix(closeError.Text, "daemon_identity_in_use:") {
+				return protocol.Command{}, &DaemonIdentityInUseError{Reason: closeError.Text}
+			}
 		}
 		return protocol.Command{}, err
 	}
@@ -310,10 +314,17 @@ func IsGatewayRestart(err error) bool {
 	return closeError.Code == websocket.CloseGoingAway || closeError.Code == websocket.CloseServiceRestart
 }
 
+// ClassifyConnectionFailure separates release incompatibilities from transient or
+// account-level connection errors so self-update never blames a bad release for an
+// external state conflict.
 func ClassifyConnectionFailure(err error) ConnectionFailure {
 	var upgradeRequired *UpgradeRequiredError
 	if errors.As(err, &upgradeRequired) {
 		return FailureIncompatible
+	}
+	var daemonIdentityInUse *DaemonIdentityInUseError
+	if errors.As(err, &daemonIdentityInUse) {
+		return FailureUnavailable
 	}
 	var closeError *websocket.CloseError
 	if errors.As(err, &closeError) {
@@ -365,6 +376,16 @@ type UpgradeRequiredError struct {
 
 func (e *UpgradeRequiredError) Error() string {
 	return "Runner Gateway requires a Local Computer upgrade"
+}
+
+// DaemonIdentityInUseError reports that the Runner Gateway closed the session
+// because another live Computer already holds this Daemon Identity.
+type DaemonIdentityInUseError struct {
+	Reason string
+}
+
+func (e *DaemonIdentityInUseError) Error() string {
+	return "Runner Gateway rejected a Daemon Identity already bound to another Local Computer"
 }
 
 func (s *gatewayStream) Send(ctx context.Context, event protocol.Event) error {

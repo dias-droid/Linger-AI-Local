@@ -910,6 +910,10 @@ describe("quick Local Agent creation", () => {
 
     it.each([
       [{ bridge: "auth_failed", runtime: "stopped" }, /sign-in expired/],
+      [
+        { bridge: "identity_conflict", runtime: "ready" },
+        /already registered under another Computer/,
+      ],
       [{ bridge: "online", runtime: "crashed" }, /local runtime stopped/],
     ])(
       "says why it cannot find runtimes instead of searching forever (%o)",

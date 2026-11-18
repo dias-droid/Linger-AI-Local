@@ -268,6 +268,11 @@ async function main(): Promise<void> {
     new EnrollmentModule({
       defaultDisplayName,
       credentials,
+      daemonIdentityFile: path.join(
+        daemonDirectory,
+        "state",
+        "daemon-identity.json",
+      ),
       sessionCookie: webSessionCookie,
     }),
     new WorkspaceGrantsModule({

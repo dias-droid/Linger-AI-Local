@@ -1,8 +1,10 @@
 import { createHash, randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 import type { components } from "@linger/wire-contracts/teamhub-public/types";
 
 import type { CredentialStore } from "./computer-credential.js";
+import type { SavedEnrollment } from "./config.js";
 import type { Module, ModuleContext } from "./modules.js";
 
 type Schemas = components["schemas"];
@@ -23,6 +25,8 @@ export class EnrollmentError extends Error {
       | "NO_TENANT"
       | "REJECTED"
       | "ENROLLMENT_REMOVED"
+      | "DAEMON_IDENTITY_IN_USE"
+      | "DAEMON_IDENTITY_MISMATCH"
       | "INVALID_RESPONSE",
     message: string,
   ) {
@@ -38,6 +42,16 @@ export interface EnrollInput {
   readonly displayName: string;
   // Keeps the same Computer identity when enrolling again.
   readonly computerId?: string;
+  // SHA-256 of the local Daemon public key in base64url.
+  readonly daemonId?: string;
+  // When re-enrolling after a reset, omit computerId if another account signed in.
+  readonly expectedOwnerActorId?: string;
+  // Persists the authorized Computer ID before exchange completes.
+  readonly onAuthorized?: (authorized: {
+    readonly computerId: string;
+    readonly tenantId: string;
+    readonly ownerActorId?: string;
+  }) => void;
   readonly fetch?: typeof fetch;
 }
 
@@ -77,27 +91,73 @@ export const enrollComputer = async (input: EnrollInput): Promise<Enrolled> => {
   if (me.status === 401)
     throw new EnrollmentError("NOT_SIGNED_IN", "Sign in before enrolling");
   if (!me.ok) throw rejected("Reading the signed-in account", me.status);
-  const tenantId = humanTenant(await me.json());
-  if (!tenantId)
+  const actor = humanActor(await me.json());
+  if (!actor)
     throw new EnrollmentError("NO_TENANT", "The account has no workspace");
+  const { tenantId, actorId } = actor;
 
-  const verifier = randomBytes(32).toString("base64url");
-  const createBody: CreateRequest = {
-    display_name: input.displayName,
-    redirect_uri: REDIRECT_URI,
-    code_challenge: createHash("sha256").update(verifier).digest("base64url"),
-    ...(input.computerId ? { computer_id: input.computerId } : {}),
+  const candidateComputerId =
+    input.expectedOwnerActorId &&
+    actorId &&
+    actorId !== input.expectedOwnerActorId
+      ? undefined
+      : input.computerId;
+
+  const createEnrollment = async (
+    computerId?: string,
+  ): Promise<{ verifier: string; response: Response }> => {
+    const verifier = randomBytes(32).toString("base64url");
+    const createBody: CreateRequest = {
+      display_name: input.displayName,
+      redirect_uri: REDIRECT_URI,
+      code_challenge: createHash("sha256").update(verifier).digest("base64url"),
+      ...(computerId ? { computer_id: computerId } : {}),
+      ...(input.daemonId ? { daemon_id: input.daemonId } : {}),
+    };
+    const response = await call(
+      `/v0/tenants/${encodeURIComponent(tenantId)}/local-computer-enrollments`,
+      { method: "POST", body: createBody, cookie: input.cookie },
+    );
+    return { verifier, response };
   };
-  const created = await call(
-    `/v0/tenants/${encodeURIComponent(tenantId)}/local-computer-enrollments`,
-    { method: "POST", body: createBody, cookie: input.cookie },
-  );
+
+  let { verifier, response: created } =
+    await createEnrollment(candidateComputerId);
+  if (
+    (created.status === 404 || created.status === 410) &&
+    candidateComputerId
+  ) {
+    ({ verifier, response: created } = await createEnrollment(undefined));
+  }
   if (created.status === 401)
     throw new EnrollmentError("NOT_SIGNED_IN", "Sign in before enrolling");
+  if (created.status === 409) {
+    const code = await readErrorCode(created);
+    if (code === "DAEMON_IDENTITY_IN_USE")
+      throw new EnrollmentError(
+        "DAEMON_IDENTITY_IN_USE",
+        "This computer is already connected to another Linger account. Sign in to that account to reconnect it, or remove this Computer from that account first.",
+      );
+    if (code === "LOCAL_COMPUTER_IDENTITY_MISMATCH")
+      throw new EnrollmentError(
+        "DAEMON_IDENTITY_MISMATCH",
+        "This Computer registration belongs to another local identity. Remove the old Computer in Linger first, then reconnect.",
+      );
+    throw rejected("Creating the enrollment", created.status);
+  }
   if (!created.ok) throw rejected("Creating the enrollment", created.status);
   const authorization = (await created.json()) as Authorization;
-  if (!authorization.enrollment_id || !authorization.authorization_code)
+  if (
+    !authorization.enrollment_id ||
+    !authorization.authorization_code ||
+    !authorization.computer_id
+  )
     throw invalid();
+  input.onAuthorized?.({
+    computerId: authorization.computer_id,
+    tenantId,
+    ...(actorId ? { ownerActorId: actorId } : {}),
+  });
 
   const exchangeBody: ExchangeRequest = {
     authorization_code: authorization.authorization_code,
@@ -177,18 +237,68 @@ export const credentialOwner = (
   }
 };
 
-export const humanTenant = (value: unknown): string | undefined => {
+function humanActor(
+  value: unknown,
+): { readonly tenantId: string; readonly actorId?: string } | undefined {
   const actors = (value as { actors?: unknown }).actors;
   if (!Array.isArray(actors)) return undefined;
   const human = actors.find(
-    (a): a is { tenant_id: string } =>
+    (a): a is { tenant_id: string; id?: unknown } =>
       !!a &&
       typeof a === "object" &&
       (a as { kind?: unknown }).kind === "human" &&
       typeof (a as { tenant_id?: unknown }).tenant_id === "string",
   );
-  return human?.tenant_id;
-};
+  if (!human) return undefined;
+  const actorId =
+    typeof human.id === "string" && human.id ? human.id : undefined;
+  return { tenantId: human.tenant_id, ...(actorId ? { actorId } : {}) };
+}
+
+export function humanTenant(value: unknown): string | undefined {
+  return humanActor(value)?.tenantId;
+}
+
+// Reads the Daemon public key file and computes the same base64url SHA-256
+// Daemon ID the Go daemon computes; never reads or retains the private key.
+export function readDaemonId(file: string): string | undefined {
+  let raw: string;
+  try {
+    raw = readFileSync(file, "utf8");
+  } catch {
+    return undefined;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+  if (!parsed || typeof parsed !== "object") return undefined;
+  const encoded = (parsed as { public_key?: unknown }).public_key;
+  if (typeof encoded !== "string" || !/^[A-Za-z0-9+/]{43}=?$/.test(encoded))
+    return undefined;
+  const publicKey = Buffer.from(encoded, "base64");
+  if (publicKey.length !== 32) return undefined;
+  return createHash("sha256").update(publicKey).digest("base64url");
+}
+
+export function enrollmentOrigin(serverUrl: string): string | undefined {
+  try {
+    return new URL(serverUrl).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+async function readErrorCode(response: Response): Promise<string | undefined> {
+  try {
+    const body = (await response.json()) as { error?: { code?: unknown } };
+    return typeof body?.error?.code === "string" ? body.error.code : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 const rejected = (step: string, status: number): EnrollmentError =>
   new EnrollmentError("REJECTED", `${step} failed (${String(status)})`);
@@ -204,6 +314,8 @@ export interface EnrollmentOptions {
   readonly defaultDisplayName: string;
   // Where the Gateway credential is kept for the daemon.
   readonly credentials: CredentialStore;
+  // Path to the Go daemon's daemon-identity.json file.
+  readonly daemonIdentityFile?: string;
   readonly fetch?: typeof fetch;
 }
 
@@ -216,6 +328,7 @@ export class EnrollmentModule implements Module {
   #ctx: ModuleContext | undefined;
   #pending: Promise<{ computerId: string }> | undefined;
   #offServerChanged: (() => void) | undefined;
+  #activeServerUrl: string | undefined;
 
   constructor(options: EnrollmentOptions) {
     this.#options = options;
@@ -223,10 +336,22 @@ export class EnrollmentModule implements Module {
 
   async start(ctx: ModuleContext): Promise<void> {
     this.#ctx = ctx;
+    const initial = ctx.config.get();
+    if (initial.serverUrl && initial.computerId) {
+      this.#activeServerUrl = initial.serverUrl;
+      this.#remember(initial.serverUrl, {
+        computerId: initial.computerId,
+        ...(initial.tenantId ? { tenantId: initial.tenantId } : {}),
+        ...(initial.ownerActorId ? { ownerActorId: initial.ownerActorId } : {}),
+      });
+    }
     // An enrollment belongs to one server; switching servers drops it.
     this.#offServerChanged = ctx.bus.on("server.changed", () => {
-      if (!ctx.config.get().computerId) return;
-      void this.unenroll().catch((error: unknown) =>
+      if (!ctx.config.get().computerId) {
+        this.#activeServerUrl = undefined;
+        return;
+      }
+      void this.#unenrollForServerChange().catch((error: unknown) =>
         ctx.log.warn("enrollment.clear_failed", { error: String(error) }),
       );
     });
@@ -278,12 +403,35 @@ export class EnrollmentModule implements Module {
   }
 
   async unenroll(): Promise<void> {
+    await this.#clearEnrollment(
+      this.#activeServerUrl ?? this.#ctx!.config.get().serverUrl,
+    );
+  }
+
+  async #unenrollForServerChange(): Promise<void> {
+    await this.#clearEnrollment(this.#activeServerUrl);
+  }
+
+  async #clearEnrollment(serverUrl: string | undefined): Promise<void> {
     const ctx = this.#ctx!;
+    const config = ctx.config.get();
+    const saved =
+      serverUrl && config.computerId
+        ? this.#withSaved(serverUrl, {
+            computerId: config.computerId,
+            ...(config.tenantId ? { tenantId: config.tenantId } : {}),
+            ...(config.ownerActorId
+              ? { ownerActorId: config.ownerActorId }
+              : {}),
+          })
+        : undefined;
+    this.#activeServerUrl = undefined;
     this.#options.credentials.clear();
     ctx.config.update({
       computerId: undefined,
       tenantId: undefined,
       ownerActorId: undefined,
+      ...(saved ? { savedEnrollments: saved } : {}),
     });
     ctx.bus.emit("computer.changed", undefined);
     ctx.log.info("enrollment.cleared");
@@ -296,11 +444,26 @@ export class EnrollmentModule implements Module {
     const cookie = await this.#options.sessionCookie(config.serverUrl);
     if (!cookie)
       throw new EnrollmentError("NOT_SIGNED_IN", "Sign in before enrolling");
+    const origin = enrollmentOrigin(config.serverUrl);
+    const saved = origin ? config.savedEnrollments?.[origin] : undefined;
+    const computerId = config.computerId ?? saved?.computerId;
+    const expectedOwnerActorId = config.computerId
+      ? undefined
+      : saved?.ownerActorId;
+    const daemonId = this.#options.daemonIdentityFile
+      ? readDaemonId(this.#options.daemonIdentityFile)
+      : undefined;
+    const serverUrl = config.serverUrl;
     const enrolled = await enrollComputer({
-      serverUrl: config.serverUrl,
+      serverUrl,
       cookie,
       displayName: config.displayName ?? this.#options.defaultDisplayName,
-      ...(config.computerId ? { computerId: config.computerId } : {}),
+      ...(computerId ? { computerId } : {}),
+      ...(expectedOwnerActorId ? { expectedOwnerActorId } : {}),
+      ...(daemonId ? { daemonId } : {}),
+      onAuthorized: (authorized) => {
+        this.#remember(serverUrl, authorized);
+      },
       ...(this.#options.fetch ? { fetch: this.#options.fetch } : {}),
     });
     this.#options.credentials.write({
@@ -308,13 +471,37 @@ export class EnrollmentModule implements Module {
       gatewayUrl: enrolled.gatewayUrl,
       token: enrolled.credential,
     });
-    ctx.config.update({
+    const nextSaved = this.#withSaved(serverUrl, {
       computerId: enrolled.computerId,
       tenantId: enrolled.tenantId,
       ownerActorId: enrolled.ownerActorId,
     });
+    this.#activeServerUrl = serverUrl;
+    ctx.config.update({
+      computerId: enrolled.computerId,
+      tenantId: enrolled.tenantId,
+      ownerActorId: enrolled.ownerActorId,
+      ...(nextSaved ? { savedEnrollments: nextSaved } : {}),
+    });
     ctx.bus.emit("computer.changed", enrolled.computerId);
     ctx.log.info("enrollment.completed", { computer_id: enrolled.computerId });
     return { computerId: enrolled.computerId };
+  }
+
+  #remember(serverUrl: string, entry: SavedEnrollment): void {
+    const next = this.#withSaved(serverUrl, entry);
+    if (next) this.#ctx?.config.update({ savedEnrollments: next });
+  }
+
+  #withSaved(
+    serverUrl: string,
+    entry: SavedEnrollment,
+  ): Record<string, SavedEnrollment> | undefined {
+    const origin = enrollmentOrigin(serverUrl);
+    if (!origin) return undefined;
+    return {
+      ...this.#ctx?.config.get().savedEnrollments,
+      [origin]: entry,
+    };
   }
 }

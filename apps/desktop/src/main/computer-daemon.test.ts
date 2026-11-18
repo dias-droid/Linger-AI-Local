@@ -313,6 +313,8 @@ describe("ComputerDaemonModule", () => {
     expect(daemon.running()).toBe(2);
     children[0]!.status("upgrade-required");
     expect(daemon.connection()).toBe("upgrade_required");
+    children[0]!.status("identity-conflict");
+    expect(daemon.connection()).toBe("identity_conflict");
     expect(activity).toEqual([2, 0]);
   });
 
@@ -598,6 +600,7 @@ describe("connectionState", () => {
     expect(connectionState("connecting")).toBe("connecting");
     expect(connectionState("authentication-failed")).toBe("auth_failed");
     expect(connectionState("upgrade-required")).toBe("upgrade_required");
+    expect(connectionState("identity-conflict")).toBe("identity_conflict");
   });
 });
 

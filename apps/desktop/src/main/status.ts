@@ -26,6 +26,11 @@ export const summarizeStatus = (input: StatusInput): StatusSummary => {
         tone: "error",
         label: "Sign-in Expired · Reconnect This Computer",
       };
+    case "identity_conflict":
+      return {
+        tone: "error",
+        label: "Computer Identity Conflict · Reconnect This Computer",
+      };
     case "upgrade_required":
       return { tone: "error", label: "Update Required" };
   }

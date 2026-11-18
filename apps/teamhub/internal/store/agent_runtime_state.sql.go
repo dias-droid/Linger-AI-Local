@@ -3289,6 +3289,43 @@ func (q *Queries) LockAgentRuntimeLocalComputer(ctx context.Context, computerID 
 	return i, err
 }
 
+const lockAgentRuntimeLocalComputerByDaemonID = `-- name: LockAgentRuntimeLocalComputerByDaemonID :one
+SELECT computer_id, display_name, status, credential_generation, capacity, active_operations, runtime_inventory, workspace_grants, runtime_diagnostics, last_seen_at, removed_at, created_at, updated_at, daemon_id, daemon_public_key, daemon_identity_version, platform, daemon_version, recommended_version, owner_tenant_id, owner_actor_id
+FROM local_computers
+WHERE daemon_id=$1::text
+  AND status<>'removed'
+FOR UPDATE
+`
+
+func (q *Queries) LockAgentRuntimeLocalComputerByDaemonID(ctx context.Context, daemonID string) (LocalComputer, error) {
+	row := q.db.QueryRow(ctx, lockAgentRuntimeLocalComputerByDaemonID, daemonID)
+	var i LocalComputer
+	err := row.Scan(
+		&i.ComputerID,
+		&i.DisplayName,
+		&i.Status,
+		&i.CredentialGeneration,
+		&i.Capacity,
+		&i.ActiveOperations,
+		&i.RuntimeInventory,
+		&i.WorkspaceGrants,
+		&i.RuntimeDiagnostics,
+		&i.LastSeenAt,
+		&i.RemovedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DaemonID,
+		&i.DaemonPublicKey,
+		&i.DaemonIdentityVersion,
+		&i.Platform,
+		&i.DaemonVersion,
+		&i.RecommendedVersion,
+		&i.OwnerTenantID,
+		&i.OwnerActorID,
+	)
+	return i, err
+}
+
 const lockAgentRuntimeLocalComputerEnrollment = `-- name: LockAgentRuntimeLocalComputerEnrollment :one
 SELECT enrollment_id, tenant_id, owner_actor_id, requested_computer_id, renews_existing_computer, display_name, redirect_uri, code_challenge, authorization_code_hash, expires_at, exchanged_at, exchanged_generation, created_at
 FROM local_computer_enrollments

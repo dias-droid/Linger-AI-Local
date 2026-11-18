@@ -428,7 +428,10 @@ export class LocalServerModule implements Module {
   #offRetry: (() => void) | undefined;
   #offReset: (() => void) | undefined;
   #offDaemon: (() => void) | undefined;
+  #offDaemonConnection: (() => void) | undefined;
+  #offComputerChanged: (() => void) | undefined;
   #daemonFailure: string | undefined;
+  #daemonConnection: string | undefined;
   #signIn: RuntimeSignIn | undefined;
   #byokCheck: SetupByokCheck | undefined;
   #legacyBackup: string | undefined;
@@ -482,6 +485,12 @@ export class LocalServerModule implements Module {
     this.#offDaemon = ctx.bus.on("computer.failed", (reason) => {
       this.#daemonFailure = reason;
     });
+    this.#offDaemonConnection = ctx.bus.on("computer.connection", (state) => {
+      this.#daemonConnection = state;
+    });
+    this.#offComputerChanged = ctx.bus.on("computer.changed", () => {
+      this.#daemonConnection = undefined;
+    });
     this.#offRetry = ctx.bus.on("local-server.retry", () => {
       if (this.#phase === "failed" && record) {
         void this.#resume(record, this.#abort.signal);
@@ -497,6 +506,8 @@ export class LocalServerModule implements Module {
     this.#offRetry?.();
     this.#offReset?.();
     this.#offDaemon?.();
+    this.#offDaemonConnection?.();
+    this.#offComputerChanged?.();
     // The installer manager keeps running a started installation; it exits
     // by itself once idle.
     this.#abort.abort();
@@ -987,7 +998,7 @@ export class LocalServerModule implements Module {
           backup: legacyBackup,
         });
         await this.#ctx?.get<EnrollmentModule>("Enrollment").unenroll();
-        this.#ctx?.config.update({ legacyBackup });
+        this.#ctx?.config.update({ legacyBackup, savedEnrollments: undefined });
         this.#legacyBackup = legacyBackup;
       }
       this.#advance("connect", 0, "Connecting this computer…");
@@ -1003,6 +1014,7 @@ export class LocalServerModule implements Module {
       this.#home = home;
       this.#location = undefined;
       this.#ready(job.origin);
+      this.#daemonConnection = undefined;
       await this.#ctx!.get<EnrollmentModule>("Enrollment").enroll();
       this.#advance("agents", 0, "Preparing your agents…");
       await this.#awaitAgents(job.origin, signal);
@@ -2098,6 +2110,24 @@ export class LocalServerModule implements Module {
         });
         throw new Error(computerServiceFailed(this.#daemonFailure));
       }
+      if (this.#daemonConnection === "identity_conflict") {
+        this.#ctx?.log.warn("local_server.computer_identity_conflict");
+        throw new Error(
+          "This computer's local identity is already connected to another Computer registration. Choose Reconnect This Computer in the Linger menu, or remove the duplicate Computer and try again.",
+        );
+      }
+      if (this.#daemonConnection === "auth_failed") {
+        this.#ctx?.log.warn("local_server.computer_auth_failed");
+        throw new Error(
+          "This computer's sign-in expired before it could connect. Choose Reconnect This Computer in the Linger menu, then try again.",
+        );
+      }
+      if (this.#daemonConnection === "upgrade_required") {
+        this.#ctx?.log.warn("local_server.computer_upgrade_required");
+        throw new Error(
+          "This computer's Linger app is too old for the server. Update Linger, then try again.",
+        );
+      }
       // The Another Me has an Agent once the server created it; there is no
       // status to wait for.
       const anotherMe = (await get(`${base}/another-me`)) as
@@ -2108,10 +2138,32 @@ export class LocalServerModule implements Module {
         const rooms = (await get(`${base}/rooms`)) as
           | { items?: { name?: string }[] }
           | undefined;
-        if (rooms?.items?.some((room) => room.name === STARTER_ROOM)) return;
-        // An owner who removed the starter Room is not kept waiting.
-        if (Date.now() >= deadline) return;
-        this.#advance("agents", 0.6, "Adding your starter agents…");
+        const starterReady = rooms?.items?.some(
+          (room) => room.name === STARTER_ROOM,
+        );
+        if (starterReady || Date.now() >= deadline) {
+          const computerId = this.#ctx?.config.get().computerId;
+          if (!computerId) return;
+          const computers = (await get(`${base}/local-computers`).catch(
+            () => undefined,
+          )) as { items?: ReportedComputer[] } | undefined;
+          if (!computers) return;
+          const computer = computers.items?.find(
+            (item) => item.computer_id === computerId,
+          );
+          if (computer?.status === "online" && !computer.upgrade_required)
+            return;
+          if (Date.now() >= deadline) {
+            this.#ctx?.log.warn("local_server.computer_offline_after_agents", {
+              computer_id: computerId,
+              computer_status: computer?.status,
+            });
+            throw new Error(computerNotOnline(computer));
+          }
+          this.#advance("agents", 0.8, "Connecting this computer…");
+        } else {
+          this.#advance("agents", 0.6, "Adding your starter agents…");
+        }
       } else {
         if (Date.now() >= deadline) {
           // Say what the server is missing, as this computer last reported it.
@@ -2477,6 +2529,18 @@ const RUNTIME_STATES: Record<string, string> = {
 // be read.
 export const computerServiceFailed = (reason: string): string =>
   `The Computer service on this computer cannot start: ${reason.replace(/[.\s]+$/, "")}. computer-daemon.log in the logs has details.`;
+
+export function computerNotOnline(
+  computer: ReportedComputer | undefined,
+): string {
+  if (!computer)
+    return "This computer did not come online on Linger: the server does not list this computer. Choose Reconnect This Computer in the Linger tray menu, then try again.";
+  if (computer.status !== "online")
+    return "This computer did not come online on Linger: its Computer service is not connected. computer-daemon.log in the logs says why.";
+  if (computer.upgrade_required)
+    return "This computer's Computer service is too old for the server. Update Linger, then try again.";
+  return "This computer did not come online on Linger.";
+}
 
 export const anotherMeMissing = (
   computer: ReportedComputer | undefined | null,

@@ -40,10 +40,12 @@ import type {
 import { type RunnerCredentialAuthenticator } from "../../../src/agent/runner-gateway/runner-credential-authority.js";
 import {
   attachRunnerGatewayWebSocket,
+  RUNNER_DAEMON_IDENTITY_IN_USE_CLOSE_REASON,
   RUNNER_UPGRADE_REQUIRED_CLOSE_REASON,
   type AttachRunnerGatewayWebSocketOptions,
 } from "../../../src/agent/runner-gateway/runner-gateway-websocket.js";
 import {
+  RunnerDaemonIdentityInUseError,
   RunnerGatewayProtocolError,
   RunnerUpgradeRequiredError,
   type RunnerOperation,
@@ -180,6 +182,29 @@ describe("Runner Gateway WebSocket", () => {
         );
     },
   );
+
+  it("closes with policy violation and identity conflict reason on RunnerDaemonIdentityInUseError", async () => {
+    const onSessionError = vi.fn();
+    const fixture = await startFixture({ onSessionError });
+    const accept = vi
+      .spyOn(fixture.gateway, "acceptConnection")
+      .mockRejectedValueOnce(new RunnerDaemonIdentityInUseError());
+    const socket = new WebSocket(fixture.url, {
+      headers: { Authorization: "Bearer runner-secret" },
+    });
+    await opened(socket);
+    const closed = onceClosed(socket);
+    socket.send(JSON.stringify(hello()));
+    await expect(closed).resolves.toEqual({
+      code: 1008,
+      reason: RUNNER_DAEMON_IDENTITY_IN_USE_CLOSE_REASON,
+    });
+    expect(accept).toHaveBeenCalledOnce();
+    expect(onSessionError).toHaveBeenCalledWith(
+      expect.any(RunnerDaemonIdentityInUseError),
+      expect.objectContaining({ phase: "runner.hello" }),
+    );
+  });
 
   it.each(["close", "invalid frame"])(
     "cleans up pending admission after %s",

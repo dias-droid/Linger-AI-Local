@@ -45,4 +45,16 @@ describe("summarizeStatus", () => {
       label: "Sign-in Expired · Reconnect This Computer",
     });
   });
+
+  it("asks to reconnect on a Daemon Identity conflict", () => {
+    expect(
+      summarizeStatus({
+        ...base,
+        connection: "identity_conflict",
+      }),
+    ).toEqual({
+      tone: "error",
+      label: "Computer Identity Conflict · Reconnect This Computer",
+    });
+  });
 });

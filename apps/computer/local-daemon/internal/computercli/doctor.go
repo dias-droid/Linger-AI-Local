@@ -177,6 +177,11 @@ func inspectDaemonHealth(ctx context.Context, client controlClient, commandName 
 			Name: "daemon", Category: categoryCredential, Status: "fail",
 			Detail: fmt.Sprintf("Gateway rejected this enrollment. If the server-side Computer was deleted, run %s doctor --prune, then %s login", commandName, commandName),
 		}
+	case "identity-conflict":
+		return doctorCheck{
+			Name: "daemon", Category: categoryCredential, Status: "fail",
+			Detail: fmt.Sprintf("This computer's Daemon Identity is already bound to another Computer registration. Run %s login to reconnect, or %s doctor --prune to reset local state", commandName, commandName),
+		}
 	case "upgrade-required":
 		return doctorCheck{
 			Name: "daemon", Category: categoryConfiguration, Status: "fail",

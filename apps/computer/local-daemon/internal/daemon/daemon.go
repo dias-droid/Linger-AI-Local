@@ -270,6 +270,8 @@ func New(options Options) (*Daemon, error) {
 	}, nil
 }
 
+// Run loads or creates the Daemon Identity and keeps the Gateway stream
+// connected until ctx ends or a terminal configuration error stops redials.
 func (d *Daemon) Run(ctx context.Context) error {
 	defer func() {
 		_, _ = native.StopAllParkedResidents()
@@ -313,6 +315,12 @@ func (d *Daemon) Run(ctx context.Context) error {
 		var upgradeRequired *transport.UpgradeRequiredError
 		if errors.As(err, &upgradeRequired) {
 			d.setGatewayState("upgrade-required")
+			<-ctx.Done()
+			return ctx.Err()
+		}
+		var daemonIdentityInUse *transport.DaemonIdentityInUseError
+		if errors.As(err, &daemonIdentityInUse) {
+			d.setGatewayState("identity-conflict")
 			<-ctx.Done()
 			return ctx.Err()
 		}

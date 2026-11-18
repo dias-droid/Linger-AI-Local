@@ -6379,9 +6379,12 @@ type LocalComputerEnrollmentCreateRequest struct {
 	CodeChallenge string `json:"code_challenge"`
 
 	// ComputerId Opaque, case-sensitive identifier. Clients must not infer type or time from it.
-	ComputerId  *Id    `json:"computer_id,omitempty"`
-	DisplayName string `json:"display_name"`
-	RedirectUri string `json:"redirect_uri"`
+	ComputerId *Id `json:"computer_id,omitempty"`
+
+	// DaemonId SHA-256 of the local Daemon Ed25519 public key in base64url. When supplied, TeamHub renews a live Computer already bound to this Daemon Identity for the same owner and rejects claims by another owner with 409 DAEMON_IDENTITY_IN_USE.
+	DaemonId    *string `json:"daemon_id,omitempty"`
+	DisplayName string  `json:"display_name"`
+	RedirectUri string  `json:"redirect_uri"`
 }
 
 // LocalComputerEnrollmentExchangeRequest defines model for LocalComputerEnrollmentExchangeRequest.

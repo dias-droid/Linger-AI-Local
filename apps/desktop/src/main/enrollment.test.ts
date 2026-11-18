@@ -1,8 +1,18 @@
 import { createHash } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { EnrollmentError, enrollComputer } from "./enrollment.js";
+import { CredentialStore } from "./computer-credential.js";
+import {
+  EnrollmentError,
+  EnrollmentModule,
+  enrollComputer,
+  readDaemonId,
+} from "./enrollment.js";
+import { EventBus } from "./modules.js";
+import { stubModule, tempDirectory, testHost } from "./test-support.js";
 
 const claims = (value: object): string =>
   Buffer.from(JSON.stringify(value)).toString("base64url");
@@ -18,8 +28,18 @@ interface Call {
   readonly body: Record<string, unknown> | undefined;
 }
 
+interface ServerOverrides {
+  readonly exchangeStatus?: number;
+  readonly bundle?: Record<string, unknown>;
+  readonly meActorId?: string;
+  readonly onCreate?: (
+    body: Record<string, unknown> | undefined,
+  ) => Response | undefined;
+  readonly onExchange?: () => Response | undefined;
+}
+
 const fakeServer = (
-  overrides: { exchangeStatus?: number; bundle?: Record<string, unknown> } = {},
+  overrides: ServerOverrides = {},
 ): { fetch: typeof fetch; calls: Call[] } => {
   const calls: Call[] = [];
   let challenge = "";
@@ -37,16 +57,31 @@ const fakeServer = (
     const json = (value: unknown, status = 200): Response =>
       new Response(JSON.stringify(value), { status });
     if (input.pathname === "/v0/me")
-      return json({ actors: [{ kind: "human", tenant_id: "tenant_acme" }] });
+      return json({
+        actors: [
+          {
+            kind: "human",
+            tenant_id: "tenant_acme",
+            ...(overrides.meActorId ? { id: overrides.meActorId } : {}),
+          },
+        ],
+      });
     if (input.pathname.endsWith("/local-computer-enrollments")) {
+      const custom = overrides.onCreate?.(body);
+      if (custom) return custom;
       challenge = String(body?.code_challenge);
       return json({
         enrollment_id: "enr_1",
-        computer_id: "computer_1",
+        computer_id:
+          typeof body?.computer_id === "string"
+            ? body.computer_id
+            : "computer_1",
         authorization_code: "code_1",
         expires_at: "2026-10-16T08:00:00Z",
       });
     }
+    const exchangeCustom = overrides.onExchange?.();
+    if (exchangeCustom) return exchangeCustom;
     if (overrides.exchangeStatus) return json({}, overrides.exchangeStatus);
     const verifier = String(body?.code_verifier);
     if (createHash("sha256").update(verifier).digest("base64url") !== challenge)
@@ -62,6 +97,20 @@ const fakeServer = (
     );
   }) as typeof fetch;
   return { fetch: fetchImpl, calls };
+};
+
+const writeDaemonIdentity = (
+  file: string,
+  publicKey = Buffer.alloc(32, 7),
+): string => {
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(
+    file,
+    JSON.stringify({
+      public_key: publicKey.toString("base64").replace(/=+$/, ""),
+    }),
+  );
+  return createHash("sha256").update(publicKey).digest("base64url");
 };
 
 const input = {
@@ -156,5 +205,256 @@ describe("enrollComputer", () => {
     await expect(
       enrollComputer({ ...input, fetch: server.fetch }),
     ).rejects.toMatchObject({ code: "INVALID_RESPONSE" });
+  });
+
+  it("includes daemon_id when provided", async () => {
+    const server = fakeServer();
+    await enrollComputer({
+      ...input,
+      daemonId: "A".repeat(43),
+      fetch: server.fetch,
+    });
+    expect(server.calls[1]?.body?.daemon_id).toBe("A".repeat(43));
+  });
+
+  it("omits saved computer_id only when another owner signed in", async () => {
+    const otherOwner = fakeServer({ meActorId: "actor_bob" });
+    await enrollComputer({
+      ...input,
+      computerId: "computer_1",
+      expectedOwnerActorId: "actor_ann",
+      daemonId: "A".repeat(43),
+      fetch: otherOwner.fetch,
+    });
+    expect(otherOwner.calls[1]?.body).not.toHaveProperty("computer_id");
+    expect(otherOwner.calls[1]?.body?.daemon_id).toBe("A".repeat(43));
+
+    const sameOwner = fakeServer({ meActorId: "actor_ann" });
+    await enrollComputer({
+      ...input,
+      computerId: "computer_1",
+      expectedOwnerActorId: "actor_ann",
+      daemonId: "A".repeat(43),
+      fetch: sameOwner.fetch,
+    });
+    expect(sameOwner.calls[1]?.body?.computer_id).toBe("computer_1");
+  });
+
+  it.each([404, 410])(
+    "retries once without computer_id when create returns %i for a saved Computer",
+    async (status) => {
+      let createCalls = 0;
+      const server = fakeServer({
+        onCreate: () => {
+          createCalls += 1;
+          if (createCalls === 1) return new Response("{}", { status });
+          return undefined;
+        },
+      });
+      const enrolled = await enrollComputer({
+        ...input,
+        computerId: "computer_stale",
+        daemonId: "D".repeat(43),
+        fetch: server.fetch,
+      });
+      expect(enrolled.computerId).toBe("computer_1");
+      const creates = server.calls.filter((call) =>
+        call.url.endsWith("/local-computer-enrollments"),
+      );
+      expect(creates).toHaveLength(2);
+      expect(creates[0]?.body?.computer_id).toBe("computer_stale");
+      expect(creates[0]?.body?.daemon_id).toBe("D".repeat(43));
+      expect(creates[1]?.body).not.toHaveProperty("computer_id");
+      expect(creates[1]?.body?.daemon_id).toBe("D".repeat(43));
+    },
+  );
+
+  it.each([
+    ["DAEMON_IDENTITY_IN_USE", "DAEMON_IDENTITY_IN_USE"],
+    ["LOCAL_COMPUTER_IDENTITY_MISMATCH", "DAEMON_IDENTITY_MISMATCH"],
+  ] as const)(
+    "maps 409 %s to EnrollmentError %s",
+    async (serverCode, expectedCode) => {
+      const server = fakeServer({
+        onCreate: () =>
+          Response.json(
+            { error: { code: serverCode, message: "conflict" } },
+            { status: 409 },
+          ),
+      });
+      await expect(
+        enrollComputer({
+          ...input,
+          daemonId: "D".repeat(43),
+          fetch: server.fetch,
+        }),
+      ).rejects.toMatchObject({ code: expectedCode });
+    },
+  );
+
+  it("invokes onAuthorized before exchange runs", async () => {
+    const seen: unknown[] = [];
+    const server = fakeServer({
+      meActorId: "actor_ann",
+      exchangeStatus: 500,
+    });
+    await expect(
+      enrollComputer({
+        ...input,
+        onAuthorized: (authorized) => seen.push(authorized),
+        fetch: server.fetch,
+      }),
+    ).rejects.toMatchObject({ code: "REJECTED" });
+    expect(seen).toEqual([
+      {
+        computerId: "computer_1",
+        tenantId: "tenant_acme",
+        ownerActorId: "actor_ann",
+      },
+    ]);
+  });
+});
+
+describe("readDaemonId", () => {
+  it("computes the 43-char base64url SHA-256 of the daemon public key", () => {
+    const dir = tempDirectory();
+    const file = path.join(dir, "state", "daemon-identity.json");
+    const expected = writeDaemonIdentity(file);
+    expect(readDaemonId(file)).toBe(expected);
+    expect(expected).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+    // Padded base64 is accepted identically.
+    const key = Buffer.alloc(32, 9);
+    const paddedFile = path.join(dir, "state", "padded.json");
+    writeFileSync(
+      paddedFile,
+      JSON.stringify({ public_key: key.toString("base64") }),
+    );
+    expect(readDaemonId(paddedFile)).toBe(
+      createHash("sha256").update(key).digest("base64url"),
+    );
+  });
+
+  it("returns undefined for missing, malformed, or wrong-length files", () => {
+    const dir = tempDirectory();
+    expect(readDaemonId(path.join(dir, "missing.json"))).toBeUndefined();
+
+    const invalidJson = path.join(dir, "invalid.json");
+    writeFileSync(invalidJson, "{");
+    expect(readDaemonId(invalidJson)).toBeUndefined();
+
+    const shortKey = path.join(dir, "short.json");
+    writeFileSync(
+      shortKey,
+      JSON.stringify({ public_key: Buffer.alloc(16, 1).toString("base64") }),
+    );
+    expect(readDaemonId(shortKey)).toBeUndefined();
+  });
+});
+
+describe("EnrollmentModule", () => {
+  const setupModule = (
+    serverOverrides: ServerOverrides = {},
+    initialServerUrl = "https://linger.example.com",
+  ) => {
+    const dir = tempDirectory();
+    const daemonIdentityFile = path.join(dir, "daemon-identity.json");
+    const daemonId = writeDaemonIdentity(daemonIdentityFile);
+    const server = fakeServer({ meActorId: "actor_ann", ...serverOverrides });
+    const credentials = new CredentialStore(path.join(dir, "credential.json"));
+    const bus = new EventBus();
+    const enrollment = new EnrollmentModule({
+      sessionCookie: async () => "teamhub_session=abc",
+      defaultDisplayName: "Laptop",
+      credentials,
+      daemonIdentityFile,
+      fetch: server.fetch,
+    });
+    const host = testHost(
+      [stubModule("Config"), enrollment],
+      { serverUrl: initialServerUrl },
+      bus,
+    );
+    return { enrollment, host, bus, server, credentials, daemonId };
+  };
+
+  it("renews the same Computer ID after unenroll using savedEnrollments and daemonId", async () => {
+    const { enrollment, host, server, daemonId } = setupModule();
+    await host.start();
+    const first = await enrollment.enroll();
+    expect(first.computerId).toBe("computer_1");
+
+    await enrollment.unenroll();
+    expect(host.ctx.config.get().computerId).toBeUndefined();
+    expect(host.ctx.config.get().savedEnrollments).toEqual({
+      "https://linger.example.com": {
+        computerId: "computer_1",
+        tenantId: "tenant_acme",
+        ownerActorId: "actor_ann",
+      },
+    });
+
+    const second = await enrollment.enroll();
+    expect(second.computerId).toBe("computer_1");
+    const creates = server.calls.filter((call) =>
+      call.url.endsWith("/local-computer-enrollments"),
+    );
+    expect(creates[1]?.body?.computer_id).toBe("computer_1");
+    expect(creates[1]?.body?.daemon_id).toBe(daemonId);
+    await host.stop("quit");
+  });
+
+  it("remembers an authorized Computer ID across an interrupted exchange", async () => {
+    let failExchange = true;
+    const { enrollment, host, server, daemonId } = setupModule({
+      onExchange: () =>
+        failExchange ? new Response("{}", { status: 500 }) : undefined,
+    });
+    await host.start();
+    await expect(enrollment.enroll()).rejects.toMatchObject({
+      code: "REJECTED",
+    });
+    expect(host.ctx.config.get().computerId).toBeUndefined();
+    expect(host.ctx.config.get().savedEnrollments).toEqual({
+      "https://linger.example.com": {
+        computerId: "computer_1",
+        tenantId: "tenant_acme",
+        ownerActorId: "actor_ann",
+      },
+    });
+
+    failExchange = false;
+    const recovered = await enrollment.enroll();
+    expect(recovered.computerId).toBe("computer_1");
+    const creates = server.calls.filter((call) =>
+      call.url.endsWith("/local-computer-enrollments"),
+    );
+    expect(creates[1]?.body?.computer_id).toBe("computer_1");
+    expect(creates[1]?.body?.daemon_id).toBe(daemonId);
+    await host.stop("quit");
+  });
+
+  it("saves the previous server origin on server.changed without polluting the new origin", async () => {
+    const { enrollment, host, bus } = setupModule();
+    await host.start();
+    await enrollment.enroll();
+
+    host.ctx.config.update({ serverUrl: "https://other.example.com" });
+    bus.emit("server.changed", "https://other.example.com");
+    await vi.waitFor(() =>
+      expect(host.ctx.config.get().computerId).toBeUndefined(),
+    );
+
+    expect(host.ctx.config.get().savedEnrollments).toEqual({
+      "https://linger.example.com": {
+        computerId: "computer_1",
+        tenantId: "tenant_acme",
+        ownerActorId: "actor_ann",
+      },
+    });
+    expect(
+      host.ctx.config.get().savedEnrollments?.["https://other.example.com"],
+    ).toBeUndefined();
+    await host.stop("quit");
   });
 });

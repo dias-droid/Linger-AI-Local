@@ -20,6 +20,8 @@ import { describe, expect, it, vi } from "vitest";
 import { NODE_RUNTIME_VERSION } from "../../../../scripts/local-computer-node-distributions.mjs";
 import { rename } from "node:fs/promises";
 
+import { CredentialStore } from "./computer-credential.js";
+import { EnrollmentModule } from "./enrollment.js";
 import {
   LOCAL_INSTANCE,
   LOCAL_STEPS,
@@ -27,6 +29,7 @@ import {
   MIN_MACOS,
   anotherMeMissing,
   checkLocation,
+  computerNotOnline,
   followHttps,
   hasNativePostgres,
   InstallerApi,
@@ -1096,6 +1099,116 @@ describe("LocalServerModule", () => {
     );
     expect(f.module.status().phase).toBe("failed");
     await f.host.stop("quit");
+  });
+
+  it("stops waiting immediately when the Computer daemon reports an identity conflict", async () => {
+    const polls = { anotherMe: 0 };
+    const server = (async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/v0/me")
+        return Response.json({ actors: [{ kind: "human", tenant_id: "t1" }] });
+      if (url.pathname === "/v0/tenants/t1/another-me") {
+        polls.anotherMe += 1;
+        return Response.json({});
+      }
+      return new Response(null, { status: 404 });
+    }) as typeof fetch;
+    const f = fixture(
+      (home) => ({
+        ...withCheckout(home),
+        fetch: server,
+        sessionCookie: async () => "session=s",
+        pollMs: 1,
+      }),
+      { computerId: "cmp_1" },
+      checkout,
+    );
+    await f.host.start();
+    const setup = f.module.begin();
+    await vi.waitFor(() => expect(polls.anotherMe).toBeGreaterThan(0));
+    f.host.ctx.bus.emit("computer.connection", "identity_conflict");
+    await expect(setup).rejects.toThrow(
+      /already connected to another Computer registration/,
+    );
+    expect(f.module.status().phase).toBe("failed");
+    await f.host.stop("quit");
+  });
+
+  it("waits for the enrolled Computer to report online before finishing setup", async () => {
+    let computerPolls = 0;
+    const server = (async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/v0/me")
+        return Response.json({ actors: [{ kind: "human", tenant_id: "t1" }] });
+      if (url.pathname === "/v0/tenants/t1/another-me")
+        return Response.json({ agent_actor_id: "actor_anotherme_1" });
+      if (url.pathname === "/v0/tenants/t1/rooms")
+        return Response.json({ items: [{ name: "Getting Started" }] });
+      if (url.pathname === "/v0/tenants/t1/local-computers") {
+        computerPolls += 1;
+        return Response.json({
+          items: [
+            {
+              computer_id: "cmp_1",
+              status: computerPolls < 3 ? "offline" : "online",
+            },
+          ],
+        });
+      }
+      return new Response(null, { status: 404 });
+    }) as typeof fetch;
+    const f = fixture(
+      (home) => ({
+        ...withCheckout(home),
+        fetch: server,
+        sessionCookie: async () => "session=s",
+        pollMs: 1,
+      }),
+      { computerId: "cmp_1" },
+      checkout,
+    );
+    await f.host.start();
+    const messages: string[] = [];
+    f.host.ctx.bus.on("local-server.changed", () => {
+      messages.push(f.module.status().message);
+    });
+    await f.module.begin();
+    expect(computerPolls).toBe(3);
+    expect(messages).toContain("Connecting this computer…");
+    expect(f.module.status().phase).toBe("ready");
+    await f.host.stop("quit");
+
+    // On timeout while offline, it reports the Computer is offline instead
+    // of claiming Another Me is missing.
+    const offlineServer = (async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/v0/me")
+        return Response.json({ actors: [{ kind: "human", tenant_id: "t1" }] });
+      if (url.pathname === "/v0/tenants/t1/another-me")
+        return Response.json({ agent_actor_id: "actor_anotherme_1" });
+      if (url.pathname === "/v0/tenants/t1/rooms")
+        return Response.json({ items: [{ name: "Getting Started" }] });
+      if (url.pathname === "/v0/tenants/t1/local-computers")
+        return Response.json({
+          items: [{ computer_id: "cmp_1", status: "offline" }],
+        });
+      return new Response(null, { status: 404 });
+    }) as typeof fetch;
+    const offline = fixture(
+      (home) => ({
+        ...withCheckout(home),
+        fetch: offlineServer,
+        sessionCookie: async () => "session=s",
+        agentsTimeoutMs: 0,
+      }),
+      { computerId: "cmp_1" },
+      checkout,
+    );
+    await offline.host.start();
+    await expect(offline.module.begin()).rejects.toThrow(
+      computerNotOnline({ status: "offline" }),
+    );
+    await offline.host.stop("quit");
   });
 
   it("rejects a source package with the wrong digest", async () => {
@@ -2807,6 +2920,228 @@ describe("LocalServerModule after a restart", () => {
     await delay(50);
     expect(existsSync(path.join(f.home, "installer", "args.json"))).toBe(false);
     await f.host.stop("quit");
+  });
+
+  it("renews the same Computer ID across local-server reset and re-enrollment with retained daemon identity", async () => {
+    const root = tempDirectory();
+    const home = path.join(root, "home");
+    const installerDirectory = path.join(root, "installer");
+    mkdirSync(installerDirectory, { recursive: true });
+    writeFileSync(
+      path.join(installerDirectory, "installer.js"),
+      FAKE_INSTALLER,
+    );
+    writeFileSync(
+      path.join(installerDirectory, "package.json"),
+      '{"type":"commonjs"}',
+    );
+    writeFileSync(
+      path.join(installerDirectory, "distribution.json"),
+      JSON.stringify({
+        platform: "linux",
+        arch: "x64",
+        nativeSources: [{ target: "linux-x64" }],
+      }),
+    );
+    const node = path.join(home, "desktop", "node", `v${NODE_RUNTIME_VERSION}`);
+    mkdirSync(path.join(node, "bin"), { recursive: true });
+    symlinkSync(process.execPath, path.join(node, "bin", "node"));
+    checkout(home);
+
+    const daemonIdentityFile = path.join(root, "state", "daemon-identity.json");
+    mkdirSync(path.dirname(daemonIdentityFile), { recursive: true });
+    const pubkey = Buffer.alloc(32, 5);
+    writeFileSync(
+      daemonIdentityFile,
+      JSON.stringify({
+        public_key: pubkey.toString("base64").replace(/=+$/, ""),
+      }),
+    );
+    const expectedDaemonId = createHash("sha256")
+      .update(pubkey)
+      .digest("base64url");
+
+    const computers: {
+      readonly computer_id: string;
+      readonly daemon_id: string | undefined;
+      readonly owner_actor_id: string;
+    }[] = [];
+    const enrollmentBodies: Record<string, unknown>[] = [];
+    let resetOccurred = false;
+    let postResetPolls = 0;
+    const api = installerApi();
+    const teamhubToken = (computerId: string) =>
+      `sr1.${Buffer.from(
+        JSON.stringify({
+          runner_id: computerId,
+          tenant_owners: [{ tenant_id: "t1", owner_actor_id: "actor_ann" }],
+        }),
+      ).toString("base64url")}.${"s".repeat(43)}`;
+
+    const fetcher = (async (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.origin === "http://127.0.0.1:4321") return api.handle(url, init);
+      if (url.pathname === "/v0/me")
+        return Response.json({
+          actors: [{ id: "actor_ann", kind: "human", tenant_id: "t1" }],
+        });
+      if (url.pathname === "/v0/tenants/t1/local-computer-enrollments") {
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        enrollmentBodies.push(body);
+        const requestedId =
+          typeof body.computer_id === "string" ? body.computer_id : undefined;
+        const daemonId =
+          typeof body.daemon_id === "string" ? body.daemon_id : undefined;
+        const existing =
+          computers.find((c) => c.computer_id === requestedId) ??
+          (daemonId
+            ? computers.find(
+                (c) =>
+                  c.daemon_id === daemonId && c.owner_actor_id === "actor_ann",
+              )
+            : undefined);
+        const resolvedId =
+          existing?.computer_id ?? `cmp_${String(computers.length + 1)}`;
+        if (!existing) {
+          computers.push({
+            computer_id: resolvedId,
+            daemon_id: daemonId,
+            owner_actor_id: "actor_ann",
+          });
+        }
+        return Response.json({
+          enrollment_id: `enr_${resolvedId}`,
+          computer_id: resolvedId,
+          authorization_code: `code_${resolvedId}`,
+          expires_at: "2026-11-18T00:00:00Z",
+        });
+      }
+      if (url.pathname.startsWith("/v0/local-computer-enrollments/")) {
+        const id = url.pathname.split("/")[3]!.replace(/^enr_/, "");
+        return Response.json({
+          computer_id: id,
+          tenant_id: "t1",
+          gateway_url: "wss://localhost:4319/v1/runner",
+          gateway_token: teamhubToken(id),
+          credential_expires_at: "2026-12-18T00:00:00Z",
+        });
+      }
+      if (url.pathname === "/v0/tenants/t1/another-me")
+        return Response.json({ agent_actor_id: "actor_anotherme_1" });
+      if (url.pathname === "/v0/tenants/t1/rooms")
+        return Response.json({ items: [{ name: "Getting Started" }] });
+      if (url.pathname === "/v0/tenants/t1/local-computers") {
+        const online = !resetOccurred || ++postResetPolls >= 2;
+        return Response.json({
+          items: computers.map((c) => ({
+            computer_id: c.computer_id,
+            status: online ? "online" : "offline",
+          })),
+        });
+      }
+      return new Response(null, { status: 404 });
+    }) as typeof fetch;
+
+    const bus = new EventBus();
+    const initialGrant = {
+      grantId: "grant_1",
+      path: path.join(root, "workspace"),
+      label: "Workspace",
+      access: "read_write" as const,
+      createdAt: "2026-11-01T00:00:00Z",
+    };
+    const enrollment = new EnrollmentModule({
+      sessionCookie: async () => "session=s",
+      defaultDisplayName: "Studio Mac",
+      credentials: new CredentialStore(path.join(root, "credential.json")),
+      daemonIdentityFile,
+      fetch: fetcher,
+    });
+    const module = new LocalServerModule({
+      home,
+      version: APP_VERSION,
+      installerDirectory,
+      checkout: path.join(home, "src"),
+      platform: "linux",
+      arch: "x64",
+      pollMs: 1,
+      freeBytes: 1,
+      signIn: async () => {},
+      serverIdentity: async (_h, origin) => ({
+        origin,
+        teamhub: TEAMHUB,
+        key: KEY,
+      }),
+      proveServer: async () => {},
+      sessionCookie: async () => "session=s",
+      fetch: fetcher,
+    });
+    let hostContext: ModuleContext | undefined;
+    const host = testHost(
+      [
+        {
+          ...stubModule("Config"),
+          start: async (ctx: ModuleContext) => {
+            hostContext = ctx;
+          },
+        },
+        {
+          ...stubModule("WindowManager"),
+          setServer: (origin: string) => {
+            if (origin !== hostContext!.config.get().serverUrl) {
+              hostContext!.config.update({ serverUrl: origin });
+              bus.emit("server.changed", origin);
+            }
+            return true;
+          },
+          showUpdating: vi.fn(),
+          showStarting: vi.fn(),
+          showStartFailed: vi.fn(),
+          loadServer: vi.fn(),
+        } as never,
+        enrollment,
+        module,
+      ],
+      { workspaceGrants: [initialGrant] },
+      bus,
+    );
+
+    const opened = vi.fn();
+    bus.on("setup.open", opened);
+    await host.start();
+
+    await module.begin();
+    expect(module.status().phase).toBe("ready");
+    expect(host.ctx.config.get().computerId).toBe("cmp_1");
+    expect(enrollmentBodies[0]?.daemon_id).toBe(expectedDaemonId);
+
+    resetOccurred = true;
+    bus.emit("local-server.reset");
+    await vi.waitFor(() => expect(opened).toHaveBeenCalledOnce());
+    expect(host.ctx.config.get().computerId).toBeUndefined();
+    expect(host.ctx.config.get().serverUrl).toBeUndefined();
+    expect(host.ctx.config.get().savedEnrollments).toEqual({
+      "http://localhost:3000": {
+        computerId: "cmp_1",
+        tenantId: "t1",
+        ownerActorId: "actor_ann",
+      },
+    });
+    expect(host.ctx.config.get().workspaceGrants).toEqual([initialGrant]);
+
+    await module.begin();
+    expect(module.status().phase).toBe("ready");
+    expect(host.ctx.config.get().computerId).toBe("cmp_1");
+    expect(host.ctx.config.get().workspaceGrants).toEqual([initialGrant]);
+    expect(computers).toHaveLength(1);
+    expect(enrollmentBodies).toHaveLength(2);
+    expect(enrollmentBodies[1]?.computer_id).toBe("cmp_1");
+    expect(enrollmentBodies[1]?.daemon_id).toBe(expectedDaemonId);
+    expect(postResetPolls).toBe(2);
+    await host.stop("quit");
   });
 
   it("writes its record in one piece", async () => {

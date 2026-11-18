@@ -1027,6 +1027,8 @@ paths:
           $ref: '../components/common.yaml#/components/responses/Unauthenticated'
         '404':
           $ref: '../components/common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: '../components/common.yaml#/components/responses/Conflict'
         '410':
           $ref: '../components/common.yaml#/components/responses/Gone'
         '503':
