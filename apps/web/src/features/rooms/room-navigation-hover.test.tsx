@@ -1,17 +1,21 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
+// Only the local rules are needed; jsdom cannot load Tailwind's CSS import.
 const navigationStyles = readFileSync(
   resolve(import.meta.dirname, "../../app/globals.css"),
   "utf8",
-);
-const stylesheet = document.createElement("style");
-// Only the local rules are needed; jsdom cannot load Tailwind's CSS import.
-stylesheet.textContent = navigationStyles.replace(/^@import .*;$/gm, "");
-document.head.append(stylesheet);
+).replace(/^@import .*;$/gm, "");
+let stylesheet: HTMLStyleElement;
 
-afterAll(() => stylesheet.remove());
+// The shared test setup removes head nodes after each test, so each test
+// attaches its own copy.
+beforeEach(() => {
+  stylesheet = document.createElement("style");
+  stylesheet.textContent = navigationStyles;
+  document.head.append(stylesheet);
+});
 
 describe("collapsed navigation hover targets", () => {
   it.each([
