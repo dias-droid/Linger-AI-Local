@@ -49,14 +49,17 @@ func setAsideOrphanedProjection(workspace string, mappings []Mapping) (string, e
 	roots := append([]string(nil), next.ReadOnlyRoots...)
 	// An outer root carries the roots inside it.
 	sort.Slice(roots, func(left, right int) bool { return len(roots[left]) < len(roots[right]) })
-	destination := ""
+	// A writable tree is agent work; it is never moved. Every root is checked
+	// before the first move, so a View that cannot publish moves nothing.
 	for _, root := range roots {
 		for _, writable := range next.WritableRoots {
 			if pathWithin(root, writable) || pathWithin(writable, root) {
-				// A writable tree is agent work; it is never moved.
 				return "", contextConflict("read-only mapping %s overlaps writable mapping %s", root, writable)
 			}
 		}
+	}
+	destination := ""
+	for _, root := range roots {
 		source := filepath.Join(workspace, root)
 		info, err := os.Lstat(source)
 		if errors.Is(err, os.ErrNotExist) {

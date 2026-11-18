@@ -154,3 +154,22 @@ func TestSameWorkspacePath(t *testing.T) {
 		}
 	}
 }
+
+func TestSetAsideMovesNothingWhenRootsOverlap(t *testing.T) {
+	workspace := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(workspace, "inbox"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	mappings := []Mapping{
+		{Kind: "inbox", TargetPath: "inbox", Access: "read_only"},
+		{Kind: "playground", TargetPath: "playground", Access: "read_write"},
+		{Kind: "skills", TargetPath: "playground/x", Access: "read_only"},
+	}
+	destination, err := setAsideOrphanedProjection(workspace, mappings)
+	if !errors.Is(err, ErrContextConflict) || destination != "" {
+		t.Fatalf("setAsideOrphanedProjection = %q, %v; want a conflict", destination, err)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, "inbox")); err != nil {
+		t.Fatalf("inbox moved before the overlap was refused: %v", err)
+	}
+}
