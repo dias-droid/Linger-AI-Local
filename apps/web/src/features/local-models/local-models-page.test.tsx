@@ -494,6 +494,70 @@ describe("LocalModelsPage", () => {
     answer();
   });
 
+  it("lets an accepted download be cancelled before its first progress", async () => {
+    const fixture = setup();
+    await renderPage(fixture);
+    await findModels();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Download GPT-OSS 20B" }),
+    );
+    const cancel = await screen.findByRole("button", {
+      name: "Cancel GPT-OSS 20B",
+    });
+    await waitFor(() => expect(cancel).toBeEnabled());
+    expect(statusOf("GPT-OSS 20B")).toBe("Downloading");
+
+    const answer = holdActions(fixture, () => accepted("cancel"));
+    fireEvent.click(cancel);
+    await waitFor(() => expect(statusOf("GPT-OSS 20B")).toBe("Cancelling"));
+    expect(
+      screen.queryByRole("button", { name: "Download GPT-OSS 20B" }),
+    ).toBeNull();
+    answer();
+  });
+
+  it("shows a download as cancelling from the click until the Computer stops it", async () => {
+    const fixture = setup([
+      withModel(labView(), "gpt-oss-20b:Q4_K_M", {
+        download: { done_bytes: 32, step: "download", total_bytes: 100 },
+        state: "downloading",
+      }),
+    ]);
+    const answer = holdActions(fixture, () => accepted("cancel"));
+    await renderPage(fixture);
+    await findModels();
+
+    fireEvent.click(screen.getByRole("button", { name: "Cancel GPT-OSS 20B" }));
+    await waitFor(() => expect(statusOf("GPT-OSS 20B")).toBe("Cancelling"));
+    expect(
+      card("GPT-OSS 20B").querySelector(".town-shimmer-text"),
+    ).not.toBeNull();
+
+    // Progress keeps arriving while the tool stops the download.
+    publishSnapshot(
+      fixture,
+      withModel(labView(), "gpt-oss-20b:Q4_K_M", {
+        download: { done_bytes: 40, step: "download", total_bytes: 100 },
+        state: "downloading",
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("progressbar", {
+          name: "GPT-OSS 20B download progress",
+        }),
+      ).toHaveAttribute("aria-valuenow", "40"),
+    );
+    expect(statusOf("GPT-OSS 20B")).toBe("Cancelling");
+
+    publishSnapshot(fixture, labView());
+    answer();
+    await waitFor(() =>
+      expect(statusOf("GPT-OSS 20B")).toMatch(/^Not downloaded/),
+    );
+  });
+
   it("discards a stopped download instead of removing it", async () => {
     const fixture = setup([
       withModel(macView(), "llama3.3-70b:Q4_K_M", {
@@ -654,9 +718,91 @@ describe("LocalModelsPage", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Retry Llama 3.3 70B" }),
     );
+    const dialog = screen.getByRole("dialog", { name: "Make room to load" });
+    expect(dialog).toHaveTextContent(
+      "Llama 3.3 70B needs more than all 40 GB of Unified memory, so it can't load there.",
+    );
+    expect(within(dialog).getByRole("button", { name: "Load" })).toBeDisabled();
+  });
+
+  it("names the apps holding the memory instead of calling the model too big", async () => {
+    const lab = labView();
+    const qwen = localModel({
+      id: "qwen3-14b:Q4_K_M",
+      memory_bytes: gb(8.9),
+      name: "Qwen3 14B",
+      pool: "gpu:0",
+      state: "idle",
+    });
+    // A 16 GB card where Linger's embedding holds 1 GB and other apps 8 GB:
+    // the model fits the empty card but not what is free now.
+    const pool = gpuPool(0, 16, [
+      { component: true, gb: 1, id: "embedding", name: "Qwen3 Embedding" },
+    ]);
+    await renderPage(
+      setup([
+        {
+          ...lab,
+          models: [modelView(qwen)],
+          pools: [{ ...pool, used_bytes: gb(9) }],
+        },
+      ]),
+    );
+    await findModels();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load Qwen3 14B" }));
+    const dialog = screen.getByRole("dialog", { name: "Make room to load" });
+    expect(dialog).toHaveTextContent(
+      "Qwen3 14B needs 8.9 GB on GPU 0 · RTX 4090; 7 GB is free.",
+    );
+    expect(dialog).not.toHaveTextContent("empty");
+    const inUse = within(dialog).getByRole("list", {
+      name: "Also using this memory",
+    });
     expect(
-      screen.getByRole("dialog", { name: "Make room to load" }),
-    ).toHaveTextContent("Nothing else is loaded there.");
+      within(inUse)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["Other apps8 GB", "Qwen3 Embedding1 GB"]);
+    expect(dialog).toHaveTextContent(
+      "Other apps are using 8 GB. Close other apps that use GPU 0, then click Recheck memory.",
+    );
+    expect(within(dialog).getByRole("button", { name: "Load" })).toBeDisabled();
+  });
+
+  it("lists other apps when unloading every model still isn't enough", async () => {
+    const lab = labView();
+    const pool = gpuPool(0, 24, [
+      { gb: 10, id: "qwen3-coder-30b:Q4_K_M", name: "Qwen3 Coder 30B" },
+    ]);
+    await renderPage(
+      setup([
+        withModel(
+          withModel(
+            { ...lab, pools: [{ ...pool, used_bytes: gb(22) }, lab.pools[1]!] },
+            "qwen3-coder-30b:Q4_K_M",
+            { memory_bytes: gb(10) },
+          ),
+          "gemma3-27b:Q4_K_M",
+          { pool: "gpu:0", memory_bytes: gb(13) },
+        ),
+      ]),
+    );
+    await findModels();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load Gemma 3 27B" }));
+    const dialog = screen.getByRole("dialog", { name: "Make room to load" });
+    expect(
+      within(dialog).getByRole("checkbox", { name: /Qwen3 Coder 30B/ }),
+    ).not.toBeChecked();
+    expect(
+      within(
+        within(dialog).getByRole("list", { name: "Also using this memory" }),
+      ).getByRole("listitem"),
+    ).toHaveTextContent("Other apps12 GB");
+    expect(dialog).toHaveTextContent(
+      "Other apps are using 12 GB. Close other apps that use GPU 0, then click Recheck memory.",
+    );
   });
 
   it("asks before unloading a model an Agent uses, and not otherwise", async () => {
@@ -911,6 +1057,7 @@ describe("LocalModelsPage", () => {
     });
     await waitFor(() => expect(unload).toHaveAttribute("aria-busy", "true"));
     expect(unload).toBeDisabled();
+    expect(statusOf("Qwen3 Coder 30B")).toBe("Unloading");
 
     answer();
     publishSnapshot(

@@ -47,8 +47,13 @@ build:assets` to check the initial JS budget.
   its own Computer. Only the Computer's owner can act; actions return at once
   and progress arrives as `local-models` invalidation hints. From the click
   until a snapshot with another status or observation time, or a refusal, the
-  row shows a requested load or download as started and spins the button of
-  any other action, with the row's actions off. A Computer's
+  row shows a requested load or download as started, labels a cancel, unload
+  or remove under way (Cancelling, Unloading, Removing), and spins that
+  action's button, with the row's actions off; a download the Computer
+  accepted can be cancelled before its first progress. Make room lists what
+  else holds the pool (components, and other apps from `used_bytes` no holder
+  accounts for) when unloading models cannot free enough, and says a model
+  cannot fit only when it needs more than the pool's total. A Computer's
   detail on the Computers page links here and reads no model state itself.
 - `src/test`: unit-test support, including the in-process TeamHub test server.
 - `e2e`: Playwright product workflows; every spec runs on the real TeamHub and

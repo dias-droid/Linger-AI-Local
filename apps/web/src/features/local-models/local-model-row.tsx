@@ -141,6 +141,17 @@ const statusTags: Record<
   unavailable: { label: "Can't download" },
 };
 
+/**
+ * The label a row shows while an action that ends its current status is
+ * under way: until a snapshot moves the model on, the status alone would
+ * read as if nothing had happened.
+ */
+const endingLabels: Partial<Record<LocalModelAction, string>> = {
+  cancel: "Cancelling",
+  remove: "Removing",
+  unload: "Unloading",
+};
+
 interface Handlers {
   onCancel: () => void;
   onDownload: () => void;
@@ -320,19 +331,28 @@ export function ModelRow({
   const panelId = useId();
   const { model } = entry;
   // A requested load or download reads as started at once; the snapshot that
-  // follows says how it went.
+  // follows says how it went. A cancel can follow a download no snapshot
+  // shows yet.
   const status: ModelStatus =
     requested === "load"
       ? "loading"
-      : requested === "download"
+      : requested === "download" ||
+          (requested === "cancel" && entry.status === "available")
         ? "downloading"
         : entry.status;
   const started = status !== entry.status;
   const stopped = status === "failed" && downloadStopped(model);
   const where = placeName(view, model.pool);
-  const tag = stopped
-    ? { ...statusTags.failed, label: "Download stopped" }
-    : statusTags[status];
+  const ending = requested && endingLabels[requested];
+  const tag = ending
+    ? {
+        dot: statusTags[status].dot,
+        label: stopped && requested === "cancel" ? "Discarding" : ending,
+        working: true,
+      }
+    : stopped
+      ? { ...statusTags.failed, label: "Download stopped" }
+      : statusTags[status];
   const progress = downloadPercent(model);
   const download = formatGigabytes(model.download_bytes);
   const recommended = status === "available" && model.recommended;
@@ -418,7 +438,7 @@ export function ModelRow({
               {model.name}
             </span>
             <RowStatusLine
-              detail={detail}
+              detail={ending ? null : detail}
               download={download}
               recommended={recommended}
               slower={slower}

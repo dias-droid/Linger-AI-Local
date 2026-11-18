@@ -12,6 +12,7 @@ import {
   formatGigabytes,
   makeRoomSelection,
   makesRoom,
+  placeName,
   poolLabel,
   poolOf,
   poolOtherBytes,
@@ -64,17 +65,29 @@ export function MakeRoomDialog({
   const effectiveSelected = roomFreeNow ? [] : selected;
   const chosen = new Set(effectiveSelected);
   const enough = roomFreeNow || makesRoom(check, chosen);
+  const pool = poolLabel(view, check.pool);
   const otherBytes = poolOtherBytes(check.pool);
   const unifiedFitsHardware =
     check.pool.kind === "unified" &&
     (view.computer.host?.ram_total_bytes ?? 0) >= check.needBytes;
+  // Whether unloading every model offered here frees enough; when not, what
+  // else holds the memory is the thing to show.
+  const reachable =
+    roomFreeNow ||
+    makesRoom(check, new Set(check.loaded.map((item) => item.model.id)));
+  // Free memory never exceeds the pool's total, whatever else closes.
+  const tooBig = check.needBytes > check.pool.total_bytes;
+  const inUse = [
+    ...(otherBytes ? [{ bytes: otherBytes, id: "", name: "Other apps" }] : []),
+    ...check.kept,
+  ];
   const affected = check.loaded.flatMap((item) =>
     chosen.has(item.model.id) ? item.used_by.map((user) => user.name) : [],
   );
 
   return (
     <ModalDialog
-      description={`${entry.model.name} needs ${formatGigabytes(check.needBytes)} on ${poolLabel(view, check.pool)}; ${formatGigabytes(check.freeBytes)} is free.`}
+      description={`${entry.model.name} needs ${formatGigabytes(check.needBytes)} on ${pool}; ${formatGigabytes(check.freeBytes)} is free.`}
       footer={
         <>
           {onRecheck ? (
@@ -147,19 +160,44 @@ export function MakeRoomDialog({
               </label>
             ))}
           </fieldset>
-        ) : (
+        ) : null}
+        {tooBig ? (
           <FormFeedback tone="danger">
-            Nothing else is loaded there.
-            {otherBytes > 0 || unifiedFitsHardware
-              ? `${otherBytes > 0 ? ` Other apps are using ${formatGigabytes(otherBytes)}.` : ""} Close video players, games, or other memory-heavy apps, then click Recheck memory so loading won't overload your computer.`
-              : " This model doesn't fit even when the memory is empty."}
+            {entry.model.name} needs more than all{" "}
+            {formatGigabytes(check.pool.total_bytes)} of {pool}, so it
+            can&apos;t load there.
           </FormFeedback>
+        ) : reachable ? null : (
+          <>
+            {inUse.length ? (
+              <ul aria-label="Also using this memory" className="grid gap-0.5">
+                {inUse.map((holder) => (
+                  <li
+                    className="flex min-h-8 items-center gap-2 px-2 text-sm text-app-body"
+                    key={holder.id}
+                  >
+                    <span className="min-w-0 flex-1 truncate">
+                      {holder.name}
+                    </span>
+                    <span className="w-16 text-right text-xs tabular-nums text-muted-foreground">
+                      {formatGigabytes(holder.bytes)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <FormFeedback tone="danger">
+              {otherBytes > 0 || unifiedFitsHardware
+                ? `${otherBytes > 0 ? `Other apps are using ${formatGigabytes(otherBytes)}. ` : ""}Close other apps that use ${placeName(view, check.pool.id)}, then ${onRecheck ? "click Recheck memory" : "try again"}.`
+                : "Unloading models here doesn't free enough. Choose a smaller model."}
+            </FormFeedback>
+          </>
         )}
-        {check.loaded.length > 0 && !enough && otherBytes > 0 ? (
+        {reachable && !enough && otherBytes > 0 ? (
           <FormFeedback tone="warning">
-            Other apps are using {formatGigabytes(otherBytes)} on{" "}
-            {poolLabel(view, check.pool)}. Close unnecessary apps and click
-            Recheck memory to free the remaining room.
+            Other apps are using {formatGigabytes(otherBytes)} on {pool}. Close
+            unnecessary apps and click Recheck memory to free the remaining
+            room.
           </FormFeedback>
         ) : null}
         {affected.length ? (

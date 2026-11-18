@@ -536,6 +536,12 @@ function Library({
   for (const input of sending) {
     if (input) requests.set(input.modelId, input.action);
   }
+  // A download the Computer accepted is a job it can cancel before the
+  // first progress reaches a snapshot; every other request holds the row.
+  const busy = (modelId: string) =>
+    requests.has(modelId) &&
+    (requests.get(modelId) !== "download" ||
+      sending.some((input) => input?.modelId === modelId));
   const offline = view.computer.status === "offline";
   const readOnly = !view.viewer_is_owner;
   // A dialog stays open across snapshots, so its confirm checks the model
@@ -560,6 +566,7 @@ function Library({
         (dialogPool
           ? {
               freeBytes: poolFreeBytes(dialogPool),
+              kept: [],
               loaded: [],
               needBytes: dialogEntry.model.memory_bytes,
               pool: dialogPool,
@@ -671,9 +678,7 @@ function Library({
                 entry.model.id !== status.runtime_model;
               return (
                 <ModelRow
-                  disabled={
-                    offline || readOnly || switching || requests.has(modelId)
-                  }
+                  disabled={offline || readOnly || switching || busy(modelId)}
                   entry={entry}
                   expanded={expandedId === modelId}
                   key={modelId}
