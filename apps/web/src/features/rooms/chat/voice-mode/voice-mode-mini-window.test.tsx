@@ -300,7 +300,15 @@ describe("Voice Mode mini window", () => {
       // front and takes the focus back.
       const focused = vi.spyOn(document, "hasFocus").mockReturnValue(true);
       act(() => fake.pipWindow.close());
+      // While it tells a close from back to tab, nothing flashes up in the
+      // page.
+      expect(
+        screen.queryByRole("region", { name: "Voice Mode window" }),
+      ).not.toBeInTheDocument();
       await waitFor(() => expect(voice.exit).toHaveBeenCalledOnce());
+      expect(
+        screen.queryByRole("region", { name: "Voice Mode window" }),
+      ).not.toBeInTheDocument();
       focused.mockRestore();
     } finally {
       fake.frame.remove();

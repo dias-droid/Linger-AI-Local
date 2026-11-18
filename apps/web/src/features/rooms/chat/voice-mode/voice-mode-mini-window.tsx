@@ -175,12 +175,22 @@ function MiniWindow({
     openRoomRef.current = () =>
       void navigate(`/t/${tenantId}/rooms/${roomId}/chat`);
   });
+  // Once the call has floated, losing that window shows nothing in the page
+  // while TeamHub tells a close from back to tab, so no window flashes up
+  // before Voice Mode ends. Back to tab brings the window into the page.
+  const [floated, setFloated] = useState(false);
+  const [backInPage, setBackInPage] = useState(false);
+  if (pip && !floated) setFloated(true);
+  if (pip && backInPage) setBackInPage(false);
+  const leavingPip = floated && !pip && !backInPage;
   useEffect(
     () =>
       onVoicePipClosedByHuman("voice-mode", () => {
-        void returnedToOpener().then((returned) =>
-          returned ? openRoomRef.current() : exitRef.current(),
-        );
+        void returnedToOpener().then((returned) => {
+          if (!returned) return exitRef.current();
+          setBackInPage(true);
+          openRoomRef.current();
+        });
       }),
     [],
   );
@@ -224,6 +234,7 @@ function MiniWindow({
     const next: WindowSize = size === "compact" ? "expanded" : "compact";
     setSize(next);
   };
+  if (leavingPip) return null;
   return createPortal(
     <section
       aria-label="Voice Mode window"
