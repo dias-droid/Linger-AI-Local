@@ -496,7 +496,7 @@ func TestClaudeTurnStartedSentAt(t *testing.T) {
 		events, _ := home.turn(t, prompt, spec)
 		after := time.Now()
 		started := claudeTurnStarted(events)
-		if started == nil || started.SentAt.Before(before) || after.Sub(started.SentAt) < 900*time.Millisecond {
+		if started == nil || started.SentAt.Before(before) || after.Sub(started.SentAt) < claudeFakeSlowOutput*9/10 {
 			t.Fatalf("turn %d SentAt = %+v window %v..%v", i, started, before, after)
 		}
 		for _, event := range events {

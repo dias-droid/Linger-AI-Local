@@ -18,6 +18,10 @@ import (
 // claudeFakeKey runs the named mode before TestMain.
 const claudeFakeKey = "CLAUDE_FAKE_MODE"
 
+// claudeFakeSlowOutput is how long a resident "slow" or "late" turn holds its
+// output; timing assertions compare against it rather than a wall-clock guess.
+const claudeFakeSlowOutput = 500 * time.Millisecond
+
 func init() {
 	if mode := os.Getenv(claudeFakeKey); mode != "" {
 		os.Exit(claudeFakeMain(mode))
@@ -308,7 +312,7 @@ func (f *claudeFake) resident() int {
 			f.emit(systemInit)
 		}
 		if strings.Contains(prompt, "late") || strings.Contains(prompt, "slow") {
-			time.Sleep(time.Second)
+			time.Sleep(claudeFakeSlowOutput)
 		}
 		if strings.Contains(prompt, "noecho") {
 			f.emit(map[string]any{"type": "result", "subtype": "error", "is_error": true, "terminal_reason": "completed",

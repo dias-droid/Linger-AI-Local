@@ -196,12 +196,10 @@ func TestCodexManagedProbeDisablesGoalsOnSupportedVersions(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fixture uses a POSIX script")
 	}
-	for _, version := range []string{"0.100.0", "0.125.0", "0.128.0", "0.150.1"} {
-		t.Run(version, func(t *testing.T) {
-			root := t.TempDir()
-			executable := filepath.Join(root, "codex")
-			trace := filepath.Join(root, "launches")
-			script := `#!/bin/sh
+	// Every version runs one shared executable: macOS scans each new
+	// executable on its first launch.
+	executable := filepath.Join(t.TempDir(), "codex")
+	script := `#!/bin/sh
 printf '%s\n' "$*" >> "$LAUNCH_TRACE"
 [ "$*" = "$EXPECTED_ARGS" ] || exit 2
 read initialize
@@ -210,9 +208,13 @@ if read initialized && read account; then
  echo '{"id":2,"result":{"account":null,"requiresOpenaiAuth":false}}'
 fi
 `
-			if err := os.WriteFile(executable, []byte(script), 0o700); err != nil {
-				t.Fatal(err)
-			}
+	if err := os.WriteFile(executable, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, version := range []string{"0.100.0", "0.125.0", "0.128.0", "0.150.1"} {
+		t.Run(version, func(t *testing.T) {
+			root := t.TempDir()
+			trace := filepath.Join(root, "launches")
 			expected := "app-server --disable plugins --listen stdio:// --config features.memories=false --config features.memory_tool=false --config features.apps=false --config features.image_generation=false"
 			if version == "0.128.0" {
 				expected = "app-server --disable plugins --disable goals --listen stdio:// --config features.memories=false --config features.memory_tool=false --config features.apps=false --config features.image_generation=false"
@@ -243,6 +245,23 @@ func TestCodexAuthenticationUsesActiveProviderAccountState(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fixture uses a POSIX script")
 	}
+	// Every scenario runs the same script: macOS scans each new executable on
+	// its first launch, so one file keeps that wait out of every scenario.
+	executable := filepath.Join(t.TempDir(), "codex")
+	script := `#!/bin/sh
+if [ "$1 $2" = "login status" ]; then echo "Not logged in"; exit 1; fi
+[ "$1 $2 $3 $4 $5" = "app-server --disable plugins --listen stdio://" ] || exit 2
+read initialize
+echo '{"id":1,"result":{"userAgent":"test"}}'
+read initialized
+case "$initialized" in *'"method":"initialized"'*) ;; *) exit 3 ;; esac
+read account
+case "$account" in *'"method":"account/read"'*) ;; *) exit 4 ;; esac
+printf '{"id":2,"result":%s}\n' "$ACCOUNT_RESULT"
+`
+	if err := os.WriteFile(executable, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
 	for _, scenario := range []struct {
 		name, response, want string
 	}{
@@ -257,21 +276,6 @@ func TestCodexAuthenticationUsesActiveProviderAccountState(t *testing.T) {
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
 			root := t.TempDir()
-			executable := filepath.Join(root, "codex")
-			script := `#!/bin/sh
-if [ "$1 $2" = "login status" ]; then echo "Not logged in"; exit 1; fi
-[ "$1 $2 $3 $4 $5" = "app-server --disable plugins --listen stdio://" ] || exit 2
-read initialize
-echo '{"id":1,"result":{"userAgent":"test"}}'
-read initialized
-case "$initialized" in *'"method":"initialized"'*) ;; *) exit 3 ;; esac
-read account
-case "$account" in *'"method":"account/read"'*) ;; *) exit 4 ;; esac
-printf '{"id":2,"result":%s}\n' "$ACCOUNT_RESULT"
-`
-			if err := os.WriteFile(executable, []byte(script), 0o700); err != nil {
-				t.Fatal(err)
-			}
 			result := probeCodexAuthentication(context.Background(), executable, map[string]string{
 				"HOME": root, "CODEX_HOME": root, "ACCOUNT_RESULT": scenario.response,
 			}, 5*time.Second)
