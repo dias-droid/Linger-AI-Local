@@ -354,16 +354,36 @@ test("invokes the verified upstream module with isolated module and state paths"
     "sourceCommit",
   );
 });
-test("stops the controller and the stack through the installed pinned kit", async () => {
+// What `library status` prints, cut to the fields the stop reads.
+const libraryStatus = (models: { id: string; state: string }[]) => ({
+  code: 0,
+  stdout: JSON.stringify({ schema: "localmodels.library-status/v1", models }),
+  stderr: "",
+});
+test("unloads the library's models, then stops the controller and the stack through the installed pinned kit", async () => {
   const f = await fixture();
   vi.stubEnv("LINGER_LOCALMODELS_TOOL_JSON", JSON.stringify(f.source));
-  const run = vi.fn<typeof runLocalmodels>(async () => ({
-    code: 0,
-    stdout: "{}",
-    stderr: "",
-  }));
+  const base = path.join(f.home, "runtime/localmodels/models");
+  const run = vi.fn<typeof runLocalmodels>(async (_home, args) =>
+    args[1] === "status"
+      ? libraryStatus([
+          { id: "qwen3-8b:Q4_K_M", state: "loaded" },
+          { id: "lfm3-1.7b:Q8_0", state: "idle" },
+          { id: "gemma4-4b:Q4_K_M", state: "loaded" },
+        ])
+      : { code: 0, stdout: "{}", stderr: "" },
+  );
   await stopLocalmodels(f.home, { signal: AbortSignal.timeout(5000) }, { run });
   expect(run.mock.calls.map(([home, args]) => [home, args])).toEqual([
+    [f.home, ["library", "status", "--base-dir", base, "--json"]],
+    [
+      f.home,
+      ["library", "unload", "qwen3-8b:Q4_K_M", "--base-dir", base, "--json"],
+    ],
+    [
+      f.home,
+      ["library", "unload", "gemma4-4b:Q4_K_M", "--base-dir", base, "--json"],
+    ],
     [
       f.home,
       [
@@ -375,6 +395,70 @@ test("stops the controller and the stack through the installed pinned kit", asyn
       ],
     ],
     [f.home, ["stack", "down", "--json"]],
+  ]);
+});
+test("a quit keeps the controller and stops only the library's models and the stack", async () => {
+  const run = vi.fn<typeof runLocalmodels>(async (_home, args) =>
+    args[1] === "status"
+      ? libraryStatus([{ id: "qwen3-8b:Q4_K_M", state: "loaded" }])
+      : { code: 0, stdout: "{}", stderr: "" },
+  );
+  await stopLocalmodels(
+    "/home",
+    { signal: AbortSignal.timeout(5000), keepController: true },
+    { run, installed: async () => true },
+  );
+  expect(run.mock.calls.map(([, args]) => args.slice(0, 2))).toEqual([
+    ["library", "status"],
+    ["library", "unload"],
+    ["stack", "down"],
+  ]);
+});
+test("stops the stack even when the library could not be read or a model did not unload, and names each failure", async () => {
+  const unloadFailed = vi.fn<typeof runLocalmodels>(async (_home, args) =>
+    args[1] === "status"
+      ? libraryStatus([{ id: "qwen3-8b:Q4_K_M", state: "loaded" }])
+      : args[1] === "unload"
+        ? {
+            code: 1,
+            stdout: JSON.stringify({
+              schema: "localmodels.library-event/v1",
+              event: "error",
+              ok: false,
+              code: "JOB_RUNNING",
+              detail: "a download is running",
+            }),
+            stderr: "",
+          }
+        : { code: 0, stdout: "{}", stderr: "" },
+  );
+  await expect(
+    stopLocalmodels(
+      "/home",
+      { signal: AbortSignal.timeout(5000), keepController: true },
+      { run: unloadFailed, installed: async () => true },
+    ),
+  ).rejects.toThrow("localmodels library unload qwen3-8b:Q4_K_M: JOB_RUNNING");
+  expect(unloadFailed.mock.calls.at(-1)?.[1]).toEqual([
+    "stack",
+    "down",
+    "--json",
+  ]);
+  const statusFailed = vi.fn<typeof runLocalmodels>(async (_home, args) =>
+    args[1] === "status"
+      ? { code: 1, stdout: "", stderr: "error: library status failed" }
+      : { code: 0, stdout: "{}", stderr: "" },
+  );
+  await expect(
+    stopLocalmodels(
+      "/home",
+      { signal: AbortSignal.timeout(5000), keepController: true },
+      { run: statusFailed, installed: async () => true },
+    ),
+  ).rejects.toThrow("localmodels library status: exit 1");
+  expect(statusFailed.mock.calls.map(([, args]) => args[1])).toEqual([
+    "status",
+    "down",
   ]);
 });
 test("a home without the pinned kit has nothing to stop and downloads nothing", async () => {
@@ -413,6 +497,7 @@ test("stops the stack even when the controller did not stop, and names the failu
     ),
   ).rejects.toThrow("localmodels foundations stop: controller still running");
   expect(run.mock.calls.map(([, args]) => args[0])).toEqual([
+    "library",
     "foundations",
     "stack",
   ]);

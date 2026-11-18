@@ -48,7 +48,16 @@ the desktop's Computer follows them.
 manager the desktop started for that instance (its `/api/stop` cancels a
 running job) and the instance's services, deletes nothing, and prints one
 JSON line with what failed. It needs nothing beside `installer.js`, so
-setup can run it from a copy on an earlier release's `Linger.exe`.
+setup can run it from a copy on an earlier release's `Linger.exe`. It also
+stops what the pinned localmodels kit runs for each home: the model
+library's loaded models, the model controller, and the stack with its
+gateway (`stopLocalmodels`).
+
+`--stop-local-models` is the desktop's quit: in the default home and the
+location `desktop/local-server.json` names, it unloads the model library's
+loaded models and stops the stack with the gateway the localmodels tool
+started, and keeps the services and the model controller running. It
+prints one JSON line with what failed.
 
 Every other mode first converts an install from before the rename to Linger
 (`migrateLegacyInstallation`); `--migrate` does only that and exits, for the

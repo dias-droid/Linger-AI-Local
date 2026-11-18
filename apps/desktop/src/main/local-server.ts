@@ -1,6 +1,12 @@
 import { spawn } from "node:child_process";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { createReadStream, existsSync, readFileSync } from "node:fs";
+import {
+  closeSync,
+  createReadStream,
+  existsSync,
+  openSync,
+  readFileSync,
+} from "node:fs";
 import {
   constants as fsConstants,
   cp,
@@ -59,7 +65,7 @@ import {
   nodeRuntimeDownloadUrls,
 } from "../../../../scripts/local-computer-node-distributions.mjs";
 import type { Logger } from "./log.js";
-import type { Module, ModuleContext } from "./modules.js";
+import type { Module, ModuleContext, StopReason } from "./modules.js";
 import { sameOrigin } from "./navigation.js";
 import { humanTenant, type EnrollmentModule } from "./enrollment.js";
 import { compareVersions } from "./update-manifest.js";
@@ -502,7 +508,7 @@ export class LocalServerModule implements Module {
     });
   }
 
-  async stop(): Promise<void> {
+  async stop(reason: StopReason): Promise<void> {
     this.#offRetry?.();
     this.#offReset?.();
     this.#offDaemon?.();
@@ -511,6 +517,64 @@ export class LocalServerModule implements Module {
     // The installer manager keeps running a started installation; it exits
     // by itself once idle.
     this.#abort.abort();
+    if (reason === "quit") await this.#stopLocalModels();
+  }
+
+  // The Computer exits with the app, so after a quit nothing uses the local
+  // models: the bundled installer unloads the model library's models and
+  // stops the stack with the gateway the localmodels tool started, which
+  // would otherwise keep their memory and ports until the next reboot. The
+  // services and the model controller keep running, as after every quit;
+  // the next launch brings the approved stack up again. The stop runs on
+  // after the app is gone, its output in the installer's folder. An update
+  // or an uninstall stops the models with the services instead.
+  async #stopLocalModels(): Promise<void> {
+    if (!(await this.#readRecord()) || !existsSync(this.#installerScript()))
+      return;
+    const directory = path.join(this.#options.home, "installer");
+    let output: number;
+    try {
+      await mkdir(directory, { recursive: true, mode: 0o700 });
+      output = openSync(
+        path.join(directory, "local-models-stop.log"),
+        "w",
+        0o600,
+      );
+    } catch (error) {
+      this.#ctx?.log.warn("local_server.local_models_stop_failed", {
+        error: String(error),
+      });
+      return;
+    }
+    try {
+      const child = spawn(
+        process.execPath,
+        [
+          this.#installerScript(),
+          "--home",
+          this.#options.home,
+          "--stop-local-models",
+        ],
+        {
+          detached: true,
+          // A detached Windows process otherwise opens its own console window.
+          windowsHide: true,
+          stdio: ["ignore", output, output],
+          env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+        },
+      );
+      child.once("error", (error) =>
+        this.#ctx?.log.warn("local_server.local_models_stop_failed", {
+          error: String(error),
+        }),
+      );
+      child.unref();
+      this.#ctx?.log.info("local_server.local_models_stopping", {
+        home: this.#options.home,
+      });
+    } finally {
+      closeSync(output);
+    }
   }
 
   status(): LocalServerStatus {

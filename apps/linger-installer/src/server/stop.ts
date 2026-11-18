@@ -26,7 +26,11 @@ export interface StopDependencies {
   stopInstance?: (instance: Instance, signal: AbortSignal) => Promise<void>;
   stopModels?: (
     home: string,
-    options: { signal: AbortSignal; log: (message: string) => void },
+    options: {
+      signal: AbortSignal;
+      log: (message: string) => void;
+      keepController?: boolean;
+    },
   ) => Promise<void>;
   fetch?: typeof fetch;
 }
@@ -47,16 +51,7 @@ export async function stopDesktopInstallation(
     fetch: fetcher = fetch,
   }: StopDependencies = {},
 ): Promise<StopOutcome> {
-  const failed: StopOutcome["failed"] = [];
-  const attempt = async (home: string, step: () => Promise<void>) => {
-    try {
-      await step();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      options.log(`Could not stop the installation in ${home}: ${message}`);
-      failed.push({ home, message });
-    }
-  };
+  const { failed, attempt } = attempts(options.log);
   for (const home of await installationHomes(options.home)) {
     // The services stop even when the manager could not: an earlier release's
     // manager has no /api/stop, and a stale session may name another server.
@@ -72,6 +67,44 @@ export async function stopDesktopInstallation(
     );
   }
   return { failed };
+}
+
+/**
+ * Stops the local models a quit leaves nothing to use: the model library's
+ * loaded models and the stack with the gateway the localmodels tool started,
+ * in every home the desktop installed to. The services and the model
+ * controller keep running, as the services do after a quit; the next launch
+ * brings the approved stack up again.
+ */
+export async function stopDesktopLocalModels(
+  options: Pick<StopOptions, "home" | "signal" | "log">,
+  { stopModels = stopLocalmodels }: Pick<StopDependencies, "stopModels"> = {},
+): Promise<StopOutcome> {
+  const { failed, attempt } = attempts(options.log);
+  for (const home of await installationHomes(options.home))
+    await attempt(home, () =>
+      stopModels(home, {
+        signal: options.signal,
+        log: options.log,
+        keepController: true,
+      }),
+    );
+  return { failed };
+}
+
+// Runs each step and records the ones that failed, so every home is tried.
+function attempts(log: (message: string) => void) {
+  const failed: StopOutcome["failed"] = [];
+  const attempt = async (home: string, step: () => Promise<void>) => {
+    try {
+      await step();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log(`Could not stop the installation in ${home}: ${message}`);
+      failed.push({ home, message });
+    }
+  };
+  return { failed, attempt };
 }
 
 // The default home and the install location the desktop chose under

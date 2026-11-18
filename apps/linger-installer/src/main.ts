@@ -19,6 +19,7 @@ export function parseInstallerArguments(args: string[]) {
     userKeys?: boolean;
     migrate?: boolean;
     stop?: boolean;
+    stopLocalModels?: boolean;
   } = {
     home: lingerHome(),
   };
@@ -46,6 +47,10 @@ export function parseInstallerArguments(args: string[]) {
     }
     if (flag === "--stop") {
       options.stop = true;
+      continue;
+    }
+    if (flag === "--stop-local-models") {
+      options.stopLocalModels = true;
       continue;
     }
     if (flag === "--user-keys") {
@@ -82,7 +87,8 @@ export function parseInstallerArguments(args: string[]) {
     !options.checkByok &&
     !options.userKeys &&
     !options.migrate &&
-    !options.stop
+    !options.stop &&
+    !options.stopLocalModels
   )
     throw new Error("The installer needs a source checkout (--source-repo).");
   if (options.resume && !options.instanceName)
@@ -273,6 +279,29 @@ async function stopInstallation(
     process.exit(outcome.failed.length ? 1 : 0),
   );
 }
+// Headless stop of the local models for the desktop's quit: the outcome as
+// one JSON line on stdout. The desktop does not wait for it to finish.
+async function stopLocalModels(
+  options: ReturnType<typeof parseInstallerArguments>,
+) {
+  const { stopDesktopLocalModels } = await import("./server/stop.js");
+  setTimeout(() => process.exit(1), 150_000).unref();
+  const outcome = await stopDesktopLocalModels({
+    home: options.home,
+    signal: AbortSignal.timeout(120_000),
+    log: (message) => process.stderr.write(message.replace(/\n?$/, "\n")),
+  }).catch((error: unknown) => ({
+    failed: [
+      {
+        home: options.home,
+        message: error instanceof Error ? error.message : String(error),
+      },
+    ],
+  }));
+  process.stdout.write(`${JSON.stringify(outcome)}\n`, () =>
+    process.exit(outcome.failed.length ? 1 : 0),
+  );
+}
 async function serve(options: ReturnType<typeof parseInstallerArguments>) {
   const server = await launchInstaller({
     ...options,
@@ -327,13 +356,13 @@ if (
   }
   // Installs from before the rename move to the Linger home once, before
   // any mode opens it; --migrate does only that, for the desktop client.
-  // Stopping for an uninstall changes nothing.
+  // Stopping for an uninstall or a quit changes nothing.
   // Only --migrate reports the instances it skipped, as warnings and as one
   // JSON line on stdout: the desktop runs it first, and in the other modes a
   // warning on stderr would read as the reason a start failed. A skipped
   // instance is refused with its own error when a mode opens it.
   let skipped: LegacyInstanceSkipped[] = [];
-  if (options && !options.stop)
+  if (options && !options.stop && !options.stopLocalModels)
     await import("@linger/local-installation/legacy-migration")
       .then(async ({ migrateLegacyInstallation }) => {
         skipped = await migrateLegacyInstallation({ home: options!.home });
@@ -346,6 +375,7 @@ if (
         options = undefined;
       });
   if (options?.stop) await stopInstallation(options);
+  else if (options?.stopLocalModels) await stopLocalModels(options);
   else if (options?.migrate)
     process.stdout.write(`${JSON.stringify({ skipped })}\n`, () =>
       process.exit(0),

@@ -331,12 +331,25 @@ Gateway and runs Agents. The daemon exits with the app.
   on `--quit`, so setup skips `--quit` for it (CloseLinger asks the person to
   quit a running app). Retry in that prompt runs the stop again. Nothing running: the stop finds nothing and setup goes on. The
   stop also asks the pinned localmodels kit, when that kit is installed in the
-  home, to end its foundations controller under `runtime/model-services`
-  (`foundations stop`) and the stack's processes (`stack down`); it downloads
-  nothing, and Linger does not end the tool's processes itself.
+  home, to unload every model its model library loaded (`library status`,
+  then `library unload` for each `loaded` model), to end its foundations
+  controller under `runtime/model-services` (`foundations stop`), and to stop
+  the stack's processes and the gateway the tool started, the library's
+  Bifrost included (`stack down`); it downloads nothing, and Linger does not
+  end the tool's processes itself. Every step runs even when an earlier one
+  fails.
   On Windows the tool cannot prove and end a controller from a kit that has
   no stop command.
-  The tool refuses the chat stack on Windows, so no engine runs there.
+  A quit the person chose (the tray, the app menu, the Dock) does the same
+  for the local models, except the controller, which serves the services
+  that keep running: `LocalServer` starts `installer.js --home <default
+home> --stop-local-models` under `ELECTRON_RUN_AS_NODE`, detached, with
+  its output in `<home>/installer/local-models-stop.log`, and does not wait
+  for it. It runs only when `desktop/local-server.json` names an
+  installation. The Computer exits with the app, so nothing uses the models
+  until the next launch, whose resume applies the approved plan again. A
+  quit for an update or a relaunch, and the `--quit` of setup or the
+  uninstaller (which stop the models themselves right after), leave them.
 - `src/main/legacy-migration.ts`: on start, stops a bridge an older version
   left running and moves its credential and the Desktop 0.16 daemon identity
   into the daemon layout, so the computer keeps its id.

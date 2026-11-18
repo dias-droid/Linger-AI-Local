@@ -6,7 +6,11 @@ import { tmpdir } from "node:os";
 import { parseInstallerArguments } from "../main.js";
 import { launchInstaller } from "./launch.js";
 import { privateDirectory, privateWrite } from "./storage.js";
-import { stopDesktopInstallation, type StopDependencies } from "./stop.js";
+import {
+  stopDesktopInstallation,
+  stopDesktopLocalModels,
+  type StopDependencies,
+} from "./stop.js";
 
 const clean: Array<() => Promise<unknown>> = [];
 afterEach(async () => {
@@ -39,6 +43,12 @@ test("the uninstall stop needs only the instance", () => {
     parseInstallerArguments(["--instance", "desktop", "--stop"]),
   ).toMatchObject({ stop: true, instanceName: "desktop" });
   expect(() => parseInstallerArguments(["--stop"])).toThrow(/instance/);
+});
+
+test("the quit's local model stop needs no instance or source", () => {
+  expect(parseInstallerArguments(["--stop-local-models"])).toMatchObject({
+    stopLocalModels: true,
+  });
 });
 
 test("stops the desktop's manager while a job runs, then the instance's services", async () => {
@@ -226,5 +236,35 @@ test("stops the local models in every home, even where the services did not stop
   expect(outcome.failed).toEqual([
     { home: value, message: "services still running" },
     { home: custom, message: "localmodels stack down: gateway still running" },
+  ]);
+});
+
+test("a quit stops only the local models, in every home, and keeps their controller", async () => {
+  const value = await home();
+  const custom = await home();
+  await mkdir(path.join(value, "desktop"), { recursive: true });
+  await writeFile(
+    path.join(value, "desktop/local-server.json"),
+    JSON.stringify({ home: custom }),
+  );
+  const models: { home: string; keepController?: boolean }[] = [];
+  const outcome = await stopDesktopLocalModels(options(value), {
+    stopModels: async (at, { keepController }) => {
+      models.push({ home: at, keepController });
+      if (at === value)
+        throw new Error(
+          "localmodels library unload qwen3-8b:Q4_K_M: JOB_RUNNING",
+        );
+    },
+  });
+  expect(models).toEqual([
+    { home: value, keepController: true },
+    { home: custom, keepController: true },
+  ]);
+  expect(outcome.failed).toEqual([
+    {
+      home: value,
+      message: "localmodels library unload qwen3-8b:Q4_K_M: JOB_RUNNING",
+    },
   ]);
 });
