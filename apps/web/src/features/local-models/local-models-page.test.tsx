@@ -418,6 +418,124 @@ describe("LocalModelsPage", () => {
     );
   });
 
+  it.each(["DOWNLOAD_FAILED", "NETWORK_UNAVAILABLE"] as const)(
+    "resumes a download that stopped with %s instead of loading it",
+    async (code) => {
+      const fixture = setup([
+        withModel(macView(), "llama3.3-70b:Q4_K_M", {
+          error: { code, detail: "retries exhausted" },
+        }),
+      ]);
+      renderPage(fixture);
+      await findModels();
+
+      expect(statusOf("Llama 3.3 70B")).toBe("Download stopped");
+      expect(
+        screen.queryByRole("button", { name: "Retry Llama 3.3 70B" }),
+      ).toBeNull();
+      fireEvent.click(
+        screen.getByRole("button", { name: "Resume download Llama 3.3 70B" }),
+      );
+      await waitFor(() =>
+        expect(fixture.actions).toEqual([
+          {
+            body: { action: "download" },
+            computerId: "computer-mac",
+            modelId: "llama3.3-70b:Q4_K_M",
+          },
+        ]),
+      );
+    },
+  );
+
+  it("shows a resumed download as under way from the click", async () => {
+    const fixture = setup([
+      withModel(macView(), "llama3.3-70b:Q4_K_M", {
+        error: { code: "DOWNLOAD_FAILED" },
+      }),
+    ]);
+    const answer = holdActions(fixture, () => accepted("download"));
+    renderPage(fixture);
+    await findModels();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Resume download Llama 3.3 70B" }),
+    );
+    await waitFor(() =>
+      expect(statusOf("Llama 3.3 70B")).toMatch(/^Downloading/),
+    );
+    answer();
+  });
+
+  it("discards a stopped download instead of removing it", async () => {
+    const fixture = setup([
+      withModel(macView(), "llama3.3-70b:Q4_K_M", {
+        error: { code: "DOWNLOAD_FAILED" },
+      }),
+    ]);
+    renderPage(fixture);
+    await findModels();
+
+    fireEvent.click(screen.getByRole("button", { name: "Llama 3.3 70B" }));
+    const details = screen.getByRole("region", {
+      name: "Llama 3.3 70B details",
+    });
+    expect(details).toHaveTextContent("Last download");
+    expect(
+      within(details).queryByRole("button", { name: "Remove from computer" }),
+    ).toBeNull();
+    fireEvent.click(
+      within(details).getByRole("button", { name: "Discard download" }),
+    );
+    await waitFor(() =>
+      expect(fixture.actions).toEqual([
+        {
+          body: { action: "cancel" },
+          computerId: "computer-mac",
+          modelId: "llama3.3-70b:Q4_K_M",
+        },
+      ]),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("retries a model that failed to load with a load and still offers Remove", async () => {
+    const fixture = setup([
+      withModel(macView(), "llama3.3-70b:Q4_K_M", {
+        error: { code: "ENGINE_START_FAILED" },
+        memory_bytes: gb(10),
+      }),
+    ]);
+    renderPage(fixture);
+    await findModels();
+
+    expect(statusOf("Llama 3.3 70B")).toBe("Couldn't load");
+    fireEvent.click(screen.getByRole("button", { name: "Llama 3.3 70B" }));
+    const details = screen.getByRole("region", {
+      name: "Llama 3.3 70B details",
+    });
+    expect(details).toHaveTextContent("Last load");
+    expect(
+      within(details).getByRole("button", { name: "Remove from computer" }),
+    ).toBeEnabled();
+    expect(
+      within(details).queryByRole("button", { name: "Discard download" }),
+    ).toBeNull();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry Llama 3.3 70B" }),
+    );
+    await waitFor(() =>
+      expect(fixture.actions).toEqual([
+        {
+          body: { action: "load" },
+          computerId: "computer-mac",
+          modelId: "llama3.3-70b:Q4_K_M",
+        },
+      ]),
+    );
+  });
+
   it("loads at once when the pool has room", async () => {
     const fixture = setup();
     renderPage(fixture);

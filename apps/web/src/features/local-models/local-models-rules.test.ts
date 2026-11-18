@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   downloadPercent,
   downloadStatusDetail,
+  downloadStopped,
   formatGigabytes,
   loadCheck,
   makeRoomSelection,
@@ -246,5 +247,37 @@ describe("local models rules", () => {
     const safe = safeModelSourceUrl("https://huggingface.co/Qwen/Qwen3-4B/");
     expect(safe).toBe("https://huggingface.co/Qwen/Qwen3-4B/");
     expect(modelSourceLabel(safe!)).toBe("huggingface.co/Qwen/Qwen3-4B");
+  });
+});
+
+describe("downloadStopped", () => {
+  const model = (fields: Parameters<typeof localModel>[0]) =>
+    localModel(fields);
+
+  it("is true only for a failed model with a download error code", () => {
+    const base = { id: "m", name: "M", state: "failed" as const };
+    expect(
+      downloadStopped(model({ ...base, error: { code: "DOWNLOAD_FAILED" } })),
+    ).toBe(true);
+    expect(
+      downloadStopped(
+        model({ ...base, error: { code: "NETWORK_UNAVAILABLE" } }),
+      ),
+    ).toBe(true);
+    expect(
+      downloadStopped(
+        model({ ...base, error: { code: "ENGINE_START_FAILED" } }),
+      ),
+    ).toBe(false);
+    expect(downloadStopped(model(base))).toBe(false);
+    expect(
+      downloadStopped(
+        model({
+          ...base,
+          error: { code: "DOWNLOAD_FAILED" },
+          state: "downloading",
+        }),
+      ),
+    ).toBe(false);
   });
 });
