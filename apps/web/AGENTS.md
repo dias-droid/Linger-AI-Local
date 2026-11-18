@@ -113,6 +113,9 @@ build:assets` to check the initial JS budget.
   `--color-app-*` roles such as `text-app-ink`) instead of hex arbitrary values;
   when no token fits, add one to `src/app/visual-theme.css` and the
   `@theme inline` block in `src/app/globals.css`.
+- Input hints use `--app-placeholder` / `text-app-placeholder` across native
+  fields, chat composers, select prompts, and editable empty states. Keep
+  entered text and adjacent labels on their own text tokens.
 - Compose conditional class names with `cn` from `src/lib/cn.ts`.
 - Do not add CSS Modules or feature-level `.css` files, and do not add new hex
   colors in TSX. Use inline `style` only for runtime-computed values.

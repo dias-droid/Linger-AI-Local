@@ -10,6 +10,7 @@
   --color-app-ink: var(--app-ink);
   --color-app-body: var(--app-body);
   --color-app-muted: var(--app-muted);
+  --color-app-placeholder: var(--app-placeholder);
   --color-app-subtle: var(--app-subtle);
   --color-app-border: var(--app-border);
   --color-app-border-strong: var(--app-border-strong);
@@ -294,6 +295,12 @@ body {
     font: inherit;
   }
 
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--app-placeholder);
+    opacity: 1;
+  }
+
   :focus-visible {
     outline: 2px solid var(--app-ring);
     outline-offset: 1px;
@@ -374,6 +381,13 @@ a[href][aria-disabled="true"],
 
 .ui-field-frame {
   position: relative;
+}
+
+.bn-container :is(input, textarea)::placeholder,
+.bn-container
+  .bn-block-content:has(.ProseMirror-trailingBreak:only-child)::after {
+  color: var(--app-placeholder);
+  opacity: 1;
 }
 
 @layer components {
@@ -2735,8 +2749,8 @@ a[href][aria-disabled="true"],
 }
 
 .message-composer-input::placeholder {
-  color: var(--app-muted);
-  -webkit-text-fill-color: var(--app-muted);
+  color: var(--app-placeholder);
+  -webkit-text-fill-color: var(--app-placeholder);
 }
 
 .message-composer-input::selection {

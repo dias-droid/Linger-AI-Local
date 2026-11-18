@@ -236,7 +236,7 @@ function CanvasField({
   return (
     <input
       className={cn(
-        "h-11 w-full border-0 bg-transparent text-app-ink outline-none shadow-none focus:outline-none focus:ring-0 placeholder:text-app-muted",
+        "h-11 w-full border-0 bg-transparent text-app-ink outline-none shadow-none focus:outline-none focus:ring-0 placeholder:text-app-placeholder",
         className,
       )}
       id={id}

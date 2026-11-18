@@ -304,7 +304,7 @@ export function RoutineDialog({
 }
 
 const FIELD =
-  "rounded-md border border-input bg-card px-3 text-sm font-normal text-foreground transition-colors duration-150 placeholder:text-muted-foreground hover:border-border-hover focus:border-foreground focus:outline-none focus:ring-2 focus:ring-ring";
+  "rounded-md border border-input bg-card px-3 text-sm font-normal text-foreground transition-colors duration-150 placeholder:text-app-placeholder hover:border-border-hover focus:border-foreground focus:outline-none focus:ring-2 focus:ring-ring";
 
 function WhenEditor({
   draft,
