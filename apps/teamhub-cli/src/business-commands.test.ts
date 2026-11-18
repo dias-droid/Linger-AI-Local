@@ -141,6 +141,7 @@ describe("business command normalization", () => {
     expect(
       renderBusinessResult("room protocol", {
         room_id: "room_one",
+        published: true,
         revision: 4,
         updated_at: "2026-10-15T00:00:00Z",
         raw_markdown: markdown,
