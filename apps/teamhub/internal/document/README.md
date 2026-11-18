@@ -57,7 +57,10 @@ needs neither.
 Every refresh request of a Human, from Memory or the Web, is admitted in a `REPEATABLE READ` transaction that starts
 only after it holds that Human's admission lock, so it sees the previous admission and joins or replays it. Admissions
 of different Humans neither wait for nor abort each other, so Memory's nightly requests for every Human can run at
-once; a settlement or dispatch status change of the same Wiki is a write conflict, and the admission retries.
+once; a settlement or dispatch status change of the same Wiki is a write conflict, and the admission retries. Before
+admission, every request except a meeting refresh binds the Human's new My pages as Wiki sources. That binding stays `SERIALIZABLE`, so
+the bindings of all Humans run one at a time under one database-wide lock, taken before each binding transaction
+starts, and each retries a serialization failure.
 
 ## History points
 

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/store"
 )
@@ -22,6 +23,25 @@ import (
 // conflicts that retry on a fresh snapshot.
 func (s *Service) admitWikiRefresh(ctx context.Context, tenantID, accountID string, admit func(pgx.Tx) error) error {
 	key := "wiki-refresh-admission|" + tenantID + "|" + accountID
+	return s.withAdvisorySessionLock(ctx, key, func(connection *pgxpool.Conn) error {
+		return retryWikiTransaction(ctx, func() error {
+			tx, err := connection.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+			if err != nil {
+				return err
+			}
+			defer func() { _ = tx.Rollback(ctx) }()
+			if err := admit(tx); err != nil {
+				return err
+			}
+			return tx.Commit(ctx)
+		})
+	})
+}
+
+// withAdvisorySessionLock runs work while a pooled session holds the advisory
+// lock key. Work may open its transactions on that session, so they start only
+// after the lock is held.
+func (s *Service) withAdvisorySessionLock(ctx context.Context, key string, work func(*pgxpool.Conn) error) error {
 	connection, err := s.pool.Acquire(ctx)
 	if err != nil {
 		return err
@@ -41,15 +61,5 @@ func (s *Service) admitWikiRefresh(ctx context.Context, tenantID, accountID stri
 		}
 		connection.Release()
 	}()
-	return retryWikiTransaction(ctx, func() error {
-		tx, err := connection.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
-		if err != nil {
-			return err
-		}
-		defer func() { _ = tx.Rollback(ctx) }()
-		if err := admit(tx); err != nil {
-			return err
-		}
-		return tx.Commit(ctx)
-	})
+	return work(connection)
 }

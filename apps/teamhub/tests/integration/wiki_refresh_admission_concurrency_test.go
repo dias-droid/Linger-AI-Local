@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -25,7 +26,7 @@ import (
 func TestWikiRefreshAdmissionsOfDifferentHumansDoNotConflict(t *testing.T) {
 	allowParallelIntegrationTest(t)
 	const humans = 12
-	service, _, tracer := newWikiRefreshAdmissionFixture(t, humans)
+	service, _, tracer := newWikiRefreshAdmissionFixture(t, humans, humans+4)
 	results := make([]document.MemoryWikiRefreshResult, humans)
 	errs := make([]error, humans)
 	runWikiAdmissionsTogether(humans, func(index int) {
@@ -43,10 +44,56 @@ func TestWikiRefreshAdmissionsOfDifferentHumansDoNotConflict(t *testing.T) {
 	}
 }
 
+func TestWikiSourceBindingsOfDifferentHumansDoNotConflict(t *testing.T) {
+	allowParallelIntegrationTest(t)
+	const humans = 12
+	// Fewer pooled connections than requests: a request waiting for the
+	// binding lock must not hold the connection the lock holder binds on.
+	service, pool, tracer := newWikiRefreshAdmissionFixture(t, humans, 8)
+	// Each Human has a Wiki and two new My pages that the refresh binds first.
+	if _, err := pool.Exec(t.Context(), `
+		INSERT INTO personal_wikis(id,tenant_id,owner_actor_id)
+		SELECT 'wiki_admission_'||i,'tenant_document_a','actor_admission_human_'||i
+		FROM generate_series(0,$1::int-1) i;
+		INSERT INTO documents(
+			id,tenant_id,title,format,owner_actor_id,owner_actor_kind,creator_actor_id,creator_actor_kind,status
+		) SELECT 'document_admission_'||i||'_'||page,'tenant_document_a','Page','blocknote',
+			'actor_admission_human_'||i,'human','actor_admission_human_'||i,'human','active'
+		FROM generate_series(0,$1::int-1) i,generate_series(1,2) page;
+		INSERT INTO document_placements(id,tenant_id,document_id,scope_kind,owner_human_actor_id,node_kind,sort_key)
+		SELECT 'placement_admission_'||i||'_'||page,'tenant_document_a','document_admission_'||i||'_'||page,
+			'personal','actor_admission_human_'||i,'document','document_admission_'||i||'_'||page
+		FROM generate_series(0,$1::int-1) i,generate_series(1,2) page`,
+		pgx.QueryExecModeSimpleProtocol, humans); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	errs := make([]error, humans)
+	runWikiAdmissionsTogether(humans, func(index int) {
+		_, errs[index] = service.RequestMemoryWikiRefresh(ctx, document.RequestMemoryWikiRefreshInput{
+			TenantID: "tenant_document_a", OwnerActorID: wikiAdmissionHuman(index), Date: "2026-11-16",
+		})
+	})
+	for index, err := range errs {
+		if err != nil {
+			t.Fatalf("Human %d refresh: %v", index, err)
+		}
+	}
+	var bound int
+	if err := pool.QueryRow(t.Context(), `SELECT count(*) FROM document_context_bindings
+		WHERE binding_kind='wiki_source' AND status='active' AND document_id LIKE 'document_admission_%'`).Scan(&bound); err != nil || bound != humans*2 {
+		t.Fatalf("bound My pages=%d err=%v, want %d", bound, err, humans*2)
+	}
+	if failures := tracer.failures.Load(); failures != 0 {
+		t.Fatalf("bindings of different Humans aborted each other %d times", failures)
+	}
+}
+
 func TestConcurrentWikiRefreshRequestsOfOneHumanAdmitOneRefresh(t *testing.T) {
 	allowParallelIntegrationTest(t)
 	const requests = 8
-	service, pool, tracer := newWikiRefreshAdmissionFixture(t, 1)
+	service, pool, tracer := newWikiRefreshAdmissionFixture(t, 1, 5)
 	// The Web request refreshes an existing Wiki; Memory creates one only for
 	// a Human's first refresh.
 	if _, err := pool.Exec(t.Context(), `INSERT INTO personal_wikis(id,tenant_id,owner_actor_id)
@@ -102,9 +149,9 @@ func (tracer *serializationFailureTracer) TraceQueryEnd(_ context.Context, _ *pg
 }
 
 // newWikiRefreshAdmissionFixture seeds Humans that each have an Another Me
-// and one indexed Room Session, and returns a Document service whose pool
-// counts serialization failures.
-func newWikiRefreshAdmissionFixture(t *testing.T, humans int) (*document.Service, *pgxpool.Pool, *serializationFailureTracer) {
+// and one indexed Room Session, and returns a Document service whose pool of
+// maxConns connections counts serialization failures.
+func newWikiRefreshAdmissionFixture(t *testing.T, humans int, maxConns int32) (*document.Service, *pgxpool.Pool, *serializationFailureTracer) {
 	t.Helper()
 	ctx := t.Context()
 	_, pool := newUnifiedDocumentActionsFixture(t)
@@ -148,7 +195,7 @@ func newWikiRefreshAdmissionFixture(t *testing.T, humans int) (*document.Service
 	config := pool.Config()
 	tracer := &serializationFailureTracer{}
 	config.ConnConfig.Tracer = tracer
-	config.MaxConns = int32(humans + 4)
+	config.MaxConns = maxConns
 	traced, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		t.Fatal(err)
