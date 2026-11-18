@@ -104,7 +104,12 @@ type fakeTool struct {
 
 func newFakeTool(t *testing.T) *fakeTool {
 	t.Helper()
-	root := t.TempDir()
+	// The tool reports its working directory as the OS resolves it, and on
+	// macOS the temporary directory sits behind the /var symlink.
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
