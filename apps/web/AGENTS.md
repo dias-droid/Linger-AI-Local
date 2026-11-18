@@ -58,6 +58,10 @@ build:assets` to check the initial JS budget.
   uses the red panda portrait on its warm brown tile.
 - The login header uses the transparent horizontal Linger wordmark in
   `public/linger-wordmark.svg`, with the proportions of `assets/logo-horizontal.svg`.
+- Switching between Meeting and Voice Mode ends the previous session and
+  releases its microphone before the new mode starts. Meeting saving can
+  continue in the background. If browser activation expires during the
+  switch, the new mode opens in the page and can be floated from there.
 - The compact primary rail reveals labels on hover and keyboard focus without
   moving link hit areas or neighbouring links. A stationary pointer at an edge
   must not trigger repeated hover enter/leave; sidebar expansion and Chat list

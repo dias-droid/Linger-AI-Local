@@ -135,12 +135,16 @@ export default function RecordingWindow() {
   // A recording that finished saving is reviewed in Another Me's chat.
   const previousStatus = useRef(status);
   useEffect(() => {
-    if (status === "completed" && previousStatus.current !== "completed") {
+    if (
+      status === "completed" &&
+      previousStatus.current !== "completed" &&
+      !windowState.autoStart
+    ) {
       closeVoicePip("recording");
       closeRecordingWindow();
     }
     previousStatus.current = status;
-  }, [status]);
+  }, [status, windowState.autoStart]);
 
   const changeView = (next: RecordingView | undefined) => {
     if (next) {

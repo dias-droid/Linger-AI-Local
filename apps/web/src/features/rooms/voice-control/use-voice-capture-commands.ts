@@ -57,6 +57,7 @@ export function useVoiceCaptureCommands({
     refs.startControllerRef.current = controller;
     const operation = (async () => {
       const target = await ensureTarget();
+      controller.signal.throwIfAborted();
       // Publishing the microphone precedes Runtime subscription and ASR input.
       // Wait for the current handshake even when the local track already exists,
       // so the recorder cannot start ahead of live transcript coverage.

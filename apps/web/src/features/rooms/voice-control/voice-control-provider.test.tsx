@@ -27,7 +27,10 @@ import type {
   TeamHubVoiceTranscriptEventPage,
 } from "@/features/teamhub/teamhub-types";
 import * as publisherLease from "./voice-publisher-lease";
-import { useVoiceControl } from "./voice-control-context";
+import {
+  useVoiceControl,
+  type VoiceControlContextValue,
+} from "./voice-control-context";
 import { LiveKitVoiceControlProvider } from "./voice-control-provider";
 import { VoiceFocusSurface } from "./voice-focus-surface";
 import {
@@ -182,6 +185,58 @@ function spyVoiceRoute(
 }
 
 describe("LiveKit voice input lifecycle", () => {
+  it("lends the microphone to Voice Mode while the Meeting is saving", async () => {
+    const runtime = createTestTeamHubRuntime();
+    const accepted = acceptVoice(runtime);
+    const stop = spyVoiceRoute(
+      runtime,
+      accepted,
+      "POST",
+      "/v0/voice-captures/{captureSessionId}/stop",
+    );
+    const getCapture = accepted("GET", "/v0/voice-captures/{captureSessionId}");
+    runtime.server.on(
+      "GET",
+      "/v0/voice-captures/{captureSessionId}",
+      async (request) => {
+        const stopped = await stop.mock.results[0]?.value;
+        return stopped ?? getCapture(request);
+      },
+    );
+    let voice!: VoiceControlContextValue;
+    function CaptureVoice() {
+      const current = useVoiceControl();
+      useEffect(() => {
+        voice = current;
+      }, [current]);
+      return <ListenerState />;
+    }
+    render(
+      <TeamHubRuntimeProvider runtime={runtime}>
+        <MemoryRouter>
+          <LiveKitVoiceControlProvider tenantId="tenant-northstar">
+            <CaptureVoice />
+          </LiveKitVoiceControlProvider>
+        </MemoryRouter>
+      </TeamHubRuntimeProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("capture")).toHaveTextContent("recording:"),
+    );
+    await act(() => voice.leavePage?.());
+    expect(screen.getByLabelText("capture")).toHaveTextContent("finalizing:");
+
+    await act(async () => {
+      const release = await voice.acquireComposerMicrophone({
+        resumeListening: false,
+      });
+      expect(voice.captureState.status).toBe("finalizing");
+      await release();
+    });
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
   it.each([3, 6])(
     "keeps microphone retry errors out of recording startup until %i failures are resolved",
     async (failures) => {
