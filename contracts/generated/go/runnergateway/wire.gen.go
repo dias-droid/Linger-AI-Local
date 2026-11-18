@@ -1315,6 +1315,8 @@ func (LocalModelEndpoint) RequiredFields() []string { return []string{"base_url"
 type LocalModelError struct {
 	Code   string `json:"code"`
 	Detail string `json:"detail,omitempty"`
+	Cause  string `json:"cause,omitempty"`
+	Path   string `json:"path,omitempty"`
 }
 
 // FixedFields lists the keys whose value the schema fixes for a LocalModelError.

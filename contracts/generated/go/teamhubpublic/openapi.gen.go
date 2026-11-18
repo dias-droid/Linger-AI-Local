@@ -2123,6 +2123,21 @@ func (e LocalModelDownloadProgressStep) Valid() bool {
 	}
 }
 
+// Defines values for LocalModelErrorCause.
+const (
+	LocalModelErrorCauseGatewayHomeNotPrivate LocalModelErrorCause = "GATEWAY_HOME_NOT_PRIVATE"
+)
+
+// Valid indicates whether the value is a known member of the LocalModelErrorCause enum.
+func (e LocalModelErrorCause) Valid() bool {
+	switch e {
+	case LocalModelErrorCauseGatewayHomeNotPrivate:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LocalModelErrorCode.
 const (
 	CANCELLED                 LocalModelErrorCode = "CANCELLED"
@@ -6588,12 +6603,21 @@ type LocalModelEndpoint struct {
 
 // LocalModelError defines model for LocalModelError.
 type LocalModelError struct {
+	// Cause Why a GATEWAY_REGISTRATION_FAILED happened, when the Computer supervised the failed job. GATEWAY_HOME_NOT_PRIVATE: the local gateway's private folder at path has another owner; closing Linger and renaming that folder lets the model load.
+	Cause *LocalModelErrorCause `json:"cause,omitempty"`
+
 	// Code Closed localmodels library error set. It is extended only together with the localmodels library contract.
 	Code LocalModelErrorCode `json:"code"`
 
 	// Detail Diagnostic text for display; never matched on.
 	Detail *string `json:"detail,omitempty"`
+
+	// Path The folder the cause names, on the Computer. The public view carries it only for the Computer's owner.
+	Path *string `json:"path,omitempty"`
 }
+
+// LocalModelErrorCause Why a GATEWAY_REGISTRATION_FAILED happened, when the Computer supervised the failed job. GATEWAY_HOME_NOT_PRIVATE: the local gateway's private folder at path has another owner; closing Linger and renaming that folder lets the model load.
+type LocalModelErrorCause string
 
 // LocalModelErrorCode Closed localmodels library error set. It is extended only together with the localmodels library contract.
 type LocalModelErrorCode string

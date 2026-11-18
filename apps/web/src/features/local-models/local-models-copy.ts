@@ -66,9 +66,24 @@ const modelErrors: Record<Schemas["LocalModelErrorCode"], string> = {
   PLATFORM_UNSUPPORTED: "This model doesn't run on this computer.",
 };
 
-/** Why the last load or download of a model failed. */
-export function modelErrorCopy(code: Schemas["LocalModelErrorCode"]) {
-  return modelErrors[code];
+const modelErrorCauses: Record<
+  NonNullable<Schemas["LocalModelError"]["cause"]>,
+  (path: string | undefined) => string
+> = {
+  GATEWAY_HOME_NOT_PRIVATE: (path) =>
+    path
+      ? `It loaded, but Agents couldn't be given access to it: the folder ${path} belongs to another account. Quit Linger, rename that folder, then open Linger and load the model again.`
+      : "It loaded, but Agents couldn't be given access to it: a Linger folder on the computer belongs to another account.",
+};
+
+/**
+ * Why the last load or download of a model failed. A cause names the fix;
+ * its path reaches only the Computer's owner.
+ */
+export function modelErrorCopy(error: Schemas["LocalModelError"]) {
+  return error.cause
+    ? modelErrorCauses[error.cause](error.path)
+    : modelErrors[error.code];
 }
 
 const notes: Record<

@@ -147,6 +147,10 @@ func localModelsView(record agentruntimestate.LocalModelsRecord, viewerID string
 				}
 			}
 		}
+		// A cause's path is a folder on the owner's machine; only they can act on it.
+		if model.Error != nil && !view.ViewerIsOwner {
+			model.Error.Path = nil
+		}
 		view.Models = append(view.Models, httpapi.LocalModelView{Model: model, UsedBy: users})
 	}
 	return view, nil
@@ -339,6 +343,9 @@ func validLocalModelsSnapshot(snapshot teamhubinternal.LocalModelsSnapshot) bool
 			return false
 		}
 		if model.PromptTokensPerSecond != nil && *model.PromptTokensPerSecond < 0 {
+			return false
+		}
+		if model.Error != nil && model.Error.Cause != nil && !model.Error.Cause.Valid() {
 			return false
 		}
 		seen[model.Id] = true

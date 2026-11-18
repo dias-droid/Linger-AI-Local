@@ -151,6 +151,14 @@ model.
   Daemon rereads the status, which carries what the phase reserved or freed
   (pool use, placement, models unloaded first), and applies the job's line on
   top; later lines of the phase update that snapshot without another read.
+- Error causes. `library status` keeps only a failed row's `code` and
+  `detail`; the `cause` and `path` of a `GATEWAY_REGISTRATION_FAILED` reach
+  the Daemon only on the job's error line (`GATEWAY_HOME_NOT_PRIVATE`: the
+  gateway's private folder at `path` has another owner). The Daemon keeps them
+  per model and puts them back on that row in every read while it still fails
+  with that code; the model's next accepted job, or a row that moved on,
+  drops them. They live in memory, so after a Daemon restart the row shows
+  only its code.
 - Pi. When the loaded models change, the Daemon asks the Runtime monitor for a
   full discovery, so TeamHub sees Pi's new model list. Each model's
   `pi_model` (`<provider>/<id>`, as an Agent's `runtime_model` stores it) is

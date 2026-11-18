@@ -590,6 +590,41 @@ describe("LocalModelsPage", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it.each([
+    [
+      "/home/ana/.local/share/localmodels/tools/gateway-home",
+      "It loaded, but Agents couldn't be given access to it: the folder /home/ana/.local/share/localmodels/tools/gateway-home belongs to another account. Quit Linger, rename that folder, then open Linger and load the model again.",
+    ],
+    [
+      undefined,
+      "It loaded, but Agents couldn't be given access to it: a Linger folder on the computer belongs to another account.",
+    ],
+  ])(
+    "explains a gateway folder another account owns (path %s)",
+    async (path, copy) => {
+      await renderPage(
+        setup([
+          withModel(macView(), "llama3.3-70b:Q4_K_M", {
+            error: {
+              cause: "GATEWAY_HOME_NOT_PRIVATE",
+              code: "GATEWAY_REGISTRATION_FAILED",
+              detail: "raw gateway detail",
+              ...(path ? { path } : {}),
+            },
+          }),
+        ]),
+      );
+      await findModels();
+
+      fireEvent.click(screen.getByRole("button", { name: "Llama 3.3 70B" }));
+      const details = screen.getByRole("region", {
+        name: "Llama 3.3 70B details",
+      });
+      expect(details).toHaveTextContent(copy);
+      expect(details).not.toHaveTextContent("raw gateway detail");
+    },
+  );
+
   it("retries a model that failed to load with a load and still offers Remove", async () => {
     const fixture = setup([
       withModel(macView(), "llama3.3-70b:Q4_K_M", {

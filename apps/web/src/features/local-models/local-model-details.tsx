@@ -127,7 +127,7 @@ export function ModelFacts({
               label={stopped ? "Last download" : "Last load"}
             >
               <span className="text-app-danger">
-                {modelErrorCopy(model.error.code)}
+                {modelErrorCopy(model.error)}
               </span>
             </Fact>
           ) : null}

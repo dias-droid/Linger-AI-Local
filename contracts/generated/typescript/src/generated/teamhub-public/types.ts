@@ -4688,6 +4688,13 @@ export interface components {
       code: components["schemas"]["LocalModelErrorCode"];
       /** @description Diagnostic text for display; never matched on. */
       detail?: string;
+      /**
+       * @description Why a GATEWAY_REGISTRATION_FAILED happened, when the Computer supervised the failed job. GATEWAY_HOME_NOT_PRIVATE: the local gateway's private folder at path has another owner; closing Linger and renaming that folder lets the model load.
+       * @enum {string}
+       */
+      cause?: "GATEWAY_HOME_NOT_PRIVATE";
+      /** @description The folder the cause names, on the Computer. The public view carries it only for the Computer's owner. */
+      path?: string;
     };
     LocalModelNote: {
       /** @enum {string} */

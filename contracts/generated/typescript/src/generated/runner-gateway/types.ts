@@ -1466,6 +1466,14 @@ export interface LocalModelError {
    * Diagnostic text for display; never matched on.
    */
   detail?: string;
+  /**
+   * Why a GATEWAY_REGISTRATION_FAILED happened, from the failed job's error line. GATEWAY_HOME_NOT_PRIVATE: the local gateway's private folder at path has another owner.
+   */
+  cause?: "GATEWAY_HOME_NOT_PRIVATE";
+  /**
+   * The folder the cause names.
+   */
+  path?: string;
 }
 /**
  * Present only when idle and the automatic load after download was skipped.

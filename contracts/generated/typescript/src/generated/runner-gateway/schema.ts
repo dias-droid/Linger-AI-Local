@@ -2403,6 +2403,17 @@ export const runnerGatewayEnvelopeSchema = {
           type: "string",
           maxLength: 4000,
         },
+        cause: {
+          description:
+            "Why a GATEWAY_REGISTRATION_FAILED happened, from the failed job's error line. GATEWAY_HOME_NOT_PRIVATE: the local gateway's private folder at path has another owner.",
+          enum: ["GATEWAY_HOME_NOT_PRIVATE"],
+        },
+        path: {
+          description: "The folder the cause names.",
+          type: "string",
+          minLength: 1,
+          maxLength: 4096,
+        },
       },
     },
     LocalModelNote: {

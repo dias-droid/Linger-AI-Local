@@ -246,6 +246,8 @@ type libraryEvent struct {
 	NeedBytes      *float64        `json:"need_bytes"`
 	FreeBytes      *float64        `json:"free_bytes"`
 	HaveBytes      *float64        `json:"have_bytes"`
+	Cause          string          `json:"cause"`
+	Path           string          `json:"path"`
 }
 
 func parseEvent(line []byte) (libraryEvent, bool) {
@@ -304,6 +306,19 @@ func bytesValue(value float64) uint64 {
 		return 1 << 53
 	}
 	return uint64(value)
+}
+
+// errorCauses is the tool's closed set of error causes; a GATEWAY_REGISTRATION_FAILED
+// line carries one with the path it names.
+var errorCauses = []string{"GATEWAY_HOME_NOT_PRIVATE"}
+
+// cause is the error line's cause as the wire carries it on a model's error,
+// or nil when the line names none the contract knows.
+func (e libraryEvent) cause() *wire.LocalModelError {
+	if !slices.Contains(errorCodes, e.Code) || !slices.Contains(errorCauses, e.Cause) || e.Path == "" {
+		return nil
+	}
+	return &wire.LocalModelError{Code: e.Code, Cause: e.Cause, Path: clip(e.Path, 4096)}
 }
 
 // clip bounds display text to the schema's length in characters.

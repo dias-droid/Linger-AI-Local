@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -92,8 +93,12 @@ type Library struct {
 	current   *wire.LocalModelsSnapshot
 	// loaded identifies the loaded models of the last status read; nil
 	// before the first one.
-	loaded        *string
-	jobs          map[string]*job
+	loaded *string
+	jobs   map[string]*job
+	// causes holds, by model, the cause the last job's error line gave. The
+	// tool's status keeps only the code, so each read puts the cause back on
+	// a row that still fails with that code.
+	causes        map[string]*wire.LocalModelError
 	lastProgress  time.Time
 	progressTimer *time.Timer
 	// progressTimerID tells a timer callback that already fired whether it
@@ -113,7 +118,7 @@ func New(options Options) *Library {
 		tool: options.Tool, environment: options.Environment, jobDirectory: options.JobDirectory,
 		publish: options.Publish, runtimeChanged: options.RuntimeChanged,
 		progressInterval: options.ProgressInterval, statusTimeout: options.StatusTimeout, actionTimeout: options.ActionTimeout,
-		now: time.Now, ctx: ctx, stop: stop, jobs: make(map[string]*job),
+		now: time.Now, ctx: ctx, stop: stop, jobs: make(map[string]*job), causes: make(map[string]*wire.LocalModelError),
 	}
 	if library.progressInterval <= 0 {
 		library.progressInterval = defaultProgressInterval
@@ -190,7 +195,23 @@ func (l *Library) read(ctx context.Context) wire.LocalModelsSnapshot {
 		slog.Warn("local_models.status_invalid", "error", err)
 		return unavailable(CodeToolFailed, "localmodels reported a library status outside its contract", l.now())
 	}
+	l.restoreCauses(&snapshot)
 	return snapshot
+}
+
+// restoreCauses puts each kept cause back on its failed row, and forgets one
+// whose row no longer fails with the code it came with.
+func (l *Library) restoreCauses(snapshot *wire.LocalModelsSnapshot) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for id, cause := range l.causes {
+		index := slices.IndexFunc(snapshot.Models, func(model wire.LocalModel) bool { return model.ID == id })
+		if index < 0 || snapshot.Models[index].Error == nil || snapshot.Models[index].Error.Code != cause.Code {
+			delete(l.causes, id)
+			continue
+		}
+		snapshot.Models[index].Error.Cause, snapshot.Models[index].Error.Path = cause.Cause, cause.Path
+	}
 }
 
 // loadedKey names the loaded models; a change means Pi's model list changed.
@@ -482,6 +503,7 @@ func (l *Library) superviseJob(action Action, events <-chan libraryEvent, ended 
 			if accepted {
 				l.mu.Lock()
 				l.jobs[action.Model] = &job{action: action}
+				delete(l.causes, action.Model)
 				l.mu.Unlock()
 			}
 		}
@@ -532,6 +554,11 @@ func (l *Library) superviseJob(action Action, events <-chan libraryEvent, ended 
 	}
 	l.mu.Lock()
 	delete(l.jobs, action.Model)
+	if final != nil && final.Event == "error" {
+		if cause := final.cause(); cause != nil {
+			l.causes[action.Model] = cause
+		}
+	}
 	l.mu.Unlock()
 	l.Refresh(l.ctx)
 	if action.Name == ActionLoad {
