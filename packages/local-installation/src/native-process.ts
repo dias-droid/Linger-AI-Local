@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { atomicPrivate, privateDirectory, readPrivate } from "./instance.js";
-import { runProcess } from "./process.js";
+import { runProcess, windowsTreeTermination } from "./process.js";
 import {
   linuxProcessStates,
   nativeProcessIdentity as observed,
@@ -413,7 +413,7 @@ export async function stopNativeProcess(
   const record = await stored(root, name);
   if (!record) return;
   if (process.platform === "win32") {
-    await stopWindowsTree(name, record.lease);
+    await stopWindowsTree(name, record.lease, record);
     await rm(paths(root, name).record, { force: true });
     return;
   }
@@ -515,16 +515,57 @@ export function windowsTerminationOrder(tree: WindowsProcess[]): number[] {
  * supervisor, whose command line carries the lease that finds the tree, goes
  * only once nothing is left under it.
  */
-async function stopWindowsTree(name: NativeService, lease: string) {
+async function stopWindowsTree(
+  name: NativeService,
+  lease: string,
+  record?: Pick<Lease, "pid" | "birth" | "lease">,
+) {
   const deadline = Date.now() + 12_000;
   for (;;) {
-    const tree = windowsLeaseTree((await windowsSnapshot()).processes, lease);
+    const snapshot = (await windowsSnapshot()).processes;
+    const tree = windowsLeaseTree(snapshot, lease);
     if (!tree.length) return;
-    if (Date.now() >= deadline)
+    if (Date.now() >= deadline) {
+      if (record && (await endRecordedTree(record, snapshot))) return;
       throw new Error(`Native ${name} did not stop; identity record retained.`);
+    }
     const order = windowsTerminationOrder(tree);
     for (const pid of tree.length > 1 ? order.slice(0, -1) : order)
       terminate(pid);
+    await delay(100);
+  }
+}
+
+/**
+ * Last resort when TerminateProcess left part of the tree alive: taskkill /T
+ * ends what Windows still links to the supervisor. Only a supervisor whose
+ * PID and creation time match the record in this very snapshot is targeted,
+ * so a PID Windows has handed to another program is never touched. True when
+ * nothing under the lease is left afterwards.
+ */
+async function endRecordedTree(
+  record: Pick<Lease, "pid" | "birth" | "lease">,
+  snapshot: WindowsProcess[],
+): Promise<boolean> {
+  const owner = recordedTree(snapshot, record)[0];
+  if (!owner) return false;
+  const invocation = windowsTreeTermination({
+    pid: owner.pid,
+    exitCode: null,
+    signalCode: null,
+  });
+  if (!invocation) return false;
+  await runProcess(invocation.command, invocation.args, {
+    timeoutMs: 15_000,
+  }).catch(() => undefined);
+  const deadline = Date.now() + 3_000;
+  for (;;) {
+    const tree = windowsLeaseTree(
+      (await windowsSnapshot()).processes,
+      record.lease,
+    );
+    if (!tree.length) return true;
+    if (Date.now() >= deadline) return false;
     await delay(100);
   }
 }
