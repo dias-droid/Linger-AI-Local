@@ -1,3 +1,4 @@
+import type { ModelLease } from "../src/model-tasks.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   COMPUTER_OFFLINE_MESSAGE,
@@ -5,7 +6,6 @@ import {
   isComputerOffline,
   ModelCallError,
   type ModelPlacement,
-  type ModelChainLease,
   type RuntimeModelGateway,
   type RuntimeModelInfo,
 } from "../src/runtime-model-call.js";
@@ -55,7 +55,7 @@ function setup(
     outcomes?: (Outcome | Error)[];
     /** Answers every invocation instead of the outcome list. */
     invoke?: Invoke;
-    lease?: ModelChainLease;
+    lease?: ModelLease;
     callLog?: ModelCallLog;
     runtimeModels?: RuntimeModelGateway["runtimeModels"];
   } = {},
@@ -71,7 +71,11 @@ function setup(
   );
   const supportsModelInvoke = vi.fn(options.ready ?? (() => true));
   const acquireModelChain = vi.fn<RuntimeModelGateway["acquireModelChain"]>(
-    async () => options.lease ?? { release: () => {} },
+    async () =>
+      options.lease ?? {
+        release: () => {},
+        borrow: () => ({ release: () => {} }),
+      },
   );
   const placements = vi.fn(async () => options.placements ?? [alice, bob]);
   let time = 0;
@@ -156,14 +160,32 @@ describe("Runtime model call", () => {
         },
       }),
     );
-    // A voice ask never queues.
+    // Voice uses the interactive reserve.
     await modelCall.text({
       kind: "voice_ask",
       key: "ask",
       owner: { tenantId: "tenant_1", ownerActorId: "bob" },
       input: "What did they say?",
     });
-    expect(invokeModel.mock.lastCall![1]).not.toHaveProperty("queue");
+    expect(invokeModel.mock.lastCall![1].queue).toEqual({
+      kind: "voice_ask",
+      key: "ask",
+      priority: 10,
+    });
+  });
+
+  it("expires interactive work while waiting for model admission", async () => {
+    const { modelCall, invokeModel } = setup({ invoke: hanging });
+    await expect(
+      modelCall.text({
+        kind: "meeting_notes",
+        key: "recording",
+        owner: { tenantId: "tenant_1", ownerActorId: "alice" },
+        input: "Notes",
+        timeoutMs: 25,
+      }),
+    ).rejects.toMatchObject({ kind: "timed_out" });
+    expect(invokeModel.mock.lastCall![1].signal.aborted).toBe(true);
   });
 
   it("runs a workspace call on a named Another Me and returns its files", async () => {
@@ -596,7 +618,10 @@ describe("Model call executions", () => {
 describe("Model chains", () => {
   afterEach(() => vi.useRealTimers());
   const owner = { tenantId: "tenant_1", ownerActorId: "alice" };
-  const lease = () => ({ release: vi.fn() });
+  const lease = () => ({
+    release: vi.fn(),
+    borrow: () => ({ release: vi.fn() }),
+  });
 
   it("runs its calls in the one place it was admitted to", async () => {
     const chainLease = lease();
@@ -632,11 +657,11 @@ describe("Model chains", () => {
     expect(
       invokeModel.mock.calls.map(([, request]) => [
         request.runtimeType,
-        request.queue,
+        request.chainLease,
       ]),
     ).toEqual([
-      ["codex", undefined],
-      ["codex", undefined],
+      ["codex", chainLease],
+      ["codex", chainLease],
     ]);
     expect(chainLease.release).toHaveBeenCalledWith({
       outcome: "completed",
@@ -790,7 +815,7 @@ describe("Model chains", () => {
     expect(invokeModel).toHaveBeenCalledTimes(3);
     expect(
       invokeModel.mock.calls.every(
-        ([, request]) => request.queue === undefined,
+        ([, request]) => request.chainLease !== undefined,
       ),
     ).toBe(true);
   });

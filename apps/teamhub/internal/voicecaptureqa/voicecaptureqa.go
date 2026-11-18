@@ -178,8 +178,7 @@ type modelAnswerer struct {
 }
 
 // NewAnswerer answers through a foreground Agent Service model call on the
-// owner's Agent Runtime, which starts at once; timeout bounds its single
-// Runtime attempt.
+// owner's Agent Runtime. The timeout covers queueing and the model attempt.
 func NewAnswerer(models *roomagent.ModelCallClient, timeout time.Duration) Answerer {
 	return &modelAnswerer{models: models, timeout: timeout}
 }

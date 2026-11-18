@@ -1,3 +1,4 @@
+import type { ModelLease } from "../../model-tasks.js";
 import type {
   ModelInvoke,
   ModelInvoked,
@@ -9,7 +10,7 @@ import {
 } from "@linger/wire-contracts/runner-gateway/validator";
 import { LocalComputerOfflineError } from "./local-computer-management.js";
 import type { ModelSignal } from "./adaptive-limit.js";
-import type { ModelLease, ModelWork } from "./model-queue.js";
+import type { ModelWork } from "./model-queue.js";
 import type {
   RunnerGatewayContext,
   RunnerGatewayControllers,
@@ -43,9 +44,8 @@ export interface RunnerModelInvokeRequest {
   readonly sessionKey?: ModelInvoke["session_key"];
   readonly timeoutMs: number;
   readonly maxOutputChars?: ModelInvoke["max_output_chars"];
-  /** The call's place in its endpoint's queue; absent, it runs at once: a
-   * chain's call runs in its chain's place, and some kinds never queue. */
-  readonly queue?: ModelWork & {
+  readonly chainLease?: ModelLease;
+  readonly queue: ModelWork & {
     /** The Run Operation an approval reviews. While that Operation holds its
      * place on the same endpoint, the approval runs in it: the Run waits for
      * the verdict, so queuing behind it would never end. */
@@ -74,7 +74,7 @@ export class RunnerModelInvokeUnavailableError extends RunnerGatewayError {
 interface InFlightCall {
   readonly runnerId: string;
   readonly runtimeType: ModelInvoke["runtime_type"];
-  readonly lease?: ModelLease;
+  readonly lease: Pick<ModelLease, "release">;
   readonly timer: NodeJS.Timeout;
   waiter?: {
     readonly signal: AbortSignal;
@@ -115,13 +115,19 @@ export class RunnerModelInvocation {
     this.#assertAvailable(computerId, request.runtimeType);
     const endpoint = { computerId, runtimeType: request.runtimeType };
     const { queue } = request;
+    const borrowed =
+      request.chainLease?.borrow() ??
+      (queue.kind === "approval"
+        ? this.owners
+            .operations()
+            .borrowModelPlace(queue.runOperationId, endpoint)
+        : undefined);
     const lease =
-      !queue ||
-      this.owners.operations().holdsModelPlace(queue.runOperationId, endpoint)
-        ? undefined
-        : await this.owners.queue().acquire(endpoint, queue, request.signal);
+      borrowed ??
+      (await this.owners.queue().acquire(endpoint, queue, request.signal));
     let sent = false;
     try {
+      request.signal.throwIfAborted();
       const connections = this.owners.connections();
       const connection = connections.getConnection(computerId);
       this.#assertAvailable(computerId, request.runtimeType);
@@ -142,7 +148,7 @@ export class RunnerModelInvocation {
       }
       return await outcome;
     } finally {
-      if (!sent) lease?.release({ outcome: "not_sent" });
+      if (!sent) lease.release({ outcome: "not_sent" });
     }
   }
 
@@ -233,7 +239,7 @@ export class RunnerModelInvocation {
   #wait(
     command: ModelInvoke,
     request: RunnerModelInvokeRequest,
-    lease: ModelLease | undefined,
+    lease: Pick<ModelLease, "release">,
   ): Promise<RunnerModelInvokeOutcome> {
     return new Promise<RunnerModelInvokeOutcome>((resolve, reject) => {
       const { signal } = request;
@@ -256,7 +262,7 @@ export class RunnerModelInvocation {
       this.#inFlight.set(command.invoke_id, {
         runnerId: command.runner_id,
         runtimeType: command.runtime_type,
-        ...(lease ? { lease } : {}),
+        lease,
         timer,
         waiter: { signal, onAbort, resolve, reject },
       });
@@ -286,7 +292,7 @@ export class RunnerModelInvocation {
           { computerId: call.runnerId, runtimeType: call.runtimeType },
           signal,
         );
-    call.lease?.release(
+    call.lease.release(
       "outcome" in result
         ? {
             outcome: result.outcome.outcome,

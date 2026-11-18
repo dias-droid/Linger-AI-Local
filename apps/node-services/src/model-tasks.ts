@@ -16,7 +16,7 @@ const modelCallKinds = [
 ] as const;
 export type ModelCallKind = (typeof modelCallKinds)[number];
 
-/** What queued a Run; only logged. */
+/** What queued a Run. */
 export type RunKind =
   | "chat"
   | "agent_message"
@@ -27,15 +27,51 @@ export type RunKind =
   | "follow_up"
   | "document";
 
-/** Queue priorities, lowest first: an approval, then every Run alike, then
- * compaction, then the background kinds. */
-export const RUN_PRIORITY = 10;
+/** Smaller priorities go first; chat and its dependencies may use the last place. */
+export const runPriorities: Readonly<Record<RunKind, number>> = {
+  chat: 10,
+  task: 12,
+  task_callback: 12,
+  document: 12,
+  agent_message: 12,
+  routine: 15,
+  proactive: 15,
+  follow_up: 15,
+};
+export interface ModelLeaseResult {
+  readonly outcome: string;
+  /** Token usage as the Runtime reported it; only logged. */
+  readonly usage?: unknown;
+}
+
+export interface ModelLease {
+  /** A sent approval or chain step keeps the place until its Runtime reply. */
+  borrow(): Pick<ModelLease, "release">;
+  /** Frees the place once all borrowers finish. Later calls do nothing. */
+  release(result: ModelLeaseResult): void;
+}
+
+/** A bounded Computer resolves an unknown Meta priority only when work contends. */
+export type CapacityPriority =
+  | number
+  | {
+      /** Monotonic arrival time retained across priority refreshes for this wait. */
+      readonly queuedAt: number;
+      resolve(): Promise<number>;
+    };
+
 export const COMPACTION_PRIORITY = 20;
 
+export function softLimit(hard: number): number {
+  return Math.max(1, hard - 1);
+}
+
+export function admissionLimit(hard: number, priority: number): number {
+  return priority <= runPriorities.chat ? hard : softLimit(hard);
+}
+
 export interface ModelCallPolicy {
-  /** Whether the call waits its turn on its endpoint's queue. */
-  readonly queued: boolean;
-  /** Queued work starts lowest priority first, in arrival order within one. */
+  /** Smaller numbers start first, in arrival order within one priority. */
   readonly priority: number;
   /** Someone waits on the answer: the call stops once nobody waits, and
    * over HTTP it never answers pending. */
@@ -51,59 +87,48 @@ export const modelCallPolicies: Readonly<
   Record<ModelCallKind, ModelCallPolicy>
 > = {
   approval: {
-    queued: true,
     priority: 0,
     interactive: true,
     attempts: 1,
     timeoutMs: 15_000,
   },
   voice_ask: {
-    queued: false,
-    priority: 0,
+    priority: runPriorities.chat,
     interactive: true,
     attempts: 1,
     timeoutMs: 45_000,
   },
-  // Quick notes right after a recording ends: the completion message waits
-  // on them, so they never queue, answer only when done, and get one short
-  // attempt.
   meeting_notes: {
-    queued: false,
-    priority: 0,
+    priority: runPriorities.task,
     interactive: true,
     attempts: 1,
     timeoutMs: 20_000,
   },
   agent_memory: {
-    queued: true,
     priority: 30,
     interactive: false,
     attempts: 2,
     timeoutMs: 10 * 60_000,
   },
   memory: {
-    queued: true,
     priority: 40,
     interactive: false,
     attempts: 3,
     timeoutMs: 10 * 60_000,
   },
   profile: {
-    queued: true,
     priority: 50,
     interactive: false,
     attempts: 2,
     timeoutMs: 2 * 60_000,
   },
   insight: {
-    queued: true,
     priority: 60,
     interactive: false,
     attempts: 2,
     timeoutMs: 2 * 60_000,
   },
   wiki: {
-    queued: true,
     priority: 70,
     interactive: false,
     attempts: 2,

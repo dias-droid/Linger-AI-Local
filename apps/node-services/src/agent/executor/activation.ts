@@ -1276,7 +1276,7 @@ class SynchronizedContextProvider implements AgentProvider {
   readonly #runGuards = new WeakMap<AgentRun, InterruptibleRun>();
   #steerTail: Promise<void> = Promise.resolve();
 
-  readonly acquireRunCapacity?: (signal: AbortSignal) => Promise<() => void>;
+  readonly acquireRunCapacity?: AgentProvider["acquireRunCapacity"];
 
   constructor(
     provider: AgentProvider,

@@ -1,3 +1,4 @@
+import type { ModelLease } from "../../model-tasks.js";
 import type {
   DaemonToAgentEnvelope,
   OperationPrepare,
@@ -6,13 +7,13 @@ import type {
 } from "@linger/wire-contracts/runner-gateway/types";
 import { isRecord } from "@linger/service-kit";
 import { isDeepStrictEqual } from "node:util";
-import { RUN_PRIORITY } from "../../model-tasks.js";
+import { admissionLimit, runPriorities, softLimit } from "../../model-tasks.js";
 import { logAgentEvent } from "../observability/agent-log.js";
 import {
   LocalComputerOfflineError,
   resolveOperationModel,
 } from "./local-computer-management.js";
-import type { ModelEndpoint, ModelLease } from "./model-queue.js";
+import type { ModelEndpoint } from "./model-queue.js";
 import { isServingConnection } from "./runner-connections.js";
 import type {
   CapacitySignal,
@@ -104,7 +105,9 @@ export class RunnerOperations {
     }
   >();
 
-  readonly #capacityWaiters = new Set<RunnerCapacityTarget>();
+  readonly #capacityWaiters = new Set<
+    RunnerCapacityTarget & { rank?: number; queuedAt: number }
+  >();
 
   #capacitySignal = capacitySignal();
 
@@ -127,7 +130,13 @@ export class RunnerOperations {
     target: RunnerCapacityTarget,
     signal: AbortSignal,
   ): Promise<RunnerCapacityPermit> {
-    const waiter = { ...target };
+    const source = target.priority ?? runPriorities.chat;
+    const waiter = {
+      ...target,
+      queuedAt:
+        typeof source === "number" ? performance.now() : source.queuedAt,
+      rank: typeof source === "number" ? source : undefined,
+    };
     this.#capacityWaiters.add(waiter);
     try {
       for (;;) {
@@ -165,23 +174,37 @@ export class RunnerOperations {
               candidate.tenantId === other.tenantId &&
               candidate.executionContextKey === other.executionContextKey,
           );
-        const busy = isBusy(target);
-        // FIFO among runnable waiters; a busy Context never blocks an unrelated one.
-        const earlierConflict = [...this.#capacityWaiters]
-          .slice(0, [...this.#capacityWaiters].indexOf(waiter))
-          .some(
-            (other) => other.runnerId === target.runnerId && !isBusy(other),
-          );
+        const hard = connection.hello.capacity;
+        const soft = hard === undefined ? Infinity : softLimit(hard);
+        const peers = [...this.#capacityWaiters].filter(
+          (other) => other.runnerId === target.runnerId && !isBusy(other),
+        );
         if (
-          !busy &&
-          !earlierConflict &&
-          (connection.hello.capacity === undefined ||
-            active.length + reservations.length < connection.hello.capacity)
+          hard !== undefined &&
+          waiter.rank === undefined &&
+          typeof source !== "number" &&
+          (occupied.length >= soft || peers.length > 1)
+        ) {
+          waiter.rank = await source.resolve();
+          this.wakeCapacityWaiters();
+          continue;
+        }
+        const rank = waiter.rank ?? runPriorities.chat;
+        // An unresolved contender may be interactive. Its lookup wakes every waiter.
+        const first = peers.sort(
+          (a, b) =>
+            (a.rank ?? runPriorities.chat) - (b.rank ?? runPriorities.chat) ||
+            a.queuedAt - b.queuedAt,
+        )[0];
+        if (
+          first === waiter &&
+          (hard === undefined || occupied.length < admissionLimit(hard, rank))
         ) {
           const id = this.context.createId();
           this.#capacityReservations.set(id, { target, connection });
           return {
             id,
+            reservedForChat: occupied.length >= soft && hard !== 1,
             release: () => {
               if (this.#capacityReservations.delete(id))
                 this.wakeCapacityWaiters();
@@ -201,12 +224,17 @@ export class RunnerOperations {
     target: RunnerOperationTarget,
   ): Promise<RunnerOperation> {
     // Readiness is checked once, after any capacity wait.
-    const permit =
-      target.capacityPermit ??
-      (await this.acquireOperationCapacity(
-        target,
-        new AbortController().signal,
-      ));
+    const priority = runPriorities[target.runKind ?? "chat"];
+    let permit = target.capacityPermit;
+    // The durable claim may select a different Run than the scheduling hint.
+    if (permit?.reservedForChat && priority > runPriorities.chat) {
+      permit.release();
+      permit = undefined;
+    }
+    permit ??= await this.acquireOperationCapacity(
+      { ...target, priority },
+      target.signal ?? new AbortController().signal,
+    );
     try {
       // The whole Run is one unit of its endpoint's model queue. It waits
       // holding its capacity, and readiness is checked after both waits.
@@ -216,7 +244,7 @@ export class RunnerOperations {
           runtimeType: target.request.runtime.type,
         },
         {
-          priority: RUN_PRIORITY,
+          priority,
           kind: target.runKind ?? "chat",
           key: target.request.run_context.execution_run_ref,
         },
@@ -248,18 +276,16 @@ export class RunnerOperations {
     }
   }
 
-  /** Whether this Run Operation holds its model place on endpoint, which an
-   * approval of its actions borrows. */
-  holdsModelPlace(
-    operationId: string | undefined,
-    endpoint: ModelEndpoint,
-  ): boolean {
-    if (!operationId || !this.#leases.has(operationId)) return false;
+  /** Pins the reviewed Operation's place until its approval has settled. */
+  borrowModelPlace(operationId: string | undefined, endpoint: ModelEndpoint) {
+    if (!operationId) return undefined;
     const operation = this.#operations.get(operationId);
-    return (
+    if (
       operation?.start.runner_id === endpoint.computerId &&
       operation.start.runtime_type === endpoint.runtimeType
-    );
+    )
+      return this.#leases.get(operationId)?.borrow();
+    return undefined;
   }
 
   /**

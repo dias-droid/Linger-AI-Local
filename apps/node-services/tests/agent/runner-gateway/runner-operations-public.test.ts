@@ -1,3 +1,4 @@
+import { runPriorities } from "../../../src/model-tasks.js";
 import { describe, expect, it, vi } from "vitest";
 import type {
   AgentToDaemonEnvelope,
@@ -203,6 +204,98 @@ describe("RunnerGateway", () => {
     next.release();
   });
 
+  it.each([1, 2])(
+    "prioritizes chat with a Computer capacity of %i",
+    async (hard) => {
+      const gateway = createTestRunnerGateway({ createId: sequenceIds() });
+      const connection = await gateway.acceptConnection(
+        authenticatedPrincipal(),
+        hello([], hard),
+        new RecordingPeer(),
+      );
+      const signal = new AbortController().signal;
+      const acquire = (
+        executionContextKey: string,
+        priority: () => Promise<number>,
+      ) =>
+        gateway.acquireOperationCapacity(
+          {
+            ...runTarget(),
+            executionContextKey,
+            priority: { queuedAt: performance.now(), resolve: priority },
+          },
+          signal,
+        );
+      try {
+        const classify = vi.fn(async () => runPriorities.routine);
+        const first = await acquire("routine", classify);
+        expect(classify).not.toHaveBeenCalled();
+        const order: string[] = [];
+        const doc = acquire(
+          "document",
+          async () => runPriorities.document,
+        ).then((p) => {
+          order.push("document");
+          return p;
+        });
+        const chat = acquire(
+          "interactive",
+          async () => runPriorities.chat,
+        ).then((p) => {
+          order.push("chat");
+          return p;
+        });
+        if (hard === 1) {
+          expect(await settlesWithin(chat, 15)).toBe(false);
+          first.release();
+        }
+        const interactive = await chat;
+        expect(order).toEqual(["chat"]);
+        interactive.release();
+        first.release();
+        (await doc).release();
+        expect(order).toEqual(["chat", "document"]);
+      } finally {
+        connection.disconnect();
+      }
+    },
+  );
+
+  it("keeps the FIFO position of a waiting Run when its priority is refreshed", async () => {
+    const gateway = createTestRunnerGateway({ createId: sequenceIds() });
+    const connection = await gateway.acceptConnection(
+      authenticatedPrincipal(),
+      hello([], 1),
+      new RecordingPeer(),
+    );
+    const stop = new AbortController();
+    const refreshed = new AbortController();
+    const acquire = (key: string, queuedAt: number, signal: AbortSignal) =>
+      gateway.acquireOperationCapacity(
+        {
+          ...runTarget(),
+          executionContextKey: key,
+          priority: { queuedAt, resolve: async () => runPriorities.routine },
+        },
+        signal,
+      );
+    try {
+      const active = await acquire("active", 0, stop.signal);
+      const old = acquire("first", 1, refreshed.signal);
+      const second = acquire("second", 2, stop.signal);
+      const canceled = expect(old).rejects.toThrow();
+      refreshed.abort();
+      await canceled;
+      const first = acquire("first", 1, stop.signal);
+      active.release();
+      (await first).release();
+      (await second).release();
+    } finally {
+      stop.abort();
+      connection.disconnect();
+    }
+  });
+
   it("rejects a capacity reservation for an offline Computer instead of waiting", async () => {
     const gateway = createTestRunnerGateway({ createId: sequenceIds() });
     await expect(
@@ -337,6 +430,61 @@ describe("RunnerGateway", () => {
         ),
       ),
     ).resolves.toHaveLength(3);
+  });
+
+  it("starts a late chat when ordinary work has filled both soft limits", async () => {
+    const gateway = createTestRunnerGateway({ createId: sequenceIds() });
+    const peer = new RecordingPeer();
+    const connection = await acceptReadyConnection(gateway, peer, {
+      ...hello([], 2),
+      runtime_diagnostics: runtimeDiagnostics({ link: "subscription" }),
+    });
+    const endpoint = {
+      computerId: "runner-local",
+      runtimeType: "codex" as const,
+    };
+    const stop = new AbortController();
+    const wiki = (index: number) =>
+      gateway.acquireModelChain(
+        endpoint,
+        { kind: "wiki", priority: 70, key: String(index) },
+        stop.signal,
+      );
+    // Eight wiki chains and one routine occupy all nine ordinary endpoint places.
+    const chains = await Promise.all(
+      Array.from({ length: 8 }, (_, i) => wiki(i)),
+    );
+    const start = (runKind: "routine" | "document" | "chat") =>
+      gateway.startOperation({
+        ...sessionTarget(),
+        ...readyContextScope(runKind),
+        runKind,
+        signal: stop.signal,
+      });
+    try {
+      const routine = await start("routine");
+      const document = start("document");
+      const waitingWiki = wiki(8);
+      const chat = await start("chat");
+      expect(
+        peer.sent
+          .filter((command) => command.type === "operation.start")
+          .map((command) => command.execution_context_key),
+      ).toEqual(["context-routine", "context-chat"]);
+      expect(await settlesWithin(waitingWiki, 10)).toBe(false);
+      const canceled = Promise.all([
+        expect(document).rejects.toThrow(),
+        expect(waitingWiki).rejects.toThrow(),
+      ]);
+      stop.abort();
+      await canceled;
+      void routine.result.catch(() => undefined);
+      void chat.result.catch(() => undefined);
+    } finally {
+      stop.abort();
+      for (const chain of chains) chain.release({ outcome: "completed" });
+      connection.disconnect();
+    }
   });
 
   it("queues a Run's whole Operation as one unit of its endpoint", async () => {

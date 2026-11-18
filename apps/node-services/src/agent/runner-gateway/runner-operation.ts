@@ -1,4 +1,4 @@
-import type { RunKind } from "../../model-tasks.js";
+import type { RunKind, CapacityPriority } from "../../model-tasks.js";
 import { EventEmitter, once } from "node:events";
 import { isDeepStrictEqual } from "node:util";
 
@@ -39,7 +39,7 @@ import {
 interface RunnerOperationTargetBase {
   /** The Agent Service epoch whose Run this Operation executes. */
   readonly executionEpoch?: string;
-  /** What queued the Run; only logged. Absent, chat. */
+  /** What queued the Run. Absent, chat. */
   readonly runKind?: RunKind;
   /** Stops the Run waiting for its turn in the model queue. */
   readonly signal?: AbortSignal;
@@ -78,9 +78,10 @@ export interface RunnerOperation {
 export type RunnerCapacityTarget = Pick<
   RunnerOperationTarget,
   "runnerId" | "tenantId" | "agentId" | "executionContextKey"
->;
+> & { readonly priority?: CapacityPriority };
 
 export interface RunnerCapacityPermit {
+  readonly reservedForChat?: boolean;
   readonly id: string;
   release(): void;
 }

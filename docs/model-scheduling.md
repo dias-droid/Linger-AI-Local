@@ -22,18 +22,26 @@ minutes; if that retry is too slow as well, the wait doubles, up to half an
 hour. What it learns lasts until the service restarts or the runtime's models
 change.
 
-Background work never takes the last place once there is more than one, so a
-chat does not wait behind a wiki refresh.
+The current adaptive limit is the hard limit. Ordinary work can start while
+the total running count is below the soft limit, `max(1, hard - 1)`. Chat,
+recording questions and standalone approvals can use the last place. At a
+hard limit of one, the current unit finishes before the next starts. When
+the limit drops, running units finish and new work respects the lower limit.
+A Computer with an explicit Operation capacity also reserves its last place
+for an interactive Run when that capacity exceeds one.
 
-| Work, highest priority first | Unit                                                                                                                           |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Tool approval                | One review. It runs in the place of the run it reviews, since that run waits for the verdict.                                  |
-| Agent run                    | A whole run, tool calls and waits for you included. Chats, tasks, routines and proactive runs share one priority.              |
-| Compaction                   | Shortening the context of a conversation that is not running. New work for that conversation cancels it.                       |
-| Background                   | Agent memory, your memory, profile, insights, wiki refresh, in that order. A flow whose calls build on each other is one unit. |
+| Work in priority order       | Unit                                                                                                |
+| ---------------------------- | --------------------------------------------------------------------------------------------------- |
+| Tool approval                | The review borrows the reviewed Run's place on the same endpoint. A standalone review queues first. |
+| Chat and recording questions | A chat Run or a question in a recording's Ask tab.                                                  |
+| Tasks and documents          | Tasks, task callbacks, agent messages, document Runs and recording notes share one priority.        |
+| Scheduled and proactive work | Routines, proactive Runs and automatic follow-ups share one priority.                               |
+| Compaction                   | An idle conversation's session compaction. New work for that conversation cancels it.               |
+| Background                   | Agent memory, user memory, profile, insights and wiki refresh, in descending priority.              |
 
-Questions in a recording's Ask tab never queue. Within one priority, work
-starts in the order it was asked.
+Each Run holds one place across its tool calls. Inputs merged into a queued
+Run take the highest priority among them. Eligible work at the same priority
+starts in arrival order.
 
 A wiki refresh is many units, not one: each routing pack, meeting, page batch
 and correction queues on its own, so other work can run between them.

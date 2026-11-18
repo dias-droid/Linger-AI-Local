@@ -111,21 +111,6 @@ func (q *Queries) AgentRuntimeContextHasPendingWork(ctx context.Context, context
 	return column_1, err
 }
 
-const agentRuntimeContextHasQueuedRun = `-- name: AgentRuntimeContextHasQueuedRun :one
-SELECT EXISTS(
-    SELECT 1 FROM agent_local_runs run
-    WHERE run.context_key=$1::text AND run.status='queued'
-      AND agent_document_run_claimable(run.run_id,run.context_key)
-)::boolean
-`
-
-func (q *Queries) AgentRuntimeContextHasQueuedRun(ctx context.Context, contextKey string) (bool, error) {
-	row := q.db.QueryRow(ctx, agentRuntimeContextHasQueuedRun, contextKey)
-	var column_1 bool
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
 const agentRuntimeDatabaseNow = `-- name: AgentRuntimeDatabaseNow :one
 SELECT clock_timestamp()::timestamptz
 `
@@ -3555,6 +3540,59 @@ func (q *Queries) NextAgentLocalRunSteerOrdinal(ctx context.Context, runID strin
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const nextAgentRunInputOrigins = `-- name: NextAgentRunInputOrigins :many
+WITH next_run AS (
+    SELECT run.run_id FROM agent_local_runs run
+    WHERE run.context_key=$1::text AND run.status='queued'
+      AND agent_document_run_claimable(run.run_id,run.context_key)
+    ORDER BY run.created_at, run.run_id LIMIT 1
+)
+SELECT DISTINCT (input.payload ? 'acceptedNotification')::boolean AS notification,
+       coalesce(input.payload->'acceptedNotification'->>'inboxId' LIKE 'taskmeta:%', false)::boolean AS task_inbox,
+       coalesce(msg.value->>'authorType', '')::text AS author_type,
+       coalesce(msg.value->>'messageKind', '')::text AS message_kind,
+       coalesce(msg.value->>'firedRoutine' = 'true', false)::boolean AS fired_routine
+FROM next_run
+JOIN agent_local_run_inputs relation ON relation.run_id=next_run.run_id AND relation.relation='initial'
+JOIN agent_runtime_inputs input ON input.context_key=relation.context_key AND input.input_id=relation.input_id
+LEFT JOIN LATERAL jsonb_array_elements(input.payload->'acceptedNotification'->'messages') AS msg(value) ON true
+`
+
+type NextAgentRunInputOriginsRow struct {
+	Notification bool   `json:"notification"`
+	TaskInbox    bool   `json:"task_inbox"`
+	AuthorType   string `json:"author_type"`
+	MessageKind  string `json:"message_kind"`
+	FiredRoutine bool   `json:"fired_routine"`
+}
+
+// Match claim order without locking the Run or returning message bodies.
+func (q *Queries) NextAgentRunInputOrigins(ctx context.Context, contextKey string) ([]NextAgentRunInputOriginsRow, error) {
+	rows, err := q.db.Query(ctx, nextAgentRunInputOrigins, contextKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NextAgentRunInputOriginsRow{}
+	for rows.Next() {
+		var i NextAgentRunInputOriginsRow
+		if err := rows.Scan(
+			&i.Notification,
+			&i.TaskInbox,
+			&i.AuthorType,
+			&i.MessageKind,
+			&i.FiredRoutine,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const observeAgentRuntimeLocalComputer = `-- name: ObserveAgentRuntimeLocalComputer :one

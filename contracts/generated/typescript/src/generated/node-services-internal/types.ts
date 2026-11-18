@@ -672,7 +672,7 @@ export interface components {
      */
     ModelCallEffort: "low" | "medium" | "high";
     /**
-     * @description What the call is for. It sets the call's place in the queue of the Runtime it runs on, where an approval goes first and Runs come next; voice_ask and meeting_notes never queue. approval, voice_ask and meeting_notes have someone waiting, so they stop once the request is gone and never answer pending.
+     * @description An approval borrows its Run's place on the same endpoint or queues first. Voice questions share chat priority and can use the reserved place. Meeting notes share task priority. All three calls stop waiting when their caller leaves and return a result or an error within their deadline.
      * @enum {string}
      */
     ModelCallKind:

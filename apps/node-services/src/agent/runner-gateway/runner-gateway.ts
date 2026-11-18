@@ -1,3 +1,4 @@
+import type { ModelLease } from "../../model-tasks.js";
 import {
   RunnerComputerTools,
   type ComputerToolRequest,
@@ -77,7 +78,6 @@ import {
   endpointConcurrency,
   ModelQueue,
   type ModelEndpoint,
-  type ModelLease,
   type ModelWork,
 } from "./model-queue.js";
 import {

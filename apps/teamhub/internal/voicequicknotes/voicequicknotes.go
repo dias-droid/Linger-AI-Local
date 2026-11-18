@@ -51,8 +51,7 @@ type Writer interface {
 
 type modelWriter struct{ models *roomagent.ModelCallClient }
 
-// NewWriter writes on the owner's Agent Runtime with a call that never
-// queues.
+// NewWriter writes on the owner's Agent Runtime at task priority.
 func NewWriter(models *roomagent.ModelCallClient) Writer { return modelWriter{models: models} }
 
 func (w modelWriter) Write(ctx context.Context, owner roomagent.ModelCallOwner, captureID, transcript string) (Notes, error) {

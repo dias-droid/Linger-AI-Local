@@ -22,6 +22,7 @@ import {
   acceptReadyConnection,
   hello,
   RecordingPeer,
+  settlesWithin,
   sequenceIds,
   sessionTarget,
 } from "./runner-gateway-fixtures.js";
@@ -211,23 +212,68 @@ describe("RunnerGateway model invocation", () => {
     }
   });
 
-  it("starts a call that never queues while queued work fills the endpoint", async () => {
+  it("keeps voice queued at hard one while a background call owns the endpoint", async () => {
     const { gateway, peer, connection } = await connect();
     try {
-      const background = gateway.invokeModel(
+      const memory = gateway.invokeModel(
         "runner-local",
         request({ input: "memory" }),
       );
       await vi.waitFor(() => expect(sentInvocations(peer)).toHaveLength(1));
+      const notes = gateway.invokeModel(
+        "runner-local",
+        request({ input: "notes", queue: queued("meeting_notes") }),
+      );
       const ask = gateway.invokeModel(
         "runner-local",
-        request({ input: "voice", queue: undefined }),
+        request({ input: "voice", queue: queued("voice_ask") }),
       );
+      expect(sentInvocations(peer)).toHaveLength(1);
+      await invoked(connection, sentInvocations(peer)[0]!);
       await vi.waitFor(() => expect(sentInvocations(peer)).toHaveLength(2));
       expect(sentInvocations(peer)[1]!.input).toBe("voice");
-      for (const command of sentInvocations(peer))
-        await invoked(connection, command);
-      await Promise.all([background, ask]);
+      await invoked(connection, sentInvocations(peer)[1]!);
+      await vi.waitFor(() => expect(sentInvocations(peer)).toHaveLength(3));
+      expect(sentInvocations(peer)[2]!.input).toBe("notes");
+      await invoked(connection, sentInvocations(peer)[2]!);
+      await Promise.all([memory, notes, ask]);
+    } finally {
+      connection.disconnect();
+    }
+  });
+
+  it("holds the chain's place for a sent step after the caller stops waiting", async () => {
+    const { gateway, peer, connection } = await connect();
+    try {
+      const stop = new AbortController();
+      const chain = await gateway.acquireModelChain(
+        { computerId: "runner-local", runtimeType: "codex" },
+        queued("wiki"),
+        stop.signal,
+      );
+      const step = gateway.invokeModel(
+        "runner-local",
+        request({
+          chainLease: chain,
+          queue: queued("wiki"),
+          signal: stop.signal,
+        }),
+      );
+      await vi.waitFor(() => expect(sentInvocations(peer)).toHaveLength(1));
+      const observed = expect(step).rejects.toThrow("caller left");
+      stop.abort(new Error("caller left"));
+      await observed;
+      chain.release({ outcome: "aborted" });
+      const ask = gateway.invokeModel(
+        "runner-local",
+        request({ queue: queued("voice_ask") }),
+      );
+      expect(await settlesWithin(ask, 10)).toBe(false);
+      expect(sentInvocations(peer)).toHaveLength(1);
+      await invoked(connection, sentInvocations(peer)[0]!);
+      await vi.waitFor(() => expect(sentInvocations(peer)).toHaveLength(2));
+      await invoked(connection, sentInvocations(peer)[1]!);
+      await ask;
     } finally {
       connection.disconnect();
     }

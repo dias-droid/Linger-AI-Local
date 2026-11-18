@@ -2248,6 +2248,15 @@ type AgentRepresentedHumanRef struct {
 	Memory *UserMemoryRevision `json:"memory,omitempty"`
 }
 
+// AgentRunInputOrigin defines model for AgentRunInputOrigin.
+type AgentRunInputOrigin struct {
+	AuthorType   string `json:"author_type"`
+	FiredRoutine bool   `json:"fired_routine"`
+	MessageKind  string `json:"message_kind"`
+	Notification bool   `json:"notification"`
+	TaskInbox    bool   `json:"task_inbox"`
+}
+
 // AgentRuntimeAcceptedContextState The Context state the accepting transaction committed. The Agent Service applies it to its Context record instead of reading the Context again.
 type AgentRuntimeAcceptedContextState struct {
 	NextInputSequence AgentRuntimeInt64                               `json:"next_input_sequence"`
@@ -2640,6 +2649,9 @@ type AgentRuntimeWorkState struct {
 
 	// MessageSteers Present on the work-state read. Steers a Message transaction queued for this Context that the Agent Service has not settled, in input order: a targeted Message for the running Run that reads its Inbox, or a native question's answer assigned to the Run that asked it.
 	MessageSteers *[]StoredAgentRuntimeInput `json:"message_steers,omitempty"`
+
+	// NextRunOrigins Distinct scheduling metadata of the oldest claimable Run's initial inputs.
+	NextRunOrigins *[]AgentRunInputOrigin `json:"next_run_origins,omitempty"`
 }
 
 // AgentRuntimeWorkingStatusChangedEvent defines model for AgentRuntimeWorkingStatusChangedEvent.

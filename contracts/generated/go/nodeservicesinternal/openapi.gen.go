@@ -2043,7 +2043,7 @@ type MemoryRebuildStatusPhase string
 // ModelCallEffort Reasoning effort for the Runtime's default model; omitted, low.
 type ModelCallEffort string
 
-// ModelCallKind What the call is for. It sets the call's place in the queue of the Runtime it runs on, where an approval goes first and Runs come next; voice_ask and meeting_notes never queue. approval, voice_ask and meeting_notes have someone waiting, so they stop once the request is gone and never answer pending.
+// ModelCallKind An approval borrows its Run's place on the same endpoint or queues first. Voice questions share chat priority and can use the reserved place. Meeting notes share task priority. All three calls stop waiting when their caller leaves and return a result or an error within their deadline.
 type ModelCallKind string
 
 // ModelCallRequest defines model for ModelCallRequest.
@@ -2060,7 +2060,7 @@ type ModelCallRequest struct {
 	// Key Names the work, for example profile:<generation_id>. A request with the same key and the same content joins the running execution or receives its cached result; the same key with other content is a new request.
 	Key string `json:"key"`
 
-	// Kind What the call is for. It sets the call's place in the queue of the Runtime it runs on, where an approval goes first and Runs come next; voice_ask and meeting_notes never queue. approval, voice_ask and meeting_notes have someone waiting, so they stop once the request is gone and never answer pending.
+	// Kind An approval borrows its Run's place on the same endpoint or queues first. Voice questions share chat priority and can use the reserved place. Meeting notes share task priority. All three calls stop waiting when their caller leaves and return a result or an error within their deadline.
 	Kind ModelCallKind `json:"kind"`
 
 	// Output Asks for one JSON object; omitted, the answer is text.

@@ -1,3 +1,4 @@
+import type { ModelLease } from "./model-tasks.js";
 import { Ajv, type ValidateFunction } from "ajv";
 import { isRecord, sleep } from "@linger/service-kit";
 import { sha256Hex, type JsonLogger } from "@linger/service-kit/node";
@@ -259,11 +260,6 @@ export function isComputerOffline(error: unknown): boolean {
         error.message.startsWith(COMPUTER_OFFLINE_MESSAGE);
 }
 
-/** A queue place a chain holds on its endpoint until release. */
-export interface ModelChainLease {
-  release(result: { readonly outcome: string; readonly usage?: unknown }): void;
-}
-
 /** A place in one endpoint's queue. */
 export interface ModelQueueWork {
   readonly priority: number;
@@ -299,9 +295,8 @@ export interface RuntimeModelGateway {
       readonly sessionKey?: string;
       readonly timeoutMs: number;
       readonly maxOutputChars?: number;
-      /** Absent, the call runs at once: a chain's call runs in its chain's
-       * place, and some kinds never queue. */
-      readonly queue?: ModelQueueWork & { readonly runOperationId?: string };
+      readonly chainLease?: ModelLease;
+      readonly queue: ModelQueueWork & { readonly runOperationId?: string };
       readonly signal: AbortSignal;
     },
   ): Promise<
@@ -327,7 +322,7 @@ export interface RuntimeModelGateway {
     },
     work: ModelQueueWork,
     signal: AbortSignal,
-  ): Promise<ModelChainLease>;
+  ): Promise<ModelLease>;
 }
 
 /** Placements of active Another Me Agents; with an owner, only that owner's. */
@@ -417,7 +412,7 @@ interface Call extends CallRequest {
 interface Entry {
   readonly call: Call;
   /** A chain's call, which runs in its chain's place. */
-  readonly admitted: boolean;
+  readonly chainLease?: ModelLease;
   readonly controller: AbortController;
   /** Token usage of each attempt, as the Runtime reported it. */
   readonly usage: unknown[];
@@ -713,6 +708,11 @@ async function invokeAttempt(
     input,
   });
   let outcome: Awaited<ReturnType<RuntimeModelGateway["invokeModel"]>>;
+  const timeoutMs = call.timeoutMs ?? policy.timeoutMs;
+  const deadline = policy.interactive
+    ? AbortSignal.timeout(timeoutMs)
+    : undefined;
+  const attemptSignal = deadline ? AbortSignal.any([signal, deadline]) : signal;
   try {
     outcome = await state.options.gateway.invokeModel(placement.computerId, {
       tenantId: placement.tenantId,
@@ -730,23 +730,20 @@ async function invokeAttempt(
       ...(call.sessionKey
         ? { sessionKey: attemptSession(call.sessionKey, attempt) }
         : {}),
-      timeoutMs: call.timeoutMs ?? policy.timeoutMs,
+      timeoutMs,
       ...(call.maxOutputChars === undefined
         ? {}
         : { maxOutputChars: call.maxOutputChars }),
-      ...(policy.queued && !entry.admitted
-        ? {
-            queue: {
-              priority: policy.priority,
-              kind: call.kind,
-              key: call.key,
-              ...(call.runOperationId
-                ? { runOperationId: call.runOperationId }
-                : {}),
-            },
-          }
-        : {}),
-      signal,
+      queue: {
+        priority: policy.priority,
+        kind: call.kind,
+        key: call.key,
+        ...(call.kind === "approval" && call.runOperationId
+          ? { runOperationId: call.runOperationId }
+          : {}),
+      },
+      chainLease: entry.chainLease,
+      signal: attemptSignal,
     });
   } catch (error) {
     callLog?.finished({
@@ -758,6 +755,11 @@ async function invokeAttempt(
       error: error instanceof Error ? error.message : String(error),
     });
     if (signal.aborted) throw signal.reason;
+    if (deadline?.aborted)
+      throw new ModelCallError(
+        "timed_out",
+        "The model call did not finish in time",
+      );
     if (error instanceof ModelCallError) {
       if (error.kind === "computer_offline" && key !== undefined)
         state.placementCache.delete(key);
@@ -897,11 +899,11 @@ function settleCall(
 function startCall(
   state: ModelCallState,
   call: Call,
-  admitted: boolean,
+  chainLease?: ModelLease,
 ): Entry {
   const entry: Entry = {
     call,
-    admitted,
+    chainLease,
     controller: new AbortController(),
     usage: [],
     result: Promise.resolve(undefined as never),
@@ -930,7 +932,7 @@ async function requestCall(
   state: ModelCallState,
   call: CallRequest,
   signal: AbortSignal | undefined,
-  admitted = false,
+  chainLease?: ModelLease,
 ): Promise<{
   readonly settled: ModelCallAnswer;
   readonly usage: readonly unknown[];
@@ -939,7 +941,7 @@ async function requestCall(
   signal?.throwIfAborted();
   const id = callId(call);
   const entry =
-    state.entries.get(id) ?? startCall(state, { ...call, id }, admitted);
+    state.entries.get(id) ?? startCall(state, { ...call, id }, chainLease);
   entry.waiters += 1;
   try {
     const settled = await untilAborted(entry.result, [
@@ -952,7 +954,7 @@ async function requestCall(
     if (
       entry.waiters === 0 &&
       state.entries.get(id) === entry &&
-      (entry.admitted || modelCallPolicies[entry.call.kind].interactive)
+      (entry.chainLease || modelCallPolicies[entry.call.kind].interactive)
     )
       entry.controller.abort(
         new ModelCallError("failed", "Nobody waits for the model call"),
@@ -1042,7 +1044,7 @@ async function runModelChain<T>(
     signal.addEventListener("abort", abort, { once: true });
   }
   state.chains.add(controller);
-  let lease: ModelChainLease | undefined;
+  let lease: ModelLease | undefined;
   let deadline: NodeJS.Timeout | undefined;
   let outcome = "failed";
   let calls = 0;
@@ -1056,12 +1058,11 @@ async function runModelChain<T>(
     );
     const { runtimeType } = resolveTarget(state.options.gateway, placement);
     const policy = modelCallPolicies[spec.kind];
-    if (policy.queued)
-      lease = await state.options.gateway.acquireModelChain(
-        { computerId: placement.computerId, runtimeType },
-        { priority: policy.priority, kind: spec.kind, key: spec.key },
-        controller.signal,
-      );
+    lease = await state.options.gateway.acquireModelChain(
+      { computerId: placement.computerId, runtimeType },
+      { priority: policy.priority, kind: spec.kind, key: spec.key },
+      controller.signal,
+    );
     if (spec.timeoutMs !== undefined)
       deadline = setTimeout(
         () =>
@@ -1086,7 +1087,7 @@ async function runModelChain<T>(
           state,
           call(`${spec.key}/${stepName}`),
           controller.signal,
-          true,
+          lease,
         );
         calls += 1;
         if (settled.usage.length) usage.push(settled.usage);

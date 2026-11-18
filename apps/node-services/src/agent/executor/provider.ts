@@ -1,4 +1,4 @@
-import type { RunKind } from "../../model-tasks.js";
+import type { RunKind, CapacityPriority } from "../../model-tasks.js";
 import type { RuntimeHistoryOptions, RuntimeHistoryPage } from "./history.js";
 
 export interface McpServerResource {
@@ -342,7 +342,10 @@ export interface ProviderSessionOptions extends SessionSpec {
 
 export interface AgentProvider {
   /** Reserve execution capacity before claiming a durable Run. Always release. */
-  acquireRunCapacity?(signal: AbortSignal): Promise<() => void>;
+  acquireRunCapacity?(
+    signal: AbortSignal,
+    priority?: CapacityPriority,
+  ): Promise<() => void>;
 
   createSession(options: ProviderSessionOptions): Promise<RuntimeSession>;
 
