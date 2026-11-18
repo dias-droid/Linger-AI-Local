@@ -137,7 +137,12 @@ program fails the start after 15 seconds instead of at the deadline.
 On POSIX, a start that finds the recorded supervisor gone but processes
 still carrying its lease (the app was killed with it) ends them as a stop
 does and starts the service again. A live recorded PID or process group
-without the lease proves nothing and is refused, never signalled. A start
+without the lease proves nothing and is refused, never signalled.
+On macOS every identity check reads `ps` start times in the C locale.
+Linger 0.1.2 recorded them in the locale it ran in; such a record is
+converted once to the C-locale birth when `ps` in the installer's own
+locale still prints the recorded birth for the live leader holding the
+lease, and is otherwise left as it is. A start
 that fails before its record is kept ends what it launched: by the lease,
 or, when the lease cannot be proved, by the group of the supervisor it has
 not reaped yet, whose PID cannot belong to another program. Before the

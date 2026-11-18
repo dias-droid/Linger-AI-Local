@@ -8,6 +8,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { atomicPrivate, privateDirectory, readPrivate } from "./instance.js";
 import { runProcess, windowsTreeTermination } from "./process.js";
 import {
+  darwinBirthInCLocale,
+  legacyDarwinIdentity,
   linuxProcessStates,
   nativeProcessIdentity as observed,
   nativeLeaseProcesses,
@@ -68,7 +70,32 @@ async function stored(
     !/^[a-f0-9]{64}$/.test(record.configuration)
   )
     throw new Error("Invalid native process identity record");
+  if (process.platform === "darwin" && !darwinBirthInCLocale(record.birth))
+    return adoptLegacyDarwinBirth(root, name, record);
   return record;
+}
+/**
+ * Linger 0.1.2 recorded a macOS birth with lstart in the locale it ran in;
+ * every check now reads it in the C locale, so a service it started in, for
+ * example, a German region format never matched again. When ps in this
+ * process's own locale still prints the recorded birth for the live leader
+ * holding the lease, it is that service: its record takes the C-locale birth,
+ * once. Otherwise the record stays as it is and proves nothing.
+ */
+async function adoptLegacyDarwinBirth(
+  root: string,
+  name: NativeService,
+  record: Lease,
+): Promise<Lease> {
+  const current = await observed(record.pid, record.lease);
+  if (
+    !current ||
+    (await legacyDarwinIdentity(record.pid, record.lease)) !== record.birth
+  )
+    return record;
+  const converted = { ...record, birth: current };
+  await atomicPrivate(paths(root, name).record, JSON.stringify(converted));
+  return converted;
 }
 async function stillLive(pid: number): Promise<boolean> {
   try {

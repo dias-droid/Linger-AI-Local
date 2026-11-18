@@ -5,13 +5,16 @@ const leaseKey = "LINGER_NATIVE_PROCESS_LEASE";
 function runProcess(
   executable: string,
   args: string[],
-  options: { timeoutMs: number },
+  options: { timeoutMs: number; locale?: "c" | "inherited" },
 ) {
   // Inspectors must not inherit the lease and appear among the owned processes.
   // ps prints lstart in the caller's locale (a zh-CN Mac prints a different
   // number of fields), and a recorded birth must read the same from every
   // process that checks it, so inspectors run in the C locale.
-  const env: NodeJS.ProcessEnv = { ...process.env, LC_ALL: "C", LANG: "C" };
+  const env: NodeJS.ProcessEnv =
+    options.locale === "inherited"
+      ? { ...process.env }
+      : { ...process.env, LC_ALL: "C", LANG: "C" };
   delete env[leaseKey];
   return new Promise<{ code: number; stdout: string }>((resolve, reject) => {
     execFile(
@@ -183,10 +186,29 @@ export function darwinProcessIdentity(
     state,
   };
 }
+/**
+ * The birth of a macOS process as Linger 0.1.2 recorded it: lstart in the
+ * locale the installer ran in, not the C locale every check now uses. Only
+ * for converting such a record; undefined elsewhere.
+ */
+export function legacyDarwinIdentity(
+  pid: number,
+  lease: string,
+): Promise<string | undefined> {
+  if (process.platform !== "darwin") return Promise.resolve(undefined);
+  return nativeProcessIdentity(pid, lease, true, "inherited");
+}
+/** Whether a recorded macOS birth reads lstart in the C locale. */
+export function darwinBirthInCLocale(birth: string): boolean {
+  return /^darwin:(?:Sun|Mon|Tue|Wed|Thu|Fri|Sat):(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec):\d{1,2}:\d{2}:\d{2}:\d{2}:\d{4}:\d+:\d+$/.test(
+    birth,
+  );
+}
 export async function nativeProcessIdentity(
   pid: number,
   lease: string,
   requireLeader = true,
+  locale: "c" | "inherited" = "c",
 ): Promise<string | undefined> {
   try {
     if (process.platform === "win32") {
@@ -214,7 +236,7 @@ export async function nativeProcessIdentity(
         runProcess(
           "/bin/ps",
           ["-p", String(pid), "-o", "lstart=,uid=,pgid=,stat="],
-          { timeoutMs: 5_000 },
+          { timeoutMs: 5_000, locale },
         ),
         // Read only this candidate. Never print the output: it contains
         // environment values. The unguessable launch lease survives execve.
