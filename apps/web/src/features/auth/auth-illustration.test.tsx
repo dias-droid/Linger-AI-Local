@@ -58,7 +58,7 @@ it("lands a nudge every four seconds and wakes Another Me for each one", () => {
   );
 
   advance(3_000);
-  expect(shownNudge()).toContain("Codex reviewed the code");
+  expect(shownNudge()).toContain("Linger reviewed the code");
   advance(4_000);
   expect(shownNudge()).toContain("the deck is ready");
   // After the last nudge the day starts over.
@@ -73,7 +73,7 @@ it("keeps one loop across unrelated rerenders and clears it on unmount", () => {
   advance(3_000);
   view.rerender(<AuthIllustration />);
   advance(4_000);
-  expect(shownNudge()).toContain("Codex reviewed the code");
+  expect(shownNudge()).toContain("Linger reviewed the code");
   expect(setIntervalSpy).toHaveBeenCalledTimes(1);
 
   view.unmount();

@@ -43,6 +43,19 @@ build:assets` to check the initial JS budget.
 
 ## Important Conventions
 
+- The login page keeps Linger's headline and day timeline on the left,
+  and the sign-in form on the right. A faint white grid fades gently into the
+  form's white background without a dark panel, colored glow, or blur. The
+  timeline uses dark and muted text on white; reduced motion holds its first
+  nudge still. Below 64rem the illustration is hidden, while the form keeps
+  its visible labels and optional desktop account sign-in.
+- Login body copy uses the Room font and chat body typography tokens. Times,
+  dividers, and the footer use the chat metadata tokens. Its titles keep their
+  own scale, with desktop content inset toward the middle on both sides and
+  the left copy and timeline inset by two additional 40px grid cells. Linger
+  uses the red panda portrait on its warm brown tile.
+- The login header uses the transparent horizontal Linger wordmark in
+  `public/linger-wordmark.svg`, with the proportions of `assets/logo-horizontal.svg`.
 - Gmail and Outlook message approvals show the subject and recipients once.
   The subject row toggles the preview and owns its hover highlight; the
   recipient line stays outside the control. The shared AutoHeight transition
