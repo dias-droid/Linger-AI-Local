@@ -218,6 +218,14 @@ SELECT count(*)::bigint FROM voice_live_tool_calls
 WHERE voice_session_id=sqlc.arg(voice_session_id)::text
   AND turn_id=sqlc.arg(turn_id)::text AND name=sqlc.arg(name)::text;
 
+-- name: CountVoiceLiveTurnCanvasChanges :one
+-- Whether a live turn wrote or changed a Gmail canvas: a send in that turn
+-- would go out before the user saw the change.
+SELECT count(*)::bigint FROM voice_live_tool_calls
+WHERE voice_session_id=sqlc.arg(voice_session_id)::text
+  AND turn_id=sqlc.arg(turn_id)::text
+  AND name IN ('open_email_canvas','edit_email_canvas','attach_email_file');
+
 -- name: GetLatestVoiceLiveToolOutput :one
 -- The newest output this session returned for the tool before the call that
 -- asks, such as the page the browser showed last. The asking call is already

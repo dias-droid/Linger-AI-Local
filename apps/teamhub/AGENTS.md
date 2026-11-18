@@ -68,6 +68,12 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
   still rendering these routes answer 503 with `Retry-After`.
 - Live voice write tools that finish a send return a `next` asking the model
   to say it was sent; a result without one can leave the voice silent.
+- Live voice writes need the user's yes from a turn after the question
+  (`voiceLiveConfirmed`), except `voicelive.DirectYesTools`: sending a Gmail
+  canvas, which is open beside the chat, runs when the user's own turn told
+  the model to send it and that turn neither asked about it nor wrote,
+  changed or attached to a canvas; otherwise the details are read back and
+  the yes comes in the user's next turn.
 
 - A Room permits 100 Routines: recurring ones count while they exist, and
   one-shot ones count until they fire. There is no separate one-shot limit.

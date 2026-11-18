@@ -109,6 +109,27 @@ func (q *Queries) CompleteVoiceLiveToolCall(ctx context.Context, arg CompleteVoi
 	return err
 }
 
+const countVoiceLiveTurnCanvasChanges = `-- name: CountVoiceLiveTurnCanvasChanges :one
+SELECT count(*)::bigint FROM voice_live_tool_calls
+WHERE voice_session_id=$1::text
+  AND turn_id=$2::text
+  AND name IN ('open_email_canvas','edit_email_canvas','attach_email_file')
+`
+
+type CountVoiceLiveTurnCanvasChangesParams struct {
+	VoiceSessionID string `json:"voice_session_id"`
+	TurnID         string `json:"turn_id"`
+}
+
+// Whether a live turn wrote or changed a Gmail canvas: a send in that turn
+// would go out before the user saw the change.
+func (q *Queries) CountVoiceLiveTurnCanvasChanges(ctx context.Context, arg CountVoiceLiveTurnCanvasChangesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countVoiceLiveTurnCanvasChanges, arg.VoiceSessionID, arg.TurnID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const countVoiceLiveTurnToolCalls = `-- name: CountVoiceLiveTurnToolCalls :one
 SELECT count(*)::bigint FROM voice_live_tool_calls
 WHERE voice_session_id=$1::text
