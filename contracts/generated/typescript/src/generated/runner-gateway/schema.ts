@@ -3579,6 +3579,11 @@ export const runnerGatewayEnvelopeSchema = {
           description:
             "The Daemon sends Runtime permission prompts as human_interaction.requested with kind permission_review; Agent Service answers each with an operation.input runtime_response.",
         },
+        resume_after_yield: {
+          type: "boolean",
+          description:
+            "Continue the exact native session of this Run after a confirmed scheduler cancellation.",
+        },
         execution_run_ref: {
           $ref: "#/$defs/Id",
         },

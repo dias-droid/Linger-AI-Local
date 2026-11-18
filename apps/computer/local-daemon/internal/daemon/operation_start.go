@@ -58,6 +58,9 @@ func (d *Daemon) handleOperationStart(ctx context.Context, stream transport.Stre
 	d.activeMu.Lock()
 	stopped := d.locallyStopped[command.AgentID]
 	d.activeMu.Unlock()
+	if d.runtimeCleanupUnconfirmed(command.RuntimeType) {
+		return d.finishFailure(ctx, stream, command, cleanupUnconfirmedCode, cleanupUnconfirmedMessage)
+	}
 	admittedCount, contextBusy := d.operationOccupancy(identity)
 	capacityExhausted := d.capacity != nil && admittedCount >= *d.capacity
 	if stopped {

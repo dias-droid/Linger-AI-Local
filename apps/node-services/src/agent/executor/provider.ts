@@ -130,6 +130,8 @@ export interface ExecutionSpec {
   acceptedAtMonotonicMs?: number;
   /** What queued the Run, for model scheduling; never sent over the wire. */
   runKind?: RunKind;
+  /** Revalidate the live claim after readmission and before resuming its native session. */
+  beforeYieldResume?: () => Promise<void>;
   signal?: AbortSignal;
   resources?: ProviderResourceBundle;
   runContext?: ProviderRunContext;
@@ -264,6 +266,13 @@ export type RunEvent =
 
 export interface RunResult {
   finalResponse: string;
+}
+
+/** A delegated Task's native Operation stopped and its session can continue. */
+export class ProviderRunYieldedError extends Error {
+  constructor(readonly session: Record<string, string | boolean>) {
+    super("Task yielded its model slot");
+  }
 }
 
 export class ProviderRunCleanupError extends Error {

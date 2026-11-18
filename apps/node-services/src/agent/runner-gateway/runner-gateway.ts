@@ -174,10 +174,13 @@ export class RunnerGateway
     this.#preparation = new RunnerOperationPreparation(context, owners);
     this.#compaction = new RunnerSessionCompaction(context, owners);
     this.#modelInvocation = new RunnerModelInvocation(context, owners);
-    this.#queue = new ModelQueue((endpoint) =>
-      endpointConcurrency(
-        this.runtimeModels(endpoint.computerId, endpoint.runtimeType),
-      ),
+    this.#queue = new ModelQueue(
+      (endpoint) =>
+        endpointConcurrency(
+          this.runtimeModels(endpoint.computerId, endpoint.runtimeType),
+        ),
+      Date.now,
+      (endpoint) => this.#operations.yieldTaskForChat(endpoint),
     );
     this.#computerTools = new RunnerComputerTools(context, owners);
     this.#localModels = new RunnerLocalModels(context, owners);

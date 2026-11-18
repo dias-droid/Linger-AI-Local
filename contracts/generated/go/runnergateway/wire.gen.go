@@ -1846,6 +1846,7 @@ func (AgentInput) RequiredFields() []string { return []string{"type", "text"} }
 type ContextRunContext struct {
 	HumanInteractions *bool    `json:"human_interactions,omitempty"`
 	PermissionReview  *bool    `json:"permission_review,omitempty"`
+	ResumeAfterYield  *bool    `json:"resume_after_yield,omitempty"`
 	ExecutionRunRef   string   `json:"execution_run_ref"`
 	SourceInboxIDs    []string `json:"source_inbox_ids"`
 }

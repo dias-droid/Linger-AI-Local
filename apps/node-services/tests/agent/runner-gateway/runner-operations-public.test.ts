@@ -96,6 +96,109 @@ describe("RunnerGateway", () => {
     await expect(operation.result).resolves.toMatchObject({ type: "run" });
   });
 
+  it.each([1, null])(
+    "waits for confirmed Task cleanup before starting chat (Computer capacity %s)",
+    async (capacity) => {
+      const gateway = createTestRunnerGateway({
+        createId: sequenceIds(),
+        operationCancelTimeoutMs: 10,
+      });
+      const peer = new RecordingPeer();
+      const connection = await acceptReadyConnection(gateway, peer, {
+        ...hello([], capacity),
+        runtime_diagnostics: runtimeDiagnostics({ link: "api" }),
+      });
+      try {
+        const task = await gateway.startOperation({
+          ...runTarget(),
+          runKind: "task",
+        });
+        const start = peer.sent.find(
+          (command) => command.type === "operation.start",
+        )!;
+        const chat = gateway.startOperation({
+          ...runTarget(),
+          ...readyContextScope("chat"),
+          runKind: "chat",
+        });
+        await connection.receive(
+          event(start, 1, {
+            type: "operation.accepted",
+            command_id: start.command_id,
+            runner_pid: 100,
+          }),
+        );
+        expect(await settlesWithin(chat, 10)).toBe(false);
+        expect(peer.sent.some((command) => command.type === "cancel")).toBe(
+          false,
+        );
+        await connection.receive(
+          event(start, 2, {
+            type: "operation.event",
+            event: {
+              type: "run.started",
+              turn_id: "turn-task",
+              session: { threadId: "task-session", canYield: true },
+            },
+          }),
+        );
+        expect(peer.sent.some((command) => command.type === "cancel")).toBe(
+          false,
+        );
+        await connection.receive(
+          event(start, 3, {
+            type: "operation.event",
+            event: {
+              type: "tool.called",
+              call_id: "read",
+              tool_name: "read",
+              input: {},
+            },
+          }),
+        );
+        await vi.waitFor(() =>
+          expect(
+            peer.sent.filter((command) => command.type === "cancel"),
+          ).toHaveLength(1),
+        );
+        expect(
+          peer.sent.find((command) => command.type === "cancel"),
+        ).toMatchObject({
+          operation_id: start.operation_id,
+          reason: "scheduler_yield",
+        });
+        expect(await settlesWithin(chat, 25)).toBe(false);
+        await connection.receive(
+          event(start, 4, {
+            type: "operation.event",
+            event: {
+              type: "human_interaction.requested",
+              request: { request_id: "late" },
+            },
+          }),
+        );
+        const yielded = expect(task.result).rejects.toMatchObject({
+          session: { threadId: "task-session" },
+        });
+        await connection.receive(
+          event(start, 5, {
+            type: "operation.cancelled",
+            reason: "scheduler_yield",
+          }),
+        );
+        await yielded;
+        const events = [];
+        for await (const item of task.events) events.push(item.type);
+        expect(events).toEqual(["run.started", "tool.called"]);
+        const interactive = await chat;
+        expect(interactive.operationId).not.toBe(start.operation_id);
+        void interactive.result.catch(() => undefined);
+      } finally {
+        connection.disconnect();
+      }
+    },
+  );
+
   it("records the Runtime turn a Run's Operation started as soon as it starts", async () => {
     const recordRunOperation = vi.fn(async () => {});
     const gateway = createTestRunnerGateway({

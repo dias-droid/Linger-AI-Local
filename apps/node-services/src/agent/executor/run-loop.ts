@@ -10,6 +10,7 @@ import {
   type RuntimeSession,
   ProviderRunAdmissionUnavailableError,
   ProviderRunCleanupError,
+  ProviderRunYieldedError,
   ProviderRunInterruptedError,
   ProviderRunStartError,
   StreamingAgentRunLimitError,
@@ -279,6 +280,7 @@ interface LocalRunExecution {
   removeAbortListener: (() => void) | undefined;
   upstreamCanceled: boolean;
   providerSucceeded: boolean;
+  hasYielded: boolean;
 }
 
 export class RunLoop {
@@ -926,6 +928,7 @@ export class RunLoop {
       removeAbortListener: undefined,
       upstreamCanceled: false,
       providerSucceeded: false,
+      hasYielded: false,
     };
     try {
       await this.#runExecution(execution);
@@ -988,10 +991,10 @@ export class RunLoop {
 
   /** Prepares, starts, observes and durably finishes one claimed Run. */
   async #runExecution(execution: LocalRunExecution): Promise<void> {
-    const { runId, attemptCount, controller } = execution;
+    const { runId, controller } = execution;
     controller.signal.throwIfAborted();
     if (execution.preparationFailure) throw execution.preparationFailure.error;
-    const input = this.#prepareRunInput(execution);
+    let input = this.#prepareRunInput(execution);
     try {
       await this.#beforeStartRun?.(runId);
     } catch (error) {
@@ -1001,7 +1004,49 @@ export class RunLoop {
         { cause: error },
       );
     }
-    controller.signal.throwIfAborted();
+    const replyDelivery = new ReplyDelivery();
+    let resumeStartRetries = 0;
+    for (;;) {
+      controller.signal.throwIfAborted();
+      try {
+        await this.#runSegment(execution, input, replyDelivery);
+        return;
+      } catch (error) {
+        if (
+          execution.hasYielded &&
+          error instanceof ProviderRunStartError &&
+          error.effect === "definitely_not_started" &&
+          !(error instanceof ProviderRunAdmissionUnavailableError) &&
+          ++resumeStartRetries < MAX_LOCAL_RUN_START_ATTEMPTS
+        )
+          continue;
+        if (!(error instanceof ProviderRunYieldedError)) throw error;
+        execution.hasYielded = true;
+        resumeStartRetries = 0;
+        const active = this.#activeExecution;
+        if (active?.runId === runId) {
+          active.acceptingSteers = false;
+          await this.#settleProviderSteers(active);
+        }
+        execution.removeAbortListener?.();
+        await this.#settleRuntimeStatusEvents(execution);
+        controller.signal.throwIfAborted();
+        // The claim stays running while the next Operation waits behind chat.
+        await this.#commitDurably(() =>
+          this.#state.setRuntimeSession(this.#runtimeSession),
+        );
+        input = { type: "text", text: "Continue on this task." };
+        this.#logger.log("info", "local_run.yielded", { runId });
+      }
+    }
+  }
+
+  async #runSegment(
+    execution: LocalRunExecution,
+    input: AgentInput,
+    replyDelivery: ReplyDelivery,
+  ): Promise<void> {
+    const { controller, runId, attemptCount } = execution;
     const providerStartAt = performance.now();
     const run = await this.#startProviderRun(execution, input);
     execution.run = run;
@@ -1009,14 +1054,13 @@ export class RunLoop {
     this.#logProviderReady(execution, run, providerStartAt, providerReadyAt);
     const active = await this.#activateExecution(execution, run, input);
 
-    execution.runtimeStatus = await this.#openRuntimeStatus(
+    execution.runtimeStatus ??= await this.#openRuntimeStatus(
       runId,
       execution.provenance,
       execution.runContext.executionEpoch,
     );
     controller.signal.throwIfAborted();
 
-    const replyDelivery = new ReplyDelivery();
     execution.runtimeStatusEvents = this.#consumeRuntimeStatusEvents(
       runId,
       run.events,
@@ -1123,6 +1167,20 @@ export class RunLoop {
           runContext: execution.runContext,
           acceptedAtMonotonicMs: execution.acceptedAtMonotonicMs,
           runKind: execution.kind,
+          ...(execution.hasYielded
+            ? {
+                beforeYieldResume: async () => {
+                  const claim = await this.#state.getLocalRun(execution.runId);
+                  if (
+                    claim?.status !== "running" ||
+                    claim.cancellationRequested ||
+                    claim.attemptCount !== execution.attemptCount
+                  )
+                    controller.abort(new LocalRunCancellationRequestedError());
+                  controller.signal.throwIfAborted();
+                },
+              }
+            : {}),
         });
         this.#firstSessionRun = false;
         return run;
@@ -1257,10 +1315,12 @@ export class RunLoop {
       executionEpoch: execution.runContext.executionEpoch,
       acceptingSteers: true,
       controller,
-      inputs: [input],
+      inputs: this.#activeExecution?.inputs ?? [input],
       run,
       runId,
-      sourceInboxIds: new Set(execution.provenance.sourceInboxIds),
+      sourceInboxIds:
+        this.#activeExecution?.sourceInboxIds ??
+        new Set(execution.provenance.sourceInboxIds),
       steerOperations: new Set(),
     };
     this.#activeExecution = active;
@@ -1372,6 +1432,7 @@ export class RunLoop {
       error instanceof ProviderRunStartError &&
       !(error instanceof ProviderRunAdmissionUnavailableError) &&
       error.effect === "definitely_not_started" &&
+      !execution.hasYielded &&
       attemptCount < MAX_LOCAL_RUN_START_ATTEMPTS &&
       !controller.signal.aborted
     ) {
@@ -1710,7 +1771,7 @@ export class RunLoop {
       return;
     }
 
-    const target = await intent.providerReady;
+    const target = this.#activeExecution ?? (await intent.providerReady);
     if (
       !target ||
       !target.acceptingSteers ||

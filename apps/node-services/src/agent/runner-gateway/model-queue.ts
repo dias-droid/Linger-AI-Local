@@ -1,5 +1,6 @@
 import {
   admissionLimit,
+  runPriorities,
   type ModelLease,
   type ModelLeaseResult,
 } from "../../model-tasks.js";
@@ -67,9 +68,9 @@ interface EndpointState {
 }
 
 /**
- * Admits model work per endpoint. A Run's Operation, a one-shot call, a
- * chain and a compaction are each one unit. Smaller priority numbers start
- * first, in arrival order within a priority. Running units finish. When the
+ * Admits model work per endpoint. A Run Operation, a model attempt and a
+ * compaction each occupy one place. Smaller priority numbers start first,
+ * in arrival order within a priority. When the
  * limit exceeds one, chat, voice asks and standalone approvals may fill the
  * last place.
  * The limit adapts to what finished requests report. Admission only; it
@@ -84,6 +85,7 @@ export class ModelQueue {
   constructor(
     private readonly concurrency: (endpoint: ModelEndpoint) => ConcurrencyRange,
     private readonly now: () => number = Date.now,
+    private readonly onInteractiveWait?: (endpoint: ModelEndpoint) => void,
   ) {}
 
   /** A model request on endpoint finished, whoever holds its place. */
@@ -162,6 +164,19 @@ export class ModelQueue {
       this.#drain(state);
     });
     return this.#lease(state, work, queuedAt);
+  }
+
+  /** A newly resumable Task can yield to chat already waiting on this endpoint. */
+  recheckInteractiveWait(endpoint: ModelEndpoint): void {
+    const state = this.#endpoints.get(endpointKey(endpoint));
+    if (
+      state &&
+      state.active === 1 &&
+      state.waiting.length &&
+      this.#limit(state.key, endpoint).value === 1 &&
+      state.waiting[0]!.priority <= runPriorities.chat
+    )
+      this.onInteractiveWait?.(endpoint);
   }
 
   /** The Computer is gone; work waiting for it fails with error. */
@@ -254,6 +269,7 @@ export class ModelQueue {
       state.waiting.shift();
       next.admit();
     }
+    this.recheckInteractiveWait(state.endpoint);
     this.#prune(state);
   }
 

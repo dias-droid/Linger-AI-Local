@@ -28,6 +28,7 @@ import {
   RuntimeExecutionError,
   StreamingAgentRun,
   ProviderRunCleanupError,
+  ProviderRunYieldedError,
   ProviderRunInterruptedError,
   ProviderRunStartError,
   runtimeSessionStartsFresh,
@@ -483,6 +484,7 @@ export class RemoteRuntimeProvider implements AgentProvider {
         signal,
         spec.runContext.executionEpoch,
         spec.runKind,
+        spec.beforeYieldResume,
       );
       if (spec.runContext.cancellationRequested) {
         await this.#cancel(operation, "Durable user cancellation");
@@ -687,6 +689,7 @@ export class RemoteRuntimeProvider implements AgentProvider {
     signal: AbortSignal = this.#closed.signal,
     executionEpoch?: string,
     runKind?: RunnerOperationTarget["runKind"],
+    beforeYieldResume?: () => Promise<void>,
   ): Promise<RunnerOperation> {
     if (this.#closePromise) {
       throw new Error("Remote Codex provider is closed");
@@ -702,6 +705,7 @@ export class RemoteRuntimeProvider implements AgentProvider {
         ...this.#target,
         executionEpoch,
         ...(runKind ? { runKind } : {}),
+        ...(beforeYieldResume ? { beforeYieldResume } : {}),
         signal,
         contextViewRef: this.#contextRunResources.currentContextViewRef(),
         request,
@@ -889,6 +893,7 @@ export class RemoteRuntimeProvider implements AgentProvider {
     return {
       run_context: {
         ...toContextRunContext(context),
+        ...(spec.beforeYieldResume ? { resume_after_yield: true } : {}),
         ...this.#runAuthorization(),
       },
       run_resources: runResources,
@@ -1044,6 +1049,8 @@ class RemoteAgentRun implements AgentRun {
       replaceOpaqueObject(this.#session, runResult.session);
       return { finalResponse: runResult.final_response };
     } catch (error) {
+      if (error instanceof ProviderRunYieldedError)
+        replaceOpaqueObject(this.#session, error.session);
       throw localRunFailure(error, true);
     }
   }

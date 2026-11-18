@@ -98,6 +98,9 @@ func (d *Daemon) modelInvokeBlocked(command protocol.Command, request modelInvok
 	if stopped {
 		return provider.ModelInvokeResult{Outcome: provider.ModelInvokeUnavailable, Reason: "Agent Runner is locally stopped"}
 	}
+	if d.runtimeCleanupUnconfirmed(command.RuntimeType) {
+		return provider.ModelInvokeResult{Outcome: provider.ModelInvokeRuntimeUnavailable, Reason: cleanupUnconfirmedMessage}
+	}
 	if d.modelInvoker == nil {
 		return provider.ModelInvokeResult{Outcome: provider.ModelInvokeRuntimeUnavailable, Reason: "Model invocation is unavailable"}
 	}

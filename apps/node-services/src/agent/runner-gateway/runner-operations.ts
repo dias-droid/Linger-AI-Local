@@ -211,6 +211,14 @@ export class RunnerOperations {
             },
           };
         }
+        if (
+          hard === 1 &&
+          first === waiter &&
+          waiter.rank !== undefined &&
+          rank <= runPriorities.chat &&
+          active.length === 1
+        )
+          active[0]!.requestYield();
         await waitForCapacityChange(changed, signal);
       }
     } finally {
@@ -251,6 +259,8 @@ export class RunnerOperations {
         target.signal ?? new AbortController().signal,
       );
       try {
+        if (target.beforeYieldResume) await target.beforeYieldResume();
+        target.signal?.throwIfAborted();
         const reservation = this.#capacityReservations.get(permit.id);
         if (
           !reservation ||
@@ -273,6 +283,14 @@ export class RunnerOperations {
       }
     } finally {
       permit.release();
+    }
+  }
+
+  /** A chat waiting on the model may already hold its Computer permit. */
+  yieldTaskForChat(endpoint: ModelEndpoint): void {
+    for (const operation of this.activeOperations(endpoint.computerId)) {
+      if (operation.start.runtime_type === endpoint.runtimeType)
+        operation.requestYield();
     }
   }
 
@@ -656,6 +674,7 @@ export class RunnerOperations {
         );
       return;
     }
+    const wasResumable = operation.resumableTask;
     const acknowledgement = await operation.receive(envelope);
     if (
       envelope.type === "operation.event" &&
@@ -671,6 +690,14 @@ export class RunnerOperations {
       !operation.terminal
     )
       this.#recordRunOperation(operation);
+    if (
+      !operation.terminal &&
+      operation.resumableTask &&
+      (!wasResumable || envelope.type === "operation.input_result")
+    ) {
+      this.owners.queue().recheckInteractiveWait(operationEndpoint(operation));
+      this.wakeCapacityWaiters();
+    }
     if (operation.terminal) this.#retireOperation(operation);
     if (acknowledgement)
       await this.owners.connections().send(connection, acknowledgement);

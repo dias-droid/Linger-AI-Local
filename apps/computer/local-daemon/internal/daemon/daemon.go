@@ -122,8 +122,11 @@ type Daemon struct {
 	// what an accepted Operation may start with: Registration snapshots, Agent
 	// Runner commands and Context commands. A start whose revision is unchanged
 	// after its off-lock MCP preparation needs no second Resolve.
-	authorityRevision  uint64
-	activeOperations   map[string]*activeOperation
+	authorityRevision uint64
+	activeOperations  map[string]*activeOperation
+	// A yielded Operation whose native cleanup is unknown still occupies this
+	// Computer. Its Runtime refuses new work until the Daemon restarts.
+	uncleanOperations  []OperationIdentity
 	preparationMu      sync.Mutex
 	preparedOperations map[string]*preparedOperation
 	providerPrepareMu  sync.Mutex

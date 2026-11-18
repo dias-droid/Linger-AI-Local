@@ -3,7 +3,7 @@
 A model serves one more request only by slowing the others, and every agent,
 approval and background job on a computer shares it. One queue per endpoint,
 one runtime on one computer, decides what reaches the model: each unit of work
-waits its turn by priority, and a unit that started is never interrupted.
+waits its turn by priority.
 
 | Endpoint                                           | Starts at | Grows to |
 | -------------------------------------------------- | --------- | -------- |
@@ -24,9 +24,8 @@ change.
 
 The current adaptive limit is the hard limit. Ordinary work can start while
 the total running count is below the soft limit, `max(1, hard - 1)`. Chat,
-recording questions and standalone approvals can use the last place. At a
-hard limit of one, the current unit finishes before the next starts. When
-the limit drops, running units finish and new work respects the lower limit.
+recording questions and standalone approvals can use the last place. When
+the limit drops, new work respects the lower limit.
 A Computer with an explicit Operation capacity also reserves its last place
 for an interactive Run when that capacity exceeds one.
 
@@ -39,8 +38,20 @@ for an interactive Run when that capacity exceeds one.
 | Compaction                   | An idle conversation's session compaction. New work for that conversation cancels it.               |
 | Background                   | Agent memory, user memory, profile, insights and wiki refresh, in descending priority.              |
 
-Each Run holds one place across its tool calls. Inputs merged into a queued
-Run take the highest priority among them. Eligible work at the same priority
+When a delegated Task occupies the only place on its endpoint or Computer,
+a waiting interactive request can ask it to yield once the Runtime has a
+resumable native session. On Codex, the Task must also have reached its first
+model response or tool event so that the original brief is in its history.
+Chat starts after the Computer confirms cleanup.
+The Task keeps its ID, running status and claim while it waits, and continues
+in the same session when admitted again. A user stop still ends the Task.
+A pending tool approval or human interaction is answered before yielding.
+If a yielded Task's cleanup cannot be confirmed, the Computer refuses further
+work on that Runtime until it restarts. Other stops only report the unknown
+cleanup.
+
+Each running Operation holds one place across its tool calls. Inputs merged
+into a queued Run take the highest priority among them. Eligible work at the same priority
 starts in arrival order.
 
 Wiki and Memory chains keep their steps in order on one endpoint. Each model

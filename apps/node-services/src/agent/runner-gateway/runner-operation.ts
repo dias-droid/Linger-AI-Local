@@ -5,6 +5,7 @@ import { isDeepStrictEqual } from "node:util";
 import { logAgentEvent } from "../observability/agent-log.js";
 import {
   RuntimeExecutionError,
+  ProviderRunYieldedError,
   runtimeSessionAwaitsFirstRun,
 } from "../executor/provider.js";
 import type { ProviderSteerAck } from "../executor/provider.js";
@@ -41,6 +42,7 @@ interface RunnerOperationTargetBase {
   readonly executionEpoch?: string;
   /** What queued the Run. Absent, chat. */
   readonly runKind?: RunKind;
+  readonly beforeYieldResume?: () => Promise<void>;
   /** Stops the Run waiting for its turn in the model queue. */
   readonly signal?: AbortSignal;
   readonly tenantId: string;
@@ -247,6 +249,11 @@ export class RunnerOperationState {
   #accepted = false;
   #terminal = false;
   #cancelCommand?: OperationCancel;
+  readonly #delegatedTask: boolean;
+  #yieldSessionId?: string;
+  #yieldRequested = false;
+  #observedNativeWork = false;
+  readonly #interactions = new Set<string>();
   #prepareCommand?: OperationPrepare;
   #prepareResumeObserved = false;
   #currentContextViewRef: ContextViewRef;
@@ -295,6 +302,7 @@ export class RunnerOperationState {
     };
   }) {
     this.#epoch = options.target.executionEpoch;
+    this.#delegatedTask = options.target.runKind === "task";
     this.#createId = options.createId;
     this.#send = options.send;
     this.#cancelTimeoutMs = options.cancelTimeoutMs;
@@ -590,6 +598,34 @@ export class RunnerOperationState {
     }
   }
 
+  get resumableTask(): boolean {
+    // Codex announces its thread before the first task input is durably in its history.
+    return (
+      Boolean(this.#yieldSessionId) &&
+      (this.start.runtime_type !== "codex" || this.#observedNativeWork)
+    );
+  }
+
+  /** Only a native terminal can hand a running Task's slot to another caller. */
+  requestYield(): void {
+    if (
+      !this.resumableTask ||
+      this.#terminal ||
+      this.#cancelCommand ||
+      this.#interactions.size ||
+      [...this.#pendingInputs.values()].some((input) => !input.settled)
+    )
+      return;
+    this.#yieldRequested = true;
+    this.#cancelCommand = createCancel(
+      this.start,
+      this.#createId(),
+      "scheduler_yield",
+    );
+    // Reconciliation resends this exact command if the Computer disconnected.
+    void this.#send(this.#cancelCommand).catch(() => undefined);
+  }
+
   retainCancellation(reason: string): void {
     if (this.#terminal) {
       return;
@@ -821,8 +857,33 @@ export class RunnerOperationState {
       case "operation.accepted":
         break;
       case "operation.event":
-        if (envelope.event.type === "run.started")
+        if (envelope.event.type === "run.started") {
           this.#turnId = envelope.event.turn_id;
+          const threadId = envelope.event.session?.threadId;
+          if (
+            this.#delegatedTask &&
+            envelope.event.session?.canYield === true &&
+            typeof threadId === "string" &&
+            threadId.trim()
+          )
+            this.#yieldSessionId = threadId;
+        }
+        if (
+          this.#delegatedTask &&
+          (envelope.event.type === "tool.called" ||
+            envelope.event.type === "tool.returned" ||
+            envelope.event.type === "model.responded")
+        )
+          this.#observedNativeWork = true;
+        if (
+          this.#delegatedTask &&
+          envelope.event.type === "human_interaction.requested"
+        ) {
+          // A prompt in transit belongs to the retiring Operation and cannot be answered on its successor.
+          if (this.#yieldRequested) break;
+          if (typeof envelope.event.request.request_id === "string")
+            this.#interactions.add(envelope.event.request.request_id);
+        }
         await this.#events.push(envelope.event);
         break;
       case "operation.input_result":
@@ -881,15 +942,24 @@ export class RunnerOperationState {
           true,
         );
         break;
-      case "operation.cancelled":
-        this.#complete(
-          () =>
-            this.#outcome.reject(
-              new RunnerOperationError("cancelled", envelope.reason, false),
-            ),
-          true,
-        );
+      case "operation.cancelled": {
+        const id = this.#yieldSessionId;
+        const runtime = this.start.runtime_type;
+        const error =
+          this.#yieldRequested && id && envelope.reason === "scheduler_yield"
+            ? new ProviderRunYieldedError(
+                runtime === "codex"
+                  ? { threadId: id }
+                  : {
+                      provider: runtime,
+                      sessionId: id,
+                      lingerMaterialized: true,
+                    },
+              )
+            : new RunnerOperationError("cancelled", envelope.reason, false);
+        this.#complete(() => this.#outcome.reject(error), true);
         break;
+      }
       default:
         assertNever(envelope);
     }
@@ -897,7 +967,7 @@ export class RunnerOperationState {
 
   async #input(options: RunnerOperationInput): Promise<ProviderSteerAck> {
     const pending = await this.#serialize(async () => {
-      if (!this.#accepted || this.#terminal) {
+      if (!this.#accepted || this.#terminal || this.#yieldRequested) {
         throw new RunnerOperationInputError(
           "No active Runtime run",
           "definitely_not_applied",
@@ -948,7 +1018,7 @@ export class RunnerOperationState {
         message,
       );
     } catch {
-      if (this.#terminal) return;
+      if (this.#terminal || this.#yieldRequested) return;
       this.#complete(() =>
         this.#outcome.reject(
           new RunnerOperationError("cancelled", message, false),
@@ -974,7 +1044,10 @@ export class RunnerOperationState {
     }
     pending.settled = true;
     try {
-      pending.outcome.resolve(outcome());
+      const accepted = outcome();
+      const requestId = pending.command.input.runtime_response?.request_id;
+      if (typeof requestId === "string") this.#interactions.delete(requestId);
+      pending.outcome.resolve(accepted);
     } catch (error) {
       pending.outcome.reject(error);
     }

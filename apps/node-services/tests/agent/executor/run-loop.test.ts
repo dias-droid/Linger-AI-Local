@@ -11,6 +11,7 @@ import {
   type RuntimeSession,
   ProviderRunAdmissionUnavailableError,
   ProviderRunCleanupError,
+  ProviderRunYieldedError,
   ProviderRunInterruptedError,
   ProviderRunStartError,
   StreamingAgentRunLimitError,
@@ -436,6 +437,82 @@ describe("RunLoop", () => {
       });
     });
   });
+
+  it.each([false, true])(
+    "keeps a yielded Task on its running claim (user stops it: %s)",
+    async (stop) => {
+      const harness = createHarness(
+        undefined,
+        undefined,
+        undefined,
+        { threadId: "retained" },
+        {
+          kind: "alter_ego",
+          agentId: "agent",
+          taskId: "task",
+        },
+      );
+      const first = new FakeRun();
+      const resumed = new FakeRun();
+      const admit = deferred<void>();
+      const start = harness.provider.startRun.bind(harness.provider);
+      let resumedSpec: ExecutionSpec | undefined;
+      let failedAdmission = false;
+      vi.spyOn(harness.provider, "startRun").mockImplementation(
+        async (session, input, spec) => {
+          if (spec.beforeYieldResume) {
+            resumedSpec = spec;
+            await admit.promise;
+            await spec.beforeYieldResume();
+            if (!failedAdmission) {
+              failedAdmission = true;
+              throw new ProviderRunStartError(
+                "definitely_not_started",
+                "View changed",
+              );
+            }
+          }
+          return start(session, input, spec);
+        },
+      );
+      harness.provider.runs.push(first, resumed);
+      const finish = vi.spyOn(harness.state, "finishLocalRun");
+      const id = enqueue(harness.state, message("original brief"));
+      harness.execution.start();
+      await vi.waitFor(() => expect(first.waitCalls).toBe(1));
+      first.fail(new ProviderRunYieldedError({ threadId: "retained" }));
+      await vi.waitFor(() => expect(resumedSpec).toBeDefined());
+      expect(harness.state.getLocalRun(id)).toMatchObject({
+        status: "running",
+        attemptCount: 1,
+      });
+      expect(finish).not.toHaveBeenCalled();
+      if (stop) await harness.execution.requestCancellation(id);
+      admit.resolve();
+      if (stop) {
+        await vi.waitFor(() =>
+          expect(harness.state.getLocalRun(id)?.status).toBe("canceled"),
+        );
+        expect(harness.provider.starts).toHaveLength(1);
+      } else {
+        await vi.waitFor(() => expect(resumed.waitCalls).toBe(1));
+        expect(harness.provider.starts[1]).toMatchObject({
+          input: { text: "Continue on this task." },
+          spec: {
+            runContext: { executionRunRef: id, executionAttemptCount: 1 },
+          },
+          session: { threadId: "retained" },
+        });
+        resumed.complete("done");
+        await vi.waitFor(() =>
+          expect(harness.state.getLocalRun(id)?.status).toBe("succeeded"),
+        );
+      }
+      expect(finish).toHaveBeenCalledTimes(1);
+      await harness.execution.drain({ cancelActive: false });
+      harness.state.close();
+    },
+  );
 
   it("keeps a wake received before fresh-state startup", async () => {
     const harness = createHarness();

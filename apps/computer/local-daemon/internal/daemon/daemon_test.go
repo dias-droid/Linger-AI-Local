@@ -416,6 +416,69 @@ func TestDaemonDoesNotReportCancelledWhenProviderCleanupIsUnconfirmed(t *testing
 	testDaemonDrainCleanup(t, true)
 }
 
+func TestSchedulerYieldRequiresConfirmedCleanup(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		result  provider.Result
+		want    string
+		blocked bool
+	}{
+		{"confirmed interrupt", provider.Result{Status: "aborted", CleanupConfirmed: true}, protocol.EventOperationCancelled, false},
+		{"confirmed Pi interrupt", provider.Result{Status: "cancelled", CleanupConfirmed: true}, protocol.EventOperationCancelled, false},
+		{"missing confirmation", provider.Result{Status: "aborted"}, protocol.EventOperationFailed, true},
+		{"unconfirmed interrupt", provider.Result{Status: "failed", CleanupUnconfirmed: true}, protocol.EventOperationFailed, true},
+		{"already finished", provider.Result{Status: "completed", Output: "done"}, protocol.EventOperationCompleted, false},
+		{"failed before interrupt", provider.Result{Status: "failed", CleanupConfirmed: true}, protocol.EventOperationFailed, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stream := &fakeStream{}
+			d, err := newTestDaemon(t, Options{ComputerID: "computer-1", Capacity: intPointer(1), ControlPlane: fakeControlPlane{stream: stream}, IdentityStore: fakeStore{}, OperationResolver: fakeOperationResolver{}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			d.operationStream = stream
+			start := daemonOperationStart("yield", "agent-1")
+			_, err = d.ledger.Begin(t.Context(), operationIdentity(start))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			d.activeOperations[start.OperationID] = &activeOperation{identity: operationIdentity(start), cancel: cancel}
+			stop := operationCancelCommand(start)
+			stop.Payload = mustJSON(map[string]string{"reason": schedulerYield})
+			if err := d.handleOperationCancel(stop); err != nil {
+				t.Fatal(err)
+			}
+			d.finishOperation(t.Context(), start, provider.OperationSpec{OperationKind: "run.start", Provider: start.RuntimeType}, tc.result)
+			events := stream.snapshotEvents()
+			if len(events) != 1 || events[0].Type != tc.want {
+				t.Fatalf("terminal=%+v, want %s", events, tc.want)
+			}
+			if d.runtimeCleanupUnconfirmed(start.RuntimeType) != tc.blocked {
+				t.Fatal("incorrect Runtime availability")
+			}
+			if !tc.blocked {
+				return
+			}
+			next := daemonOperationStart("late-chat", "agent-2")
+			if err := d.handleOperationStart(t.Context(), stream, next); err != nil {
+				t.Fatal(err)
+			}
+			events = stream.snapshotEvents()
+			if len(events) != 2 || events[1].Type != protocol.EventOperationFailed || !strings.Contains(string(events[1].Payload), cleanupUnconfirmedCode) {
+				t.Fatalf("unconfirmed cleanup admitted chat: %+v", events)
+			}
+			if blocked := d.modelInvokeBlocked(next, modelInvokeRequest{}); blocked.Reason != cleanupUnconfirmedMessage {
+				t.Fatalf("unconfirmed cleanup admitted inference: %+v", blocked)
+			}
+			if count, _ := d.operationOccupancy(operationIdentity(next)); count != 1 {
+				t.Fatalf("Computer occupation=%d", count)
+			}
+		})
+	}
+}
+
 func testDaemonDrainCleanup(t *testing.T, cleanupUnconfirmed bool) {
 	t.Helper()
 	cancelled := make(chan struct{})
@@ -474,6 +537,9 @@ func testDaemonDrainCleanup(t *testing.T, cleanupUnconfirmed bool) {
 	}
 	if len(events) < 2 || events[len(events)-1].Type != wantTerminal {
 		t.Fatalf("terminal was not delivered before slot release: %+v", events)
+	}
+	if d.runtimeCleanupUnconfirmed(start.RuntimeType) {
+		t.Fatal("an ordinary stop with unknown cleanup blocked its Runtime")
 	}
 	if cleanupUnconfirmed {
 		var failure struct {

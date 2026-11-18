@@ -1032,6 +1032,10 @@ export interface ContextRunContext {
    * The Daemon sends Runtime permission prompts as human_interaction.requested with kind permission_review; Agent Service answers each with an operation.input runtime_response.
    */
   permission_review?: boolean;
+  /**
+   * Continue the exact native session of this Run after a confirmed scheduler cancellation.
+   */
+  resume_after_yield?: boolean;
   execution_run_ref: Id;
   /**
    * @maxItems 1024
