@@ -74,14 +74,21 @@ The document contains exactly these fields; unknown fields are rejected.
     the start year and a leading dash marks the end year: `2009–2013` when
     both years are known, `2019` when only the start year is known, `–2013`
     when only the end year is known (such as a graduation year), and
-    `Present` for every ongoing role, whatever year it started. When the
-    sources only show that a role ended before a later role began, write
-    that later role's start year from the sources as the end, as in
-    `–2025`, even when the later role's own period reads `Present`. Never
-    leave a school or organization out of the timeline because its years are
-    unclear: use the end year of this rule when a later role's start year is
-    known, and ask the Human for the years only when no year can be
-    supported at all. Do not prefix roles with "Former"; the period
+    `Present` for every ongoing role, whatever year it started. Write every
+    year the sources support: a start year shown by an offer, a background
+    check, or a first day belongs in the period, so a finished job reads
+    `2020–2026`, not `–2026`. A later role's start year is an end year only
+    for the entry that later role directly follows, when the sources show
+    that transition, such as graduating and then joining, as in `–2025`
+    even when the later role's own period reads `Present`. A later year
+    that only proves an entry was over by then is an upper bound, not its
+    end year; never copy one bound onto several earlier entries. Search
+    for the entry's own years first (degree, graduation, admission, offer,
+    internship, or resignation records). If none is found, write the bound
+    as `≤2020` and list the entry in the Task report so the Human is asked
+    for its years. Never leave a school or organization out of the timeline
+    because its years are unclear, and ask the Human for the years when no
+    year at all is supported. Do not prefix roles with "Former"; the period
     shows it. Never guess a year.
   - `organization`: the school or organization.
   - `place`: the city, or an empty string when the source does not state it
