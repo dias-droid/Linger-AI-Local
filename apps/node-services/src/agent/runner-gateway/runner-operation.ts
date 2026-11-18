@@ -610,7 +610,9 @@ export class RunnerOperationState {
   }
 
   get resumable(): boolean {
-    // Codex announces its thread before the first input is durably in its history.
+    // Codex announces its thread before the first input is durably in its
+    // history. Any model output, thinking included, comes after Codex
+    // recorded that input.
     return (
       Boolean(this.#yieldSessionId) &&
       (this.start.runtime_type !== "codex" || this.#observedNativeWork)
@@ -888,7 +890,10 @@ export class RunnerOperationState {
         if (
           envelope.event.type === "tool.called" ||
           envelope.event.type === "tool.returned" ||
-          envelope.event.type === "model.responded"
+          envelope.event.type === "model.responded" ||
+          envelope.event.type === "message.delta" ||
+          (envelope.event.type === "status.changed" &&
+            envelope.event.status === "thinking")
         )
           this.#observedNativeWork = true;
         if (envelope.event.type === "human_interaction.requested") {

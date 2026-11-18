@@ -43,11 +43,12 @@ When work at chat priority or above is first in line and cannot start, it asks
 the lowest-priority running Run below it on that endpoint or Computer to yield,
 one Run at a time and at any limit. A recording question can swap out a chat,
 and a chat can swap out a Task or a routine. A Run can yield once the Runtime
-has a resumable native session. On Codex, the Run must also have reached its
-first model response or tool event so that its original input is in its
-history. A pending tool approval or human interaction is answered before
-yielding. The waiting work starts after the Computer confirms cleanup. A Run
-that finishes on its own while it is asked to yield completes normally.
+has a resumable native session. On Codex, the Run must also have produced
+model output, its thinking included, or a tool event so that its original
+input is in its history. A pending tool approval or human interaction is
+answered before yielding. The waiting work starts after the Computer confirms
+cleanup. A Run that finishes on its own while it is asked to yield completes
+normally.
 The yielded Run keeps its ID, running status and claim while it waits, and
 continues in the same session when admitted again. A user stop still ends it.
 If a yielded Run's cleanup cannot be confirmed, the Computer refuses further

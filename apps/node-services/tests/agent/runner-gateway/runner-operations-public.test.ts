@@ -203,6 +203,87 @@ describe("RunnerGateway", () => {
     },
   );
 
+  it.each([
+    ["thinking", { type: "status.changed", status: "thinking" }],
+    [
+      "streaming its answer",
+      { type: "message.delta", message_id: "answer", delta: "Hel" },
+    ],
+  ] as const)(
+    "lets a Codex Run yield to chat once it is %s",
+    async (_, work) => {
+      const gateway = createTestRunnerGateway({
+        createId: sequenceIds(),
+        operationCancelTimeoutMs: 10,
+      });
+      const peer = new RecordingPeer();
+      const connection = await acceptReadyConnection(gateway, peer, {
+        ...hello([], 1),
+        runtime_diagnostics: runtimeDiagnostics({ link: "api" }),
+      });
+      try {
+        const task = await gateway.startOperation({
+          ...runTarget(),
+          runKind: "task",
+        });
+        task.result.catch(() => undefined);
+        const start = peer.sent.find(
+          (command) => command.type === "operation.start",
+        )!;
+        const chat = gateway.startOperation({
+          ...runTarget(),
+          ...readyContextScope("chat"),
+          runKind: "chat",
+        });
+        // The chat never starts here; the disconnect ends its wait.
+        chat.then(
+          (interactive) => interactive.result.catch(() => undefined),
+          () => undefined,
+        );
+        await connection.receive(
+          event(start, 1, {
+            type: "operation.accepted",
+            command_id: start.command_id,
+            runner_pid: 100,
+          }),
+        );
+        await connection.receive(
+          event(start, 2, {
+            type: "operation.event",
+            event: {
+              type: "run.started",
+              turn_id: "turn-task",
+              session: { threadId: "task-session", canYield: true },
+            },
+          }),
+        );
+        await connection.receive(
+          event(start, 3, {
+            type: "operation.event",
+            event: { type: "status.changed", status: "working" },
+          }),
+        );
+        expect(await settlesWithin(chat, 10)).toBe(false);
+        expect(peer.sent.some((command) => command.type === "cancel")).toBe(
+          false,
+        );
+        await connection.receive(
+          event(start, 4, { type: "operation.event", event: work }),
+        );
+        await vi.waitFor(() =>
+          expect(
+            peer.sent.find((command) => command.type === "cancel"),
+          ).toMatchObject({
+            operation_id: start.operation_id,
+            reason: "scheduler_yield",
+          }),
+        );
+      } finally {
+        connection.disconnect();
+      }
+    },
+  );
+
   it("keeps a user-stopped Task's place through the cancel timeout and a later chat", async () => {
     const gateway = createTestRunnerGateway({
       createId: sequenceIds(),
