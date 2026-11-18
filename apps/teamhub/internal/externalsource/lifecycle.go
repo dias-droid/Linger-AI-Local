@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/composio"
+	"github.com/simplexai-labs/linger/apps/teamhub/internal/document"
 	idgen "github.com/simplexai-labs/linger/apps/teamhub/internal/ids"
 )
 
@@ -115,13 +116,17 @@ func (s *Service) disconnectOnce(ctx context.Context, accountID, connectionID st
 }
 
 // stopConnectionAccessTx ends the Connection's mailbox snapshot, drops its
-// mail evidence, and revokes its Agent grants. A running import stops at its
-// next fence, since the caller also changes the revision.
+// mail evidence, takes its mail out of the Wiki, and revokes its Agent grants.
+// A running import stops at its next fence, since the caller also changes the
+// revision.
 func stopConnectionAccessTx(ctx context.Context, tx pgx.Tx, connectionID string) error {
 	if _, err := tx.Exec(ctx, `UPDATE external_connections SET mail_import_status=NULL,mail_import_revision=NULL,mail_import_tenant_id=NULL,mail_import_error_code=NULL,mail_import_cursor=NULL,mail_import_read=NULL,mail_import_provider_calls=NULL,mail_synced_until=NULL WHERE id=$1`, connectionID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM external_mail_import_documents WHERE connection_id=$1`, connectionID); err != nil {
+		return err
+	}
+	if err := document.SuspendMailWikiSourcesTx(ctx, tx, connectionID); err != nil {
 		return err
 	}
 	_, err := tx.Exec(ctx, `UPDATE external_connection_agent_grants SET status='revoked',revision=revision+1,revoked_at=now(),updated_at=now() WHERE connection_id=$1 AND status='active'`, connectionID)

@@ -215,6 +215,44 @@ func upsertWikiSourceItemInTransaction(
 	return UpsertWikiSourceResult{DocumentID: documentID, VersionID: nextVersionID, WikiID: wikiID, Changed: true}, nil
 }
 
+// SuspendMailWikiSourcesTx takes a disconnected mail Connection's messages out
+// of the Wiki: their source Bindings are suspended, so the next refresh
+// withdraws them like any removed source. The wiki_source_items rows stay, which
+// keeps the messages out of the owned and unfiled lists.
+func SuspendMailWikiSourcesTx(ctx context.Context, tx pgx.Tx, connectionID string) error {
+	rows, err := tx.Query(ctx, `UPDATE document_context_bindings binding
+		SET status='suspended',access_epoch=binding.access_epoch+1,updated_at=clock_timestamp()
+		FROM wiki_source_items item
+		WHERE item.tenant_id=binding.tenant_id AND item.document_id=binding.document_id
+		  AND item.source_key LIKE 'mail:%' AND split_part(item.source_key,':',2)=$1
+		  AND binding.binding_kind='wiki_source' AND binding.status='active'
+		RETURNING binding.tenant_id,item.owner_actor_id,binding.document_id`, connectionID)
+	if err != nil {
+		return err
+	}
+	type owner struct{ tenantID, actorID string }
+	suspended := make(map[owner][]string)
+	for rows.Next() {
+		var key owner
+		var documentID string
+		if err := rows.Scan(&key.tenantID, &key.actorID, &documentID); err != nil {
+			rows.Close()
+			return err
+		}
+		suspended[key] = append(suspended[key], documentID)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	rows.Close()
+	for key, documentIDs := range suspended {
+		if err := AppendBindingUpdatedEvents(ctx, tx, key.tenantID, key.actorID, connectionID, documentIDs); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func ensureWikiSourceBinding(ctx context.Context, tx pgx.Tx, prefix, tenantID, actorID, wikiID, documentID string) error {
 	bindingID := stableCreateID(prefix, documentID, wikiID)
 	changed, err := upsertTypedBinding(ctx, tx, tenantID, documentID, bindingID, "wiki_source", wikiID, "editor")

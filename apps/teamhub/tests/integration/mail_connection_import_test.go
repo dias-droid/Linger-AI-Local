@@ -173,6 +173,18 @@ func TestMailConnectionAutomaticallyImportsWikiWithoutProfile(t *testing.T) {
 				}()
 			}
 			callers.Wait()
+			mailWikiSources := func() (bound, items int) {
+				if err := pool.QueryRow(ctx, `SELECT
+					(SELECT count(*) FROM document_context_bindings binding JOIN wiki_source_items item ON item.document_id=binding.document_id
+					  WHERE item.source_key LIKE 'mail:'||$1||':%' AND binding.binding_kind='wiki_source' AND binding.status='active'),
+					(SELECT count(*) FROM wiki_source_items WHERE source_key LIKE 'mail:'||$1||':%')`, connectionID).Scan(&bound, &items); err != nil {
+					t.Fatal(err)
+				}
+				return bound, items
+			}
+			if bound, _ := mailWikiSources(); bound != 3000 {
+				t.Fatalf("imported mail has %d active Wiki source Bindings", bound)
+			}
 			connection, err := external.GetConnection(ctx, "account_alice", connectionID)
 			if err != nil {
 				t.Fatal(err)
@@ -185,6 +197,11 @@ func TestMailConnectionAutomaticallyImportsWikiWithoutProfile(t *testing.T) {
 			}
 			if snapshots != 0 {
 				t.Fatalf("disconnect retained %d mail evidence snapshots", snapshots)
+			}
+			// The disconnected mailbox leaves the Wiki's sources; its items stay
+			// so the messages never surface as the Human's own pages.
+			if bound, items := mailWikiSources(); bound != 0 || items != 3000 {
+				t.Fatalf("after disconnect: active Wiki source Bindings=%d items=%d", bound, items)
 			}
 
 			provider.pageMu.Lock()

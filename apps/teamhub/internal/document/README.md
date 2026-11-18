@@ -37,6 +37,9 @@ status and `longest_line_bytes` (a PDF without a text layer has no text and stay
 refresh freezes the admitted ones by `document_text_version_id`. Texts come from text layers only; there is no OCR, so
 raster images have no text.
 Mail the whitelist filters out never becomes a source and is not recorded.
+Disconnecting a mail Connection suspends its messages' source Bindings (`SuspendMailWikiSourcesTx`), so the next
+refresh withdraws them and a reconnected mailbox is not read twice; their `wiki_source_items` rows stay and keep them
+out of the owned and unfiled lists.
 The Wiki's Session sources are not Documents: `wiki_session_sources` reads the Human's Room and recording Sessions
 from the Memory index (`memory_index.sources` at their `source_versions` text), `wiki_current_sources` joins them
 to the bound Documents, and a refresh freezes each Session at the SHA-256 of its indexed text.
