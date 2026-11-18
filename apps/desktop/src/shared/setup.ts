@@ -123,6 +123,18 @@ export interface SetupTransfer {
   readonly partial?: boolean;
 }
 
+// The localmodels tool's reason code with the counts it carries. Its words
+// stay in the main process log; the page has its own copy per code.
+export interface SetupReason {
+  readonly code: string;
+  // On gpu-memory-required: the card other programs hold memory on.
+  readonly gpuIndex?: number;
+  // The memory free now and what the install needs free: that card's VRAM,
+  // or RAM on free-memory-required.
+  readonly freeBytes?: number;
+  readonly requiredBytes?: number;
+}
+
 export type SetupLocalModelsCheck =
   | { readonly state: "unchecked" | "unavailable" }
   // While the check first downloads the localmodels tool: its bytes.
@@ -147,12 +159,10 @@ export type SetupLocalModelsCheck =
         readonly diskBytes: number | null;
         readonly memoryBytes: number | null;
       };
-      // The localmodels tool's code and words for why not, or, when
-      // eligible, for what could still stop the install.
-      readonly reasons?: readonly {
-        readonly code: string;
-        readonly message?: string;
-      }[];
+      // The localmodels tool's code for why not, or, when eligible, for
+      // what could still stop the install, with the counts it carries. The
+      // page words each code itself.
+      readonly reasons?: readonly SetupReason[];
       // The localmodels tool's pick, which Quick Install installs:
       // "local-models" is the model above served by Pi.
       readonly recommendation?: SetupChoice;

@@ -2057,7 +2057,8 @@
       <section data-step="permissions" aria-labelledby="permissions-title">
         <h1 id="permissions-title">A few permissions</h1>
         <p class="lead compact">
-          Change these later from the menu bar or in your system settings.
+          Change these later from the <span data-tray>menu bar</span> or in your
+          system settings.
         </p>
         <div class="rows">
           <div class="row">
@@ -2162,7 +2163,10 @@
             ></span>
             <div class="text">
               <strong>Open at login</strong
-              ><span class="sub">Start in the menu bar when you log in.</span>
+              ><span class="sub"
+                >Start in the <span data-tray>menu bar</span> when you log
+                in.</span
+              >
             </div>
             <button
               class="switch"
@@ -2567,6 +2571,96 @@
         requestAnimationFrame(placeKnobs);
       };
 
+      // The page's own words for each localmodels reason code, with the
+      // counts it carries; the tool's message is never shown. held: the
+      // model fits the hardware, but other programs hold memory it needs now.
+      const counts = (free, needed) =>
+        free != null && needed != null
+          ? " (" + size(free) + " free, " + size(needed) + " needed)"
+          : "";
+      const reasonText = (reason, held, freeMemory) => {
+        switch (reason.code) {
+          case "gpu-memory-required":
+            return (
+              "Other programs are using " +
+              (reason.gpuIndex != null
+                ? "GPU " + reason.gpuIndex + "'s"
+                : "the GPU's") +
+              " memory" +
+              counts(reason.freeBytes, reason.requiredBytes) +
+              ". Close programs that use the GPU, such as games, video or other AI apps."
+            );
+          case "free-memory-required":
+            return (
+              "Other programs are using the memory it needs" +
+              (counts(reason.freeBytes, reason.requiredBytes) ||
+                counts(
+                  freeMemory?.ramAvailableBytes,
+                  freeMemory?.ramRequiredBytes,
+                )) +
+              ". Close other programs."
+            );
+          case "gpu-sharing-required":
+            return "Other work is running on the GPU. Close it.";
+          // localmodels 0.1.0.dev39 reports it; later versions plan by the
+          // GPU memory free instead.
+          case "gpu-ownership-unknown":
+            return "Linger couldn't tell which programs are using the GPU, so it can't share it. Close programs that use the GPU.";
+          case "facts-unavailable":
+            return "Linger couldn't read this computer's memory, disk or GPU.";
+          case "unsupported-platform":
+            return "Local models don't run on this system.";
+          // Blocked now, it names another inference app holding a Mac's
+          // memory.
+          case "plan-unavailable":
+            return held
+              ? "Another app is holding the memory it needs, such as another AI app. Quit it."
+              : "No local model fits this computer.";
+          default:
+            return held
+              ? "Other programs are using the memory it needs. Close other programs."
+              : "This computer can't run a local model now.";
+        }
+      };
+      const reasonsText = (models, held) =>
+        [
+          ...new Set(
+            (models.reasons?.length ? models.reasons : [{ code: "" }]).map(
+              (reason) => reasonText(reason, held, models.freeMemory),
+            ),
+          ),
+        ].join(" ");
+      // The held card's short line: what is free against what is needed.
+      const heldLine = (models) => {
+        const gpu = models.reasons?.find(
+          (reason) =>
+            reason.code === "gpu-memory-required" &&
+            reason.freeBytes != null &&
+            reason.requiredBytes != null,
+        );
+        if (gpu)
+          return (
+            "On hold: " +
+            (gpu.gpuIndex != null ? "GPU " + gpu.gpuIndex : "The GPU") +
+            " has " +
+            size(gpu.freeBytes) +
+            " free, needs " +
+            size(gpu.requiredBytes)
+          );
+        const ram = models.reasons?.find(
+          (reason) =>
+            reason.code === "free-memory-required" &&
+            reason.freeBytes != null &&
+            reason.requiredBytes != null,
+        );
+        const free = ram?.freeBytes ?? models.freeMemory?.ramAvailableBytes;
+        const needed =
+          ram?.requiredBytes ?? models.freeMemory?.ramRequiredBytes;
+        return free != null && needed != null
+          ? "On hold: " + size(free) + " of memory free, needs " + size(needed)
+          : "On hold: close other programs, then Check again.";
+      };
+
       const renderLocal = (busy) => {
         const local = state.localServer;
         const recommended = defaults();
@@ -2586,22 +2680,6 @@
         // needs now: shown, not offered, until a new check finds that memory.
         const held =
           models.state === "checked" && models.blockedNow && models.model;
-        // The tool's count of memory free now against what the plan needs.
-        const free = held && models.freeMemory;
-        const freeText =
-          free &&
-          "needs " +
-            size(free.ramRequiredBytes) +
-            " of memory, " +
-            size(free.ramAvailableBytes) +
-            " is free" +
-            (free.vramRequiredBytes != null
-              ? "; graphics memory needs " +
-                size(free.vramRequiredBytes) +
-                ", " +
-                size(free.vramFreeBytes) +
-                " is free"
-              : "");
         plan.localModel = plan.source === "local" && !!model;
         const custom = !isDefaultPlan(local);
         // Quick Install waits for the check, so it installs what it shows.
@@ -2658,7 +2736,12 @@
           : following && known
             ? "Recommended for this computer: " + named(plan)
             : named(plan) || "Best AI runtime";
-        // Why, in the localmodels tool's facts and words.
+        // Why: the localmodels tool's facts, and its reason codes in the
+        // page's words.
+        const unavailableText =
+          models.state === "checked"
+            ? reasonsText(models, false)
+            : "Couldn't check this computer for a local model.";
         $("plan-why").textContent = fetching
           ? transferParts(fetching).join(" · ")
           : !following || checking
@@ -2672,34 +2755,17 @@
                     gigabytes(model.downloadBytes) + " download",
                 ]
                   .filter(Boolean)
-                  .join(" · ") +
-                (models.reasons?.[0]?.message
-                  ? ". " + models.reasons[0].message
-                  : "")
+                  .join(" · ")
               : held
-                ? "Local model on hold: " +
-                  (free
-                    ? "quit other programs first; it " +
-                      freeText +
-                      "." +
-                      // Other codes name what to quit, such as another
-                      // inference app; the counts alone do not.
-                      (models.reasons?.[0]?.code !== "free-memory-required" &&
-                      models.reasons?.[0]?.message
-                        ? " " + models.reasons[0].message
-                        : "")
-                    : models.reasons?.[0]?.message ||
-                      "other programs are using the memory it needs.") +
+                ? "Local model on hold. " +
+                  reasonsText(models, true) +
                   " Quick Install sets up " +
                   named(plan) +
                   " now, or choose Check again once memory is free."
-                : models.state === "checked" && !models.eligible
-                  ? "No local model: " +
-                    (models.reasons?.[0]?.message ||
-                      "this computer can't run one.")
-                  : models.state === "unavailable"
-                    ? "Couldn't check this computer for a local model."
-                    : "";
+                : (models.state === "checked" && !models.eligible) ||
+                    models.state === "unavailable"
+                  ? unavailableText
+                  : "";
         $("plan-why").hidden =
           !local.available || customizing || !$("plan-why").textContent;
         $("plan-line").hidden = !local.available;
@@ -2737,18 +2803,16 @@
         $("local-row").hidden = plan.source !== "local";
         $("subscription-row").hidden = plan.source !== "subscription";
         $("byok-row").hidden = plan.source !== "byok";
-        $("local-model").hidden = !shown;
+        // Once checked, the card always shows: the model, or why there is
+        // none, disabled.
+        const settled =
+          models.state === "checked" || models.state === "unavailable";
+        $("local-model").hidden = !shown && !settled;
         $("local-recheck").hidden = !held || !local.available;
         $("local-recheck").disabled = busy;
         if (shown) {
           $("local-sub").textContent = held
-            ? free
-              ? "On hold: " +
-                size(free.ramRequiredBytes) +
-                " memory needed, " +
-                size(free.ramAvailableBytes) +
-                " free"
-              : "On hold: close other programs, then Check again."
+            ? heldLine(models)
             : [
                 recommended.localModel
                   ? "Recommended for this computer · Runs on Pi via Bifrost"
@@ -2762,18 +2826,24 @@
             shown.downloadBytes != null &&
               gigabytes(shown.downloadBytes) + " download",
             shown.diskBytes != null && gigabytes(shown.diskBytes) + " disk",
+            // The whole stack's memory, so more than the model's own on
+            // the Local models page.
             shown.memoryBytes != null &&
-              gigabytes(shown.memoryBytes) + " memory",
+              gigabytes(shown.memoryBytes) + " memory with its services",
           ]
             .filter(Boolean)
             .join(" · ");
           $("local-model").setAttribute("aria-checked", String(!!model));
           $("local-model").disabled = busy || !model;
+        } else if (settled) {
+          $("local-sub").textContent =
+            "Runs your tasks on this computer via Pi";
+          $("local-model-name").textContent = "Not available on this computer";
+          $("local-model-needs").textContent = unavailableText;
+          $("local-model").setAttribute("aria-checked", "false");
+          $("local-model").disabled = true;
         } else {
-          $("local-sub").textContent = checking
-            ? "Checking this computer…"
-            : models.reasons?.[0]?.message ||
-              "No local model fits this computer.";
+          $("local-sub").textContent = "Checking this computer…";
         }
         const subKnown =
           recommended.source === "subscription" &&
@@ -2981,6 +3051,10 @@
       const render = () => {
         if (!state) return;
         document.body.dataset.platform = state.platform;
+        // Where the tray icon lives on this platform.
+        for (const el of document.querySelectorAll("[data-tray]"))
+          el.textContent =
+            state.platform === "darwin" ? "menu bar" : "system tray";
         const at = ORDER.indexOf(step);
         $("step-label").textContent =
           at >= 0 ? "Step " + (at + 1) + " of " + ORDER.length : "";

@@ -671,9 +671,17 @@ export interface components {
           vramFreeBytes?: number;
           vramRequiredBytes?: number;
         };
-        reasons: string[];
-        /** @description Human-readable upstream explanations in the same order as reasons; model eligibility remains upstream-owned. */
-        reasonMessages?: string[];
+        /** @description Upstream stack.reasons. Clients choose their copy by code and its counts; message is upstream diagnostic text for logs, never shown or matched on. */
+        reasons: {
+          code: string;
+          message: string;
+          /** @description On gpu-memory-required, the card other programs hold memory on. */
+          gpuIndex?: number;
+          /** @description On gpu-memory-required (that card's VRAM) and free-memory-required (RAM), the memory free now. */
+          freeBytes?: number;
+          /** @description The memory the install needs free, for the same resource as freeBytes. */
+          requiredBytes?: number;
+        }[];
         /**
          * @description Present when the upstream plan fits this computer's hardware only once other programs release the memory they hold now (reason free-memory-required); installing plans again against the memory free then.
          * @enum {string}

@@ -138,8 +138,14 @@ Gateway and runs Agents. The daemon exits with the app.
   Quick Install installs the `recommendation` of the localmodels setup
   report (`installer.js --inspect`, run once as the setup window opens):
   `local-models` is the planned model served by Pi, shown with the model,
-  GPU, memory and download, plus the tool's caveat when it has one;
-  otherwise the named runtime, with the tool's reason for no local model.
+  GPU, memory and download (the card's memory is the whole stack's, so
+  "with its services"); otherwise the named runtime, with why there is no
+  local model. The page words each reason by its code and the counts it
+  carries (`gpuIndex`, `freeBytes`, `requiredBytes`); the tool's message
+  goes only to the main process log (`local_server.inspected`), never to
+  the page. Under Customize the Local model card stays visible once the
+  check ends: disabled, "Not available on this computer", with that reason.
+  Off macOS the page names the system tray, not the menu bar.
   Under Customize the local model runs only behind Pi: with another runtime
   it is greyed (`aria-disabled`, still focusable), does not toggle, and says
   "Local models are only available with the Pi runtime."; choosing another
@@ -149,10 +155,11 @@ Gateway and runs Agents. The daemon exits with the app.
   memory it needs now; a tool before that field marks it by `basis:
 "capacity"` or reason `free-memory-required`, either one), the install
   would plan again against the memory free then and stop, so the local model
-  shows on hold and is not offered. With the tool's `stack.memory` the page
-  says "quit other programs first; it needs X of memory, Y is free" (and the
-  graphics memory on a discrete GPU), adding the tool's words for any other
-  reason code; without it, the tool's reason. Quick Install installs the
+  shows on hold and is not offered. `gpu-memory-required` names the GPU and
+  its free against needed memory and says to close programs that use the
+  GPU; `free-memory-required` gives the RAM counts (from the reason, or the
+  tool's `stack.memory` when the reason has none). The page still words
+  `gpu-ownership-unknown`, which localmodels 0.1.0.dev39 reports. Quick Install installs the
   runtime the installer recommends instead, and Check again
   (`local.recheck`) runs the check again. A tool before `stack.state` still
   recommends `local-models` there, so the installer's setup adapter

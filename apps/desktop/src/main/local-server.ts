@@ -75,7 +75,11 @@ import {
   savedProviderKeys,
   type ProviderKeyChanges,
 } from "./provider-keys.js";
-import type { SetupByokCheck, SetupByokConfig } from "../shared/setup.js";
+import type {
+  SetupByokCheck,
+  SetupByokConfig,
+  SetupReason,
+} from "../shared/setup.js";
 
 // The pinned linger source this build installs, written by the release build:
 // downloaded from `url` (or a mirror of it), or bundled in the app at `file`.
@@ -129,18 +133,13 @@ export type LocalModelsCheck =
       readonly gpu?: string;
       // Present when eligible or when it needs free memory.
       readonly model?: LocalModel;
-      // The localmodels tool's code and words for why not, or, when
-      // eligible, for what could still stop the install.
+      // The localmodels tool's code for why not, or, when eligible, for
+      // what could still stop the install, with the counts it carries.
       readonly reasons?: readonly SetupReason[];
       // The localmodels tool's pick for this computer, which Quick Install
       // installs; the page adds no rule of its own.
       readonly recommendation?: SetupChoice;
     };
-
-export interface SetupReason {
-  readonly code: string;
-  readonly message?: string;
-}
 
 // A download under way: its bytes so far and in all, and the rate when the
 // source reports one. partial: the counts cover only the file downloading
@@ -664,7 +663,7 @@ export class LocalServerModule implements Module {
       this.#ctx?.bus.emit("local-server.changed");
     })
       .then(
-        (check) => {
+        ({ check, reasonLog }) => {
           this.#ctx?.log.info("local_server.inspected", {
             ms: Date.now() - started,
             eligible: check.state === "checked" && check.eligible,
@@ -674,13 +673,7 @@ export class LocalServerModule implements Module {
             ...(check.state === "checked" && check.recommendation
               ? { recommendation: check.recommendation }
               : {}),
-            ...(check.state === "checked" && check.reasons
-              ? {
-                  reasons: check.reasons.map(({ code, message }) =>
-                    message ? `${code}: ${message}` : code,
-                  ),
-                }
-              : {}),
+            ...(reasonLog.length ? { reasons: reasonLog } : {}),
           });
           this.#check = check;
         },
@@ -782,7 +775,11 @@ export class LocalServerModule implements Module {
   async #inspect(
     signal: AbortSignal,
     onDownload: (download: Transfer) => void,
-  ): Promise<LocalModelsCheck> {
+  ): Promise<{
+    check: LocalModelsCheck;
+    // The tool's codes with its words, for the log only.
+    reasonLog: string[];
+  }> {
     // The app's own Node runs the check, so it needs no download of its own;
     // installing still uses the pinned Node runtime.
     const output = await new Promise<string>((resolve, reject) => {
@@ -840,7 +837,6 @@ export class LocalServerModule implements Module {
         state?: unknown;
         memory?: Record<string, unknown>;
         reasons?: unknown;
-        reasonMessages?: unknown;
         estimate?: {
           model?: unknown;
           downloadBytes?: unknown;
@@ -889,12 +885,26 @@ export class LocalServerModule implements Module {
               : {}),
           }
         : undefined;
-    const strings = (value: unknown) =>
-      Array.isArray(value) ? value.map(String) : [];
-    const messages = strings(report.localModels.reasonMessages);
-    const reasons = strings(report.localModels.reasons).map(
-      (code, index): SetupReason =>
-        messages[index] ? { code, message: messages[index] } : { code },
+    const listed = Array.isArray(report.localModels.reasons)
+      ? (report.localModels.reasons as Record<string, unknown>[]).filter(
+          (reason) => typeof reason?.code === "string",
+        )
+      : [];
+    // The page words each reason by its code and counts, never the tool's.
+    const reasons = listed.map((reason): SetupReason => {
+      const counted = (key: "gpuIndex" | "freeBytes" | "requiredBytes") =>
+        bytes(reason[key]) !== null ? { [key]: reason[key] as number } : {};
+      return {
+        code: reason.code as string,
+        ...counted("gpuIndex"),
+        ...counted("freeBytes"),
+        ...counted("requiredBytes"),
+      };
+    });
+    const reasonLog = listed.map(({ code, message }) =>
+      typeof message === "string" && message
+        ? `${code}: ${message}`
+        : `${code}`,
     );
     const pick = report.recommendation;
     // The local model is recommended only with a model the page can show.
@@ -904,7 +914,7 @@ export class LocalServerModule implements Module {
       (pick !== "local-models" || eligible)
         ? (pick as SetupChoice)
         : undefined;
-    return {
+    const check: LocalModelsCheck = {
       state: "checked",
       eligible,
       memoryBytes: hardware.totalMemoryBytes,
@@ -928,6 +938,7 @@ export class LocalServerModule implements Module {
       ...(reasons.length ? { reasons } : {}),
       ...(recommendation ? { recommendation } : {}),
     };
+    return { check, reasonLog };
   }
 
   // Logs how long one part of setup took, so a slow setup says which part.

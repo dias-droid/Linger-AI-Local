@@ -119,8 +119,11 @@ if (args.includes("--inspect")) {
   }
   process.stderr.write("Checked this computer in 1.5s.\n");
   const lowMemory = eligible && fs.existsSync(path.join(home, "low-memory"));
-  const reasons = eligible ? (lowMemory ? ["free-memory-required"] : []) : ["facts-unavailable"];
-  const reasonMessages = eligible ? (lowMemory ? ["Close other programs before installing."] : []) : ["nvidia-smi was not found"];
+  const reasons = eligible
+    ? lowMemory
+      ? [{ code: "free-memory-required", message: "Close other programs before installing.", freeBytes: 2899102924, requiredBytes: 13689304433 }]
+      : []
+    : [{ code: "facts-unavailable", message: "nvidia-smi was not found" }];
   // With the plan priced on capacity, the installer recommends a runtime.
   const recommendation = eligible && !lowMemory ? "local-models" : "codex";
   const local = {
@@ -128,7 +131,7 @@ if (args.includes("--inspect")) {
     state: lowMemory ? "blocked-now" : eligible ? "ready" : "unavailable",
     ...(lowMemory ? { basis: "capacity", memory: { ramAvailableBytes: 2899102924, ramRequiredBytes: 13689304433 } } : {}),
   };
-  process.stdout.write(JSON.stringify({ hardware, localModels: { ...local, reasons, reasonMessages, estimate }, recommendation }) + "\n");
+  process.stdout.write(JSON.stringify({ hardware, localModels: { ...local, reasons, estimate }, recommendation }) + "\n");
   process.exit(0);
 }
 if (args.includes("--resume")) {
@@ -1621,14 +1624,13 @@ describe("LocalServerModule", () => {
       expect(f.module.status().localModels).toMatchObject({
         state: "checked",
         eligible: false,
-        reasons: [
-          { code: "facts-unavailable", message: "nvidia-smi was not found" },
-        ],
+        reasons: [{ code: "facts-unavailable" }],
         recommendation: "codex",
       }),
     );
     expect(f.module.status().localModels).not.toHaveProperty("model");
-    // The log says why, as the localmodels tool did.
+    // The page gets the code only; the tool's words go to the log.
+    expect(JSON.stringify(f.module.status())).not.toContain("nvidia-smi");
     expect(info).toHaveBeenCalledWith(
       "local_server.inspected",
       expect.objectContaining({
@@ -1660,7 +1662,8 @@ describe("LocalServerModule", () => {
         reasons: [
           {
             code: "free-memory-required",
-            message: "Close other programs before installing.",
+            freeBytes: 2899102924,
+            requiredBytes: 13689304433,
           },
         ],
         recommendation: "codex",

@@ -9,6 +9,7 @@ import type {
   SetupCommand,
   SetupLocalAccount,
   SetupLocalModelsCheck,
+  SetupReason,
   SetupState,
 } from "../shared/setup.js";
 
@@ -203,12 +204,13 @@ const small: SetupLocalModelsCheck = {
   eligible: false,
   memoryBytes: 8 * GB,
   diskFreeBytes: 100 * GB,
-  // A code the page never parses: it shows only the message.
-  reasons: [
-    { code: "upstream_policy", message: "No model fits this computer." },
-  ],
+  reasons: [{ code: "plan-unavailable" }],
   recommendation: "codex",
 };
+// The tool's own words, which the page must never show.
+const TOOL_WORDS = "GPU service owners unknown; explicit sharing";
+const reason = (fields: SetupReason): SetupReason =>
+  ({ ...fields, message: TOOL_WORDS }) as SetupReason;
 // The model fits the hardware, but other programs hold its memory now.
 const held: SetupLocalModelsCheck = {
   state: "checked",
@@ -222,13 +224,7 @@ const held: SetupLocalModelsCheck = {
     diskBytes: 8 * GB,
     memoryBytes: 12 * GB,
   },
-  reasons: [
-    {
-      code: "free-memory-required",
-      message:
-        "Other programs are using memory it needs (now 2.7 GB of RAM is available).",
-    },
-  ],
+  reasons: [reason({ code: "free-memory-required" })],
   recommendation: "codex",
 };
 const welcome = (localModels: SetupLocalModelsCheck): SetupState => {
@@ -263,7 +259,7 @@ describe("setup page Quick Install recommendation", () => {
       "Recommended for this computer: Codex",
     );
     expect($("plan-why").textContent).toBe(
-      "No local model: No model fits this computer.",
+      "No local model fits this computer.",
     );
     expect($("local-row").hidden).toBe(true);
     $("local-install").click();
@@ -278,7 +274,7 @@ describe("setup page Quick Install recommendation", () => {
       "Recommended for this computer: Codex",
     );
     expect($("plan-why").textContent).toBe(
-      "Local model on hold: Other programs are using memory it needs (now 2.7 GB of RAM is available). Quick Install sets up Codex now, or choose Check again once memory is free.",
+      "Local model on hold. Other programs are using the memory it needs. Close other programs. Quick Install sets up Codex now, or choose Check again once memory is free.",
     );
     expect($("local-recheck").hidden).toBe(false);
     $("local-customize").click();
@@ -313,25 +309,40 @@ describe("setup page Quick Install recommendation", () => {
   });
 
   it("says how much memory a held local model needs and how much is free", async () => {
-    const counted = (
-      code: string,
-      message: string,
-      vram = false,
-    ): SetupLocalModelsCheck => ({
+    const withCounts = (reasons: SetupReason[]): SetupLocalModelsCheck => ({
       ...held,
       freeMemory: {
         ramAvailableBytes: 2899102924,
         ramRequiredBytes: 13689304433,
-        ...(vram ? { vramFreeBytes: 3 * GB, vramRequiredBytes: 9 * GB } : {}),
+        vramFreeBytes: 3 * GB,
+        vramRequiredBytes: 9 * GB,
       },
-      reasons: [{ code, message }],
+      reasons,
     });
+    const customizeLocal = () => {
+      $("local-customize").click();
+      document
+        .querySelector<HTMLButtonElement>(
+          '[data-plan="source"] [data-value="local"]',
+        )!
+        .click();
+    };
+    // The GPU and the RAM each name what is free and what the install needs.
     await openPage(
       welcome(
-        counted(
-          "free-memory-required",
-          "Other programs are using memory it needs.",
-        ),
+        withCounts([
+          reason({
+            code: "gpu-memory-required",
+            gpuIndex: 1,
+            freeBytes: 3 * GB,
+            requiredBytes: 9 * GB,
+          }),
+          reason({
+            code: "free-memory-required",
+            freeBytes: 2899102924,
+            requiredBytes: 13689304433,
+          }),
+        ]),
       ),
       "welcome",
     );
@@ -339,31 +350,95 @@ describe("setup page Quick Install recommendation", () => {
       "Recommended for this computer: Codex",
     );
     expect($("plan-why").textContent).toBe(
-      "Local model on hold: quit other programs first; it needs 12.7 GB of memory, 2.7 GB is free. Quick Install sets up Codex now, or choose Check again once memory is free.",
+      "Local model on hold. Other programs are using GPU 1's memory (3.0 GB free, 9.0 GB needed). Close programs that use the GPU, such as games, video or other AI apps. Other programs are using the memory it needs (2.7 GB free, 12.7 GB needed). Close other programs. Quick Install sets up Codex now, or choose Check again once memory is free.",
     );
     expect($("local-recheck").hidden).toBe(false);
+    customizeLocal();
+    expect($("local-sub").textContent).toBe(
+      "On hold: GPU 1 has 3.0 GB free, needs 9.0 GB",
+    );
+    expect(document.body.textContent).not.toContain(TOOL_WORDS);
+    // A tool that counts only the plan's memory: the RAM counts from it.
+    await openPage(
+      welcome(withCounts([reason({ code: "free-memory-required" })])),
+      "welcome",
+    );
+    expect($("plan-why").textContent).toBe(
+      "Local model on hold. Other programs are using the memory it needs (2.7 GB free, 12.7 GB needed). Close other programs. Quick Install sets up Codex now, or choose Check again once memory is free.",
+    );
+    customizeLocal();
+    expect($("local-sub").textContent).toBe(
+      "On hold: 2.7 GB of memory free, needs 12.7 GB",
+    );
+  });
+
+  it("words every localmodels reason by its code, never the tool's message", async () => {
+    const cases: [SetupLocalModelsCheck, string][] = [
+      [
+        { ...held, reasons: [reason({ code: "gpu-sharing-required" })] },
+        "Local model on hold. Other work is running on the GPU. Close it.",
+      ],
+      [
+        { ...held, reasons: [reason({ code: "plan-unavailable" })] },
+        "Local model on hold. Another app is holding the memory it needs, such as another AI app. Quit it.",
+      ],
+      [
+        { ...small, reasons: [reason({ code: "gpu-ownership-unknown" })] },
+        "Linger couldn't tell which programs are using the GPU, so it can't share it. Close programs that use the GPU.",
+      ],
+      [
+        { ...small, reasons: [reason({ code: "facts-unavailable" })] },
+        "Linger couldn't read this computer's memory, disk or GPU.",
+      ],
+      [
+        { ...small, reasons: [reason({ code: "unsupported-platform" })] },
+        "Local models don't run on this system.",
+      ],
+      [
+        { ...small, reasons: [reason({ code: "a-new-code" })] },
+        "This computer can't run a local model now.",
+      ],
+    ];
+    for (const [check, words] of cases) {
+      await openPage(welcome(check), "welcome");
+      expect($("plan-why").textContent).toContain(words);
+      expect(document.body.textContent).not.toContain(TOOL_WORDS);
+    }
+  });
+
+  it("shows the Local model card disabled with the reason when none can run", async () => {
+    await openPage(
+      welcome({
+        ...small,
+        reasons: [reason({ code: "gpu-ownership-unknown" })],
+      }),
+      "welcome",
+    );
     $("local-customize").click();
     document
       .querySelector<HTMLButtonElement>(
         '[data-plan="source"] [data-value="local"]',
       )!
       .click();
-    expect($("local-sub").textContent).toBe(
-      "On hold: 12.7 GB memory needed, 2.7 GB free",
+    expect($("local-row").hidden).toBe(false);
+    expect($("local-model").hidden).toBe(false);
+    expect(($("local-model") as HTMLButtonElement).disabled).toBe(true);
+    expect($("local-model").getAttribute("aria-checked")).toBe("false");
+    expect($("local-model-name").textContent).toBe(
+      "Not available on this computer",
     );
-    // Another code names what holds the memory, so its words stay.
-    await openPage(
-      welcome(
-        counted(
-          "plan-unavailable",
-          "Another inference app holds this Mac's memory; quit it and check again.",
-          true,
-        ),
-      ),
-      "welcome",
+    expect($("local-model-needs").textContent).toBe(
+      "Linger couldn't tell which programs are using the GPU, so it can't share it. Close programs that use the GPU.",
     );
-    expect($("plan-why").textContent).toBe(
-      "Local model on hold: quit other programs first; it needs 12.7 GB of memory, 2.7 GB is free; graphics memory needs 9.0 GB, 3.0 GB is free. Another inference app holds this Mac's memory; quit it and check again. Quick Install sets up Codex now, or choose Check again once memory is free.",
+    expect(($("local-install") as HTMLButtonElement).disabled).toBe(true);
+    expect(document.body.textContent).not.toContain(TOOL_WORDS);
+  });
+
+  it("says the stack's memory covers the model and its services", async () => {
+    await openPage(welcome(capable), "welcome");
+    $("local-customize").click();
+    expect($("local-model-needs").textContent).toBe(
+      "6 GB download · 8 GB disk · 12 GB memory with its services",
     );
   });
 
@@ -602,6 +677,24 @@ describe("setup page Quick Install recommendation", () => {
       }),
     );
     expect(key.value).toBe("");
+  });
+});
+
+describe("setup page permissions", () => {
+  it("names the menu bar on macOS and the system tray elsewhere", async () => {
+    const permissions = () =>
+      document.querySelector('[data-step="permissions"]')!.textContent!;
+    for (const [platform, place] of [
+      ["darwin", "menu bar"],
+      ["win32", "system tray"],
+      ["linux", "system tray"],
+    ] as const) {
+      await openPage({ ...welcome(capable), platform }, "welcome");
+      const words = permissions().replace(/\s+/g, " ");
+      expect(words).toContain(`Change these later from the ${place} or`);
+      expect(words).toContain(`Start in the ${place} when you log in.`);
+      if (platform !== "darwin") expect(words).not.toContain("menu bar");
+    }
   });
 });
 
