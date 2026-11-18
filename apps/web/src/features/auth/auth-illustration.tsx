@@ -5,7 +5,7 @@ import { AgentAvatarPortrait } from "@/features/rooms/members/agent-avatar-portr
 /** What Linger says first, one nudge at a time, across a working day. */
 const NUDGES = [
   { time: "9:00 AM", text: "Demo is tomorrow. I drafted the brief." },
-  { time: "1:30 PM", text: "Linger reviewed the code. Two notes." },
+  { time: "1:30 PM", text: "I reviewed the code. Two notes." },
   { time: "5:00 PM", text: "Before you go: the deck is ready." },
 ] as const;
 

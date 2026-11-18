@@ -48,9 +48,9 @@ build:assets` to check the initial JS budget.
 - The login page keeps Linger's headline and day timeline on the left,
   and the sign-in form on the right. A faint white grid fades gently into the
   form's white background without a dark panel, colored glow, or blur. The
-  timeline uses dark and muted text on white; reduced motion holds its first
-  nudge still. Below 64rem the illustration is hidden, while the form keeps
-  its visible labels and optional desktop account sign-in.
+  timeline speaks in the first person and uses dark and muted text on white;
+  reduced motion holds its first nudge still. Below 64rem the illustration is
+  hidden, while the form keeps its visible labels and optional desktop account sign-in.
 - Login body copy uses the Room font and chat body typography tokens. Times,
   dividers, and the footer use the chat metadata tokens. Its titles keep their
   own scale, with desktop content inset toward the middle on both sides and
