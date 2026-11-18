@@ -199,6 +199,12 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
   `notify_river_queue` so the job does not wait for the queue's poll. Such a
   loop is woken on commit and sleeps until its next due time, with a fallback
   of at least one minute; it never polls on a short fixed interval.
+- Voice recording timestamps come from a recorder clock distinct from PostgreSQL.
+  A recorder is bound to a persisted Capture epoch; normalize a reported start
+  earlier than the Capture's clock to that clock before confirming its timeline.
+  A missing start stays unconfirmed. Keep audio duration and transcript offsets
+  on the confirmed timeline, and enqueue an already-requested Stop when the
+  initial recorder becomes known, including after restart reconciliation.
 - Voice: `TEAMHUB_VOICE_MEDIA` (`on` by default) builds the voice media plane
   over LiveKit; `off`, a missing `LINGER_SECRET_SEED`, or missing ffmpeg keep
   voice off (the last two log `voice.media_unavailable`) without stopping
