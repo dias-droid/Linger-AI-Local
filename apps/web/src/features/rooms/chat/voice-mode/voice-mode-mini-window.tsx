@@ -245,7 +245,11 @@ function MiniWindow({
       }
       data-pip={pip ? true : undefined}
       data-size={size}
-      style={pip ? undefined : { ...position, maxHeight: height + 36, width }}
+      style={
+        pip
+          ? undefined
+          : { ...position, maxHeight: `calc(${height} + 36px)`, width }
+      }
     >
       {pip ? null : (
         <div

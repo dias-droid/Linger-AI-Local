@@ -266,14 +266,17 @@ describe("Voice Mode mini window", () => {
     renderWindow();
     const panel = screen.getByRole("region", { name: "Voice Mode window" });
     expect(panel).toHaveStyle({ width: "320px" });
+    expect(panel).toHaveStyle({ maxHeight: "calc(min(480px, 70dvh) + 36px)" });
     fireEvent.click(
       screen.getByRole("button", { name: "Expand Voice Mode window" }),
     );
     expect(panel).toHaveStyle({ width: "560px" });
+    expect(panel).toHaveStyle({ maxHeight: "calc(min(760px, 86dvh) + 36px)" });
     fireEvent.click(
       screen.getByRole("button", { name: "Shrink Voice Mode window" }),
     );
     expect(panel).toHaveStyle({ width: "320px" });
+    expect(panel).toHaveStyle({ maxHeight: "calc(min(480px, 70dvh) + 36px)" });
   });
 
   it("floats over other windows as the one Voice Mode window", async () => {
