@@ -55,7 +55,7 @@ teamhub agent update --agent-id <actor-id> --prompt-file ./reviewer.md --json
 ## Connected applications
 
 Eight applications have dedicated commands: Gmail, Outlook, Slack, Google Calendar, Notion, Google Drive, Figma and GitHub, with 50 Connector leaf commands. `teamhub gmail --help` and `teamhub gdrive --help` discover them offline, and each command keeps its own help, examples and Composio support boundary.
-Choose an account with `--account <connection ID|full label>`. Without a delegation, the command asks the user in an allowed chat to click an authorization card; run the original command again after authorization.
+Choose an account with `--account <connection ID|full label>`; labels match case-insensitively, connection IDs exactly. A connection ID that no longer matches a delegated account returns `account_ambiguous` with the delegated candidates instead of switching accounts. Without a delegation, the command asks the user in an allowed chat to click an authorization card that names the requested label; run the original command again after authorization.
 Mail `--markdown` is converted to HTML by TeamHub; only `--attach` adds attachments.
 
 GitHub reads the connected account, its repositories, issues and pull requests at once; `github comment` and `github create-issue` wait for the sponsor's confirmation card.

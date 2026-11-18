@@ -21,6 +21,7 @@ import {
   externalConnectionNeedsAttention,
   openPendingExternalConnection,
   reauthorizationConnectUrl,
+  startReauthorization,
   usableConnectUrl,
 } from "@/features/apps/connection-state";
 import { openOAuthUrl } from "@/features/apps/oauth-popup";
@@ -115,6 +116,11 @@ function ConnectionAuthCard({
           icon={<ConnectedAppIcon appKey={appKey} size={16} />}
           title={appName}
         />
+        {card.connection_auth?.account ? (
+          <p className="pb-1 text-sm text-muted-foreground [overflow-wrap:anywhere]">
+            {`Requested account: ${card.connection_auth.account}`}
+          </p>
+        ) : null}
         {children}
         {done ??
           (card.status === "authorizing" ? (
@@ -196,12 +202,27 @@ function ConnectionAuthorizationActions({
     !available.some((item) => item.id === createdNow.id)
   )
     available.push(createdNow);
+  const canConnectNew =
+    app?.availability === "available" &&
+    app.capabilities.includes("agent_tools");
+  // The account the Agent asked for is preselected; when it is not connected
+  // yet, connecting a new account is. The Human may still choose another.
+  const requestedAccount = card.connection_auth?.account?.toLowerCase();
+  const requested = requestedAccount
+    ? available.find(
+        (item) => item.identity_label?.toLowerCase() === requestedAccount,
+      )
+    : undefined;
+  const fallback =
+    available.find((item) => item.status === "active") ??
+    available.find(externalConnectionNeedsAttention);
+  const defaultSelection = !requestedAccount
+    ? fallback
+    : (requested ?? (canConnectNew ? undefined : fallback));
   const selected =
     selectedId === NEW_ACCOUNT
       ? undefined
-      : (available.find((item) => item.id === selectedId) ??
-        available.find((item) => item.status === "active") ??
-        available.find(externalConnectionNeedsAttention));
+      : (available.find((item) => item.id === selectedId) ?? defaultSelection);
   const resumeUrl =
     fallbackUrl ||
     reauthorizationConnectUrl(bound.data) ||
@@ -257,15 +278,7 @@ function ConnectionAuthorizationActions({
         setCreated(connection);
         setSelectedId(connection.id);
       } else if (connection.status !== "active" && !connectUrl) {
-        connectUrl =
-          reauthorizationConnectUrl(connection) ??
-          reauthorizationConnectUrl(
-            await client.createExternalConnectionReauthorization(
-              connection.id,
-              connection.revision,
-            ),
-          ) ??
-          "";
+        connectUrl = (await startReauthorization(client, connection)) ?? "";
       }
       // Consent is durable before OAuth navigation; backend confirmation publishes the completion.
       await decide("approve", connection.id);
@@ -302,9 +315,6 @@ function ConnectionAuthorizationActions({
     }
   }
   const loadError = apps.error ?? connections.error ?? bound.error;
-  const canConnectNew =
-    app?.availability === "available" &&
-    app.capabilities.includes("agent_tools");
   const loading = !authorizing && (connections.isPending || apps.isPending);
   const showPicker =
     !authorizing &&

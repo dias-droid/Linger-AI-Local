@@ -327,7 +327,7 @@ describe("Connected apps", () => {
     expect(screen.queryByRole("button", { name: "Facebook" })).toBeNull();
   });
 
-  it("counts only active authorizations as connected", async () => {
+  it("counts active accounts and those that need reconnecting", async () => {
     const runtime = await testRuntime();
     const existing = (await runtime.client.listExternalConnections())
       .connections[0]!;
@@ -352,11 +352,13 @@ describe("Connected apps", () => {
     renderPage(runtime, "/apps?app=gmail");
 
     const gmail = await screen.findByRole("button", { name: "Gmail" });
-    expect(within(gmail).getByText("Connected")).toBeVisible();
-    expect(screen.queryByText(/need attention/)).not.toBeInTheDocument();
+    expect(
+      within(gmail).getByText("Connected, 2 need reconnecting"),
+    ).toBeVisible();
     const dialog = screen.getByRole("dialog", { name: "Gmail" });
-    expect(within(dialog).queryByText("expired@linger.test")).toBeNull();
-    expect(within(dialog).queryByText("failed@linger.test")).toBeNull();
+    expect(within(dialog).getByText("expired@linger.test")).toBeVisible();
+    expect(within(dialog).getByText("failed@linger.test")).toBeVisible();
+    expect(within(dialog).getAllByText("Needs reconnecting")).toHaveLength(2);
   });
 
   it("hides in-flight pending accounts from the manage dialog", async () => {
@@ -569,7 +571,7 @@ describe("Connected apps", () => {
     ).toBeEnabled();
   });
 
-  it("hides a Gmail account that failed authorization", async () => {
+  it("lists a Gmail account that failed authorization for reconnecting", async () => {
     const runtime = await testRuntime();
     const existing = (await runtime.client.listExternalConnections())
       .connections[0]!;
@@ -587,53 +589,124 @@ describe("Connected apps", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "Gmail" });
     expect(
-      screen.queryByText(
+      await within(dialog).findByText(
         "This app did not grant enough permission. Reconnect and approve all requested access.",
       ),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Reconnect" })).toBeNull();
+    ).toBeVisible();
+    expect(within(dialog).getByText("Needs reconnecting")).toBeVisible();
+    expect(
+      within(dialog).getByRole("button", {
+        name: "Reconnect jenny@linger.test",
+      }),
+    ).toBeEnabled();
+    expect(
+      within(dialog).getByRole("button", {
+        name: "Disconnect jenny@linger.test",
+      }),
+    ).toBeEnabled();
     expect(
       within(dialog).getByRole("button", { name: "Connect Gmail" }),
     ).toBeEnabled();
   });
 
-  it("hides an expired Gmail account instead of continuing reauthorization", async () => {
+  it("reconnects an expired Gmail account beside an active one only when asked", async () => {
     const runtime = await testRuntime();
     const existing = (await runtime.client.listExternalConnections())
       .connections[0]!;
+    const expired = {
+      ...existing,
+      id: "gmail-expired",
+      identity_label: "old@linger.test",
+      status: "expired" as const,
+    };
     vi.spyOn(runtime.client, "listExternalConnections").mockResolvedValue({
-      connections: [
-        {
-          ...existing,
-          reauthorizing: true,
-          reauthorization_connect_expires_at: "2026-08-06T08:10:00.000Z",
-          reauthorization_connect_url:
-            "https://connect.example.test/gmail/reauthorize",
-          status: "expired",
-        },
-      ],
+      connections: [existing, expired],
     });
-    const createReauthorization = vi.spyOn(
+    const createReauthorization = vi
+      .spyOn(runtime.client, "createExternalConnectionReauthorization")
+      .mockResolvedValue({
+        ...expired,
+        reauthorizing: true,
+        reauthorization_connect_expires_at: "2999-01-01T00:00:00Z",
+        reauthorization_connect_url:
+          "https://connect.example.test/gmail/reauthorize",
+      });
+    const open = vi
+      .spyOn(window, "open")
+      .mockReturnValue({ opener: null } as unknown as Window);
+
+    renderPage(runtime, "/apps?app=gmail");
+
+    expect(
+      await screen.findByText("Connected, 1 needs reconnecting"),
+    ).toBeVisible();
+    const dialog = await screen.findByRole("dialog", { name: "Gmail" });
+    expect(createReauthorization).not.toHaveBeenCalled();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Reconnect old@linger.test" }),
+    );
+    await waitFor(() =>
+      expect(createReauthorization).toHaveBeenCalledWith(
+        "gmail-expired",
+        expired.revision,
+      ),
+    );
+    await waitFor(() =>
+      expect(open).toHaveBeenCalledWith(
+        "https://connect.example.test/gmail/reauthorize",
+        expect.any(String),
+        expect.any(String),
+      ),
+    );
+  });
+
+  it("clears a failed Add account error once Reconnect succeeds", async () => {
+    const runtime = await testRuntime();
+    const existing = (await runtime.client.listExternalConnections())
+      .connections[0]!;
+    const expired = {
+      ...existing,
+      id: "gmail-expired",
+      identity_label: "old@linger.test",
+      status: "expired" as const,
+    };
+    vi.spyOn(runtime.client, "listExternalConnections").mockResolvedValue({
+      connections: [existing, expired],
+    });
+    vi.spyOn(runtime.client, "createExternalConnection").mockRejectedValue(
+      new Error("Add account failed for the test."),
+    );
+    vi.spyOn(
       runtime.client,
       "createExternalConnectionReauthorization",
-    );
-    const replace = vi.fn();
+    ).mockResolvedValue({
+      ...expired,
+      reauthorizing: true,
+      reauthorization_connect_expires_at: "2999-01-01T00:00:00Z",
+      reauthorization_connect_url:
+        "https://connect.example.test/gmail/reauthorize",
+    });
     vi.spyOn(window, "open").mockReturnValue({
-      close: vi.fn(),
-      location: { replace },
-      opener: window,
+      opener: null,
     } as unknown as Window);
 
     renderPage(runtime, "/apps?app=gmail");
 
     const dialog = await screen.findByRole("dialog", { name: "Gmail" });
-    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Add another Gmail account" }),
+    );
     expect(
-      within(dialog).getByRole("button", { name: "Connect Gmail" }),
-    ).toBeEnabled();
-    expect(window.open).not.toHaveBeenCalled();
-    expect(createReauthorization).not.toHaveBeenCalled();
-    expect(replace).not.toHaveBeenCalled();
+      await within(dialog).findByText("Add account failed for the test."),
+    ).toBeVisible();
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Reconnect old@linger.test" }),
+    );
+    await waitFor(() =>
+      expect(
+        within(dialog).queryByText("Add account failed for the test."),
+      ).toBeNull(),
+    );
   });
 
   it("hides a duplicate remote account that failed to connect", async () => {

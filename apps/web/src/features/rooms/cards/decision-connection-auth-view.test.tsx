@@ -437,6 +437,44 @@ describe("Chat connection authorization", () => {
     expect(create).toHaveBeenCalledOnce();
   });
 
+  it("shows and preselects the account the Agent asked for", async () => {
+    await setup(
+      {
+        ...card,
+        connection_auth: { app_key: "notion", account: "WORK@example.com" },
+      },
+      "alice",
+      true,
+      "active",
+      [
+        {
+          id: "notion-work",
+          status: "active",
+          identity_label: "work@example.com",
+        },
+      ],
+    );
+    expect(
+      await screen.findByText("Requested account: WORK@example.com"),
+    ).toBeVisible();
+    expect(
+      await screen.findByRole("combobox", { name: "Notion account" }),
+    ).toHaveTextContent("work@example.com");
+  });
+
+  it("offers a new account when the requested one is not connected", async () => {
+    await setup({
+      ...card,
+      connection_auth: { app_key: "notion", account: "home@example.com" },
+    });
+    expect(
+      await screen.findByRole("combobox", { name: "Notion account" }),
+    ).toHaveTextContent("Connect a new account");
+    expect(
+      screen.getByRole("button", { name: "Connect Notion" }),
+    ).toBeVisible();
+  });
+
   it("navigates OAuth only after durable consent is accepted", async () => {
     vi.spyOn(window, "open").mockReturnValue({
       opener: null,

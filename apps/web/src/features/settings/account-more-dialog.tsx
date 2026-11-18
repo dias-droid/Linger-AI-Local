@@ -966,6 +966,29 @@ function AppConnectRow({
           })}
         </div>
       ) : null}
+      {active.length && needsAttention ? (
+        // An account that needs reconnecting stays visible beside an active one.
+        <div className="mt-1 ml-12 divide-y divide-border">
+          {connections
+            .filter(externalConnectionNeedsAttention)
+            .map((connection) => (
+              <div
+                className="flex min-h-10 items-center justify-between gap-3 py-1.5"
+                key={connection.id}
+              >
+                <span className="min-w-0 truncate text-xs text-muted-foreground">
+                  {`${connection.identity_label ?? "Account"} needs attention in Apps`}
+                </span>
+                <Link
+                  className="text-xs font-medium text-app-link hover:underline"
+                  to={`/t/${tenantId}/apps?app=${app.key}`}
+                >
+                  Open Apps
+                </Link>
+              </div>
+            ))}
+        </div>
+      ) : null}
     </div>
   );
 }

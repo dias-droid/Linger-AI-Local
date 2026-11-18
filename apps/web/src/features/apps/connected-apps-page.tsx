@@ -23,6 +23,7 @@ import {
 } from "./app-manage-dialog";
 import {
   activeExternalConnections,
+  externalConnectionNeedsAttention,
   openPendingExternalConnection,
 } from "./connection-state";
 import {
@@ -229,10 +230,15 @@ function CatalogAppCard({
   const pending = openPendingExternalConnection(connections, app.key);
   const canConnect = app.availability === "available";
   const canStart = connectFlow.canStart(app);
+  const needsReconnecting = connections.filter(
+    externalConnectionNeedsAttention,
+  ).length;
   const connectedLabel = active.length
-    ? active.length === 1
-      ? "Connected"
-      : `${active.length} accounts`
+    ? `${active.length === 1 ? "Connected" : `${active.length} accounts`}${
+        needsReconnecting
+          ? `, ${needsReconnecting} ${needsReconnecting === 1 ? "needs" : "need"} reconnecting`
+          : ""
+      }`
     : null;
   const authorizing =
     createConnection.isPending || Boolean(createConnection.blockedConnectUrl);

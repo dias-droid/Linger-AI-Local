@@ -1,3 +1,4 @@
+import type { TeamHubClient } from "@/features/teamhub/teamhub-client";
 import type { TeamHubExternalConnection } from "@/features/teamhub/teamhub-types";
 
 const NEEDS_ATTENTION = new Set<TeamHubExternalConnection["status"]>([
@@ -65,6 +66,25 @@ export function usableConnectUrl(authorization?: {
   return authorization?.connect_url && connectLinkOpen(authorization)
     ? authorization.connect_url
     : undefined;
+}
+
+/**
+ * The Connect Link that reauthorizes a connection: the open link of one in
+ * progress, otherwise a new reauthorization's.
+ */
+export async function startReauthorization(
+  client: Pick<TeamHubClient, "createExternalConnectionReauthorization">,
+  connection: TeamHubExternalConnection,
+) {
+  return (
+    reauthorizationConnectUrl(connection) ??
+    reauthorizationConnectUrl(
+      await client.createExternalConnectionReauthorization(
+        connection.id,
+        connection.revision,
+      ),
+    )
+  );
 }
 
 /** The open Connect Link of a reauthorization in progress, if any. */

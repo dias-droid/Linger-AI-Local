@@ -142,7 +142,7 @@ export async function resolveConnectorAccount(
   if (resolution.status === "account_ambiguous")
     throw new ConnectorError(
       "account_ambiguous",
-      "Multiple accounts match. Select a connection ID with --account.",
+      "The requested account is unavailable or more than one account matches. If one of the candidates is the account you meant, run again with --account set to its connection ID; otherwise pass the account's label (for example its email address) with --account to ask the user to authorize it.",
       { candidates: resolution.candidates, operation_rejected: true },
     );
   const selected = record(resolution.account, "selected account");

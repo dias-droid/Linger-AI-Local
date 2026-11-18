@@ -4736,9 +4736,10 @@ type ComputerPermissionSubjectStatus struct {
 	Subject ComputerPermissionSubject `json:"subject"`
 }
 
-// ConnectionAuthDecisionView The view of a connection_auth decision: the Connected App the Agent needs. connection_id is the Connection the Human chose, once they approved.
+// ConnectionAuthDecisionView The view of a connection_auth decision: the Connected App the Agent needs. account is the identity the Agent asked for, when it named one. connection_id is the Connection the Human chose, once they approved.
 type ConnectionAuthDecisionView struct {
-	AppKey string `json:"app_key"`
+	Account *string `json:"account,omitempty"`
+	AppKey  string  `json:"app_key"`
 
 	// ConnectionId Opaque, case-sensitive identifier. Clients must not infer type or time from it.
 	ConnectionId *Id `json:"connection_id,omitempty"`
@@ -4922,7 +4923,7 @@ type DecisionRequestedMessageCard struct {
 	// ComputerPermission The view of a computer_permission decision: the macOS permissions one app on the owner's Local Computer needs. The card reads their live state from the Computer; once all are granted TeamHub answers it granted.
 	ComputerPermission *ComputerPermissionDecisionView `json:"computer_permission,omitempty"`
 
-	// ConnectionAuth The view of a connection_auth decision: the Connected App the Agent needs. connection_id is the Connection the Human chose, once they approved.
+	// ConnectionAuth The view of a connection_auth decision: the Connected App the Agent needs. account is the identity the Agent asked for, when it named one. connection_id is the Connection the Human chose, once they approved.
 	ConnectionAuth *ConnectionAuthDecisionView `json:"connection_auth,omitempty"`
 
 	// ConnectorWrite The view of a connector_write decision: one external write a wrapped TeamHub CLI command asked to run. TeamHub builds it from the stored call it will run after approval, so message is what will actually be sent and input is the full call.

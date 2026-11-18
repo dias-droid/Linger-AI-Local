@@ -441,6 +441,38 @@ describe("Wiki Profile sources", () => {
     await waitFor(() => expect(generate).toHaveBeenCalledOnce());
   });
 
+  it("keeps an account that needs reconnecting beside an active one", async () => {
+    const runtime = await testRuntime();
+    const existing = (await runtime.client.listExternalConnections())
+      .connections[0]!;
+    vi.spyOn(runtime.client, "listExternalConnections").mockResolvedValue({
+      connections: [
+        existing,
+        {
+          ...existing,
+          id: "gmail-expired",
+          identity_label: "old@linger.test",
+          status: "expired",
+        },
+      ],
+    });
+    renderProfile(runtime);
+
+    const sources = await screen.findByRole("list", {
+      name: "Profile sources",
+    });
+    await waitFor(() =>
+      expect(
+        within(sources).getByRole("button", { name: "Reconnect Gmail" }),
+      ).toBeVisible(),
+    );
+    expect(
+      within(sources).getByRole("button", {
+        name: "Gmail · jenny@linger.test — connected",
+      }),
+    ).toBeVisible();
+  });
+
   it("stacks connected sources first and grays out the ones to connect", async () => {
     const runtime = await testRuntime();
     const existing = (await runtime.client.listExternalConnections())

@@ -85,6 +85,8 @@ describe("apps connect", () => {
     ).not.toBe(0);
     expect(JSON.parse(f.errors.join("")).error).toMatchObject({
       code: "account_ambiguous",
+      message:
+        "The requested account is unavailable or more than one account matches. If one of the candidates is the account you meant, run again with --account set to its connection ID; otherwise pass the account's label (for example its email address) with --account to ask the user to authorize it.",
       details: { candidates: [{ connection_id: "c2" }] },
     });
   });

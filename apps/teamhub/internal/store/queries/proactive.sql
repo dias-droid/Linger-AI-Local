@@ -110,3 +110,7 @@ LIMIT 200;
 SELECT represented_human_actor_id::text
 FROM agent_registrations
 WHERE actor_id=sqlc.arg(agent_actor_id)::text AND tenant_id=sqlc.arg(tenant_id)::text AND agent_type='anotherme';
+
+-- name: GetExternalConnectionIdentityLabel :one
+-- The account label a proactive event names for its granted connection.
+SELECT coalesce(identity_label,'')::text FROM external_connections WHERE id=sqlc.arg(id)::text;

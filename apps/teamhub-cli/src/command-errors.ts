@@ -16,7 +16,7 @@ const templates: Record<string, string> = {
   provider_key_required:
     "The user has not set up Composio, which every connected app needs. A card asking them to add a Composio API key was posted in this chat; run this command again after they add it.",
   account_ambiguous:
-    "Multiple accounts match. Select a connection ID with --account.",
+    "The requested account is unavailable or more than one account matches. If one of the candidates is the account you meant, run again with --account set to its connection ID; otherwise pass the account's label (for example its email address) with --account to ask the user to authorize it.",
   capability_unavailable:
     "This command's exact application capability is unavailable.",
   cursor_mismatch: "Use the returned cursor with the same account and filters.",

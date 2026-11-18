@@ -5425,9 +5425,10 @@ export interface components {
       /** @description Connected App keys a profile_setup_apps card offers behind "more". */
       more_apps?: string[];
     };
-    /** @description The view of a connection_auth decision: the Connected App the Agent needs. connection_id is the Connection the Human chose, once they approved. */
+    /** @description The view of a connection_auth decision: the Connected App the Agent needs. account is the identity the Agent asked for, when it named one. connection_id is the Connection the Human chose, once they approved. */
     ConnectionAuthDecisionView: {
       app_key: string;
+      account?: string;
       connection_id?: components["schemas"]["Id"];
     };
     /** @description The view of a provider_key decision: the deployment has no Composio API key, which every Connected App needs. app_key names the app the Agent wanted, when its command said. Saving a key answers it configured. */
