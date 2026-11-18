@@ -27,6 +27,7 @@ import {
   establishedExternalConnections,
   externalConnectionNeedsAttention,
   openPendingExternalConnection,
+  accountIdentityText,
 } from "./connection-state";
 
 export function AppManageDialog({
@@ -161,7 +162,10 @@ function ConnectionRow({
     <div className="flex min-h-[58px] flex-wrap items-center gap-3 py-2.5">
       <div className="min-w-[180px] flex-1">
         <p className="truncate text-sm font-medium text-foreground">
-          {connection.identity_label ?? "Authorization in progress"}
+          {accountIdentityText(
+            connection.provider,
+            connection.identity_label,
+          ) ?? "Authorization in progress"}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           {needsReconnecting ? (
@@ -330,7 +334,10 @@ export function DisconnectConnectionDialog({
 
   return (
     <ModalDialog
-      description={connection.identity_label ?? connection.provider}
+      description={
+        accountIdentityText(connection.provider, connection.identity_label) ??
+        connection.provider
+      }
       onClose={onClose}
       size="md"
       title="Disconnect account?"

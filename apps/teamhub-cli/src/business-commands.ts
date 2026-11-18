@@ -24,7 +24,7 @@ import {
   validateAccountSelector,
 } from "./connector-runtime.js";
 import { renderBusinessResult } from "./business-render.js";
-import { displayText } from "./display-text.js";
+import { accountIdentityText, displayText } from "./display-text.js";
 import { computerPermissionCommandDefinitions } from "./computer-permission-commands.js";
 
 type Json = Record<string, unknown>;
@@ -346,7 +346,7 @@ const appsConnect: CommandDefinition = {
   }),
   render: (result) => {
     const account = result.account as Json;
-    return `Connected: ${singleLineText(account.connection_id)} (${singleLineText(account.identity_label ?? account.display_name)})`;
+    return `Connected: ${singleLineText(account.connection_id)} (${singleLineText(accountIdentityText(account.app_key, account.identity_label) || account.display_name)})`;
   },
 };
 const browserConnect: CommandDefinition = {
@@ -408,7 +408,7 @@ const autoRemindersItem = {
   required: ["connection_id", "app_key", "identity_label", "status", "enabled"],
 };
 const autoRemindersLine = (item: Json): string =>
-  `${singleLineText(item.connection_id)}  ${singleLineText(item.app_key)}  ${singleLineText(item.identity_label)}  auto reminders ${item.enabled ? "on" : "off"}`;
+  `${singleLineText(item.connection_id)}  ${singleLineText(item.app_key)}  ${singleLineText(accountIdentityText(item.app_key, item.identity_label))}  auto reminders ${item.enabled ? "on" : "off"}`;
 const autoRemindersNote =
   "Auto reminders let AnotherMe watch the Human's Gmail, Outlook, Google Calendar or Slack and remind them of things that need attention. Only Another Me can use it, and only for connections its own Human owns.";
 const appsAutoRemindersList: CommandDefinition = {

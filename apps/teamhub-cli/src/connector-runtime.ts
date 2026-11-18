@@ -18,7 +18,7 @@ import { connectorWriteApproval } from "./connector-approval.js";
 import { id, object, rootSchema } from "./connector-schemas.js";
 import { CliError, ConnectorError } from "./errors.js";
 import type { ConnectorFile } from "./connector-files.js";
-import { displayText } from "./display-text.js";
+import { accountIdentityText, displayText } from "./display-text.js";
 
 export type Json = Record<string, unknown>;
 export interface ConnectorBinding {
@@ -757,7 +757,7 @@ function label(key: string): string {
 export function renderConnectorResult(result: Json): string {
   const account = record(result.account);
   const lines = [
-    `Account: ${clean(account.identityLabel || account.displayName)} (${clean(account.connectionId)})`,
+    `Account: ${clean(accountIdentityText(account.name, account.identityLabel) || account.displayName)} (${clean(account.connectionId)})`,
   ];
   const submitted = record(result.result ?? {});
   if (submitted.action === "confirmation_requested") {

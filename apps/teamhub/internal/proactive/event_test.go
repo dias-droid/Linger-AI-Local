@@ -60,11 +60,15 @@ func TestEventWakeFencesOutsideData(t *testing.T) {
 func TestEventWakeNamesTheGrantedAccount(t *testing.T) {
 	event := Event{Source: "outlook", Kind: "new_mail", Summary: "Hello",
 		Grant: &reminder.GrantReference{ID: "g", Revision: 1, ConnectionID: "external_connection_abc"}}
-	if text := eventText("[e]", event, "work@example.com"); !strings.HasPrefix(text, "[e]\nsource: outlook; kind: new_mail; account: work@example.com; connection: external_connection_abc\n") {
+	if text := eventText("[e]", event, "work@example.com"); !strings.HasPrefix(text, "[e]\nsource: outlook; kind: new_mail; account: work@example.com; account note: Microsoft sign-in name, the mailbox address may differ; connection: external_connection_abc\n") {
 		t.Fatalf("wake text=%q", text)
 	}
 	if text := eventText("[e]", event, ""); !strings.HasPrefix(text, "[e]\nsource: outlook; kind: new_mail; connection: external_connection_abc\n") {
 		t.Fatalf("wake text without a label=%q", text)
+	}
+	event.Source = "gmail"
+	if text := eventText("[e]", event, "work@example.com"); !strings.HasPrefix(text, "[e]\nsource: gmail; kind: new_mail; account: work@example.com; connection: external_connection_abc\n") {
+		t.Fatalf("gmail wake text=%q", text)
 	}
 }
 

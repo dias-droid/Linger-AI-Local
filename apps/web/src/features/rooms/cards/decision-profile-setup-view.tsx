@@ -23,6 +23,7 @@ import {
 import {
   activeExternalConnections,
   openPendingExternalConnection,
+  accountIdentityText,
 } from "@/features/apps/connection-state";
 import { teamHubDone } from "@/features/teamhub/teamhub-api";
 import {
@@ -299,7 +300,8 @@ function SetupAppRow({
               className="size-1.5 shrink-0 rounded-full bg-[var(--app-status-success-text)]"
             />
             <span className="truncate">
-              {active.identity_label ?? "Connected"}
+              {accountIdentityText(active.provider, active.identity_label) ??
+                "Connected"}
             </span>
           </span>
         ) : verifying && showConnections ? (

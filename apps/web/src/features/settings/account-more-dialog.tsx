@@ -30,6 +30,7 @@ import {
   connectLinkOpen,
   externalConnectionNeedsAttention,
   usableConnectUrl,
+  accountIdentityText,
 } from "@/features/apps/connection-state";
 import {
   externalAppsQueryOptions,
@@ -607,7 +608,10 @@ function AccountMoreSelectionStep({
           Choose {providerDisplayName(connection.provider)} content
         </h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          {connection.identity_label ?? "Connected account"}
+          {accountIdentityText(
+            connection.provider,
+            connection.identity_label,
+          ) ?? "Connected account"}
         </p>
       </div>
       <ProviderSelectionPicker
@@ -883,7 +887,12 @@ function AppConnectRow({
           <p className="truncate text-sm font-medium">{app.display_name}</p>
           <p className="truncate text-xs text-muted-foreground">
             {singleActive
-              ? `Connected as ${singleActive.identity_label ?? "account"}`
+              ? `Connected: ${
+                  accountIdentityText(
+                    singleActive.provider,
+                    singleActive.identity_label,
+                  ) ?? "account"
+                }`
               : active.length
                 ? `${active.length} connected accounts`
                 : unavailable
@@ -945,7 +954,11 @@ function AppConnectRow({
       {active.length > 1 ? (
         <div className="mt-1 ml-12 divide-y divide-border">
           {active.map((connection) => {
-            const identity = connection.identity_label ?? "Connected account";
+            const identity =
+              accountIdentityText(
+                connection.provider,
+                connection.identity_label,
+              ) ?? "Connected account";
             return (
               <div className="py-1.5" key={connection.id}>
                 <div className="flex min-h-10 items-center justify-between gap-3">
@@ -977,7 +990,12 @@ function AppConnectRow({
                 key={connection.id}
               >
                 <span className="min-w-0 truncate text-xs text-muted-foreground">
-                  {`${connection.identity_label ?? "Account"} needs attention in Apps`}
+                  {`Needs attention in Apps: ${
+                    accountIdentityText(
+                      connection.provider,
+                      connection.identity_label,
+                    ) ?? "account"
+                  }`}
                 </span>
                 <Link
                   className="text-xs font-medium text-app-link hover:underline"

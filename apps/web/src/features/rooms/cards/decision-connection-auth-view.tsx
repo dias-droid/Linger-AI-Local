@@ -23,6 +23,7 @@ import {
   reauthorizationConnectUrl,
   startReauthorization,
   usableConnectUrl,
+  accountIdentityText,
 } from "@/features/apps/connection-state";
 import { openOAuthUrl } from "@/features/apps/oauth-popup";
 import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
@@ -399,7 +400,7 @@ function ConnectionAuthorizationActions({
           >
             {available.map((connection) => (
               <SelectItem key={connection.id} value={connection.id}>
-                {`${connection.identity_label || appName}${
+                {`${accountIdentityText(connection.provider, connection.identity_label) || appName}${
                   connection.status === "active"
                     ? ""
                     : connection.status === "pending"

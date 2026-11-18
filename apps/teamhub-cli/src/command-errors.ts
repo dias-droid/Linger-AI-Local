@@ -1,6 +1,6 @@
 import type { CommandTarget } from "./command-definition.js";
 import { CliError } from "./errors.js";
-import { displayText } from "./display-text.js";
+import { accountIdentityText, displayText } from "./display-text.js";
 
 export interface CommandError {
   code: string;
@@ -150,7 +150,7 @@ export function renderCommandError(error: CommandError): string {
       : []
     ).map(
       (item: Record<string, unknown>) =>
-        `Account: ${singleLine(displayText(item.connection_id ?? ""))}  ${singleLine(displayText(item.identity_label ?? ""))}`,
+        `Account: ${singleLine(displayText(item.connection_id ?? ""))}  ${singleLine(accountIdentityText(item.app_key, item.identity_label))}`,
     ),
     ...(Array.isArray(error.details?.issues) ? error.details.issues : []).map(
       (issue: Record<string, unknown>) =>

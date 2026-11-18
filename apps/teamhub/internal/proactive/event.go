@@ -272,6 +272,12 @@ func eventText(label string, event Event, accountLabel string) string {
 	if event.Grant != nil {
 		if accountLabel != "" {
 			facts = append(facts, "account: "+accountLabel)
+			// An Outlook label is the Microsoft account's sign-in name, which can
+			// belong to another mail provider; the account value itself stays
+			// exact so it can be passed to --account.
+			if event.Source == "outlook" {
+				facts = append(facts, "account note: Microsoft sign-in name, the mailbox address may differ")
+			}
 		}
 		facts = append(facts, "connection: "+event.Grant.ConnectionID)
 	}
