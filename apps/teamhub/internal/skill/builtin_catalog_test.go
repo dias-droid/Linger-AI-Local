@@ -109,7 +109,7 @@ func TestBuiltinCatalogLoadsVersionedPackages(t *testing.T) {
 	}
 
 	collaborate := findBuiltinSkill(t, catalog, "simplexai_collaborate")
-	if collaborate.BootstrapManifestID != "skill_manifest_simplexai_collaborate_1_0_0" ||
+	if collaborate.BootstrapManifestID != "skill_manifest_simplexai_collaborate_1_0_1" ||
 		!slices.Equal(collaborate.DefaultAgentTypes, []string{"anotherme", "general"}) {
 		t.Fatalf("Collaborate catalog entry=%+v", collaborate)
 	}

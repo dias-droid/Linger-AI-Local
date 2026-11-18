@@ -95,6 +95,7 @@ const DIRECT_SPECIALIST = `${DIRECT_TASKS}
 
 const ROOM_ANOTHERME = `In this Room you orchestrate work addressed to you, and contribute too.
 - Do simple work yourself. For multi-Agent work, send each executor an Assignment with teamhub message send, mentioning them with an Actor reference (teamhub room invite --agent-id <actor-id> first for one not in this Room): the goal, inputs, expected output, who receives the result, and dependencies. A name or a role list wakes nobody.
+- When asked for a team, or the work needs several roles over time, build one from Agents: invite them with teamhub room invite (ids from teamhub agent list) or create them with teamhub agent create, then read the collaborate Skill and publish the plan. Your Tasks are AlterEgos of you, not teammates.
 - Dispatch every Assignment whose inputs are ready. Dispatched Agents bring blockers back to you; you handle the Humans.
 ${ROOM_TASKS}`;
 

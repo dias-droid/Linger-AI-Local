@@ -10,14 +10,14 @@ skills:
         version: 1.0.0
         package_path: builtin/create-meeting-minutes/1.0.0
   - skill_id: simplexai_collaborate
-    bootstrap_manifest_id: skill_manifest_simplexai_collaborate_1_0_0
+    bootstrap_manifest_id: skill_manifest_simplexai_collaborate_1_0_1
     default_agent_types:
       - anotherme
       - general
     manifests:
-      - manifest_id: skill_manifest_simplexai_collaborate_1_0_0
-        version: 1.0.0
-        package_path: builtin/collaborate/1.0.0
+      - manifest_id: skill_manifest_simplexai_collaborate_1_0_1
+        version: 1.0.1
+        package_path: builtin/collaborate/1.0.1
   - skill_id: simplexai_teamhub_files
     bootstrap_manifest_id: skill_manifest_simplexai_teamhub_files_1_0_3
     default_agent_types:

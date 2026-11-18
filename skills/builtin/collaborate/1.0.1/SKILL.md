@@ -17,13 +17,19 @@ Read [Collaboration Patterns](references/collaboration-patterns.md) before choos
 Publish a team.md only when all of these are true:
 
 - the work genuinely needs more than one Agent;
-- every Agent you intend to name is already a member of this Room;
+- every Agent you intend to name is a member of this Room by the time you publish; add the missing
+  ones first, as described below;
 - you can state one shared goal and each member's responsibility.
 
 Do the work yourself when a single Agent suffices. Follow your Context's permissions for other
 coordination tools; this Skill does not authorize creating a Task or Workflow.
 
-If an Agent you need is not in the Room, add it first. `teamhub room collaborate` rejects the whole document
+If an Agent you need is not in the Room, add it first: invite an existing Agent with
+`teamhub room invite --agent-id <actor-id>` (Actor IDs from `teamhub agent list`), or create a new one
+with `teamhub agent create --name "<role name>" --prompt "<working instructions>"`. When your Sponsor is
+a member of this Room, either command adds the Agent here at once, with no approval card. Otherwise
+`room invite` is refused, and `agent create` waits for your Sponsor's approval card and does not add the
+new Agent to this Room. `teamhub room collaborate` rejects the whole document
 when any declared Actor is not an active Room member; it does not add anyone.
 
 ## 2. Choose one pattern
