@@ -19,7 +19,7 @@ vi.mock("./instance.js", async (original) => {
     },
   };
 });
-import { afterEach, expect, test, vi } from "vitest";
+import { test as base, vi, type TestContext } from "vitest";
 import {
   nativeConfigurationChanged,
   startNativeProcess,
@@ -27,17 +27,29 @@ import {
   stopNativeProcess,
 } from "./native-process.js";
 
-const roots: string[] = [];
-afterEach(async () => {
-  for (const root of roots.splice(0)) {
-    for (const name of ["web", "teamhub"] as const)
-      await stopNativeProcess(root, name).catch(() => {});
-    await rm(root, { recursive: true, force: true });
-  }
+// Each test owns its root and real process group, so they run side by side;
+// the bounds are generous so that a loaded host slows them without failing them.
+const test = base.concurrent;
+vi.setConfig({
+  testTimeout: 30_000,
+  hookTimeout: 60_000,
+  expect: { poll: { timeout: 15_000 } },
 });
-async function fixture() {
+async function fixture({ onTestFinished }: TestContext) {
   const root = await mkdtemp(path.join(tmpdir(), "native-process-"));
-  roots.push(root);
+  onTestFinished(async () => {
+    // Supervisors outlive the test process by design, so a cleanup that gives
+    // up leaks them for good: escalate at once instead of the production wait,
+    // then end whatever still runs from this root.
+    for (const name of ["web", "teamhub"] as const)
+      await stopNativeProcess(root, name, 300).catch(() => {});
+    try {
+      execFileSync("pkill", ["-KILL", "-f", root]);
+    } catch {
+      // pkill exits 1 when nothing matched.
+    }
+    await rm(root, { recursive: true, force: true });
+  });
   return root;
 }
 /** Gone or a zombie; Linux reads /proc so the check cannot pass when ps is absent. */
@@ -54,8 +66,9 @@ function exited(pid: number): boolean {
     return true;
   }
 }
-test("retains an owned service after launch and reuses its identity", async () => {
-  const root = await fixture();
+test("retains an owned service after launch and reuses its identity", async (context) => {
+  const { expect } = context;
+  const root = await fixture(context);
   const options = {
     root,
     name: "web" as const,
@@ -81,8 +94,9 @@ test("retains an owned service after launch and reuses its identity", async () =
     await readFile(path.join(root, "native/logs/web.log"), "utf8"),
   ).toContain("native fixture ready");
 });
-test("refuses to signal a PID whose recorded lease differs", async () => {
-  const root = await fixture();
+test("refuses to signal a PID whose recorded lease differs", async (context) => {
+  const { expect } = context;
+  const root = await fixture(context);
   const options = {
     root,
     name: "web" as const,
@@ -103,8 +117,9 @@ test("refuses to signal a PID whose recorded lease differs", async () => {
   expect(() => process.kill(processState.pid!, 0)).not.toThrow();
   await writeFile(file, original, { mode: 0o600 });
 });
-test("rejects changed service configuration instead of leaking a duplicate", async () => {
-  const root = await fixture();
+test("rejects changed service configuration instead of leaking a duplicate", async (context) => {
+  const { expect } = context;
+  const root = await fixture(context);
   const options = {
     root,
     name: "teamhub" as const,
@@ -123,8 +138,9 @@ test("rejects changed service configuration instead of leaking a duplicate", asy
   ).rejects.toThrow(/configuration/i);
 });
 
-test("restarts a service whose settings changed, keeps one whose did not", async () => {
-  const root = await fixture();
+test("restarts a service whose settings changed, keeps one whose did not", async (context) => {
+  const { expect } = context;
+  const root = await fixture(context);
   const options = {
     root,
     name: "teamhub" as const,
@@ -143,8 +159,9 @@ test("restarts a service whose settings changed, keeps one whose did not", async
   ).toBe(second.pid);
   expect((await startNativeProcess(options)).pid).not.toBe(second.pid);
 });
-test("redacts complete lines before persisting split writes and known secrets", async () => {
-  const root = await fixture();
+test("redacts complete lines before persisting split writes and known secrets", async (context) => {
+  const { expect } = context;
+  const root = await fixture(context);
   await startNativeProcess({
     root,
     name: "web",
@@ -165,8 +182,9 @@ test("redacts complete lines before persisting split writes and known secrets", 
   expect(log).toContain("[REDACTED]");
 });
 
-test("stops descendants that ignore SIGINT after the service leader exits", async () => {
-  const root = await fixture();
+test("stops descendants that ignore SIGINT after the service leader exits", async (context) => {
+  const { expect } = context;
+  const root = await fixture(context);
   const childCode =
     "process.on('SIGINT',()=>{});console.log('descendant-ready');setInterval(()=>{},1000)";
   await startNativeProcess({
@@ -184,14 +202,17 @@ test("stops descendants that ignore SIGINT after the service leader exits", asyn
     .poll(async () => readFile(path.join(root, "native/logs/web.log"), "utf8"))
     .toContain("descendant-ready");
   const pid = Number(await readFile(path.join(root, "descendant.pid"), "utf8"));
-  await stopNativeProcess(root, "web");
+  // The descendant ignores SIGINT, so only the SIGKILL escalation ends it;
+  // a short interrupt window reaches it without the production wait.
+  await stopNativeProcess(root, "web", 300);
   await expect.poll(() => exited(pid)).toBe(true);
-}, 20_000);
+});
 
-test.skipIf(process.platform === "win32")(
+(process.platform === "win32" ? test.skip : test)(
   "replaces a service whose supervisor was killed with the app",
-  async () => {
-    const root = await fixture();
+  async (context) => {
+    const { expect } = context;
+    const root = await fixture(context);
     const options = {
       root,
       name: "web" as const,
@@ -222,11 +243,11 @@ test.skipIf(process.platform === "win32")(
     await expect.poll(() => exited(orphan)).toBe(true);
     expect((await inspectNativeProcess(root, "web")).running).toBe(true);
   },
-  20_000,
 );
 
-test("cleans the launched owned group when identity persistence fails", async () => {
-  const root = await fixture();
+test("cleans the launched owned group when identity persistence fails", async (context) => {
+  const { expect } = context;
+  const root = await fixture(context);
   failure.file = path.join(root, "native/processes/web.json");
   try {
     await expect(
@@ -259,8 +280,9 @@ test("cleans the launched owned group when identity persistence fails", async ()
   }
 });
 
-test("bundled entry resolves its packaged worker and survives caller exit", async () => {
-  const root = await fixture();
+test("bundled entry resolves its packaged worker and survives caller exit", async (context) => {
+  const { expect } = context;
+  const root = await fixture(context);
   const app = fileURLToPath(
     new URL("../../../apps/linger-installer/", import.meta.url),
   );
@@ -295,12 +317,13 @@ test("bundled entry resolves its packaged worker and survives caller exit", asyn
   await expect
     .poll(async () => readFile(path.join(root, "native/logs/web.log"), "utf8"))
     .toContain("packaged-ready");
-}, 20_000);
+});
 
-test.each(["ENOSPC", "EIO"])(
+test.for(["ENOSPC", "EIO"])(
   "retains ownership after log writes fail with %s",
-  async (code) => {
-    const root = await fixture();
+  async (code, context) => {
+    const { expect } = context;
+    const root = await fixture(context);
     const app = fileURLToPath(
       new URL("../../../apps/linger-installer/", import.meta.url),
     );
@@ -381,13 +404,13 @@ test.each(["ENOSPC", "EIO"])(
       }
     }
   },
-  20_000,
 );
 
-test.each([false, true])(
+test.for([false, true])(
   "stops leased orphan descendants across groups (owner killed: %s)",
-  async (killOwner) => {
-    const root = await fixture();
+  async (killOwner, context) => {
+    const { expect } = context;
+    const root = await fixture(context);
     let orphan: number | undefined;
     const unrelated = spawn(
       process.execPath,
@@ -423,7 +446,8 @@ test.each([false, true])(
           .poll(async () => (await inspectNativeProcess(root, "web")).running)
           .toBe(false);
       }
-      await stopNativeProcess(root, "web");
+      // The orphan ignores SIGINT; only the SIGKILL escalation ends it.
+      await stopNativeProcess(root, "web", 300);
       expect((await inspectNativeProcess(root, "web")).running).toBe(false);
       await expect.poll(() => exited(orphan!)).toBe(true);
       expect(() => process.kill(unrelated.pid!, 0)).not.toThrow();
@@ -438,10 +462,10 @@ test.each([false, true])(
       }
     }
   },
-  25_000,
 );
-test("reports a configuration change only for a running recorded process", async () => {
-  const root = await fixture();
+test("reports a configuration change only for a running recorded process", async (context) => {
+  const { expect } = context;
+  const root = await fixture(context);
   const options = {
     root,
     name: "teamhub" as const,

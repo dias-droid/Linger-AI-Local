@@ -412,6 +412,8 @@ export const NATIVE_PROCESS_REPLACED = "NATIVE_PROCESS_REPLACED";
 export async function stopNativeProcess(
   root: string,
   name: NativeService,
+  /** How long descendants get to exit on SIGINT before SIGKILL; tests shorten it. */
+  interruptMs = 12_000,
 ): Promise<void> {
   const record = await stored(root, name);
   if (!record) return;
@@ -451,7 +453,7 @@ export async function stopNativeProcess(
     }
   };
   const interrupted = new Map<number, string>();
-  const deadline = Date.now() + 12_000;
+  const deadline = Date.now() + interruptMs;
   for (;;) {
     for (const candidate of owned) {
       if (

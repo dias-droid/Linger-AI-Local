@@ -287,24 +287,29 @@ export async function nativeLeaseProcesses(
   if (process.platform === "darwin") {
     const leased: number[] = [];
     // Batch the private environment lookup, then fetch a birth identity only
-    // for matching leases. One ps per host process makes ordinary down slow.
-    for (let offset = 0; offset < candidates.length; offset += 32) {
-      const listing = await runProcess(
-        "/bin/ps",
-        [
-          "eww",
-          "-p",
-          candidates.slice(offset, offset + 32).join(","),
-          "-o",
-          "pid=,command=",
-        ],
-        { timeoutMs: 5000 },
+    // for matching leases. One ps per host process makes ordinary down slow,
+    // and so does running a busy host's batches one at a time.
+    const batches: number[][] = [];
+    for (let offset = 0; offset < candidates.length; offset += 32)
+      batches.push(candidates.slice(offset, offset + 32));
+    for (let offset = 0; offset < batches.length; offset += 4) {
+      const listings = await Promise.all(
+        batches
+          .slice(offset, offset + 4)
+          .map((batch) =>
+            runProcess(
+              "/bin/ps",
+              ["eww", "-p", batch.join(","), "-o", "pid=,command="],
+              { timeoutMs: 5000 },
+            ),
+          ),
       );
-      for (const line of listing.stdout.split("\n")) {
-        const pid = /^\s*(\d+)\s/.exec(line)?.[1];
-        if (pid && line.includes(`${leaseKey}=${lease}`))
-          leased.push(Number(pid));
-      }
+      for (const listing of listings)
+        for (const line of listing.stdout.split("\n")) {
+          const pid = /^\s*(\d+)\s/.exec(line)?.[1];
+          if (pid && line.includes(`${leaseKey}=${lease}`))
+            leased.push(Number(pid));
+        }
     }
     candidates = leased;
   }
