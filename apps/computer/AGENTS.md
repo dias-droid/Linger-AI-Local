@@ -39,6 +39,9 @@
   `internal/workspace`. Keep tests next to their implementation.
 - Context refresh publishes validated input files atomically into a stable
   workspace and never deletes local writable output or a running provider's cwd.
+  Every Ensure also creates whichever files of the Context's own `agent/`
+  package project (`pyproject.toml` for uv, `package.json` for npm) are
+  missing and never replaces one the Agent changed.
 
 - `cmd/linger-computer-launcher` is the stable Windows command: as
   `linger-computer-<environment>.exe` it runs the active bundle's CLI, and as

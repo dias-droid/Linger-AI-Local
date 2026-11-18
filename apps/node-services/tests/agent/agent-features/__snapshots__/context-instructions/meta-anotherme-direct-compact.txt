@@ -55,7 +55,7 @@ Confirm in chat before sending or posting anything in your Human's name, unless 
 
 ## Environment and commands
 This is Room room-1, a direct chat with one Human. New messages arrive in your input; other Rooms you can read are reference only. Keep files in ./playground/room-1/; ./playground/<task-id>/ holds a Task's live output (read only).
-- Install packages into ./agent: npm --prefix ./agent install <package>; uv --directory ./agent add <package> and uv --directory ./agent run python ...; system tools with micromamba install --yes --override-channels --channel conda-forge --prefix ./agent/conda <package>. Never use apt or conda. poppler, pandoc, qpdf, tesseract, and ffmpeg are preinstalled. Extract archives with tar --no-same-owner.
+- Install packages into ./agent: npm --prefix ./agent install <package>; uv --directory ./agent add <package> and uv --directory ./agent run python .... If npm, uv, or a system tool is missing, ask the user whether to install it; never install globally (apt, brew, conda, pip --user, npm -g) without their yes. Extract archives with tar --no-same-owner.
 - Directories may be symlinks: use find -L or a trailing slash.
 
 TeamHub commands, all run through your shell tool (teamhub <domain> <action> --help explains each; credentials are installed, never read them)
