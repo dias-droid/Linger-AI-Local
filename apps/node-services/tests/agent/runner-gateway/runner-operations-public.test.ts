@@ -9,6 +9,7 @@ import {
   RunnerGatewayProtocolError,
   type RunnerGatewayConnection,
 } from "../../../src/agent/runner-gateway/runner-gateway.js";
+import { OPERATION_OUTCOME_UNKNOWN } from "../../../src/agent/runner-gateway/runner-operation.js";
 import { createTestRunnerGateway } from "../test-support/runner-gateway.js";
 import { readyContextScope } from "../test-support/ready-context-view.js";
 import { runtimeDiagnostics } from "./runtime-diagnostics-fixture.js";
@@ -965,7 +966,7 @@ describe("RunnerGateway", () => {
       expect.objectContaining({ type: "operation.start" }),
     );
     await expect(operation.result).rejects.toMatchObject({
-      code: "OPERATION_OUTCOME_UNKNOWN",
+      code: OPERATION_OUTCOME_UNKNOWN,
       retryable: false,
     });
   });
