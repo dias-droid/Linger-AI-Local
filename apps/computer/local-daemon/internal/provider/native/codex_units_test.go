@@ -113,7 +113,7 @@ func TestCodexManagedProjection(t *testing.T) {
 	servers := parsed["mcp_servers"].(map[string]any)
 	remote := servers["remote"].(map[string]any)
 	if parsed["model"] != "keep" || parsed[codexOAuthStoreKey] != "file" || servers["old"] != nil || remote["type"] != nil || remote["tools"] != nil || remote["headers"] != nil ||
-		remote["http_headers"].(map[string]any)["Authorization"] != "Bearer t" || remote["experimental_use_rmcp_client"] != true {
+		remote["http_headers"].(map[string]any)["Authorization"] != "Bearer t" || len(remote) != 2 {
 		t.Fatalf("projected = %s", first)
 	}
 	if work := parsed["profiles"].(map[string]any)["work"].(map[string]any); work["mcp_servers"] != nil || work["model"] != "p" {

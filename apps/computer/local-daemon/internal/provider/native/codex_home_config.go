@@ -198,7 +198,6 @@ func codexProjectServer(server map[string]any) map[string]any {
 			}
 			delete(out, "headers")
 		}
-		out["experimental_use_rmcp_client"] = true
 	}
 	return out
 }
