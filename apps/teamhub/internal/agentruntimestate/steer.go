@@ -114,6 +114,18 @@ func (s *Service) AssignSteerRun(ctx context.Context, input AssignSteerRunInput)
 				ordinal++
 			}
 		}
+		// A follow-up newer than the Run's reply takes that reply back, but
+		// the Run may add no event before it replies again. Announcing the
+		// status now lets the Room show its Agent working on the follow-up.
+		log, err := openRunStatusLog(ctx, queries, input.RunID)
+		if err != nil {
+			return false, err
+		}
+		if log != nil && !log.stopped() {
+			if err := log.publish(ctx, queries); err != nil {
+				return false, err
+			}
+		}
 		if _, err := queries.BumpAgentExecutionContextStateRevision(ctx, input.ContextKey); err != nil {
 			return false, err
 		}
