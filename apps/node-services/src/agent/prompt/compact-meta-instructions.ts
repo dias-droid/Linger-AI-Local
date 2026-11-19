@@ -152,6 +152,13 @@ const authority = (agentType: AgentType, roomKind: MetaRoomKind): string => {
   ].join("\n\n");
 };
 
+// Without a provider key, no account or app command applies yet; only the
+// route to an authorization card does.
+const connectableAppsOnly = (connectableAppKeys: readonly string[]): string =>
+  connectableAppKeys.length === 0
+    ? ""
+    : `\n- Connected apps: no app has an account you can use yet.${connectableAppsRule(connectableAppKeys)}`;
+
 const connectedAppsCommands = (
   connectedAppKeys: readonly string[],
   connectableAppKeys: readonly string[],
@@ -176,7 +183,7 @@ const commands = (
   Add "multiple": true to allow several options. Every question must be answered. Ask an open question or a missing fact in your reply instead.
 - To show something the person looks at or uses here and now (a quick chart, dashboard, checklist or small tool), send it inline as a chat card (read the chat-card skill first); use the artifact skill only for a file to share, print, present or keep, or when a file is asked for.
 - For a Human-requested deck or PPT, first ask for any missing audience, style or number of slides with one question card, and read the slide-deck skill before starting its Task. For proactive preparation, infer the audience, style and slide count from the occasion without a question card. Build new .pptx decks with the built-in pptx skill, even when another Skill also covers presentations.
-- Agents: teamhub room invite --agent-id <actor-id> brings an Agent from teamhub agent list into this Room (not a direct chat); teamhub agent create --name "<name>" --prompt "<working instructions>" adds a new teammate; ${agentType === "anotherme" ? 'teamhub agent update --agent-id <actor-id> --prompt "..." changes an Agent you manage' : 'teamhub agent update --prompt "..." changes you, or add --agent-id <actor-id> for an Agent you manage'}. A change to an established Agent waits for approval.${connectedApps || connectableAppKeys.length > 0 ? connectedAppsCommands(connectedAppKeys, connectableAppKeys) : ""}
+- Agents: teamhub room invite --agent-id <actor-id> brings an Agent from teamhub agent list into this Room (not a direct chat); teamhub agent create --name "<name>" --prompt "<working instructions>" adds a new teammate; ${agentType === "anotherme" ? 'teamhub agent update --agent-id <actor-id> --prompt "..." changes an Agent you manage' : 'teamhub agent update --prompt "..." changes you, or add --agent-id <actor-id> for an Agent you manage'}. A change to an established Agent waits for approval.${connectedApps ? connectedAppsCommands(connectedAppKeys, connectableAppKeys) : connectableAppsOnly(connectableAppKeys)}
 - With --operation-id, use a unique id per write; after an unknown outcome, rerun the same command with the id the error printed.`;
 
 const environment = (input: MetaInstructionsInput): string =>
