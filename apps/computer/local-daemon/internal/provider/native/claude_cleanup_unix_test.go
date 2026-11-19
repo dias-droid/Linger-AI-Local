@@ -48,7 +48,7 @@ func claudeWaitFile(t *testing.T, path string) {
 }
 
 func TestClaudeInitRejectionCleansUpTermIgnoringTree(t *testing.T) {
-	claudeLowerGrace(t, 300*time.Millisecond)
+	claudeLowerGrace(t, 150*time.Millisecond)
 	dir := t.TempDir()
 	profile := claudeFakeProfile(t, "signal", map[string]string{"CLAUDE_FAKE_DIR": dir, "CLAUDE_FAKE_POLICY": "ignore", "CLAUDE_FAKE_INIT": "error"})
 	started := time.Now()
@@ -60,7 +60,7 @@ func TestClaudeInitRejectionCleansUpTermIgnoringTree(t *testing.T) {
 }
 
 func TestClaudeCallerCancelDuringTurn(t *testing.T) {
-	claudeLowerGrace(t, 300*time.Millisecond)
+	claudeLowerGrace(t, 150*time.Millisecond)
 	for _, policy := range []string{"report", "normal", "ignore", "child", "completed"} {
 		t.Run(policy, func(t *testing.T) {
 			dir := t.TempDir()
@@ -116,7 +116,7 @@ func TestClaudeFailureDiagnostics(t *testing.T) {
 		{"success with status", []string{frame, okResult}, nil, 0, statusCompleted, func(d RuntimeFailureDiagnostics) bool { return d.empty() }},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			claudeLowerGrace(t, 300*time.Millisecond)
+			claudeLowerGrace(t, 150*time.Millisecond)
 			run := claudeStart(t, claudeFramesProfile(t, "frames", test.frames, test.env), "hello", RunSpec{Budget: test.budget})
 			_, outcome := claudeFinish(t, run, 10*time.Second)
 			if outcome.Status != test.status || !test.check(outcome.Diagnostics) {

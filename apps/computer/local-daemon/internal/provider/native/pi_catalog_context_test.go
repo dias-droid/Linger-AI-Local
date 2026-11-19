@@ -27,7 +27,7 @@ func TestPiCatalogPreservesContextCauseAfterChildCleanup(t *testing.T) {
 			}
 			ctx, cancel := context.WithCancelCause(t.Context())
 			defer cancel(nil)
-			bounded, stop := context.WithTimeout(ctx, time.Second)
+			bounded, stop := context.WithTimeout(ctx, 400*time.Millisecond)
 			defer stop()
 			done := make(chan error, 1)
 			go func() {

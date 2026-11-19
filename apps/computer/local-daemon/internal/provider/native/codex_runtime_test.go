@@ -185,7 +185,7 @@ func TestCodexStartupStallKillsTree(t *testing.T) {
 			fake := newCodexFake(t, nil, nil)
 			// The fake never answers the stall, so each stop step waits out its
 			// grace; newCodexFake's cleanup restores the grace.
-			codexStopGrace.set(300 * time.Millisecond)
+			codexStopGrace.set(150 * time.Millisecond)
 			receipt := filepath.Join(fake.root, "pids")
 			fake.env["FAKE_STALL"], fake.env["FAKE_GRANDCHILD"] = method, receipt
 			spec := fake.spec()
@@ -206,7 +206,7 @@ func TestCodexStartupFailureKeepsSecretsOut(t *testing.T) {
 			fake := newCodexFake(t, nil, map[string]string{"FAKE_STDERR": "env " + secret, "FAKE_STALL": "initialize"})
 			// The fake never answers the stall, so each stop step waits out its
 			// grace; newCodexFake's cleanup restores the grace.
-			codexStopGrace.set(300 * time.Millisecond)
+			codexStopGrace.set(150 * time.Millisecond)
 			var log codexTestLog
 			spec := fake.spec()
 			if variant == "startup" {
@@ -241,6 +241,9 @@ func TestCodexInitializeCancelUnconfirmed(t *testing.T) {
 	var force atomic.Bool
 	force.Store(true)
 	codexForceUnconfirmed(&force)
+	// The stall makes each stop step wait out its grace; newCodexFake's
+	// cleanup restores the grace.
+	codexStopGrace.set(150 * time.Millisecond)
 	ctx, cancel := context.WithCancel(context.Background())
 	run, err := fake.runtime(nil).Start(ctx, "go", fake.spec())
 	if err != nil {
@@ -267,7 +270,7 @@ func TestCodexInitializeTimeoutRetriesOnce(t *testing.T) {
 	fake := newCodexFake(t, nil, map[string]string{"FAKE_STALL": "initialize"})
 	// The fake never answers the stall, so each stop step waits out its
 	// grace; newCodexFake's cleanup restores the grace.
-	codexStopGrace.set(300 * time.Millisecond)
+	codexStopGrace.set(150 * time.Millisecond)
 	var log codexTestLog
 	spec := fake.spec()
 	spec.StartupBudget = 100 * time.Millisecond
