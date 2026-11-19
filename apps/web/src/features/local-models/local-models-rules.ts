@@ -240,7 +240,8 @@ export function memoryGuidance(view: LocalModelsView): MemoryGuidance | null {
     if (stats.otherBytes <= 0) continue;
     const poolIds = new Set(group.pools.map((pool) => pool.id));
     const blockedLoad = entries.some(({ model, status }) => {
-      if (status !== "idle" && status !== "failed") return false;
+      if (status !== "idle" && (status !== "failed" || downloadStopped(model)))
+        return false;
       if (model.pool === undefined || !poolIds.has(model.pool)) return false;
       const pool = poolOf(view, model.pool);
       if (!pool || poolOtherBytes(pool) <= 0) return false;
@@ -400,6 +401,7 @@ export function downloadPercent(model: LocalModel) {
 
 /** Context length in thousands of tokens, as model cards write it: 128K. */
 export function contextLabel(tokens: number) {
+  if (tokens < 1024) return `${tokens} tokens`;
   return `${Math.round(tokens / 1024)}K tokens`;
 }
 
@@ -491,10 +493,10 @@ export function collapsedRowBadges(model: LocalModel): CollapsedRowBadges {
 
 function formatRemainingTime(seconds: number) {
   if (seconds < 60) return `${seconds}s left`;
-  if (seconds < 3600) return `${Math.ceil(seconds / 60)}m left`;
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.ceil((seconds % 3600) / 60);
-  if (minutes >= 60) return `${hours + 1}h left`;
+  const totalMinutes = Math.ceil(seconds / 60);
+  if (totalMinutes < 60) return `${totalMinutes}m left`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
   return minutes > 0 ? `${hours}h ${minutes}m left` : `${hours}h left`;
 }
 

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Copy01Icon,
   LinkSquare02Icon,
@@ -79,23 +79,62 @@ function Fact({
 
 function CopyEndpoint({ endpoint, name }: { endpoint: string; name: string }) {
   const [copied, setCopied] = useState(false);
+  const timerRef = useRef<number | undefined>(undefined);
+  const codeRef = useRef<HTMLElement>(null);
+
+  useEffect(
+    () => () => {
+      window.clearTimeout(timerRef.current);
+    },
+    [],
+  );
+
+  function markCopied() {
+    window.clearTimeout(timerRef.current);
+    setCopied(true);
+    timerRef.current = window.setTimeout(() => setCopied(false), 1_500);
+  }
+
+  function copy() {
+    const clipboard = navigator.clipboard;
+    if (clipboard?.writeText) {
+      void clipboard.writeText(endpoint).then(
+        () => markCopied(),
+        () => selectCodeText(codeRef.current),
+      );
+      return;
+    }
+    selectCodeText(codeRef.current);
+  }
+
   return (
     <span className="flex items-center gap-1">
-      <code className="min-w-0 truncate font-mono text-xs">{endpoint}</code>
+      <code className="min-w-0 truncate font-mono text-xs" ref={codeRef}>
+        {endpoint}
+      </code>
       <Button
-        aria-label={`Copy ${name} endpoint`}
-        onClick={() => {
-          void navigator.clipboard
-            ?.writeText(endpoint)
-            .then(() => setCopied(true));
-        }}
+        aria-label={
+          copied ? `Copied ${name} endpoint` : `Copy ${name} endpoint`
+        }
+        onClick={copy}
         size="compactIcon"
+        title={copied ? "Copied" : "Copy endpoint"}
         tone="ghost"
       >
         <Icon icon={copied ? Tick02Icon : Copy01Icon} size={14} />
       </Button>
     </span>
   );
+}
+
+function selectCodeText(element: HTMLElement | null) {
+  if (!element) return;
+  const selection = window.getSelection();
+  if (!selection) return;
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  selection.removeAllRanges();
+  selection.addRange(range);
 }
 
 function gatewayFactValue(
@@ -139,6 +178,7 @@ export function ModelFacts({
   computer,
   disabled = false,
   entry,
+  hasPrimaryAssignAction = false,
   onAssignAgent,
   view,
 }: {
@@ -147,6 +187,7 @@ export function ModelFacts({
   computer?: TeamHubLocalComputerPage["items"][number];
   disabled?: boolean;
   entry: ModelEntry;
+  hasPrimaryAssignAction?: boolean;
   onAssignAgent?: (agent: AssignableLocalModelAgent) => void;
   view: LocalModelsView;
 }) {
@@ -170,6 +211,8 @@ export function ModelFacts({
     poolFreeBytes(pool) < model.memory_bytes;
   const computerId = view.computer.computer_id;
   const usedNames = usedByAgentNames(entry, assignableAgents, computerId);
+  const idleUsedWarning =
+    status === "idle" && !model.note && usedNames.length > 0;
   const unassigned = assignableAgents.filter(
     (agent) => !isAgentUsingModel(entry, agent, computerId),
   );
@@ -178,7 +221,10 @@ export function ModelFacts({
     status === "loaded" &&
     Boolean(model.pi_model) &&
     Boolean(onAssignAgent) &&
-    (unassigned.some((agent) => !agent.isAnotherMe) || unassigned.length > 1);
+    unassigned.length > 0 &&
+    (!hasPrimaryAssignAction ||
+      unassigned.some((agent) => !agent.isAnotherMe) ||
+      unassigned.length > 1);
   const primaryBusy =
     status === "loaded" &&
     Boolean(model.pi_model) &&
@@ -216,6 +262,15 @@ export function ModelFacts({
               {modelNoteCopy(model.note.code, placeName(view, model.pool))}
             </span>
           </Fact>
+        </div>
+      ) : null}
+      {idleUsedWarning ? (
+        <div className="my-1.5">
+          <FormFeedback tone="warning">
+            {usedNames.join(", ")} {usedNames.length === 1 ? "uses" : "use"}{" "}
+            this model. Load it so {usedNames.length === 1 ? "it" : "they"} can
+            answer.
+          </FormFeedback>
         </div>
       ) : null}
       {availableNeedsRoom ? (
@@ -289,7 +344,9 @@ export function ModelFacts({
                     );
                     if (target) onAssignAgent(target);
                   }}
-                  placeholder="Switch Agent…"
+                  placeholder={
+                    assigningAgentId ? "Switching…" : "Switch Agent…"
+                  }
                   value=""
                   variant="pill"
                 >
@@ -367,17 +424,19 @@ function PoolBar({
         className="flex h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted"
         role="img"
       >
-        {pool.holders.map((holder) => (
-          <span
-            className={cn(
-              "h-full border-r-2 border-card last:border-r-0",
-              colorOf(holder.id),
-            )}
-            key={holder.id}
-            style={{ width: width(holder.bytes) }}
-            title={`${holder.name} · ${formatGigabytes(holder.bytes)}`}
-          />
-        ))}
+        {pool.holders
+          .filter((holder) => holder.bytes > 0)
+          .map((holder) => (
+            <span
+              className={cn(
+                "h-full border-r-2 border-card last:border-r-0",
+                colorOf(holder.id),
+              )}
+              key={holder.id}
+              style={{ width: width(holder.bytes) }}
+              title={`${holder.name} · ${formatGigabytes(holder.bytes)}`}
+            />
+          ))}
         {otherBytes ? (
           <span
             className="h-full bg-muted-foreground/30"
@@ -402,9 +461,20 @@ export function AdvancedDialog({
   view: LocalModelsView;
 }) {
   const host = view.computer.host;
-  const holders = view.pools.flatMap((pool) => pool.holders);
-  const models = holders.filter((holder) => holder.kind === "model");
-  const components = holders.filter((holder) => holder.kind === "component");
+  type PoolHolder = LocalModelPool["holders"][number];
+  const seenHolderIds = new Set<string>();
+  const models: PoolHolder[] = [];
+  const components: PoolHolder[] = [];
+  let hasOtherApps = false;
+  for (const pool of view.pools) {
+    if (poolOtherBytes(pool) > 0) hasOtherApps = true;
+    for (const holder of pool.holders) {
+      if (seenHolderIds.has(holder.id)) continue;
+      seenHolderIds.add(holder.id);
+      if (holder.kind === "model") models.push(holder);
+      else components.push(holder);
+    }
+  }
   const colorOf = (holderId: string) => {
     const index = models.findIndex((holder) => holder.id === holderId);
     return index < 0
@@ -425,30 +495,56 @@ export function AdvancedDialog({
       title={`${view.computer.display_name} details`}
     >
       <div className="px-5 py-4">
-        <h3 className="mb-1 text-sm font-medium text-muted-foreground">
-          Memory
-        </h3>
-        <div className="divide-y divide-border">
-          {view.pools.map((pool) => (
-            <PoolBar colorOf={colorOf} key={pool.id} pool={pool} view={view} />
-          ))}
-        </div>
-        {holders.length ? (
-          <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            {[...models, ...components].map((holder) => (
-              <span className="flex items-center gap-1.5" key={holder.id}>
-                <span
-                  aria-hidden
-                  className={cn("size-1.5 rounded-full", colorOf(holder.id))}
+        {view.pools.length ? (
+          <>
+            <h3 className="mb-1 text-sm font-medium text-muted-foreground">
+              Memory
+            </h3>
+            <div className="divide-y divide-border">
+              {view.pools.map((pool) => (
+                <PoolBar
+                  colorOf={colorOf}
+                  key={pool.id}
+                  pool={pool}
+                  view={view}
                 />
-                {holder.name}
-              </span>
-            ))}
-          </p>
+              ))}
+            </div>
+            {seenHolderIds.size > 0 || hasOtherApps ? (
+              <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                {[...models, ...components].map((holder) => (
+                  <span className="flex items-center gap-1.5" key={holder.id}>
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "size-1.5 rounded-full",
+                        colorOf(holder.id),
+                      )}
+                    />
+                    {holder.name}
+                  </span>
+                ))}
+                {hasOtherApps ? (
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className="size-1.5 rounded-full bg-muted-foreground/30"
+                    />
+                    Other apps
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
+          </>
         ) : null}
         {host ? (
           <>
-            <h3 className="mt-5 mb-1 text-sm font-medium text-muted-foreground">
+            <h3
+              className={cn(
+                "mb-1 text-sm font-medium text-muted-foreground",
+                view.pools.length > 0 && "mt-5",
+              )}
+            >
               Hardware
             </h3>
             <div>

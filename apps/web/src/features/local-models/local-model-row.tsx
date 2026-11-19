@@ -27,7 +27,7 @@ import {
   usedByAgentNames,
 } from "./local-model-agents";
 import { ModelFacts } from "./local-model-details";
-import { unavailableShortCopy } from "./local-models-copy";
+import { modelErrorShortCopy, unavailableShortCopy } from "./local-models-copy";
 import type {
   LocalModel,
   LocalModelAction,
@@ -312,13 +312,17 @@ function DownloadProgress({
   model: LocalModel;
   progress: number;
 }) {
+  const shownProgress =
+    model.download?.step === "verify" && !model.download.total_bytes
+      ? 100
+      : progress;
   return (
     <div className="px-4 pb-3">
       <span
         aria-label={`${model.name} download progress`}
         aria-valuemax={100}
         aria-valuemin={0}
-        aria-valuenow={progress}
+        aria-valuenow={shownProgress}
         className="block h-1.5 overflow-hidden rounded-full bg-muted"
         role="progressbar"
       >
@@ -328,7 +332,7 @@ function DownloadProgress({
             model.download?.step === "verify" &&
               "animate-pulse motion-reduce:animate-none",
           )}
-          style={{ transform: `scaleX(${progress / 100})` }}
+          style={{ transform: `scaleX(${shownProgress / 100})` }}
         />
       </span>
     </div>
@@ -415,11 +419,19 @@ export function ModelRow({
     Boolean(onAssignAgent);
   const { badges, overflowTitle } = collapsedRowBadges(model);
   const hasMeta = Boolean(usedBy) || badges.length > 0;
+  const damagedFiles =
+    status === "failed" &&
+    (model.error?.code === "CHECKSUM_MISMATCH" ||
+      model.error?.code === "MODEL_FILES_MISSING");
   const detail = {
     available: download,
     downloading: started ? null : downloadStatusDetail(model),
-    failed: null,
-    idle: model.note ? "no room to load yet" : null,
+    failed: modelErrorShortCopy(model.error) ?? null,
+    idle: model.note
+      ? "no room to load yet"
+      : usedNames.length
+        ? "load to answer"
+        : null,
     loaded: [
       where ? `${where[0]!.toUpperCase()}${where.slice(1)}` : undefined,
       formatGigabytes(model.memory_bytes),
@@ -436,13 +448,21 @@ export function ModelRow({
       downloading: ["Cancel", handlers.onCancel, "cancel"],
       failed: stopped
         ? (["Resume download", handlers.onDownload, "download"] as const)
-        : (["Retry", handlers.onLoad, "load"] as const),
+        : damagedFiles
+          ? (["Remove", handlers.onRemove, "remove"] as const)
+          : (["Retry", handlers.onLoad, "load"] as const),
       idle: ["Load", handlers.onLoad, "load"],
       loaded: ["Unload", handlers.onUnload, "unload"],
       loading: null,
       unavailable: null,
     } as const
   )[status];
+  const showsPrimaryAssignButton =
+    !(status === "loaded" && handlers.onUseForAgents) &&
+    canUsePrimary &&
+    Boolean(primaryAgent) &&
+    !primaryUsing &&
+    Boolean(onAssignAgent);
   // A stopped download has no record to remove; discarding it deletes the
   // kept partial instead.
   const removable =
@@ -470,7 +490,7 @@ export function ModelRow({
           aria-expanded={expanded}
           aria-label={model.name}
           className={cn(
-            "col-start-1 row-start-1 flex min-w-0 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "col-span-2 col-start-1 row-start-1 flex min-w-0 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring @md:col-span-1",
             status === "unavailable" && "opacity-60",
           )}
           onClick={handlers.onToggle}
@@ -511,8 +531,8 @@ export function ModelRow({
         ) : null}
         <div
           className={cn(
-            "col-start-2 row-start-1 flex shrink-0 items-center gap-1.5",
-            hasMeta && "@2xl:col-start-3",
+            "col-span-2 flex flex-wrap items-center justify-end gap-1.5 pl-13 @md:col-span-1 @md:col-start-2 @md:row-start-1 @md:flex-nowrap @md:pl-0",
+            hasMeta ? "row-start-3 @2xl:col-start-3" : "row-start-2",
           )}
         >
           {status === "loaded" && handlers.onUseForAgents ? (
@@ -530,10 +550,7 @@ export function ModelRow({
             >
               Use for Agents
             </Button>
-          ) : canUsePrimary &&
-            primaryAgent &&
-            !primaryUsing &&
-            onAssignAgent ? (
+          ) : showsPrimaryAssignButton && primaryAgent && onAssignAgent ? (
             <Button
               aria-label={`Use ${model.name} with ${primaryAgent.name}`}
               className="px-2.5"
@@ -576,9 +593,11 @@ export function ModelRow({
               tone={
                 status === "downloading"
                   ? "ghost"
-                  : recommended
-                    ? "primary"
-                    : "secondary"
+                  : damagedFiles
+                    ? "danger"
+                    : recommended
+                      ? "primary"
+                      : "secondary"
               }
             >
               {action[0]}
@@ -624,6 +643,7 @@ export function ModelRow({
             computer={computer}
             disabled={disabled}
             entry={entry}
+            hasPrimaryAssignAction={showsPrimaryAssignButton}
             onAssignAgent={onAssignAgent}
             view={view}
           />

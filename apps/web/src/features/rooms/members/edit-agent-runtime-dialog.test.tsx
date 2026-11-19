@@ -607,9 +607,66 @@ describe("EditAgentRuntimeDialog", () => {
       expect(onClose).toHaveBeenCalledTimes(1);
     },
   );
+
+  it("resolves an unloaded local model name in the unavailable Model option", async () => {
+    const computer = localComputer("computer-old", "Old Mac", "online");
+    computer.runtimes = [
+      ...computer.runtimes,
+      { models: [], status: "ready", type: "pi" },
+    ];
+    const registration = localCodexAgent();
+    registration.runtime = {
+      model: "localmodels-library/qwen3-coder-30b",
+      placement: {
+        computer_id: "computer-old",
+        runtime_type: "pi",
+        type: "local",
+        workspace_grant_id: "grant-workspace",
+      },
+    };
+    const api = {
+      GET: vi.fn().mockResolvedValue({
+        data: {
+          available: true,
+          computer: {
+            computer_id: "computer-old",
+            display_name: "Old Mac",
+            status: "online",
+          },
+          models: [
+            {
+              model: {
+                id: "qwen3-coder-30b:Q4_K_M",
+                name: "Qwen3 Coder 30B",
+                pi_model: "localmodels-library/qwen3-coder-30b",
+                state: "idle",
+              },
+              used_by: [],
+            },
+          ],
+          pools: [],
+          viewer_is_owner: true,
+        },
+        response: new Response(null, { status: 200 }),
+      }),
+    };
+    renderDialog({
+      api,
+      computersOverride: { items: [computer] },
+      onSave: vi.fn(),
+      registration,
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("combobox", { name: "Agent model" }),
+      ).toHaveTextContent("Qwen3 Coder 30B · Unavailable"),
+    );
+  });
 });
 
 function renderDialog({
+  api,
   field = "runtime",
   onClose = vi.fn(),
   onSave,
@@ -619,6 +676,7 @@ function renderDialog({
     defaultOptions: { queries: { retry: false } },
   }),
 }: {
+  api?: { GET: ReturnType<typeof vi.fn> };
   queryClient?: QueryClient;
   field?: AgentRuntimeField;
   onClose?: () => void;
@@ -633,6 +691,7 @@ function renderDialog({
     ],
   };
   const client = {
+    ...(api ? { api: api as never } : {}),
     listTenantLocalComputers: vi.fn().mockResolvedValue(computers),
   };
 

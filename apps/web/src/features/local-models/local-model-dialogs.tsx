@@ -9,10 +9,10 @@ import { cn } from "@/lib/cn";
 import {
   type AssignableLocalModelAgent,
   isAgentUsingModel,
+  usedByAgentNames,
 } from "./local-model-agents";
 import type { LocalModelsView } from "./local-models-queries";
 import {
-  agentNames,
   formatGigabytes,
   makeRoomSelection,
   makesRoom,
@@ -26,16 +26,16 @@ import {
 
 /** The amber notice naming the Agents that stop answering. */
 function AffectedAgents({
-  entry,
+  names,
   until,
 }: {
-  entry: ModelEntry;
+  names: readonly string[];
   until: string;
 }) {
-  const count = entry.used_by.length;
+  const count = names.length;
   return count ? (
     <FormFeedback tone="warning">
-      {agentNames(entry)} {count === 1 ? "uses" : "use"} this model and
+      {names.join(", ")} {count === 1 ? "uses" : "use"} this model and
       can&apos;t answer until {until}.
     </FormFeedback>
   ) : (
@@ -69,7 +69,10 @@ export function MakeRoomDialog({
   const [selected, setSelected] = useState(() => makeRoomSelection(check));
   const [switchAgents, setSwitchAgents] = useState(true);
   const roomFreeNow = check.freeBytes >= check.needBytes;
-  const effectiveSelected = roomFreeNow ? [] : selected;
+  const loadedIds = new Set(check.loaded.map((item) => item.model.id));
+  const effectiveSelected = roomFreeNow
+    ? []
+    : selected.filter((id) => loadedIds.has(id));
   const chosen = new Set(effectiveSelected);
   const enough = roomFreeNow || makesRoom(check, chosen);
   const pool = poolLabel(view, check.pool);
@@ -88,16 +91,27 @@ export function MakeRoomDialog({
     ...(otherBytes ? [{ bytes: otherBytes, id: "", name: "Other apps" }] : []),
     ...check.kept,
   ];
+  const computerId = view.computer.computer_id;
   const chosenLoaded = check.loaded.filter((item) => chosen.has(item.model.id));
-  const affected = chosenLoaded.flatMap((item) =>
-    item.used_by.map((user) => user.name),
+  const selectedFreedBytes = chosenLoaded.reduce(
+    (sum, item) => sum + item.model.memory_bytes,
+    0,
   );
+  const remainingShortfallBytes = Math.max(
+    0,
+    check.needBytes - (check.freeBytes + selectedFreedBytes),
+  );
+  const affected = [
+    ...new Set(
+      chosenLoaded.flatMap((item) =>
+        usedByAgentNames(item, assignableAgents, computerId),
+      ),
+    ),
+  ];
   const affectedAssignable = assignableAgents.filter(
     (agent) =>
       !agent.busy &&
-      chosenLoaded.some((item) =>
-        isAgentUsingModel(item, agent, view.computer.computer_id),
-      ),
+      chosenLoaded.some((item) => isAgentUsingModel(item, agent, computerId)),
   );
   const canSwitchOnLoad =
     Boolean(entry.model.pi_model) && affectedAssignable.length > 0;
@@ -174,9 +188,16 @@ export function MakeRoomDialog({
                   {item.model.name}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {item.used_by.length
-                    ? `Used by ${agentNames(item)}`
-                    : "Not used"}
+                  {(() => {
+                    const names = usedByAgentNames(
+                      item,
+                      assignableAgents,
+                      computerId,
+                    );
+                    return names.length
+                      ? `Used by ${names.join(", ")}`
+                      : "Not used";
+                  })()}
                 </span>
                 <span className="w-16 text-right text-xs tabular-nums text-muted-foreground">
                   {formatGigabytes(item.model.memory_bytes)}
@@ -223,6 +244,11 @@ export function MakeRoomDialog({
             unnecessary apps and click Recheck memory to free the remaining
             room.
           </FormFeedback>
+        ) : reachable && !enough && remainingShortfallBytes > 0 ? (
+          <FormFeedback tone="info">
+            Select at least {formatGigabytes(remainingShortfallBytes)} more to
+            unload before loading {entry.model.name}.
+          </FormFeedback>
         ) : null}
         {affected.length ? (
           <FormFeedback tone="warning">
@@ -251,12 +277,14 @@ export function MakeRoomDialog({
 
 /** Unloading a model an Agent uses stops that Agent, so it asks first. */
 export function UnloadModelDialog({
+  assignableAgents = [],
   disabled,
   entry,
   onClose,
   onConfirm,
   view,
 }: {
+  assignableAgents?: readonly AssignableLocalModelAgent[];
   /** The action no longer applies, or its Computer takes no actions. */
   disabled: boolean;
   entry: ModelEntry;
@@ -265,6 +293,11 @@ export function UnloadModelDialog({
   view: LocalModelsView;
 }) {
   const pool = poolOf(view, entry.model.pool);
+  const names = usedByAgentNames(
+    entry,
+    assignableAgents,
+    view.computer.computer_id,
+  );
   return (
     <ModalDialog
       description={`Frees ${formatGigabytes(entry.model.memory_bytes)} of ${
@@ -283,19 +316,21 @@ export function UnloadModelDialog({
       title={`Unload ${entry.model.name}?`}
     >
       <div className="px-5 py-4">
-        <AffectedAgents entry={entry} until="it is loaded again" />
+        <AffectedAgents names={names} until="it is loaded again" />
       </div>
     </ModalDialog>
   );
 }
 
 export function RemoveModelDialog({
+  assignableAgents = [],
   disabled,
   entry,
   onClose,
   onConfirm,
   view,
 }: {
+  assignableAgents?: readonly AssignableLocalModelAgent[];
   /** The action no longer applies, or its Computer takes no actions. */
   disabled: boolean;
   entry: ModelEntry;
@@ -303,6 +338,11 @@ export function RemoveModelDialog({
   onConfirm: () => void;
   view: LocalModelsView;
 }) {
+  const names = usedByAgentNames(
+    entry,
+    assignableAgents,
+    view.computer.computer_id,
+  );
   return (
     <ModalDialog
       description={`${
@@ -324,8 +364,8 @@ export function RemoveModelDialog({
     >
       <div className="px-5 py-4">
         <AffectedAgents
-          entry={entry}
-          until={`you choose another model for ${entry.used_by.length === 1 ? "it" : "them"}`}
+          names={names}
+          until={`you choose another model for ${names.length === 1 ? "it" : "them"}`}
         />
       </div>
     </ModalDialog>

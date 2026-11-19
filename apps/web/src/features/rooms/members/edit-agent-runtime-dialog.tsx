@@ -9,6 +9,7 @@ import { runtimeStatusLabels } from "@/features/local-computer/computer-readines
 import { localComputersQueryKey } from "@/features/local-computer/local-computer-queries";
 import { LocalRuntimeAuthenticationGuidance } from "@/features/local-computer/local-runtime-authentication-guidance";
 import { LocalRuntimeInstallGuidance } from "@/features/local-computer/local-runtime-install-guidance";
+import { localModelsQueryOptions } from "@/features/local-models/local-models-queries";
 import type { TeamHubClient } from "@/features/teamhub/teamhub-client";
 import type {
   TeamHubAgentReasoningEffort,
@@ -53,7 +54,8 @@ export function EditAgentRuntimeDialog({
   tenantId,
 }: {
   busy?: boolean;
-  client: Pick<TeamHubClient, "listTenantLocalComputers">;
+  client: Pick<TeamHubClient, "listTenantLocalComputers"> &
+    Partial<Pick<TeamHubClient, "api">>;
   field?: AgentRuntimeField;
   error?: string;
   isPending: boolean;
@@ -73,6 +75,26 @@ export function EditAgentRuntimeDialog({
   const { computer, grant, localReady, model, moving, runtime, target } =
     selection;
   const modelIsAvailable = Boolean(selection.selectedModel);
+  const localModels = useQuery({
+    ...localModelsQueryOptions(
+      client as TeamHubClient,
+      tenantId,
+      selection.computerId,
+    ),
+    enabled: Boolean(
+      client.api &&
+      selection.runtimeType === "pi" &&
+      selection.computerId &&
+      model &&
+      !modelIsAvailable &&
+      model.startsWith("localmodels-library/"),
+    ),
+  });
+  const unavailableModelLabel =
+    (localModels.data?.available
+      ? localModels.data.models.find((item) => item.model.pi_model === model)
+          ?.model.name
+      : undefined) ?? model;
   const loading = computers.isPending;
   const placementLocked = field === "model" || field === "reasoning";
   const noWritableGrant = moving && Boolean(computer) && !grant;
@@ -169,7 +191,7 @@ export function EditAgentRuntimeDialog({
               >
                 {model && !modelIsAvailable ? (
                   <SelectItem value={model} disabled>
-                    {model} · Unavailable
+                    {unavailableModelLabel} · Unavailable
                   </SelectItem>
                 ) : null}
                 {selection.modelOptions.map((item) => (

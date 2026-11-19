@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { lazy, Suspense, useState } from "react";
+import { tenantLocalModelsQueryKey } from "@/features/local-models/local-models-queries";
 import { teamHubData } from "@/features/teamhub/teamhub-api";
 import { type TeamHubClient } from "@/features/teamhub/teamhub-client";
 import type {
@@ -76,9 +77,14 @@ function RuntimeSettingsEntry({ client, registration, tenantId, busy }: Props) {
               }
             : current,
       );
-      void queryClient.invalidateQueries({
-        queryKey: tenantAgentsQueryKey(tenantId),
-      });
+      void Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: tenantAgentsQueryKey(tenantId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: tenantLocalModelsQueryKey(tenantId),
+        }),
+      ]);
       setOpen(false);
     },
   });

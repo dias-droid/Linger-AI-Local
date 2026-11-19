@@ -64,6 +64,7 @@ import type {
   AgentRuntimeField,
   AgentRuntimeUpdateInput,
 } from "./edit-agent-runtime-dialog";
+import { tenantLocalModelsQueryKey } from "@/features/local-models/local-models-queries";
 import { useResolvedAgentModelLabel } from "./use-agent-model-selection";
 const EditAgentRuntimeDialog = lazy(async () => ({
   default: (await import("./edit-agent-runtime-dialog")).EditAgentRuntimeDialog,
@@ -290,6 +291,9 @@ export function AgentProfileContent({
         }),
         queryClient.invalidateQueries({
           queryKey: tenantAgentsQueryKey(tenantId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: tenantLocalModelsQueryKey(tenantId),
         }),
         queryClient.invalidateQueries({
           queryKey: tenantRoomsQueryKey(tenantId),

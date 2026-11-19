@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   collapsedRowBadges,
+  contextLabel,
   downloadPercent,
   downloadStatusDetail,
   downloadStopped,
@@ -16,7 +17,6 @@ import {
   memorySummary,
   modelCapabilities,
   modelEntries,
-  modelSourceLabel,
   parametersLabel,
   placeName,
   poolLabel,
@@ -562,7 +562,41 @@ describe("local models rules", () => {
     expect(safeModelSourceUrl("http://example.com/model")).toBeUndefined();
     const safe = safeModelSourceUrl("https://huggingface.co/Qwen/Qwen3-4B/");
     expect(safe).toBe("https://huggingface.co/Qwen/Qwen3-4B/");
-    expect(modelSourceLabel(safe!)).toBe("huggingface.co/Qwen/Qwen3-4B");
+    expect(
+      downloadStatusDetail(
+        localModel({
+          download: {
+            bytes_per_second: mb,
+            done_bytes: 0,
+            step: "download",
+            total_bytes: 3590 * mb,
+          },
+          id: "m",
+          name: "m",
+          state: "downloading",
+        }),
+      ),
+    ).toBe("0% · 1 MB/s · 1h left");
+    expect(contextLabel(512)).toBe("512 tokens");
+    expect(contextLabel(131_072)).toBe("128K tokens");
+
+    // A stopped download does not trigger blocked_load memory guidance.
+    const stoppedDownloadView = labView({
+      models: [
+        modelView(
+          localModel({
+            error: { code: "NETWORK_UNAVAILABLE" },
+            id: "stopped:Q4",
+            memory_bytes: gb(20),
+            name: "Stopped",
+            pool: "gpu:0",
+            state: "failed",
+          }),
+        ),
+      ],
+      pools: [{ ...gpuPool(0, 24), used_bytes: gb(12) }],
+    });
+    expect(memoryGuidance(stoppedDownloadView)).toBeNull();
   });
 });
 

@@ -15,6 +15,10 @@ import { ModalDialog } from "@/components/ui/modal-dialog";
 import { Select, SelectItem } from "@/components/ui/select";
 import { Hint } from "@/features/local-computer/computer-hint";
 import { localComputersQueryKey } from "@/features/local-computer/local-computer-queries";
+import {
+  tenantAgentAvailabilityQueryKey,
+  tenantAgentsQueryKey,
+} from "@/features/rooms/room-queries";
 import { TeamHubError } from "@/features/teamhub/teamhub-error";
 import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
 import { cn } from "@/lib/cn";
@@ -64,9 +68,11 @@ export function activeSourceLabel(status: ModelSourceStatus) {
 }
 
 interface ModelSourceSwitcher {
+  clearFeedback: () => void;
   failure: string | undefined;
   pending: ModelSourceSwitchRequest | undefined;
   request: (body: ModelSourceSwitchRequest) => void;
+  saveRevision: number;
 }
 
 /**
@@ -91,6 +97,7 @@ export function useModelSourceSwitch({
     body: ModelSourceSwitchRequest;
   } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [saveRevision, setSaveRevision] = useState(0);
   const mutation = useMutation({
     mutationFn: (body: ModelSourceSwitchRequest) =>
       switchModelSource(client, tenantId, computerId, body),
@@ -113,23 +120,37 @@ export function useModelSourceSwitch({
     onSuccess: (view) => {
       queryClient.setQueryData(modelSourceQueryKey(tenantId, computerId), view);
       setNotice(switchedNotice(view));
-      void queryClient.invalidateQueries({
-        queryKey: tenantLocalModelsQueryKey(tenantId),
-      });
-      void queryClient.invalidateQueries({
-        queryKey: localComputersQueryKey(tenantId),
-      });
+      setSaveRevision((current) => current + 1);
+      void Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: tenantLocalModelsQueryKey(tenantId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: localComputersQueryKey(tenantId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: tenantAgentsQueryKey(tenantId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: tenantAgentAvailabilityQueryKey(tenantId),
+        }),
+      ]);
     },
   });
   const failureCode =
     mutation.error instanceof TeamHubError ? mutation.error.code : undefined;
   const switcher: ModelSourceSwitcher = {
+    clearFeedback: () => {
+      setNotice(null);
+      if (mutation.isError) mutation.reset();
+    },
     failure:
       mutation.isError && failureCode !== "AGENT_HAS_ACTIVE_RUNS"
         ? modelSourceErrorCopy(failureCode)
         : undefined,
     pending: mutation.isPending ? mutation.variables : undefined,
     request: (body) => mutation.mutate(body),
+    saveRevision,
   };
   const feedback = (
     <>
@@ -215,7 +236,7 @@ export function ModelSourceTabs({
   return (
     <div
       aria-label="Model source"
-      className="mt-6 inline-flex rounded-lg bg-muted p-0.5"
+      className="mt-6 inline-flex self-start rounded-lg bg-muted p-0.5"
       role="tablist"
     >
       {modes.map((mode) => {
@@ -244,7 +265,7 @@ export function ModelSourceTabs({
           </button>
         );
         return mode === "byok" ? (
-          <Hint key={mode} placement="bottom" text={byokExplanation}>
+          <Hint key={mode} placement="top" text={byokExplanation}>
             {tab}
           </Hint>
         ) : (
@@ -265,10 +286,11 @@ export function SwitchToLocalNotice({
   models: readonly LocalModel[];
   switcher: ModelSourceSwitcher;
 }) {
-  const [selectedId, setSelectedId] = useState<string | undefined>(
-    () => models[0]?.id,
-  );
-  const chosen = models.find((model) => model.id === selectedId) ?? models[0];
+  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+  const chosen =
+    (selectedId
+      ? models.find((model) => model.id === selectedId)
+      : undefined) ?? models[0];
   const single = models.length === 1 ? models[0] : undefined;
 
   return (
@@ -337,6 +359,18 @@ function ByokModelOption({ model }: { model: ByokModel }) {
   );
 }
 
+function sameEndpointOrigin(savedUrl: string | undefined, nextUrl: string) {
+  const trimmedSaved = savedUrl?.trim();
+  const trimmedNext = nextUrl.trim();
+  if (!trimmedSaved || !trimmedNext) return false;
+  if (trimmedSaved === trimmedNext) return true;
+  try {
+    return new URL(trimmedSaved).origin === new URL(trimmedNext).origin;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The person's own endpoint. The API key goes to the Computer, which keeps
  * it private; Linger never shows it again.
@@ -363,6 +397,7 @@ export function ByokPanel({
   const [apiKey, setApiKey] = useState("");
   // Starts empty until a model is saved, then shows the saved one.
   const [modelId, setModelId] = useState(saved.model_id ?? "");
+  const [manualModelEntry, setManualModelEntry] = useState(false);
   // Models are listed for the address and key as they stand when a field is
   // left, not on every keystroke.
   const [listed, setListed] = useState({
@@ -370,13 +405,26 @@ export function ByokPanel({
     keyRevision: 0,
   });
   const [keyEdited, setKeyEdited] = useState(false);
+  const trimmedBaseUrl = baseUrl.trim();
+  // Never reuse a saved key when the owner points BYOK at a different host.
+  const canReuseSavedKey =
+    saved.key_saved &&
+    (!saved.base_url || sameEndpointOrigin(saved.base_url, trimmedBaseUrl));
   const credentials = apiKey
     ? { api_key: apiKey }
-    : saved.key_saved
+    : canReuseSavedKey
+      ? { reuse_saved_key: true }
+      : {};
+  const listedCanReuseSavedKey =
+    saved.key_saved &&
+    (!saved.base_url || sameEndpointOrigin(saved.base_url, listed.baseUrl));
+  const listedCredentials = apiKey
+    ? { api_key: apiKey }
+    : listedCanReuseSavedKey
       ? { reuse_saved_key: true }
       : {};
   const input: ByokInput = {
-    base_url: baseUrl.trim(),
+    base_url: trimmedBaseUrl,
     model_id: modelId.trim(),
     ...credentials,
   };
@@ -385,13 +433,14 @@ export function ByokPanel({
       client,
       tenantId,
       computerId,
-      { base_url: listed.baseUrl, ...credentials },
+      { base_url: listed.baseUrl, ...listedCredentials },
       listed.keyRevision,
     ),
-    // A refresh keeps the current choices on screen until the new list lands.
-    placeholderData: keepPreviousData,
+    // A refresh keeps the current choices on screen until the new list lands,
+    // but clearing the address clears stale options.
+    placeholderData: listed.baseUrl ? keepPreviousData : undefined,
   });
-  const listedModels = models.data?.models ?? [];
+  const listedModels = listed.baseUrl ? (models.data?.models ?? []) : [];
   // A saved or typed ID the endpoint does not list stays choosable.
   const modelOptions =
     input.model_id === "" ||
@@ -407,6 +456,7 @@ export function ByokPanel({
       : listedModels.length
         ? `${listedModels.length} ${listedModels.length === 1 ? "model" : "models"} listed.`
         : undefined;
+  const showModelSelect = listedModels.length > 0 && !manualModelEntry;
   // The Computer decides whether the endpoint needs a key: one on this
   // computer or the local network may have none.
   const complete = input.base_url !== "" && input.model_id !== "";
@@ -474,7 +524,10 @@ export function ByokPanel({
                 : { ...current, baseUrl: input.base_url },
             )
           }
-          onChange={(event) => setBaseUrl(event.target.value)}
+          onChange={(event) => {
+            setBaseUrl(event.target.value);
+            test.reset();
+          }}
           placeholder="https://api.example.com/v1"
           spellCheck={false}
           value={baseUrl}
@@ -483,7 +536,7 @@ export function ByokPanel({
           autoComplete="new-password"
           disabled={disabled}
           hint={
-            saved.key_saved
+            canReuseSavedKey
               ? "A key is saved on this computer. Leave blank to keep it."
               : "Optional for an endpoint on this computer or your local network."
           }
@@ -499,6 +552,7 @@ export function ByokPanel({
           onChange={(event) => {
             setApiKey(event.target.value);
             setKeyEdited(true);
+            test.reset();
           }}
           type="password"
           value={apiKey}
@@ -510,9 +564,9 @@ export function ByokPanel({
           >
             Model
           </label>
-          <div className="flex gap-2">
-            <div className="min-w-0 flex-1">
-              {listedModels.length ? (
+          <div className="flex flex-wrap gap-2">
+            <div className="min-w-48 flex-1">
+              {showModelSelect ? (
                 <Select
                   aria-describedby={modelHint ? modelHintId : undefined}
                   aria-label="Model"
@@ -539,7 +593,10 @@ export function ByokPanel({
                   className={fieldControlClassName}
                   disabled={disabled}
                   id={modelControlId}
-                  onChange={(event) => setModelId(event.target.value)}
+                  onChange={(event) => {
+                    setModelId(event.target.value);
+                    test.reset();
+                  }}
                   placeholder="provider/model-name"
                   spellCheck={false}
                   value={modelId}
@@ -550,19 +607,29 @@ export function ByokPanel({
               disabled={disabled || input.base_url === ""}
               loading={models.isFetching}
               onClick={listModels}
+              onMouseDown={(event) => event.preventDefault()}
               size="large"
             >
               {models.isFetching ? null : <Icon icon={RefreshIcon} size={16} />}
               List models
             </Button>
           </div>
-          {modelHint ? (
-            <p
-              className="mt-1.5 text-xs text-muted-foreground"
-              id={modelHintId}
-            >
-              {modelHint}
-            </p>
+          {modelHint || listedModels.length > 0 ? (
+            <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+              <p id={modelHintId}>{modelHint}</p>
+              {listedModels.length > 0 ? (
+                <button
+                  className="text-foreground underline underline-offset-2 disabled:opacity-50"
+                  disabled={disabled}
+                  onClick={() => setManualModelEntry((current) => !current)}
+                  type="button"
+                >
+                  {manualModelEntry
+                    ? "Choose from list"
+                    : "Enter model ID manually"}
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
         {test.isSuccess ? (

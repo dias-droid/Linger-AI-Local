@@ -475,7 +475,11 @@ describe("LocalModelsPage", () => {
       await renderPage(fixture);
       await findModels();
 
-      expect(statusOf("Llama 3.3 70B")).toBe("Download stopped");
+      expect(statusOf("Llama 3.3 70B")).toBe(
+        code === "NETWORK_UNAVAILABLE"
+          ? "Download stopped · network unavailable"
+          : "Download stopped",
+      );
       expect(
         screen.queryByRole("button", { name: "Retry Llama 3.3 70B" }),
       ).toBeNull();
@@ -654,7 +658,9 @@ describe("LocalModelsPage", () => {
     await renderPage(fixture);
     await findModels();
 
-    expect(statusOf("Llama 3.3 70B")).toBe("Couldn't load");
+    expect(statusOf("Llama 3.3 70B")).toBe(
+      "Couldn't load · engine didn't start",
+    );
     fireEvent.click(screen.getByRole("button", { name: "Llama 3.3 70B" }));
     const details = screen.getByRole("region", {
       name: "Llama 3.3 70B details",
@@ -704,7 +710,9 @@ describe("LocalModelsPage", () => {
     await renderPage(fixture, "?computer=computer-mac");
     await findModels();
 
-    expect(statuses()).toContain("Llama 3.3 70B: Couldn't load");
+    expect(statuses()).toContain(
+      "Llama 3.3 70B: Couldn't load · not enough free memory",
+    );
     fireEvent.click(screen.getByRole("button", { name: "Llama 3.3 70B" }));
     const details = screen.getByRole("region", {
       name: "Llama 3.3 70B details",
@@ -2727,5 +2735,496 @@ describe("Model source", () => {
     expect(alert).toHaveTextContent(
       "Couldn't read how Agents on this computer get their model. Try again.",
     );
+    const retry = within(alert).getByRole("button", { name: "Retry" });
+    fixture.runtime.server.on("GET", modelSourcePath, ({ params }) =>
+      Response.json({
+        computer_id: params.computerId,
+        online: true,
+        status: {
+          ...byokStatus,
+          mode: "local",
+          runtime: "pi",
+          runtime_model: "localmodels-library/qwen3-coder-30b",
+        },
+        viewer_is_owner: true,
+      }),
+    );
+    fireEvent.click(retry);
+    expect(
+      await screen.findByText("Agents on lab-118 use Local model"),
+    ).toBeInTheDocument();
+  });
+
+  it("refetches model source when a Computer comes back online and disables BYOK when offline", async () => {
+    const offlineLab = labView({
+      computer: { ...labView().computer, status: "offline" },
+    });
+    const fixture = setup([offlineLab]);
+    let online = false;
+    fixture.runtime.server.on("GET", switchPath, ({ params }) =>
+      Response.json({
+        computer_id: params.computerId,
+        online,
+        ...(online ? { status: byokStatus } : {}),
+        viewer_is_owner: true,
+      }),
+    );
+    fixture.runtime.server.on("POST", modelsPath, () =>
+      Response.json({ base_url: "https://api.example.com", models: [] }),
+    );
+    await renderPage(fixture);
+    await findModels();
+
+    expect(
+      screen.queryByRole("tablist", { name: "Model source" }),
+    ).not.toBeInTheDocument();
+
+    online = true;
+    publishSnapshot(fixture, labView());
+
+    expect(
+      await screen.findByRole("tab", { name: /BYOK/u, selected: true }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Base URL")).toBeEnabled();
+
+    // Going offline while viewing BYOK shows the offline notice and disables edits.
+    publishSnapshot(fixture, offlineLab);
+    expect(await screen.findByText(/Reconnect it in/u)).toBeInTheDocument();
+    expect(screen.getByLabelText("Base URL")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("resets stale BYOK test feedback, protects saved keys across origins, clears models on empty URL, and allows manual model IDs", async () => {
+    const fixture = setup([labView()]);
+    const { listings, switches, tests } = withSource(fixture, byokStatus);
+    fixture.runtime.server.on("POST", switchPath, ({ body }) => {
+      switches.push(body);
+      return Response.json({
+        computer_id: "computer-lab",
+        online: true,
+        status: byokStatus,
+        viewer_is_owner: true,
+      });
+    });
+    await renderPage(fixture);
+
+    expect(await screen.findByText("2 models listed.")).toBeInTheDocument();
+    const tabs = screen.getByRole("tablist", { name: "Model source" });
+    expect(tabs).toHaveClass("self-start");
+
+    // Manual model ID toggle lets owners type custom IDs even when models were listed.
+    fireEvent.click(
+      screen.getByRole("button", { name: "Enter model ID manually" }),
+    );
+    const manualInput = screen.getByLabelText("Model");
+    expect(manualInput).toHaveValue("vendor/model");
+    fireEvent.change(manualInput, { target: { value: "custom/alias" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+    expect(
+      await screen.findByText(/Connected to https:\/\/api\.example\.com/u),
+    ).toBeInTheDocument();
+
+    // Changing Base URL to a different origin resets test feedback and stops reusing the saved key.
+    const baseUrl = screen.getByLabelText("Base URL");
+    fireEvent.change(baseUrl, {
+      target: { value: "https://other.example.net/v1" },
+    });
+    expect(
+      screen.queryByText(/Connected to https:\/\/api\.example\.com/u),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/A key is saved on this computer/u),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+    await waitFor(() => expect(tests).toHaveLength(2));
+    expect(tests[1]).toEqual({
+      byok: {
+        base_url: "https://other.example.net/v1",
+        model_id: "custom/alias",
+      },
+      runtime: "codex",
+    });
+
+    // Clearing Base URL clears stale listed models instead of keeping previous endpoint choices.
+    fireEvent.change(baseUrl, { target: { value: "" } });
+    fireEvent.blur(baseUrl);
+    expect(screen.queryByText("2 models listed.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Choose from list" }),
+    ).not.toBeInTheDocument();
+
+    // Saving while already on BYOK clears the typed API key input cleanly.
+    fireEvent.change(baseUrl, {
+      target: { value: "https://api.example.com/v1" },
+    });
+    fireEvent.change(screen.getByLabelText("API key"), {
+      target: { value: "sk-rotate" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(switches).toHaveLength(1));
+    await waitFor(() =>
+      expect(screen.getByLabelText("API key")).toHaveValue(""),
+    );
+    expect(listings.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("refreshes Tenant Agents after Use for Agents and lets SwitchToLocalNotice prefer a newly loaded model", async () => {
+    const idleSmall = localModel({
+      id: "spark-4b:Q4_K_M",
+      memory_bytes: gb(4),
+      name: "Spark 4B",
+      pi_model: "localmodels-library/spark-4b",
+      pool: "gpu:0",
+      state: "idle",
+    });
+    const loadedLarge = localModel({
+      id: "qwen3.8-27b:IQ3_S",
+      memory_bytes: gb(16),
+      name: "Qwen3.8 27B",
+      pi_model: "localmodels-library/qwen3.8-27b",
+      pool: "gpu:0",
+      state: "loaded",
+    });
+    const fixture = setup([labView({ models: [modelView(idleSmall)] })]);
+    enableReadyPi(fixture);
+    const { switches } = withSource(fixture, {
+      ...byokStatus,
+      mode: "byok",
+      runtime: "pi",
+      runtime_model: "localmodels-byok",
+    });
+    let agentReads = 0;
+    fixture.runtime.server.on("GET", "/v0/tenants/{tenantId}/agents", () => {
+      agentReads += 1;
+      return {
+        items: fixture.runtime.seed.tenantAgents,
+        page: { has_more: false },
+      };
+    });
+    fixture.runtime.server.on("POST", switchPath, ({ body }) => {
+      switches.push(body);
+      return Response.json({
+        computer_id: "computer-lab",
+        online: true,
+        status: {
+          ...byokStatus,
+          mode: "local",
+          runtime: "pi",
+          runtime_model: "localmodels-library/qwen3.8-27b",
+        },
+        viewer_is_owner: true,
+      });
+    });
+    await renderPage(fixture);
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Local model" }));
+    await findModels();
+
+    // A newly loaded model becomes the default target without sticking on the earlier idle one.
+    publishSnapshot(
+      fixture,
+      labView({
+        models: [modelView(idleSmall), modelView(loadedLarge)],
+        observed_at: "2026-11-13T10:08:00.000Z",
+      }),
+    );
+    const readsBeforeSwitch = agentReads;
+    await screen.findByRole("combobox", { name: "Local model" });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Switch to Local model" }),
+    );
+    await waitFor(() => expect(switches).toHaveLength(1));
+    expect(switches[0]).toEqual({
+      local_model_id: "qwen3.8-27b:IQ3_S",
+      mode: "local",
+    });
+    await waitFor(() => expect(agentReads).toBeGreaterThan(readsBeforeSwitch));
+  });
+
+  it("offers Remove for damaged files, warns for unloaded models with Agents, and recovers from missing Computers or TOOL_FAILED", async () => {
+    const damaged = localModel({
+      error: { code: "CHECKSUM_MISMATCH" },
+      id: "broken:Q4",
+      memory_bytes: gb(6),
+      name: "Broken 6B",
+      pool: "gpu:0",
+      state: "failed",
+    });
+    const idleUsed = localModel({
+      id: "idle-used:Q4",
+      memory_bytes: gb(8),
+      name: "Idle Used 8B",
+      pi_model: "localmodels-library/idle-used",
+      pool: "gpu:1",
+      state: "idle",
+    });
+    const offlineFirst = labView({
+      computer: {
+        ...labView().computer,
+        computer_id: "computer-offline",
+        display_name: "Old Laptop",
+        status: "offline",
+      },
+    });
+    const onlineSecond = labView({
+      computer: {
+        ...labView().computer,
+        computer_id: "computer-online",
+        display_name: "Workstation",
+        status: "online",
+      },
+      models: [modelView(damaged), modelView(idleUsed, ["Research agent"])],
+      pools: [gpuPool(0, 24), { ...gpuPool(1, 24), used_bytes: gb(5) }],
+    });
+    const fixture = setup(
+      [offlineFirst, onlineSecond],
+      [inventoryComputer(offlineFirst), inventoryComputer(onlineSecond)],
+    );
+    await renderPage(fixture);
+    await findModels();
+
+    // Prefers the online Computer over an earlier offline one when no ?computer= is given.
+    expect(
+      screen.getByRole("combobox", { name: "Computer" }),
+    ).toHaveTextContent("Workstation");
+
+    expect(statusOf("Broken 6B")).toBe("Couldn't load · files damaged");
+    expect(
+      screen.getByRole("button", { name: "Remove Broken 6B" }),
+    ).toBeEnabled();
+    expect(
+      screen.queryByRole("button", { name: "Retry Broken 6B" }),
+    ).toBeNull();
+
+    expect(statusOf("Idle Used 8B")).toBe("Downloaded · load to answer");
+    fireEvent.click(screen.getByRole("button", { name: "Idle Used 8B" }));
+    expect(
+      screen.getByRole("region", { name: "Idle Used 8B details" }),
+    ).toHaveTextContent(
+      "Research agent uses this model. Load it so it can answer.",
+    );
+
+    // Details modal includes Other apps in the legend when external apps hold memory.
+    fireEvent.click(screen.getByRole("button", { name: "Details" }));
+    const detailsDialog = screen.getByRole("dialog", {
+      name: "Workstation details",
+    });
+    expect(detailsDialog).toHaveTextContent("Other apps");
+    fireEvent.click(
+      within(detailsDialog).getByRole("button", { name: "Close" }),
+    );
+
+    // A missing ?computer= shows clear copy and a button back to the owner's online Computer.
+    cleanup();
+    await renderPage(fixture, "?computer=computer-removed");
+    expect(
+      await screen.findByText(
+        "This computer wasn't found. It may have been removed.",
+      ),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Open Workstation" }));
+    await findModels();
+    expect(card("Broken 6B")).toBeVisible();
+
+    // TOOL_FAILED offers Try again refresh when the Computer is online.
+    publishSnapshot(fixture, {
+      ...onlineSecond,
+      available: false,
+      models: [],
+      observed_at: "2026-11-13T10:12:00.000Z",
+      pools: [],
+      reason: { code: "TOOL_FAILED" },
+    });
+    const retryTool = await screen.findByRole("button", { name: "Try again" });
+    fireEvent.click(retryTool);
+    await waitFor(() => expect(fixture.refreshes).toEqual(["computer-online"]));
+  });
+
+  it("clears optimistic action state when a snapshot lands before 202 and drops externally unloaded models from Make room", async () => {
+    const baseMac = macView();
+    const fixture = setup([baseMac]);
+    let releaseAction!: () => void;
+    fixture.runtime.server.on(
+      "POST",
+      actionPath,
+      ({ body, params }) =>
+        new Promise((resolve) => {
+          fixture.actions.push({
+            body,
+            computerId: params.computerId!,
+            modelId: params.modelId!,
+          });
+          releaseAction = () =>
+            resolve(accepted((body as { action: string }).action));
+        }),
+    );
+    await renderPage(fixture);
+    await findModels();
+
+    // Open Make room for Llama 3.3 70B (needs 46 GB, GPT-OSS 20B preselected).
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry Llama 3.3 70B" }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "Make room to load" });
+    const checkbox = within(dialog).getByRole("checkbox", {
+      name: /GPT-OSS 20B/u,
+    });
+    // Unchecking shows the shortfall hint cleanly.
+    fireEvent.click(checkbox);
+    expect(dialog).toHaveTextContent(
+      "Select at least 9.1 GB more to unload before loading Llama 3.3 70B.",
+    );
+    fireEvent.click(checkbox);
+
+    // Another model is unloaded externally, leaving another loaded model on the pool.
+    const extraLoaded = localModel({
+      fit: "unified",
+      id: "extra:Q4",
+      memory_bytes: gb(12),
+      name: "Extra 12B",
+      pool: "unified",
+      state: "loaded",
+    });
+    publishSnapshot(fixture, {
+      ...baseMac,
+      models: [modelView(extraLoaded), baseMac.models[1]!],
+      observed_at: "2026-11-13T10:09:00.000Z",
+      pools: [
+        {
+          holders: [
+            { bytes: gb(12), id: "extra:Q4", kind: "model", name: "Extra 12B" },
+          ],
+          id: "unified",
+          kind: "unified",
+          total_bytes: gb(51.2),
+          used_bytes: gb(12),
+        },
+      ],
+    });
+    const extraCheck = await within(dialog).findByRole("checkbox", {
+      name: /Extra 12B/u,
+    });
+    fireEvent.click(extraCheck);
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Unload and load" }),
+    );
+    await waitFor(() => expect(fixture.actions).toHaveLength(1));
+    // GPT-OSS 20B (no longer loaded) was filtered out of unload_first.
+    expect(fixture.actions[0]).toEqual({
+      body: { action: "load", unload_first: ["extra:Q4"] },
+      computerId: "computer-mac",
+      modelId: "llama3.3-70b:Q4_K_M",
+    });
+
+    // A newer snapshot arrives with the same failed status BEFORE the 202 resolves.
+    publishSnapshot(fixture, {
+      ...baseMac,
+      models: [modelView(extraLoaded), baseMac.models[1]!],
+      observed_at: "2026-11-13T10:10:00.000Z",
+    });
+    releaseAction();
+
+    // Row does not stay stuck on "Loading" because observedAt was captured at click time.
+    await waitFor(() =>
+      expect(statusOf("Llama 3.3 70B")).toBe(
+        "Couldn't load · not enough free memory",
+      ),
+    );
+    expect(
+      screen.getByRole("button", { name: "Retry Llama 3.3 70B" }),
+    ).toBeEnabled();
+  });
+
+  it("preserves busy Agent warnings during mixed Make room handoff and shows queued handoff status", async () => {
+    const mac = withModel(macView(), "llama3.3-70b:Q4_K_M", {
+      pi_model: "localmodels-library/llama3.3-70b",
+    });
+    const fixture = setup([mac]);
+    enableReadyPi(fixture);
+    acceptTenantAgentUpdates(fixture.runtime);
+    fixture.runtime.seed.tenantAgents = fixture.runtime.seed.tenantAgents.map(
+      (agent) =>
+        agent.actor.id === "actor-delegate" || agent.actor.id === "actor-codex"
+          ? {
+              ...agent,
+              runtime: {
+                model: "localmodels-library/gpt-oss-20b",
+                placement: {
+                  computer_id: "computer-mac",
+                  runtime_type: "pi",
+                  type: "local",
+                  workspace_grant_id: "grant-linger-workspace",
+                },
+              },
+            }
+          : agent,
+    );
+    await renderPage(fixture, "?computer=computer-mac");
+    await findModels();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry Llama 3.3 70B" }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "Make room to load" });
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Unload and load" }),
+    );
+    expect(
+      await screen.findByText(
+        "Will switch Jenny's Delegate, Codex to Llama 3.3 70B once it finishes loading.",
+      ),
+    ).toBeVisible();
+
+    // Codex starts working while Jenny's Delegate stays idle.
+    fixture.runtime.seed.tenantAgents = fixture.runtime.seed.tenantAgents.map(
+      (agent) =>
+        agent.actor.id === "actor-codex"
+          ? {
+              ...agent,
+              availability: {
+                active_task_count: 1,
+                label: "Working",
+                status: "online",
+              },
+            }
+          : agent,
+    );
+    fixture.runtime.events.emitSignal({
+      hint: { id: "actor-codex", resource: "agents", tenant_id: tenantId },
+      type: "resource.invalidated",
+    });
+    await waitFor(() =>
+      expect(
+        fixture.runtime.server.requestsTo(
+          "GET",
+          "/v0/tenants/{tenantId}/agent-availability",
+        ).length,
+      ).toBeGreaterThanOrEqual(2),
+    );
+
+    publishSnapshot(
+      fixture,
+      withModel(mac, "llama3.3-70b:Q4_K_M", {
+        endpoint: { base_url: "http://127.0.0.1:18100/v1" },
+        state: "loaded",
+      }),
+    );
+
+    // Idle Agent switches AND busy Agent warning survives instead of being wiped.
+    await waitFor(() =>
+      expect(
+        fixture.runtime.server.requestsTo(
+          "PATCH",
+          "/v0/tenants/{tenantId}/agents/{agentId}",
+        ),
+      ).toHaveLength(1),
+    );
+    expect(
+      await screen.findByText(
+        "Couldn't switch Codex to Llama 3.3 70B while working. Switch once the current turn finishes.",
+      ),
+    ).toBeVisible();
   });
 });
