@@ -241,10 +241,14 @@ Gateway and runs Agents. The daemon exits with the app.
   workspace and the Models page. If an older installer still fails a resume for
   the local model, the start failure names the stack's first known binding reason code
   (`details.reasons`, such as `pi-extensions-unavailable`) in its own words
-  and, by `details.code`, the action that works: Try Again for
-  `LOCAL_MODELS_RECOVERY_REQUIRED` (the resume applies the approved plan
-  again), Set Up Again to review a new plan or choose another runtime. During
-  Quick Install, `LOCAL_MODELS_RECOVERY_REQUIRED` with `binding-unavailable` in
+  and, by `details.code` and `details.causeCode`, the action that works:
+  Set Up Again for `LOCAL_MODELS_APPROVAL_REQUIRED` and for
+  `LOCAL_MODELS_RECOVERY_REQUIRED` when `details.causeCode` indicates the saved
+  plan cannot be re-applied without replanning (`STACK_REPLAN_FAILED`,
+  `STACK_PLAN_CHANGED`, `STACK_APPROVAL_MISMATCH`, `STACK_PLAN_INVALID`), and
+  Try Again or Set Up Again for transient `LOCAL_MODELS_RECOVERY_REQUIRED`
+  failures (the resume applies the approved plan again). During Quick Install,
+  `LOCAL_MODELS_RECOVERY_REQUIRED` with `binding-unavailable` in
   `errorReasons` skips blind replanning and surfaces the structured reason copy. A Quick Install that stopped
   before the computer enrolled is not resumed: setup shows again and Install
   finishes it, reusing a finished job only while its origin answers (a stopped
