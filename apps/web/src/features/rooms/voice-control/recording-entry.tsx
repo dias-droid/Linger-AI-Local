@@ -89,7 +89,11 @@ export function RecordingEntry({
     // the browser allows it for a few seconds after, enough to load it.
     const startRecording = async () => {
       const pip = import("../chat/voice-mode/voice-pip");
-      const opened = pip.then(({ openVoicePip }) => openVoicePip("recording"));
+      // A new Meeting opens expanded, even if the browser remembers a small
+      // window from a recording that ended while minimized.
+      const opened = pip.then(({ openVoicePip }) =>
+        openVoicePip("recording", { preferInitialWindowPlacement: true }),
+      );
       try {
         await voice.selectTargetRoom?.(anotherMeRoomId);
         await opened;

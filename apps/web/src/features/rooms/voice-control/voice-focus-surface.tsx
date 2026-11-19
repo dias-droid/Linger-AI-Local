@@ -201,6 +201,9 @@ export function VoiceFocusSurface({
   // Before a recording runs, the window always shows how to start it.
   const shown: RecordingView | undefined = panels ? view : "transcript";
   const pip = floating === "pip";
+  // A minimized window is one row tall, in the page or floating, and a page
+  // window can sit at the bottom of the viewport; Stop asks inside that row.
+  const compactConfirmation = !shown;
   // The listening title is the quiet default; anything else is news.
   const notice = captureActive && title !== listeningTitle ? title : undefined;
   const tabs: { id: RecordingView; label: string }[] = [
@@ -226,9 +229,13 @@ export function VoiceFocusSurface({
       }
     });
   // Closing a running recording asks first; it ends and saves the recording.
+  // Confirmation never changes the recording view.
   const close = () => {
-    if (captureActive) setConfirmingStop(true);
-    else void run(leave);
+    if (!captureActive) {
+      void run(leave);
+      return;
+    }
+    setConfirmingStop(true);
   };
   const titleBar = (
     <div
@@ -239,6 +246,7 @@ export function VoiceFocusSurface({
         <button
           aria-label={shown ? "Minimize recording" : "Open recording"}
           className={styles.windowButton}
+          disabled={confirmingStop}
           onClick={() => onViewChange?.(shown ? undefined : "transcript")}
           title={shown ? "Minimize; recording continues" : "Open recording"}
           type="button"
@@ -255,6 +263,7 @@ export function VoiceFocusSurface({
         <button
           aria-label="Float recording window"
           className={styles.windowButton}
+          disabled={confirmingStop}
           onClick={onFloat}
           title="Float over other tabs and apps"
           type="button"
@@ -347,27 +356,46 @@ export function VoiceFocusSurface({
           </button>
         </header>
         {confirmingStop ? (
-          <div className={styles.confirmLayer}>
+          <div
+            className={`${styles.confirmLayer} ${pip ? "overflow-y-auto" : ""}`}
+          >
             <div
               aria-describedby="recording-stop-description"
               aria-labelledby="recording-stop-title"
               aria-modal="true"
-              className={styles.confirm}
+              className={
+                compactConfirmation ? "w-full min-w-0" : styles.confirm
+              }
               role="alertdialog"
             >
-              <h2 className={styles.confirmTitle} id="recording-stop-title">
+              <h2
+                className={
+                  compactConfirmation ? "sr-only" : styles.confirmTitle
+                }
+                id="recording-stop-title"
+              >
                 Stop recording?
               </h2>
               <p
-                className={styles.confirmDescription}
+                className={
+                  compactConfirmation ? "sr-only" : styles.confirmDescription
+                }
                 id="recording-stop-description"
               >
                 The recording is saved and summarized. You can find it in
                 Meetings.
               </p>
-              <div className="flex flex-col gap-2">
+              <div
+                className={
+                  compactConfirmation ? "flex gap-2" : "flex flex-col gap-2"
+                }
+              >
                 <button
-                  className={styles.confirmStop}
+                  className={
+                    compactConfirmation
+                      ? `${styles.confirmStop} flex-1 whitespace-nowrap`
+                      : styles.confirmStop
+                  }
                   onClick={() => {
                     // A failed stop shows its reason in the window behind.
                     setConfirmingStop(false);
@@ -381,8 +409,14 @@ export function VoiceFocusSurface({
                 <button
                   // eslint-disable-next-line jsx-a11y/no-autofocus -- the safe choice is focused on purpose because the user just asked to stop recording
                   autoFocus
-                  className={styles.confirmKeep}
-                  onClick={() => setConfirmingStop(false)}
+                  className={
+                    compactConfirmation
+                      ? `${styles.confirmKeep} flex-1 whitespace-nowrap`
+                      : styles.confirmKeep
+                  }
+                  onClick={() => {
+                    setConfirmingStop(false);
+                  }}
                   type="button"
                 >
                   Keep recording
