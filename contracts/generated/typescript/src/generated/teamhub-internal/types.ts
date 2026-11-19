@@ -2801,6 +2801,8 @@ export interface components {
       connected_apps: boolean;
       /** @description Sorted keys of the apps with an account granted to this Agent, such as gmail or google_calendar, so its instructions name only sources it can query. Empty without connected_apps. Agent Service requires this field, so TeamHub ships before Agent Service. */
       connected_app_keys: string[];
+      /** @description Sorted keys of every catalog app a Human can connect for Agents, such as linear, with or without a Composio key, so the Agent asks for authorization with teamhub apps connect instead of reaching the app another way. A fixed catalog, so the digest leaves it out; Agent Service renders it again on every Run. */
+      connectable_app_keys: string[];
       skills: components["schemas"]["AgentEffectiveSkill"][];
     };
     ProactiveWindowMessage: {
