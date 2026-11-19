@@ -2005,7 +2005,7 @@ describe("Model source", () => {
       return Response.json({
         computer_id: "computer-lab",
         online: true,
-        status: { ...byokStatus, mode: "subscription", runtime: "claude" },
+        status: { ...byokStatus, mode: "local", runtime: "pi" },
         terminated_run_count: 1,
         updated_agent_count: 2,
         viewer_is_owner: true,
@@ -2013,9 +2013,9 @@ describe("Model source", () => {
     });
     await renderPage(fixture);
 
-    fireEvent.click(await screen.findByRole("tab", { name: "Subscription" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Local model" }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Switch to Claude Code" }),
+      await screen.findByRole("button", { name: "Switch to Local model" }),
     );
     const dialog = await screen.findByRole("dialog", {
       name: "End running tasks?",
@@ -2027,13 +2027,15 @@ describe("Model source", () => {
 
     expect(
       await screen.findByText(
-        "Agents now use Subscription · Claude Code. 2 Agents were moved. 1 task was ended.",
+        "Agents now use Local model. 2 Agents were moved. 1 task was ended.",
       ),
     ).toBeInTheDocument();
-    expect(switches).toEqual([
-      { mode: "subscription", runtime: "claude" },
-      { force_terminate: true, mode: "subscription", runtime: "claude" },
-    ]);
+    expect(switches).toHaveLength(2);
+    expect(switches[0]).toMatchObject({ mode: "local" });
+    expect(switches[1]).toEqual({
+      ...(switches[0] as object),
+      force_terminate: true,
+    });
   });
 
   it("shows what the Computer serves after a switch fails", async () => {
@@ -2049,7 +2051,7 @@ describe("Model source", () => {
           status:
             reads === 1
               ? byokStatus
-              : { ...byokStatus, mode: "subscription", runtime: "claude" },
+              : { ...byokStatus, mode: "local", runtime: "pi" },
           viewer_is_owner: true,
         });
       })
@@ -2067,15 +2069,13 @@ describe("Model source", () => {
       );
     await renderPage(fixture);
 
-    fireEvent.click(await screen.findByRole("tab", { name: "Subscription" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Local model" }));
     fireEvent.click(
-      screen.getByRole("button", { name: "Switch to Claude Code" }),
+      await screen.findByRole("button", { name: "Switch to Local model" }),
     );
 
     expect(
-      await screen.findByText(
-        "Agents on lab-118 use Subscription · Claude Code",
-      ),
+      await screen.findByText("Agents on lab-118 use Local model"),
     ).toBeInTheDocument();
     expect(reads).toBe(2);
   });
@@ -2124,7 +2124,7 @@ describe("Model source", () => {
     );
 
     await waitFor(() => expect(switches).toHaveLength(1));
-    fireEvent.click(await screen.findByRole("tab", { name: "Subscription" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Local model" }));
     fireEvent.click(screen.getByRole("tab", { name: /BYOK/u }));
     expect(
       await screen.findByRole("combobox", { name: "Model" }),
@@ -2351,13 +2351,16 @@ describe("Model source", () => {
     });
     await renderPage(fixture);
 
-    const tip = await screen.findByRole("complementary", {
-      name: "Local model tip",
-    });
-    expect(tip).toHaveTextContent("16 GB");
-    fireEvent.click(
-      within(tip).getByRole("button", { name: "Open Local model" }),
-    );
+    const tabs = await screen.findByRole("tablist", { name: "Model source" });
+    expect(
+      within(tabs).getByRole("tab", { name: "Local model", selected: true }),
+    ).toBeInTheDocument();
+    expect(
+      within(tabs).queryByRole("tab", { name: "Subscription" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Agents on lab-118 use Subscription · Claude Code"),
+    ).toBeInTheDocument();
 
     const guidance = await screen.findByRole("complementary", {
       name: "Memory guidance",

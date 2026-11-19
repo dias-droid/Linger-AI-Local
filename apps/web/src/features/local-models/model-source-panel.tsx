@@ -5,7 +5,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { type FormEvent, type ReactNode, useId, useState } from "react";
+import { type FormEvent, useId, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Field, fieldControlClassName } from "@/components/ui/field";
@@ -17,7 +17,6 @@ import { Hint } from "@/features/local-computer/computer-hint";
 import { localComputersQueryKey } from "@/features/local-computer/local-computer-queries";
 import { TeamHubError } from "@/features/teamhub/teamhub-error";
 import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
-import type { TeamHubLocalComputerPage } from "@/features/teamhub/teamhub-types";
 import { cn } from "@/lib/cn";
 
 import {
@@ -46,11 +45,10 @@ import {
   testByokEndpoint,
 } from "./model-source-queries";
 
-type LocalComputerRuntime =
-  TeamHubLocalComputerPage["items"][number]["runtimes"][number];
-
-const modes: readonly ModelSourceMode[] = ["local", "subscription", "byok"];
-const subscriptionRuntimes = ["claude", "codex"] as const;
+// Subscription is not offered: switching to it moves every Agent on the
+// Computer to one Runtime without checking that Runtime is signed in, and
+// unloads local models.
+const modes: readonly ModelSourceMode[] = ["local", "byok"];
 const byokRuntimes: readonly ModelSourceRuntime[] = ["claude", "codex", "pi"];
 
 const byokExplanation =
@@ -204,7 +202,7 @@ function TerminateTasksDialog({
   );
 }
 
-/** The three model sources as tabs; a dot marks the one in use. */
+/** The offered model sources as tabs; a dot marks the one in use. */
 export function ModelSourceTabs({
   active,
   onChange,
@@ -254,17 +252,6 @@ export function ModelSourceTabs({
         );
       })}
     </div>
-  );
-}
-
-function Panel({ children, title }: { children: ReactNode; title: string }) {
-  return (
-    <section
-      aria-label={title}
-      className="mt-6 rounded-xl border border-border px-4 py-4"
-    >
-      {children}
-    </section>
   );
 }
 
@@ -329,89 +316,6 @@ export function SwitchToLocalNotice({
         </Button>
       </div>
     </div>
-  );
-}
-
-const runtimeStateCopy: Partial<
-  Record<LocalComputerRuntime["status"], string>
-> = {
-  authentication_required: "Signed out",
-  not_installed: "Not installed",
-  ready: "Signed in",
-};
-
-/** Claude Code and Codex on the person's own subscription accounts. */
-export function SubscriptionPanel({
-  disabled,
-  runtimes,
-  status,
-  switcher,
-}: {
-  disabled: boolean;
-  runtimes: readonly LocalComputerRuntime[];
-  status: ModelSourceStatus;
-  switcher: ModelSourceSwitcher;
-}) {
-  return (
-    <Panel title="Subscription">
-      <ul className="grid gap-3">
-        {subscriptionRuntimes.map((runtime) => {
-          const active =
-            status.mode === "subscription" && status.runtime === runtime;
-          // Off subscription, the Computer checks Runtimes against the
-          // gateway, so their sign-in state is only known while active.
-          const state =
-            status.mode === "subscription"
-              ? runtimeStateCopy[
-                  runtimes.find((item) => item.type === runtime)?.status ??
-                    "not_installed"
-                ]
-              : undefined;
-          return (
-            <li
-              className="flex items-center justify-between gap-4"
-              key={runtime}
-            >
-              <div className="min-w-0">
-                <p className="text-sm text-foreground">
-                  {modelSourceRuntimeLabels[runtime]}
-                  {active ? (
-                    <span className="ml-2 text-xs text-app-success">
-                      In use
-                    </span>
-                  ) : null}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {state ? `${state} · ` : ""}
-                  {runtime === "claude"
-                    ? "Anthropic account on this computer"
-                    : "ChatGPT account on this computer"}
-                </p>
-              </div>
-              {active ? null : (
-                <Button
-                  disabled={disabled}
-                  loading={
-                    switcher.pending?.mode === "subscription" &&
-                    switcher.pending.runtime === runtime
-                  }
-                  onClick={() =>
-                    switcher.request({ mode: "subscription", runtime })
-                  }
-                  size="compact"
-                >
-                  Switch to {modelSourceRuntimeLabels[runtime]}
-                </Button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      <p className="mt-4 text-xs text-muted-foreground">
-        Switching to a subscription unloads local models to free memory; their
-        files stay on disk.
-      </p>
-    </Panel>
   );
 }
 

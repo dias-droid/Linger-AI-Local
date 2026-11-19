@@ -80,7 +80,6 @@ import {
   activeSourceLabel,
   ByokPanel,
   ModelSourceTabs,
-  SubscriptionPanel,
   SwitchToLocalNotice,
   useModelSourceSwitch,
 } from "./model-source-panel";
@@ -110,7 +109,6 @@ function computersPath(tenantId: string) {
   return `/t/${tenantId}/settings/computers`;
 }
 
-type LocalComputerRuntime = InventoryComputer["runtimes"][number];
 type InventoryComputer = TeamHubLocalComputerPage["items"][number];
 
 /**
@@ -251,7 +249,6 @@ function ComputerModels({
   displayName?: string;
   tenantId: string;
 }) {
-  const runtimes: readonly LocalComputerRuntime[] = computer?.runtimes ?? [];
   const { client } = useTeamHubRuntime();
   const queryClient = useQueryClient();
   const query = useQuery(localModelsQueryOptions(client, tenantId, computerId));
@@ -266,7 +263,9 @@ function ComputerModels({
   });
   const status = source.data?.status;
   const [tab, setTab] = useState<ModelSourceMode | null>(null);
-  const shownTab = tab ?? status?.mode ?? "local";
+  // A Computer on a subscription opens on Local model, which offers the way
+  // off it; the Subscription tab is not offered.
+  const shownTab = tab ?? (status?.mode === "byok" ? "byok" : "local");
   const computerName = displayName ?? "this computer";
   const { feedback, switcher } = useModelSourceSwitch({
     computerId,
@@ -295,9 +294,6 @@ function ComputerModels({
     view.computer.status === "online",
   );
   const guidance = view?.available ? memoryGuidance(view) : null;
-  const subscriptionGuidanceCopy = guidance
-    ? memoryGuidanceCopy(guidance)
-    : undefined;
 
   return (
     <>
@@ -385,34 +381,7 @@ function ComputerModels({
         </p>
       ) : null}
       {feedback}
-      {status && shownTab === "subscription" ? (
-        <>
-          <SubscriptionPanel
-            disabled={switching}
-            runtimes={runtimes}
-            status={status}
-            switcher={switcher}
-          />
-          {subscriptionGuidanceCopy ? (
-            <aside
-              aria-label="Local model tip"
-              className="mt-6 flex flex-wrap items-start justify-between gap-3 rounded-xl bg-muted px-4 py-3"
-            >
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-foreground">
-                  {subscriptionGuidanceCopy.title}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {subscriptionGuidanceCopy.body}
-                </p>
-              </div>
-              <Button onClick={() => setTab("local")} size="compact">
-                Open Local model
-              </Button>
-            </aside>
-          ) : null}
-        </>
-      ) : status && shownTab === "byok" ? (
+      {status && shownTab === "byok" ? (
         <ByokPanel
           computerId={computerId}
           disabled={switching}
