@@ -21,9 +21,14 @@ runs:
     # A push's `before` shares no history with HEAD after a branch's first push
     # (all zeros) or a force push that replaced the history. The checks then
     # compare HEAD with itself: the changed-file checks have nothing to check and
-    # every whole-tree check still runs.
+    # every whole-tree check still runs. Shallow checkouts belong to jobs that do
+    # not use BASE, so anything there that starts using it fails loudly on the
+    # unknown ref instead of silently comparing HEAD with itself.
     - shell: bash
       run: |
+        if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
+          exit 0
+        fi
         if ! git merge-base "$BASE" HEAD >/dev/null 2>&1; then
           echo "::notice::BASE $BASE shares no history with HEAD; the changed-file checks compare HEAD with itself."
           echo "BASE=$(git rev-parse HEAD)" >>"$GITHUB_ENV"

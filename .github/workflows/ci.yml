@@ -7,8 +7,8 @@ name: CI
 # filter makes every app check fail instead of skipping. A merge-queue build
 # checks the paths its whole group changes, on top of the latest main. Pushes
 # to main run every check. scripts/check-plan.mjs maps paths to checks, here
-# and in `make check`. CI runs the
-# computer daemon's Go unit tests; the rest of check-computer (TS and process
+# and in `make check`. Only jobs that use BASE check out full history. CI runs
+# the computer daemon's Go unit tests; the rest of check-computer (TS and process
 # tests) and the heavier suites (node-services, voice-runtime, integration,
 # containers and E2E) stay local: run `make check BASE=<target-ref>` and the
 # targets in the Makefile before you open a pull request.
@@ -101,8 +101,6 @@ jobs:
         shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: ./.github/actions/setup
         with:
           go: false
@@ -150,8 +148,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: ./.github/actions/check
         with:
           app: packages
@@ -164,8 +160,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: ./.github/actions/check
         with:
           app: teamhub-cli
@@ -178,8 +172,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: ./.github/actions/check
         with:
           app: installer
@@ -192,8 +184,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: ./.github/actions/check
         with:
           app: desktop
@@ -206,8 +196,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: ./.github/actions/check
         with:
           app: contracts
@@ -234,8 +222,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: ./.github/actions/check
         with:
           app: computer-go
