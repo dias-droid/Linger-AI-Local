@@ -454,7 +454,7 @@ test("unloads the library's models, then stops the controller and the stack thro
     args[1] === "status"
       ? libraryStatus([
           { id: "qwen3-8b:Q4_K_M", state: "loaded" },
-          { id: "lfm3-1.7b:Q8_0", state: "idle" },
+          { id: "spark-x2.6-4b:Q4_K_M", state: "idle" },
           { id: "gemma4-4b:Q4_K_M", state: "loaded" },
         ])
       : { code: 0, stdout: "{}", stderr: "" },

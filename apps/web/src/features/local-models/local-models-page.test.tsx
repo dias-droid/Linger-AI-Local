@@ -315,7 +315,7 @@ describe("LocalModelsPage", () => {
     const fixture = setup([
       macView({
         models: [
-          absent("lfm3-1.7b:Q8_0", "LFM3 1.7B", "unified", false),
+          absent("qwen3.8-27b-iq3s:UD-IQ3_S", "Qwen3.8 27B", "unified", false),
           absent("spark-x2.6-4b:Q4_K_M", "Spark-X2.6 4B", "unified", true),
         ],
       }),
@@ -328,7 +328,7 @@ describe("LocalModelsPage", () => {
     await findModels();
     expect(statuses()).toEqual([
       "Spark-X2.6 4B: Not downloaded · 2.6 GB · Recommended",
-      "LFM3 1.7B: Not downloaded · 2.6 GB",
+      "Qwen3.8 27B: Not downloaded · 2.6 GB",
     ]);
 
     cleanup();
