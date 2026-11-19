@@ -1,8 +1,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
+import { localComputersQueryKey } from "@/features/local-computer/local-computer-queries";
 import type {
   TeamHubLocalComputerPage,
   TeamHubTenantAgent,
@@ -152,6 +159,99 @@ describe("EditAgentRuntimeDialog", () => {
     },
   );
 
+  it("names a missing runtime and gives its install command", async () => {
+    const computer = localComputer("computer-old", "Old Mac", "online", {
+      platform: "darwin",
+    });
+    computer.runtimes = [
+      ...computer.runtimes,
+      {
+        error_code: "RUNTIME_NOT_INSTALLED",
+        message: "Runtime executable not found",
+        models: [],
+        status: "not_installed",
+        type: "pi",
+      },
+    ];
+    renderDialog({ computersOverride: { items: [computer] }, onSave: vi.fn() });
+    const runtime = await screen.findByRole("combobox", {
+      name: "Agent runtime",
+    });
+    fireEvent.click(runtime);
+    fireEvent.click(
+      await screen.findByRole("option", { name: "Pi · Not installed" }),
+    );
+    expect(
+      screen.getByText("npm install -g @earendil-works/pi-coding-agent"),
+    ).toBeVisible();
+    expect(
+      screen.queryByText("Runtime executable not found"),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save Runtime" })).toBeDisabled();
+  });
+
+  it("picks a model once the chosen runtime turns ready while open", async () => {
+    const onSave = vi.fn<(input: AgentRuntimeUpdateInput) => void>();
+    const computer = localComputer("computer-old", "Old Mac", "online");
+    // A signed-out runtime reports no models until it is ready.
+    const claudeModels = computer.runtimes[0]!.models;
+    computer.runtimes[0] = { ...computer.runtimes[0]!, models: [] };
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    renderDialog({
+      computersOverride: { items: [computer] },
+      onSave,
+      queryClient,
+    });
+    const runtime = await screen.findByRole("combobox", {
+      name: "Agent runtime",
+    });
+    fireEvent.click(runtime);
+    fireEvent.click(
+      await screen.findByRole("option", {
+        name: "Claude Code · Sign-in required",
+      }),
+    );
+    expect(screen.getByRole("button", { name: "Save Runtime" })).toBeDisabled();
+
+    await act(async () => {
+      queryClient.setQueryData(localComputersQueryKey("tenant-northstar"), {
+        items: [
+          {
+            ...computer,
+            runtimes: computer.runtimes.map((item) =>
+              item.type === "claude"
+                ? {
+                    models: claudeModels,
+                    status: "ready" as const,
+                    type: item.type,
+                  }
+                : item,
+            ),
+          },
+        ],
+      });
+    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("combobox", { name: "Agent model" }),
+      ).toHaveTextContent("Claude default"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save Runtime" }));
+    expect(onSave).toHaveBeenCalledWith({
+      runtime: {
+        model: "claude-default",
+        placement: {
+          computer_id: "computer-old",
+          runtime_type: "claude",
+          type: "local",
+          workspace_grant_id: "grant-workspace",
+        },
+      },
+    });
+  });
+
   it("blocks an unauthenticated target and allows choosing a ready runtime again", async () => {
     const onSave = vi.fn();
     renderDialog({ onSave });
@@ -161,9 +261,12 @@ describe("EditAgentRuntimeDialog", () => {
     await waitFor(() => expect(runtime).toHaveTextContent("Codex"));
     fireEvent.click(runtime);
     fireEvent.click(
-      await screen.findByRole("option", { name: "Claude Code · Unavailable" }),
+      await screen.findByRole("option", {
+        name: "Claude Code · Sign-in required",
+      }),
     );
-    expect(screen.getByText("Claude authentication is required")).toBeVisible();
+    expect(screen.getByText("Claude Code sign-in required")).toBeVisible();
+    expect(screen.getByText("claude auth login")).toBeVisible();
     expect(screen.getByRole("button", { name: "Save Runtime" })).toBeDisabled();
     fireEvent.click(runtime);
     fireEvent.click(await screen.findByRole("option", { name: "Codex" }));
@@ -486,7 +589,7 @@ describe("EditAgentRuntimeDialog", () => {
       fireEvent.click(runtime);
       fireEvent.click(
         await screen.findByRole("option", {
-          name: mode === "ready-empty" ? "Pi" : "Pi · Unavailable",
+          name: mode === "ready-empty" ? "Pi" : "Pi · Not installed",
         }),
       );
 
@@ -512,7 +615,11 @@ function renderDialog({
   onSave,
   registration = localCodexAgent(),
   computersOverride,
+  queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  }),
 }: {
+  queryClient?: QueryClient;
   field?: AgentRuntimeField;
   onClose?: () => void;
   onSave: (input: AgentRuntimeUpdateInput) => void;
@@ -531,11 +638,7 @@ function renderDialog({
 
   render(
     <MemoryRouter>
-      <QueryClientProvider
-        client={
-          new QueryClient({ defaultOptions: { queries: { retry: false } } })
-        }
-      >
+      <QueryClientProvider client={queryClient}>
         <EditAgentRuntimeDialog
           field={field}
           client={client}
