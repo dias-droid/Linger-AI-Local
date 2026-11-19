@@ -262,14 +262,16 @@ describe("desktop-release.sh build", () => {
   });
 
   it("keeps the archive folder's address out of the log", () => {
+    // A missing file:// folder fails at once; an unresolvable host would wait
+    // out curl's retry backoff.
     const result = run(["fetch-native", "linux-x64"], {
       LINGER_NATIVE_POSTGRES_DIR: folder(),
-      LINGER_NATIVE_DEPS_URL: "http://deps.invalid/private/folder",
+      LINGER_NATIVE_DEPS_URL: `file://${folder()}/private-deps-folder`,
     });
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("cannot download");
-    expect(result.stdout + result.stderr).not.toContain("deps.invalid");
+    expect(result.stdout + result.stderr).not.toContain("private-deps-folder");
   });
 });
 
