@@ -4150,6 +4150,97 @@ describe("legacyMigrationResult", () => {
   });
 });
 
+it("allows a slow installer runtime lookup and keeps the login deadline", async () => {
+  // Native AbortSignal.timeout uses a timer outside Vitest's fake clock.
+  vi.useFakeTimers();
+  const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation((ms) => {
+    const controller = new AbortController();
+    setTimeout(
+      () => controller.abort(new DOMException("timed out", "TimeoutError")),
+      ms,
+    );
+    return controller.signal;
+  });
+  try {
+    const runtime = { setupChoice: "pi", environment: {} };
+    const signals = new Map<string, AbortSignal>();
+    let responseMs = 125_000;
+    const api = await InstallerApi.open(
+      "http://127.0.0.1:9/#token=abc",
+      (input, options) => {
+        const pathname = new URL(String(input)).pathname;
+        if (pathname === "/api/session")
+          return Promise.resolve(
+            new Response("{}", {
+              headers: {
+                "set-cookie": "linger_installer_session=s1; Path=/api",
+              },
+            }),
+          );
+        const signal = options!.signal!;
+        signals.set(pathname, signal);
+        return new Promise((resolve, reject) => {
+          const reply = setTimeout(
+            () => resolve(Response.json(runtime)),
+            responseMs,
+          );
+          signal.addEventListener(
+            "abort",
+            () => {
+              clearTimeout(reply);
+              reject(signal.reason);
+            },
+            { once: true },
+          );
+        });
+      },
+      1,
+    );
+    const controller = new AbortController();
+    const requests = Promise.allSettled([
+      api.runtime(controller.signal),
+      api.login(),
+    ]);
+    await vi.advanceTimersByTimeAsync(59_999);
+    expect(signals.get(`/api/instances/${LOCAL_INSTANCE}/login`)?.aborted).toBe(
+      false,
+    );
+    await vi.advanceTimersByTimeAsync(1);
+    expect(signals.get(`/api/instances/${LOCAL_INSTANCE}/login`)?.aborted).toBe(
+      true,
+    );
+    expect(
+      signals.get(`/api/instances/${LOCAL_INSTANCE}/runtime`)?.aborted,
+    ).toBe(false);
+    await vi.advanceTimersByTimeAsync(65_000);
+    expect(await requests).toEqual([
+      { status: "fulfilled", value: runtime },
+      {
+        status: "rejected",
+        reason: expect.objectContaining({ name: "TimeoutError" }),
+      },
+    ]);
+
+    const cancelled = api
+      .runtime(controller.signal)
+      .catch((error: unknown) => error);
+    controller.abort(new Error("Desktop stopped"));
+    expect(await cancelled).toBe(controller.signal.reason);
+
+    responseMs = 181_000;
+    const overdue = api
+      .runtime(new AbortController().signal)
+      .catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(180_000);
+    expect(await overdue).toMatchObject({
+      message: "The installer timed out while reading the selected runtime.",
+    });
+  } finally {
+    timeout.mockRestore();
+    vi.useRealTimers();
+  }
+});
+
 describe("InstallerApi polling", () => {
   const reset = () =>
     new TypeError("fetch failed", {
