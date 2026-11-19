@@ -6,6 +6,10 @@ import { ModalDialog } from "@/components/ui/modal-dialog";
 import { sourceCheckClassName } from "@/features/settings/provider-selection-picker";
 import { cn } from "@/lib/cn";
 
+import {
+  type AssignableLocalModelAgent,
+  isAgentUsingModel,
+} from "./local-model-agents";
 import type { LocalModelsView } from "./local-models-queries";
 import {
   agentNames,
@@ -39,6 +43,7 @@ function AffectedAgents({
 
 /** Loading would overfill the pool: offer to unload loaded models first. */
 export function MakeRoomDialog({
+  assignableAgents = [],
   check,
   disabled,
   entry,
@@ -46,20 +51,30 @@ export function MakeRoomDialog({
   onConfirm,
   view,
 }: {
+  assignableAgents?: readonly AssignableLocalModelAgent[];
   check: LoadCheck;
   /** The model can no longer be loaded, or its Computer took no actions. */
   disabled: boolean;
   entry: ModelEntry;
   onClose: () => void;
-  onConfirm: (unloadIds: string[]) => void;
+  onConfirm: (unloadIds: string[], switchAgentIds: string[]) => void;
   view: LocalModelsView;
 }) {
   const [selected, setSelected] = useState(() => makeRoomSelection(check));
+  const [switchAgents, setSwitchAgents] = useState(true);
   const chosen = new Set(selected);
   const enough = makesRoom(check, chosen);
-  const affected = check.loaded.flatMap((item) =>
-    chosen.has(item.model.id) ? item.used_by.map((user) => user.name) : [],
+  const chosenLoaded = check.loaded.filter((item) => chosen.has(item.model.id));
+  const affected = chosenLoaded.flatMap((item) =>
+    item.used_by.map((user) => user.name),
   );
+  const affectedAssignable = assignableAgents.filter((agent) =>
+    chosenLoaded.some((item) =>
+      isAgentUsingModel(item, agent, view.computer.computer_id),
+    ),
+  );
+  const canSwitchOnLoad =
+    Boolean(entry.model.pi_model) && affectedAssignable.length > 0;
 
   return (
     <ModalDialog
@@ -69,7 +84,14 @@ export function MakeRoomDialog({
           <Button onClick={onClose}>Cancel</Button>
           <Button
             disabled={disabled || !enough}
-            onClick={() => onConfirm(selected)}
+            onClick={() =>
+              onConfirm(
+                selected,
+                canSwitchOnLoad && switchAgents
+                  ? affectedAssignable.map((agent) => agent.actorId)
+                  : [],
+              )
+            }
             tone="primary"
           >
             {selected.length ? "Unload and load" : "Load"}
@@ -133,6 +155,20 @@ export function MakeRoomDialog({
             {affected.join(", ")} can&apos;t answer until their model is loaded
             again.
           </FormFeedback>
+        ) : null}
+        {canSwitchOnLoad ? (
+          <label className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-app-ink">
+            <input
+              checked={switchAgents}
+              className={sourceCheckClassName}
+              onChange={(event) => setSwitchAgents(event.target.checked)}
+              type="checkbox"
+            />
+            <span>
+              Switch {affectedAssignable.map((agent) => agent.name).join(", ")}{" "}
+              to {entry.model.name} once loaded
+            </span>
+          </label>
         ) : null}
       </div>
     </ModalDialog>

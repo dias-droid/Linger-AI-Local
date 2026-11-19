@@ -34,10 +34,14 @@ build:assets` to check the initial JS budget.
   orders and labels them, picks the Make room default, renders tinted family
   icon tiles, Agent usage counts, structured capability/parameter badges (never
   matched against `name` or `description`), state-distinct cards (`loaded`,
-  `recommended`, `failed`, `unavailable`), download speed/ETA, and top
-  diagnostic callouts with a two-column model-card facts grid from structured
-  `LocalModel` fields in `local-models-rules.ts`, and maps every code and enum
-  label to English in `local-models-copy.ts`. Without `?computer=`
+  `recommended`, `failed`, `unavailable`), download speed/ETA, live Bifrost
+  (`Pi`) `Gateway` readiness, and top diagnostic callouts with a two-column
+  model-card facts grid from structured `LocalModel` fields in
+  `local-models-rules.ts`, resolves Sponsor-owned Agent eligibility and `Pi`
+  runtime switch payloads in `local-model-agents.ts` (`Use with <Another Me>`,
+  `Open chat`, `Switch Agent…` in `Used by`, and `Make room` automatic Agent
+  handoff once the replacement model loads), and maps every code and enum label
+  to English in `local-models-copy.ts`. Without `?computer=`
   the desktop app opens
   its own Computer. Only the Computer's owner can act; actions return at once
   and progress arrives as `local-models` invalidation hints. From the click

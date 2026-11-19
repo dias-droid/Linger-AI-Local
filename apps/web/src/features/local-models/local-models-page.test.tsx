@@ -15,6 +15,7 @@ import { TeamHubEventSync } from "@/features/rooms/event-sync";
 import { TeamHubRuntimeProvider } from "@/features/teamhub/teamhub-runtime";
 import type { TeamHubLocalComputerPage } from "@/features/teamhub/teamhub-types";
 import {
+  acceptTenantAgentUpdates,
   createTestTeamHubRuntime,
   type TestTeamHubRuntime,
 } from "@/test/teamhub-test-runtime";
@@ -146,6 +147,10 @@ async function renderPage(fixture: Fixture, search = "") {
               <Route
                 element={<p>Computers page</p>}
                 path="/t/:tenantId/settings/computers"
+              />
+              <Route
+                element={<p>Another Me room</p>}
+                path="/t/:tenantId/rooms/:roomId/chat"
               />
             </Routes>
           </Suspense>
@@ -1250,6 +1255,265 @@ describe("LocalModelsPage", () => {
 
     expect(statuses()).toContain(
       "GPT-OSS 20B: Downloading · 25% · 50 MB/s · 5m left",
+    );
+  });
+
+  it("shows Bifrost gateway readiness above Endpoint on an expanded loaded model", async () => {
+    const view = labView();
+    const computer = {
+      ...inventoryComputer(view),
+      runtimes: [
+        ...inventoryComputer(view).runtimes,
+        {
+          models: [
+            {
+              id: "localmodels-library/qwen3-coder-30b",
+              label: "Qwen3 Coder 30B",
+            },
+          ],
+          status: "ready" as const,
+          type: "pi" as const,
+          version: "1.3.0",
+        },
+      ],
+    };
+    await renderPage(setup([view], [computer]));
+    await findModels();
+
+    fireEvent.click(screen.getByRole("button", { name: "Qwen3 Coder 30B" }));
+    const details = screen.getByRole("region", {
+      name: "Qwen3 Coder 30B details",
+    });
+    expect(details).toHaveTextContent("GatewayReady · Bifrost (Pi)");
+    expect(details).toHaveTextContent("Endpointhttp://127.0.0.1:18100/v1");
+  });
+
+  it("reflects Pi runtime setup, catalog registration, and failure states in the Gateway row", async () => {
+    const fixture = setup([labView()]);
+    await renderPage(fixture);
+    await findModels();
+
+    fireEvent.click(screen.getByRole("button", { name: "Qwen3 Coder 30B" }));
+    const details = screen.getByRole("region", {
+      name: "Qwen3 Coder 30B details",
+    });
+    expect(details).toHaveTextContent("GatewayBifrost · Setting up Pi…");
+
+    const computer = fixture.runtime.seed.localComputers[0]!;
+    computer.runtimes = [
+      ...computer.runtimes,
+      {
+        models: [],
+        status: "ready",
+        type: "pi",
+        version: "1.3.0",
+      },
+    ];
+    fixture.runtime.events.emitSignal({
+      hint: {
+        id: "computer-lab",
+        resource: "computers",
+        tenant_id: tenantId,
+      },
+      type: "resource.invalidated",
+    });
+    await waitFor(() =>
+      expect(details).toHaveTextContent(
+        "GatewayBifrost · Registering with Pi…",
+      ),
+    );
+
+    computer.runtimes = computer.runtimes.map((runtime) =>
+      runtime.type === "pi" ? { ...runtime, status: "error" } : runtime,
+    );
+    fixture.runtime.events.emitSignal({
+      hint: {
+        id: "computer-lab",
+        resource: "computers",
+        tenant_id: tenantId,
+      },
+      type: "resource.invalidated",
+    });
+    await waitFor(() =>
+      expect(details).toHaveTextContent("GatewayBifrost · Pi unavailable"),
+    );
+  });
+
+  it("switches Another Me to a loaded model in one click and opens its chat", async () => {
+    const fixture = setup();
+    acceptTenantAgentUpdates(fixture.runtime);
+    await renderPage(fixture);
+    await findModels();
+
+    const useButton = await screen.findByRole("button", {
+      name: "Use Qwen3 Coder 30B with Jenny's Delegate",
+    });
+    fireEvent.click(useButton);
+
+    await waitFor(() =>
+      expect(
+        fixture.runtime.server.requestsTo(
+          "PATCH",
+          "/v0/tenants/{tenantId}/agents/{agentId}",
+        ),
+      ).toHaveLength(1),
+    );
+    const openChat = await screen.findByRole("link", { name: "Open chat" });
+    expect(openChat).toHaveAttribute(
+      "href",
+      "/t/tenant-northstar/rooms/room-another-me/chat",
+    );
+    expect(
+      within(card("Qwen3 Coder 30B")).getByText("3 Agents"),
+    ).toHaveAttribute(
+      "title",
+      "Used by Research agent, Code reviewer, Jenny's Delegate",
+    );
+
+    fireEvent.click(openChat);
+    expect(await screen.findByText("Another Me room")).toBeVisible();
+  });
+
+  it("lets the Sponsor switch other Agents from Used by while disabling busy ones", async () => {
+    const fixture = setup();
+    acceptTenantAgentUpdates(fixture.runtime);
+    fixture.runtime.seed.tenantAgents = fixture.runtime.seed.tenantAgents.map(
+      (agent) =>
+        agent.actor.id === "actor-codex"
+          ? {
+              ...agent,
+              availability: {
+                active_task_count: 1,
+                label: "Working",
+                status: "online",
+              },
+            }
+          : agent,
+    );
+    await renderPage(fixture);
+    await findModels();
+
+    await screen.findByRole("button", {
+      name: "Use Qwen3 Coder 30B with Jenny's Delegate",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Qwen3 Coder 30B" }));
+    const details = screen.getByRole("region", {
+      name: "Qwen3 Coder 30B details",
+    });
+    const switcher = within(details).getByRole("combobox", {
+      name: "Switch an Agent to Qwen3 Coder 30B",
+    });
+    fireEvent.click(switcher);
+    const busyCodex = await screen.findByRole("option", {
+      name: "Codex · Working",
+    });
+    expect(busyCodex).toBeDisabled();
+
+    // Finish Codex's active turn, then switch Codex from Used by.
+    fireEvent.keyDown(screen.getByRole("listbox"), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+    fixture.runtime.seed.tenantAgents = fixture.runtime.seed.tenantAgents.map(
+      (agent) =>
+        agent.actor.id === "actor-codex"
+          ? {
+              ...agent,
+              availability: {
+                active_task_count: 0,
+                label: "Online",
+                status: "online",
+              },
+            }
+          : agent,
+    );
+    fixture.runtime.events.emitSignal({
+      hint: { id: "actor-codex", resource: "agents", tenant_id: tenantId },
+      type: "resource.invalidated",
+    });
+
+    fireEvent.click(
+      within(details).getByRole("combobox", {
+        name: "Switch an Agent to Qwen3 Coder 30B",
+      }),
+    );
+    fireEvent.click(await screen.findByRole("option", { name: "Codex" }));
+
+    await waitFor(() =>
+      expect(
+        fixture.runtime.server.requestsTo(
+          "PATCH",
+          "/v0/tenants/{tenantId}/agents/{agentId}",
+        ),
+      ).toHaveLength(1),
+    );
+    expect(details).toHaveTextContent("Codex");
+  });
+
+  it("hands affected Agents over automatically once a Make room replacement model loads", async () => {
+    const mac = withModel(macView(), "llama3.3-70b:Q4_K_M", {
+      pi_model: "localmodels-library/llama3.3-70b",
+    });
+    const fixture = setup([mac]);
+    acceptTenantAgentUpdates(fixture.runtime);
+    fixture.runtime.seed.tenantAgents = fixture.runtime.seed.tenantAgents.map(
+      (agent) =>
+        agent.actor.id === "actor-delegate"
+          ? {
+              ...agent,
+              runtime: {
+                model: "localmodels-library/gpt-oss-20b",
+                placement: {
+                  computer_id: "computer-mac",
+                  runtime_type: "pi",
+                  type: "local",
+                  workspace_grant_id: "grant-linger-workspace",
+                },
+              },
+            }
+          : agent,
+    );
+    await renderPage(fixture, "?computer=computer-mac");
+    await findModels();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry Llama 3.3 70B" }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "Make room to load" });
+    const handoff = within(dialog).getByRole("checkbox", {
+      name: "Switch Jenny's Delegate to Llama 3.3 70B once loaded",
+    });
+    expect(handoff).toBeChecked();
+
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Unload and load" }),
+    );
+    await waitFor(() => expect(fixture.actions).toHaveLength(1));
+    expect(
+      fixture.runtime.server.requestsTo(
+        "PATCH",
+        "/v0/tenants/{tenantId}/agents/{agentId}",
+      ),
+    ).toHaveLength(0);
+
+    publishSnapshot(
+      fixture,
+      withModel(mac, "llama3.3-70b:Q4_K_M", {
+        endpoint: { base_url: "http://127.0.0.1:18100/v1" },
+        state: "loaded",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        fixture.runtime.server.requestsTo(
+          "PATCH",
+          "/v0/tenants/{tenantId}/agents/{agentId}",
+        ),
+      ).toHaveLength(1),
+    );
+    await waitFor(() =>
+      expect(
+        within(card("Llama 3.3 70B")).getByText("1 Agent"),
+      ).toHaveAttribute("title", "Used by Jenny's Delegate"),
     );
   });
 });

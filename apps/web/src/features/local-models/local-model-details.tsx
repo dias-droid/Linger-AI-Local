@@ -8,8 +8,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { ModalDialog } from "@/components/ui/modal-dialog";
+import { Select, SelectItem } from "@/components/ui/select";
+import type { TeamHubLocalComputerPage } from "@/features/teamhub/teamhub-types";
 import { cn } from "@/lib/cn";
 
+import {
+  type AssignableLocalModelAgent,
+  isAgentUsingModel,
+  primaryLocalModelAgent,
+  usedByAgentNames,
+} from "./local-model-agents";
 import {
   capabilityCopy,
   modelErrorCopy,
@@ -18,7 +26,6 @@ import {
 } from "./local-models-copy";
 import type { LocalModelPool, LocalModelsView } from "./local-models-queries";
 import {
-  agentNames,
   contextLabel,
   downloadStopped,
   formatGigabytes,
@@ -88,12 +95,51 @@ function CopyEndpoint({ endpoint, name }: { endpoint: string; name: string }) {
   );
 }
 
+function gatewayFactValue(
+  entry: ModelEntry,
+  view: LocalModelsView,
+  computer?: TeamHubLocalComputerPage["items"][number],
+): ReactNode {
+  if (!computer || !entry.model.pi_model) return "Bifrost";
+  const piRuntime = computer.runtimes.find((runtime) => runtime.type === "pi");
+  if (piRuntime?.status === "ready") {
+    if (piRuntime.models.some((item) => item.id === entry.model.pi_model)) {
+      return "Ready · Bifrost (Pi)";
+    }
+    return (
+      <span className="text-muted-foreground">
+        Bifrost · Registering with Pi…
+      </span>
+    );
+  }
+  if (!piRuntime || piRuntime.status === "not_installed") {
+    return (
+      <span className="text-muted-foreground">
+        {view.computer.status === "online"
+          ? "Bifrost · Setting up Pi…"
+          : "Bifrost · Pi not installed"}
+      </span>
+    );
+  }
+  return <span className="text-app-warning">Bifrost · Pi unavailable</span>;
+}
+
 /** Everything about one model on one Computer, shown when its row expands. */
 export function ModelFacts({
+  assignableAgents = [],
+  assigningAgentId,
+  computer,
+  disabled = false,
   entry,
+  onAssignAgent,
   view,
 }: {
+  assignableAgents?: readonly AssignableLocalModelAgent[];
+  assigningAgentId?: string;
+  computer?: TeamHubLocalComputerPage["items"][number];
+  disabled?: boolean;
   entry: ModelEntry;
+  onAssignAgent?: (agent: AssignableLocalModelAgent) => void;
   view: LocalModelsView;
 }) {
   const { model, status } = entry;
@@ -108,6 +154,24 @@ export function ModelFacts({
   const parameters = parametersLabel(model);
   const speed = speedLabel(model);
   const sourceUrl = safeModelSourceUrl(model.source_url);
+  const computerId = view.computer.computer_id;
+  const usedNames = usedByAgentNames(entry, assignableAgents, computerId);
+  const unassigned = assignableAgents.filter(
+    (agent) => !isAgentUsingModel(entry, agent, computerId),
+  );
+  const primaryAgent = primaryLocalModelAgent(assignableAgents);
+  const showAgentPicker =
+    status === "loaded" &&
+    Boolean(model.pi_model) &&
+    Boolean(onAssignAgent) &&
+    (unassigned.some((agent) => !agent.isAnotherMe) || unassigned.length > 1);
+  const primaryBusy =
+    status === "loaded" &&
+    Boolean(model.pi_model) &&
+    Boolean(onAssignAgent) &&
+    primaryAgent !== undefined &&
+    !isAgentUsingModel(entry, primaryAgent, computerId) &&
+    primaryAgent.busy;
   return (
     <div>
       {model.error || status === "unavailable" ? (
@@ -180,10 +244,47 @@ export function ModelFacts({
         {model.license ? <Fact label="License">{model.license}</Fact> : null}
         {onComputer ? (
           <Fact
-            className={entry.used_by.length > 1 ? "@xl:col-span-2" : undefined}
+            className={
+              usedNames.length > 1 || showAgentPicker || primaryBusy
+                ? "@xl:col-span-2"
+                : undefined
+            }
             label="Used by"
           >
-            {entry.used_by.length ? agentNames(entry) : "No Agent yet"}
+            <span className="flex flex-wrap items-center gap-2">
+              <span>
+                {usedNames.length ? usedNames.join(", ") : "No Agent yet"}
+              </span>
+              {showAgentPicker && onAssignAgent ? (
+                <Select
+                  aria-label={`Switch an Agent to ${model.name}`}
+                  disabled={disabled || Boolean(assigningAgentId)}
+                  onValueChange={(actorId) => {
+                    const target = unassigned.find(
+                      (agent) => agent.actorId === actorId,
+                    );
+                    if (target) onAssignAgent(target);
+                  }}
+                  placeholder="Switch Agent…"
+                  value=""
+                  variant="pill"
+                >
+                  {unassigned.map((agent) => (
+                    <SelectItem
+                      disabled={agent.busy}
+                      key={agent.actorId}
+                      value={agent.actorId}
+                    >
+                      {agent.busy ? `${agent.name} · Working` : agent.name}
+                    </SelectItem>
+                  ))}
+                </Select>
+              ) : primaryBusy ? (
+                <span className="text-xs text-muted-foreground">
+                  Finish the current turn to switch
+                </span>
+              ) : null}
+            </span>
           </Fact>
         ) : null}
         {sourceUrl ? (
@@ -197,6 +298,11 @@ export function ModelFacts({
               <span className="truncate">{modelSourceLabel(sourceUrl)}</span>
               <Icon className="shrink-0" icon={LinkSquare02Icon} size={14} />
             </a>
+          </Fact>
+        ) : null}
+        {status === "loaded" && model.endpoint ? (
+          <Fact className="@xl:col-span-2" label="Gateway">
+            {gatewayFactValue(entry, view, computer)}
           </Fact>
         ) : null}
         {model.endpoint ? (

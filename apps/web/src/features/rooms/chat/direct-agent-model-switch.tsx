@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { lazy, Suspense, useState } from "react";
 import { teamHubData } from "@/features/teamhub/teamhub-api";
 import { type TeamHubClient } from "@/features/teamhub/teamhub-client";
@@ -11,6 +11,7 @@ const EditAgentRuntimeDialog = lazy(async () => ({
   default: (await import("../members/edit-agent-runtime-dialog"))
     .EditAgentRuntimeDialog,
 }));
+import { useResolvedAgentModelLabel } from "../members/use-agent-model-selection";
 import { tenantAgentsQueryKey } from "../room-queries";
 import "./direct-agent-model-switch.css";
 
@@ -42,18 +43,10 @@ export function DirectAgentModelSwitch(props: Props) {
 function RuntimeSettingsEntry({ client, registration, tenantId, busy }: Props) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const computers = useQuery({
-    queryFn: () => client.listTenantLocalComputers(tenantId),
-    queryKey: ["teamhub", "local-computers", tenantId],
-    retry: false,
-  });
-  const placement = registration.runtime.placement;
-  const models = computers.data?.items
-    .find((item) => item.computer_id === placement?.computer_id)
-    ?.runtimes.find((item) => item.type === placement?.runtime_type)?.models;
-  const model = models?.find((item) => item.id === registration.runtime.model);
   const effort = registration.runtime.reasoning_effort;
-  const label = model?.label ?? registration.runtime.model;
+  const label =
+    useResolvedAgentModelLabel(client, tenantId, registration.runtime) ??
+    registration.runtime.model;
   const update = useMutation({
     mutationFn: (input: AgentRuntimeUpdateInput) =>
       teamHubData(
