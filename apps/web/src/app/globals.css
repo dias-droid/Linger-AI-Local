@@ -2757,14 +2757,9 @@ a[href][aria-disabled="true"],
   background: color-mix(in srgb, var(--app-info) 24%, transparent);
 }
 
-.message-composer-input[data-composing="true"] {
-  color: var(--app-ink);
-  -webkit-text-fill-color: var(--app-ink);
-}
-
-.message-composer-input[data-composing="true"]
-  + .message-composer-highlight-layer {
-  visibility: hidden;
+.message-composer-composition {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .message-composer-highlight-layer {
