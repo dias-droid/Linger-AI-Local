@@ -6,6 +6,7 @@ import {
   existsSync,
   linkSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   realpathSync,
@@ -13,6 +14,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { zstdCompressSync } from "node:zlib";
@@ -381,8 +383,8 @@ const fixture = (
   config: Partial<DesktopConfig> = {},
   prepare: (home: string) => void = () => {},
   api = installerApi(),
+  root = tempDirectory(),
 ) => {
-  const root = tempDirectory();
   const home = path.join(root, "home");
   const installerDirectory = path.join(root, "installer");
   mkdirSync(installerDirectory);
@@ -2472,29 +2474,52 @@ describe("LocalServerModule after a restart", () => {
   });
 
   it("moves the keys of the unpacked source's .env into the instance's user.env once", async () => {
-    const f = fixture({}, enrolled, (home) => {
-      const source = path.join(home, "desktop", "source", "previous");
-      mkdirSync(source, { recursive: true });
-      writeFileSync(
-        path.join(source, ".env"),
-        "SONIOX_API_KEY=soniox\nTEAMHUB_SECRET_ENCRYPTION_KEY=other\n",
-      );
-      writeFileSync(
-        path.join(home, "desktop", "local-server.json"),
-        JSON.stringify({ home, repo: source, origin: "http://localhost:3000" }),
-      );
-    });
-    await f.host.start();
-    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
-    const source = path.join(f.home, "desktop", "source", "previous");
-    expect(existsSync(path.join(source, ".env"))).toBe(false);
-    const user = readFileSync(
-      path.join(f.home, "instances", LOCAL_INSTANCE, "user.env"),
-      "utf8",
+    // Windows refuses to store credentials under shared ancestors such as Temp.
+    const parent = realpathSync(homedir());
+    const root = isWindowsHost
+      ? mkdtempSync(path.join(parent, "desktop-acl-test-"))
+      : tempDirectory();
+    const f = fixture(
+      {},
+      enrolled,
+      (home) => {
+        const source = path.join(home, "desktop", "source", "previous");
+        mkdirSync(source, { recursive: true });
+        writeFileSync(
+          path.join(source, ".env"),
+          "SONIOX_API_KEY=soniox\nTEAMHUB_SECRET_ENCRYPTION_KEY=other\n",
+        );
+        writeFileSync(
+          path.join(home, "desktop", "local-server.json"),
+          JSON.stringify({
+            home,
+            repo: source,
+            origin: "http://localhost:3000",
+          }),
+        );
+      },
+      undefined,
+      root,
     );
-    expect(user).toContain("SONIOX_API_KEY='soniox'");
-    expect(user).not.toContain("TEAMHUB_SECRET_ENCRYPTION_KEY");
-    await f.host.stop("quit");
+    try {
+      await f.host.start();
+      await waitForInstaller(() => {
+        const status = f.module.status();
+        expect(status.phase, status.message).toBe("ready");
+      });
+      const source = path.join(f.home, "desktop", "source", "previous");
+      expect(existsSync(path.join(source, ".env"))).toBe(false);
+      const user = readFileSync(
+        path.join(f.home, "instances", LOCAL_INSTANCE, "user.env"),
+        "utf8",
+      );
+      expect(user).toContain("SONIOX_API_KEY='soniox'");
+      expect(user).not.toContain("TEAMHUB_SECRET_ENCRYPTION_KEY");
+    } finally {
+      await f.host.stop("quit");
+      if (isWindowsHost && path.dirname(realpathSync(root)) === parent)
+        rmSync(root, { recursive: true, force: true, maxRetries: 10 });
+    }
   });
 
   it("leaves a developer checkout's .env alone", async () => {
@@ -3432,19 +3457,28 @@ describe("LocalServerModule after a restart", () => {
     await f.host.stop("quit");
   });
 
-  it("leaves no staged record behind when the record cannot be moved into place", async () => {
-    const f = fixture(withCheckout, {}, checkout);
-    // A folder where the record goes: the rename fails.
-    mkdirSync(path.join(f.home, "desktop", "local-server.json", "x"), {
-      recursive: true,
-    });
-    await f.host.start();
-    await f.module.begin().catch(() => {});
-    expect(readdirSync(path.join(f.home, "desktop"))).toEqual(
-      expect.not.arrayContaining([expect.stringMatching(/\.tmp$/)]),
-    );
-    await f.host.stop("quit");
-  });
+  it(
+    "leaves no staged record behind when the record cannot be moved into place",
+    // A target directory returns EPERM on Windows, consuming the 30 s retry budget.
+    { timeout: isWindowsHost ? 45_000 : 5_000 },
+    async () => {
+      const f = fixture(withCheckout, {}, checkout);
+      mkdirSync(path.join(f.home, "desktop", "local-server.json", "x"), {
+        recursive: true,
+      });
+      await f.host.start();
+      try {
+        await expect(f.module.begin()).rejects.toMatchObject({
+          syscall: "rename",
+        });
+        expect(readdirSync(path.join(f.home, "desktop"))).toEqual(
+          expect.not.arrayContaining([expect.stringMatching(/\.tmp$/)]),
+        );
+      } finally {
+        await f.host.stop("quit");
+      }
+    },
+  );
 
   it("leaves the services alone when the window uses another server", async () => {
     const f = fixture({}, { serverUrl: "https://linger.example" }, record);
