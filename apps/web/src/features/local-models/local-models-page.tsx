@@ -50,6 +50,7 @@ import {
   actionErrorCopy,
   libraryUnavailableCopy,
   memoryGuidanceCopy,
+  modelSourceReadErrorCopy,
 } from "./local-models-copy";
 import {
   actOnLocalComputerModel,
@@ -289,7 +290,9 @@ function ComputerModels({
       }),
   });
   const canRecheck = Boolean(
-    view && view.viewer_is_owner && view.computer.status === "online",
+    view?.available &&
+    view.viewer_is_owner &&
+    view.computer.status === "online",
   );
   const guidance = view?.available ? memoryGuidance(view) : null;
   const subscriptionGuidanceCopy = guidance
@@ -350,6 +353,19 @@ function ComputerModels({
           onChange={setTab}
           value={shownTab}
         />
+      ) : null}
+      {source.isError &&
+      !switcher.failure &&
+      view?.computer.status !== "offline" ? (
+        <div className="mt-4">
+          <FormFeedback tone="danger">
+            {modelSourceReadErrorCopy(
+              source.error instanceof TeamHubError
+                ? source.error.code
+                : undefined,
+            )}
+          </FormFeedback>
+        </div>
       ) : null}
       {switcher.failure ? (
         <div className="mt-4">

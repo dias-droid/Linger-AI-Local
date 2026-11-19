@@ -131,8 +131,9 @@ Web → TeamHub → Agent Service → Computer → `localmodels source`:
    `listLocalComputerByokModels` under
    `/v1/tenants/{tenantId}/owners/{ownerActorId}/local-computers/{computerId}/model-source`.
 3. Agent Service sends `execute` with kind `model_source` (`status`, `test`,
-   `models` or `apply`), only to Computer 0.54.0 or later; an older one answers
-   `MODEL_SOURCE_UNSUPPORTED` without the command. The Daemon runs
+   `models` or `apply`), only to Computer 0.54.0 or later; an older Computer,
+   or one whose installed `localmodels` tool lacks the `source` command, answers
+   `MODEL_SOURCE_UNSUPPORTED`. The Daemon runs
    `localmodels source status|check|models|apply` and answers `executed`. A BYOK
    API key travels in the request and the envelope only, reaches `localmodels`
    on stdin, and is kept on the Computer in an owner-only file.

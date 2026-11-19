@@ -230,4 +230,34 @@ describe("Agent Management model-source routes", () => {
     });
     expect((await offlineApp.request(basePath)).status).toBe(503);
   });
+
+  it("maps MODEL_SOURCE_UNSUPPORTED from localmodels to HTTP 409", async () => {
+    const app = buildTestApp(async () => {
+      throw new LocalModelSourceError(
+        "MODEL_SOURCE_UNSUPPORTED",
+        "The localmodels tool on this Computer does not support model sources.",
+        false,
+      );
+    });
+
+    const getRes = await app.request(basePath);
+    expect(getRes.status).toBe(409);
+    expect(await getRes.json()).toEqual({
+      code: "MODEL_SOURCE_UNSUPPORTED",
+      message:
+        "The localmodels tool on this Computer does not support model sources.",
+    });
+
+    const postRes = await app.request(basePath, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ mode: "subscription", runtime: "claude" }),
+    });
+    expect(postRes.status).toBe(409);
+    expect(await postRes.json()).toEqual({
+      code: "MODEL_SOURCE_UNSUPPORTED",
+      message:
+        "The localmodels tool on this Computer does not support model sources.",
+    });
+  });
 });

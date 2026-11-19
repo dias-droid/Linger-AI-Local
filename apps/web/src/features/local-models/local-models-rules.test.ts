@@ -31,6 +31,7 @@ import {
   labView,
   localModel,
   macView,
+  memoryPool,
   modelView,
 } from "./local-models-test-support";
 
@@ -220,6 +221,60 @@ describe("local models rules", () => {
       gpu: true,
       kind: "blocked_load",
       otherBytes: gb(14),
+    });
+
+    const multiSpaceGpu = {
+      ...gpuPool(0, 96, [{ gb: 21, id: "loaded:Q4", name: "Loaded" }]),
+      used_bytes: gb(83),
+    };
+    const multiSpaceSystem = {
+      ...memoryPool("system", 400),
+      used_bytes: gb(340),
+    };
+    const gpuConstrainedWithBusyRam = labView({
+      models: [
+        modelView(
+          localModel({
+            id: "big-gpu:Q4",
+            memory_bytes: gb(40),
+            name: "Big GPU Model",
+            pool: "gpu:0",
+          }),
+        ),
+      ],
+      pools: [multiSpaceGpu, multiSpaceSystem],
+    });
+    expect(memoryGuidance(gpuConstrainedWithBusyRam)).toEqual({
+      freeBytes: gb(13),
+      gpu: true,
+      kind: "constrained_pool",
+      otherBytes: gb(62),
+      totalBytes: gb(96),
+    });
+
+    const cleanGpuBusyRam = labView({
+      models: [
+        modelView(
+          localModel({
+            fit: "system",
+            id: "ram-only:Q4",
+            memory_bytes: gb(80),
+            name: "System RAM Model",
+            pool: "system",
+          }),
+        ),
+      ],
+      pools: [
+        gpuPool(0, 96, [{ gb: 21, id: "loaded:Q4", name: "Loaded" }]),
+        multiSpaceSystem,
+      ],
+    });
+    expect(memoryGuidance(cleanGpuBusyRam)).toEqual({
+      freeBytes: gb(60),
+      gpu: false,
+      kind: "constrained_pool",
+      otherBytes: gb(340),
+      totalBytes: gb(400),
     });
   });
 

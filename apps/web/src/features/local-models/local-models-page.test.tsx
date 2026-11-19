@@ -1247,6 +1247,9 @@ describe("LocalModelsPage", () => {
       expect(
         screen.queryByRole("button", { name: "Details" }),
       ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Recheck memory" }),
+      ).not.toBeInTheDocument();
     },
   );
 
@@ -2706,5 +2709,20 @@ describe("Model source", () => {
     expect(
       screen.queryByRole("button", { name: "Recheck memory" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows a readable error while keeping the library when reading model source fails", async () => {
+    const fixture = setup();
+    fixture.runtime.server.on("GET", modelSourcePath, () =>
+      teamHubErrorResponse(502, "MODEL_SOURCE_FAILED"),
+    );
+
+    await renderPage(fixture);
+    await findModels();
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      "Couldn't read how Agents on this computer get their model. Try again.",
+    );
   });
 });

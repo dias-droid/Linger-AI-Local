@@ -528,6 +528,7 @@ const modelSourceRequestError = (error: unknown): Error => {
       return new LocalComputerHttpError(400, error.code, error.message);
     }
     if (
+      error.code === "MODEL_SOURCE_UNSUPPORTED" ||
       error.code === "RUNTIME_NOT_ENABLED" ||
       error.code === "TOOL_NOT_INSTALLED"
     ) {

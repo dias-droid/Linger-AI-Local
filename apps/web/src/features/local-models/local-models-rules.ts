@@ -148,18 +148,27 @@ export function poolReclaimableBytes(pool: LocalModelPool) {
   return poolFreeBytes(pool) + poolOtherBytes(pool);
 }
 
-/** What the header adds up: GPU memory when the Computer has GPUs, else its memory. */
-export function memorySummary(view: LocalModelsView) {
-  const gpus = view.pools.filter((pool) => pool.kind === "gpu");
-  const pools = gpus.length ? gpus : view.pools;
+function summarizePools(pools: readonly LocalModelPool[], gpu: boolean) {
   const totalBytes = pools.reduce((sum, pool) => sum + pool.total_bytes, 0);
   const usedBytes = pools.reduce((sum, pool) => sum + pool.used_bytes, 0);
+  const otherBytes = pools.reduce((sum, pool) => sum + poolOtherBytes(pool), 0);
   return {
     freeBytes: Math.max(0, totalBytes - usedBytes),
-    gpu: gpus.length > 0,
+    gpu,
+    otherBytes,
     totalBytes,
     usedBytes,
   };
+}
+
+/** What the header adds up: GPU memory when the Computer has GPUs, else its memory. */
+export function memorySummary(view: LocalModelsView) {
+  const gpus = view.pools.filter((pool) => pool.kind === "gpu");
+  const { freeBytes, gpu, totalBytes, usedBytes } = summarizePools(
+    gpus.length ? gpus : view.pools,
+    gpus.length > 0,
+  );
+  return { freeBytes, gpu, totalBytes, usedBytes };
 }
 
 export interface MemoryGuidance {
@@ -201,85 +210,101 @@ export function memoryReclaimable(
   ) {
     return false;
   }
+  const gpus = view.pools.filter((pool) => pool.kind === "gpu");
+  const pools = gpus.length ? gpus : view.pools;
   return (
-    view.pools.some((pool) => poolOtherBytes(pool) > 0) &&
+    pools.some((pool) => poolOtherBytes(pool) > 0) &&
     reason.need_bytes <= maxHardwareCapacity(view)
   );
 }
 
 /**
  * Whether external apps hold enough GPU or system memory that closing them
- * and rechecking could let a larger model download or load.
+ * and rechecking could let a larger model download or load. Pool metrics are
+ * scoped per physical memory space so system RAM is never added into GPU VRAM.
  */
 export function memoryGuidance(view: LocalModelsView): MemoryGuidance | null {
   if (!view.available || !view.pools.length) return null;
-  const summary = memorySummary(view);
-  const externalPools = view.pools
-    .map((pool) => ({ external: poolOtherBytes(pool), pool }))
-    .filter((item) => item.external > 0)
-    .sort((left, right) => right.external - left.external);
-  if (!externalPools.length) return null;
+  const gpus = view.pools.filter((pool) => pool.kind === "gpu");
+  const nonGpus = view.pools.filter((pool) => pool.kind !== "gpu");
+  const groups = [
+    ...(gpus.length ? [{ gpu: true, pools: gpus }] : []),
+    ...(nonGpus.length ? [{ gpu: false, pools: nonGpus }] : []),
+  ];
+  if (!groups.length) return null;
 
-  const top = externalPools[0]!;
-  const otherBytes = externalPools.reduce(
-    (sum, item) => sum + item.external,
-    0,
-  );
-  const blockedLoad = modelEntries(view).some((entry) => {
-    const { model, status } = entry;
-    if (status !== "idle" && status !== "failed") return false;
-    const pool = poolOf(view, model.pool);
-    const poolHasExternal = pool ? poolOtherBytes(pool) > 0 : false;
-    if (!poolHasExternal) return false;
-    return (
-      model.note?.code === "NO_ROOM_TO_LOAD" ||
-      model.error?.code === "LOAD_NO_ROOM" ||
-      model.error?.code === "OUT_OF_MEMORY" ||
-      loadCheck(view, model) !== null
-    );
-  });
-  if (blockedLoad) {
-    return {
-      freeBytes: summary.freeBytes,
-      gpu: top.pool.kind === "gpu" || summary.gpu,
-      kind: "blocked_load",
-      otherBytes,
-      totalBytes: summary.totalBytes,
-    };
+  const entries = modelEntries(view);
+
+  for (const group of groups) {
+    const stats = summarizePools(group.pools, group.gpu);
+    if (stats.otherBytes <= 0) continue;
+    const poolIds = new Set(group.pools.map((pool) => pool.id));
+    const blockedLoad = entries.some(({ model, status }) => {
+      if (status !== "idle" && status !== "failed") return false;
+      if (model.pool === undefined || !poolIds.has(model.pool)) return false;
+      const pool = poolOf(view, model.pool);
+      if (!pool || poolOtherBytes(pool) <= 0) return false;
+      return (
+        model.note?.code === "NO_ROOM_TO_LOAD" ||
+        model.error?.code === "LOAD_NO_ROOM" ||
+        model.error?.code === "OUT_OF_MEMORY" ||
+        loadCheck(view, model) !== null
+      );
+    });
+    if (blockedLoad) {
+      return {
+        freeBytes: stats.freeBytes,
+        gpu: group.gpu,
+        kind: "blocked_load",
+        otherBytes: stats.otherBytes,
+        totalBytes: stats.totalBytes,
+      };
+    }
   }
 
-  const blockedDownload = modelEntries(view).some(
-    (entry) =>
-      entry.status === "unavailable" && memoryReclaimable(view, entry.model),
-  );
-  if (blockedDownload) {
+  const primary = groups[0]!;
+  const primaryStats = summarizePools(primary.pools, primary.gpu);
+  if (
+    primaryStats.otherBytes > 0 &&
+    entries.some(
+      (entry) =>
+        entry.status === "unavailable" && memoryReclaimable(view, entry.model),
+    )
+  ) {
     return {
-      freeBytes: summary.freeBytes,
-      gpu: top.pool.kind === "gpu" || summary.gpu,
+      freeBytes: primaryStats.freeBytes,
+      gpu: primary.gpu,
       kind: "blocked_download",
-      otherBytes,
-      totalBytes: summary.totalBytes,
+      otherBytes: primaryStats.otherBytes,
+      totalBytes: primaryStats.totalBytes,
     };
   }
 
-  const constrainedAvailable = modelEntries(view).some((entry) => {
-    if (entry.status !== "available") return false;
-    const pool = poolOf(view, entry.model.pool);
-    return (
-      pool !== undefined &&
-      poolOtherBytes(pool) > 0 &&
-      entry.model.memory_bytes > poolFreeBytes(pool)
-    );
-  });
   const twoGigabytes = 2 * 1024 ** 3;
-  if (otherBytes >= twoGigabytes && constrainedAvailable) {
-    return {
-      freeBytes: summary.freeBytes,
-      gpu: top.pool.kind === "gpu" || summary.gpu,
-      kind: "constrained_pool",
-      otherBytes,
-      totalBytes: summary.totalBytes,
-    };
+  for (const group of groups) {
+    const stats = summarizePools(group.pools, group.gpu);
+    if (stats.otherBytes < twoGigabytes) continue;
+    const poolIds = new Set(group.pools.map((pool) => pool.id));
+    const constrainedAvailable = entries.some((entry) => {
+      if (entry.status !== "available") return false;
+      const modelPool = entry.model.pool;
+      if (modelPool === undefined || !poolIds.has(modelPool)) return false;
+      const pool = poolOf(view, modelPool);
+      return (
+        pool !== undefined &&
+        poolOtherBytes(pool) > 0 &&
+        entry.model.memory_bytes > poolFreeBytes(pool)
+      );
+    });
+    if (constrainedAvailable) {
+      return {
+        freeBytes: stats.freeBytes,
+        gpu: group.gpu,
+        kind: "constrained_pool",
+        otherBytes: stats.otherBytes,
+        totalBytes: stats.totalBytes,
+      };
+    }
   }
   return null;
 }

@@ -23,8 +23,9 @@ const (
 // Unavailable reason codes of a LocalModelsSnapshot, and the refusal codes
 // the Daemon adds to the tool's own.
 const (
-	CodeToolNotInstalled = "TOOL_NOT_INSTALLED"
-	CodeToolFailed       = "TOOL_FAILED"
+	CodeToolNotInstalled       = "TOOL_NOT_INSTALLED"
+	CodeToolFailed             = "TOOL_FAILED"
+	CodeModelSourceUnsupported = "MODEL_SOURCE_UNSUPPORTED"
 )
 
 // errorCodes is the tool's closed error set (LocalModelErrorCode).

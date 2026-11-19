@@ -264,3 +264,46 @@ func TestAgentRuntimeModelPrefersTargetThenCatalogDefault(t *testing.T) {
 		})
 	}
 }
+
+func TestModelSourceReportsUnsupportedWhenToolLacksSourceCommand(t *testing.T) {
+	ft := newFakeTool(t)
+	for _, verb := range []string{"status", "apply", "check", "models"} {
+		if err := os.WriteFile(filepath.Join(ft.state, "source-"+verb+".json"), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(ft.state, "source-"+verb+"-exit"), []byte("2"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ms := NewModelSource(ModelSourceOptions{Tool: &ft.tool})
+
+	assertUnsupported := func(name string, err error) {
+		t.Helper()
+		var sourceErr *ModelSourceError
+		if !errors.As(err, &sourceErr) {
+			t.Fatalf("%s: expected *ModelSourceError, got %v", name, err)
+		}
+		if sourceErr.Code != CodeModelSourceUnsupported || sourceErr.Retryable {
+			t.Fatalf("%s: got %+v, want non-retryable %s", name, sourceErr, CodeModelSourceUnsupported)
+		}
+	}
+
+	_, err := ms.Status(t.Context())
+	assertUnsupported("Status", err)
+
+	_, err = ms.Apply(t.Context(), ModelSourceApply{Mode: "subscription", Runtime: "claude"})
+	assertUnsupported("Apply", err)
+
+	_, err = ms.TestByok(t.Context(), "claude", wire.ByokConfigInput{
+		BaseURL: "https://api.example.com/v1",
+		APIKey:  "sk-unused",
+		ModelID: "gpt-5.4",
+	})
+	assertUnsupported("TestByok", err)
+
+	_, err = ms.ListByokModels(t.Context(), wire.ByokConfigInput{
+		BaseURL: "https://api.example.com/v1",
+		APIKey:  "sk-unused",
+	})
+	assertUnsupported("ListByokModels", err)
+}

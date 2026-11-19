@@ -235,6 +235,17 @@ export function modelSourceErrorCopy(code: string | undefined) {
     : "Something went wrong. Try again.";
 }
 
+/** Why reading a Computer's model source failed. */
+export function modelSourceReadErrorCopy(code: string | undefined) {
+  if (code === "MODEL_SOURCE_SERVICE_UNAVAILABLE") {
+    return modelSourceRefusals.MODEL_SOURCE_SERVICE_UNAVAILABLE;
+  }
+  if (code === "MODEL_SOURCE_UNCONFIRMED") {
+    return "The computer didn't answer in time. Try again.";
+  }
+  return "Couldn't read how Agents on this computer get their model. Try again.";
+}
+
 export const modelSourceModeLabels: Record<Schemas["ModelSourceMode"], string> =
   { byok: "BYOK", local: "Local model", subscription: "Subscription" };
 

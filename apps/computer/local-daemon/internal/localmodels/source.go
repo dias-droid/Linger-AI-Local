@@ -1,6 +1,7 @@
 package localmodels
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -335,6 +336,9 @@ func (m *ModelSource) Status(ctx context.Context) (wire.ModelSourceStatus, error
 		}
 	}
 	if exitCode != 0 {
+		if unsupported := unsupportedSourceCommand(exitCode, stdout); unsupported != nil {
+			return wire.ModelSourceStatus{}, unsupported
+		}
 		return wire.ModelSourceStatus{}, parseToolFailure(stdout, CodeToolFailed, "Could not read model source status on this Computer.")
 	}
 	return parseSourceStatus(stdout)
@@ -404,6 +408,9 @@ func (m *ModelSource) runEndpointCommand(ctx context.Context, input wire.ByokCon
 			Message:   "Timed out while reaching the BYOK endpoint.",
 			Retryable: true,
 		}
+	}
+	if unsupported := unsupportedSourceCommand(exitCode, stdout); unsupported != nil {
+		return unsupported
 	}
 	var outcome struct {
 		Schema  string `json:"schema"`
@@ -506,6 +513,9 @@ func (m *ModelSource) Apply(ctx context.Context, apply ModelSourceApply) (wire.M
 		}
 	}
 	if exitCode != 0 {
+		if unsupported := unsupportedSourceCommand(exitCode, stdout); unsupported != nil {
+			return wire.ModelSourceStatus{}, unsupported
+		}
 		return wire.ModelSourceStatus{}, parseToolFailure(stdout, CodeToolFailed, "Could not switch model source on this Computer.")
 	}
 	status, err := parseSourceStatus(stdout)
@@ -622,6 +632,20 @@ func parseSourceStatus(stdout []byte) (wire.ModelSourceStatus, error) {
 		status.GatewayURL = *doc.GatewayURL
 	}
 	return status, nil
+}
+
+// unsupportedSourceCommand detects a localmodels CLI without the source
+// subcommand, which exits with CLI usage status 2 and empty stdout whereas
+// structured source failures emit JSON on stdout.
+func unsupportedSourceCommand(exitCode int, stdout []byte) error {
+	if exitCode == 2 && len(bytes.TrimSpace(stdout)) == 0 {
+		return &ModelSourceError{
+			Code:      CodeModelSourceUnsupported,
+			Message:   "The localmodels tool on this Computer does not support model sources.",
+			Retryable: false,
+		}
+	}
+	return nil
 }
 
 func parseToolFailure(stdout []byte, fallbackCode, fallbackMessage string) error {

@@ -685,6 +685,19 @@ function createSettingsRoute(): RouteObject {
     );
   }
 
+  function openModels({
+    params,
+    request,
+  }: {
+    params: { tenantId?: string };
+    request: Request;
+  }): never {
+    const tenantId = requireRoomRouteParam(params.tenantId, "Tenant");
+    throw redirect(
+      `/t/${tenantId}/settings/models${new URL(request.url).search}`,
+    );
+  }
+
   return {
     children: [
       { index: true, loader: openProfile },
@@ -717,6 +730,7 @@ function createSettingsRoute(): RouteObject {
         }),
         path: "models",
       },
+      { loader: openModels, path: "local-models" },
       { loader: openProfile, path: "administration" },
     ],
     ErrorBoundary: PanelRouteErrorSurface,
@@ -768,7 +782,7 @@ function NotFoundRoute({ inShell = false }: { inShell?: boolean }) {
           void navigate(tenantId ? `/t/${tenantId}/rooms` : "/");
         }}
       >
-        Open Message
+        Open Messages
       </Button>
     </main>
   );
