@@ -68,9 +68,13 @@ Every update or recreate path stops node-services on its own, right before
 TeamHub restarts (natively: for a changed configuration) and while TeamHub is
 still up, so its graceful shutdown requeues in-flight Agent Runs.
 
+`inspectSetup` keeps tool downloads and state in `home`; `targetHome`, when
+provided, selects the installation paths to inspect independently of that cache.
+
 The home is `LINGER_HOME`, else `~/.simplexai` (`home.ts`). Installs from
 before the product was renamed Linger convert once in
-`legacy-migration.ts`, which the installer runs before it opens the home and
+`legacy-migration.ts`, which the installer runs before it opens the home (except
+inspection and stop modes) and
 the desktop runs through `installer.js --migrate`. Under each instance's lock
 it stops the instance's Computer and native services, renames `SIMPLEX_*`
 keys in the generated env files, and gives the instance its

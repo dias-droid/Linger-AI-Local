@@ -645,6 +645,7 @@ export class LocalServerModule implements Module {
   // goes back to the default.
   async chooseLocation(picked: string | null): Promise<void> {
     if (this.#running) return;
+    const previous = this.#location;
     if (picked === null) {
       this.#location = undefined;
       this.#locationError = undefined;
@@ -654,6 +655,8 @@ export class LocalServerModule implements Module {
       if (!this.#locationError)
         this.#location = home === this.#home ? undefined : home;
     }
+    if (previous !== this.#location && this.#check.state !== "unchecked")
+      this.recheck();
     this.#ctx?.bus.emit("local-server.changed");
   }
 
@@ -664,7 +667,8 @@ export class LocalServerModule implements Module {
   inspect(): void {
     if (
       this.#check.state !== "unchecked" ||
-      this.#phase !== "idle" ||
+      this.#running ||
+      (this.#phase !== "idle" && this.#phase !== "failed") ||
       !this.status().available
     )
       return;
@@ -674,7 +678,8 @@ export class LocalServerModule implements Module {
     const started = Date.now();
     const signal = this.#abort.signal;
     if (!signal.aborted) void this.#ensureNode(signal).catch(() => undefined);
-    void this.#inspect(signal, (download) => {
+    const home = this.#location ?? this.#home;
+    void this.#inspect(home, signal, (download) => {
       if (this.#check.state !== "checking") return;
       this.#check = { state: "checking", download };
       this.#ctx?.bus.emit("local-server.changed");
@@ -692,19 +697,26 @@ export class LocalServerModule implements Module {
               : {}),
             ...(reasonLog.length ? { reasons: reasonLog } : {}),
           });
-          this.#check = check;
-          this.#checkedAt = Date.now();
+          return check;
         },
         (error: unknown) => {
           this.#ctx?.log.warn("local_server.inspect_failed", {
             ms: Date.now() - started,
             error: error instanceof Error ? error.message : String(error),
           });
-          this.#check = { state: "unavailable" };
-          this.#checkedAt = undefined;
+          return { state: "unavailable" } as const;
         },
       )
-      .then(() => {
+      .then((check) => {
+        if (signal.aborted) return;
+        if (home !== (this.#location ?? this.#home)) {
+          this.#check = { state: "unchecked" };
+          this.inspect();
+          return;
+        }
+        this.#check = check;
+        this.#checkedAt =
+          check.state === "unavailable" ? undefined : Date.now();
         this.#ctx?.bus.emit("local-server.changed");
       });
   }
@@ -712,7 +724,12 @@ export class LocalServerModule implements Module {
   // Checks again, for example after the person closed other programs to free
   // the memory the local model needs.
   recheck(): void {
-    if (this.#check.state === "checking" || this.#phase !== "idle") return;
+    if (
+      this.#check.state === "checking" ||
+      this.#running ||
+      (this.#phase !== "idle" && this.#phase !== "failed")
+    )
+      return;
     this.#check = { state: "unchecked" };
     this.inspect();
   }
@@ -790,6 +807,7 @@ export class LocalServerModule implements Module {
   }
 
   async #inspect(
+    targetHome: string,
     signal: AbortSignal,
     onDownload: (download: Transfer) => void,
   ): Promise<{
@@ -802,14 +820,21 @@ export class LocalServerModule implements Module {
     const output = await new Promise<string>((resolve, reject) => {
       const child = spawn(
         process.execPath,
-        [this.#installerScript(), "--home", this.#home, "--inspect"],
+        [
+          this.#installerScript(),
+          "--home",
+          this.#options.home,
+          "--inspect",
+          "--inspect-target",
+          targetHome,
+        ],
         {
           stdio: ["ignore", "pipe", "pipe"],
           windowsHide: true,
           env: {
             ...process.env,
             ELECTRON_RUN_AS_NODE: "1",
-            LINGER_HOME: this.#home,
+            LINGER_HOME: this.#options.home,
           },
           signal,
         },

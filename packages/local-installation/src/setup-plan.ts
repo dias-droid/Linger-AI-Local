@@ -107,6 +107,7 @@ export interface SetupReport {
 export interface SetupOptions {
   shareGpu?: boolean;
   home?: string;
+  targetHome?: string;
   userHome?: string;
   signal?: AbortSignal;
   localmodels?: typeof runLocalmodels;
@@ -175,15 +176,16 @@ export async function inspectSetup(
   const home = path.resolve(
     options.home ?? path.join(options.userHome ?? homedir(), ".simplexai"),
   );
+  const targetHome = path.resolve(options.targetHome ?? home);
   let failure: string | undefined;
   try {
     const args = [
       "setup",
       "inspect",
       "--root",
-      path.join(home, "runtime", "harness"),
+      path.join(targetHome, "runtime", "harness"),
       "--model-base-dir",
-      path.join(home, "runtime", "localmodels", "models"),
+      path.join(targetHome, "runtime", "localmodels", "models"),
       "--decision",
       "none",
       "--offline",

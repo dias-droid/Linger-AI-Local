@@ -16,6 +16,7 @@ export function parseInstallerArguments(args: string[]) {
     noOpen?: boolean;
     resume?: boolean;
     inspect?: boolean;
+    inspectTarget?: string;
     checkByok?: boolean;
     userKeys?: boolean;
     migrate?: boolean;
@@ -63,13 +64,21 @@ export function parseInstallerArguments(args: string[]) {
       continue;
     }
     if (
-      !["--home", "--port", "--source-repo", "--instance"].includes(flag ?? "")
+      ![
+        "--home",
+        "--port",
+        "--source-repo",
+        "--instance",
+        "--inspect-target",
+      ].includes(flag ?? "")
     )
       throw new Error("Invalid installer option.");
     const value = args[++i];
     if (!value || value.startsWith("--"))
       throw new Error("Installer option is missing a value.");
     if (flag === "--home") options.home = path.resolve(value);
+    else if (flag === "--inspect-target")
+      options.inspectTarget = path.resolve(value);
     else if (flag === "--source-repo") options.sourceRepo = path.resolve(value);
     else if (flag === "--instance") {
       if (!/^[a-z][a-z0-9-]{0,39}$/.test(value))
@@ -92,6 +101,8 @@ export function parseInstallerArguments(args: string[]) {
     !options.stopLocalModels
   )
     throw new Error("The installer needs a source checkout (--source-repo).");
+  if (options.inspectTarget && !options.inspect)
+    throw new Error("An inspection target requires --inspect.");
   if (options.resume && !options.instanceName)
     throw new Error("Resume needs a source checkout and an instance.");
   if (options.userKeys && !options.instanceName)
@@ -172,6 +183,7 @@ async function inspect(options: ReturnType<typeof parseInstallerArguments>) {
   // The desktop logs stderr, so a slow check says which part was slow.
   const report = await inspectSetup({
     home: options.home,
+    targetHome: options.inspectTarget,
     signal: AbortSignal.timeout(10 * 60_000),
     onEvent: (event) => {
       if (event.kind === "log")
@@ -385,13 +397,13 @@ if (
   }
   // Installs from before the rename move to the Linger home once, before
   // any mode opens it; --migrate does only that, for the desktop client.
-  // Stopping for an uninstall or a quit changes nothing.
+  // Inspecting or stopping for an uninstall or a quit never migrates it.
   // Only --migrate reports the instances it skipped, as warnings and as one
   // JSON line on stdout: the desktop runs it first, and in the other modes a
   // warning on stderr would read as the reason a start failed. A skipped
   // instance is refused with its own error when a mode opens it.
   let skipped: LegacyInstanceSkipped[] = [];
-  if (options && !options.stop && !options.stopLocalModels)
+  if (options && !options.inspect && !options.stop && !options.stopLocalModels)
     await import("@linger/local-installation/legacy-migration")
       .then(async ({ migrateLegacyInstallation }) => {
         skipped = await migrateLegacyInstallation({ home: options!.home });

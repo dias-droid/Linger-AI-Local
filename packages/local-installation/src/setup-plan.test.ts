@@ -352,3 +352,20 @@ it("inspects with GPU sharing unless sharing was explicitly declined", async () 
   await inspectSetup({ localmodels });
   expect(localmodels.mock.calls[2]?.[1]).toContain("--share-gpu");
 });
+
+it("checks the installation target while keeping tool state in the existing home", async () => {
+  const home = path.resolve("cached-home");
+  const targetHome = path.resolve("candidate");
+  const localmodels = runner();
+  await inspectSetup({ home, targetHome, localmodels });
+  expect(localmodels).toHaveBeenCalledWith(
+    home,
+    expect.arrayContaining([
+      "--root",
+      path.join(targetHome, "runtime", "harness"),
+      "--model-base-dir",
+      path.join(targetHome, "runtime", "localmodels", "models"),
+    ]),
+    expect.anything(),
+  );
+});

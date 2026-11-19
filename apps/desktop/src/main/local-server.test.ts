@@ -117,13 +117,14 @@ if (args.includes("--migrate")) {
   process.stdout.write(JSON.stringify({ skipped }) + "\n");
   process.exit(0);
 }
-fs.mkdirSync(path.join(home, "installer"), { recursive: true });
-fs.writeFileSync(path.join(home, "installer", "args.json"), JSON.stringify(args));
 if (args.includes("--inspect")) {
+  const target = args.includes("--inspect-target") ? args[args.indexOf("--inspect-target") + 1] : home;
+  fs.mkdirSync(path.join(home, "runtime", "localmodels", "state"), { recursive: true });
+  fs.writeFileSync(path.join(home, "runtime", "inspect-args.json"), JSON.stringify(args));
   const hardware = { totalMemoryBytes: 64 * 1024 ** 3, diskFreeBytes: 200 * 1024 ** 3, gpus: [{ name: "RTX 4090" }] };
-  const eligible = !fs.existsSync(path.join(home, "small-computer"));
+  const eligible = !fs.existsSync(path.join(target, "small-computer"));
   const estimate = eligible
-    ? { model: fs.existsSync(path.join(home, "unnamed-model")) ? "" : "qwen3-8b", downloadBytes: 6 * 1024 ** 3, diskBytes: 8 * 1024 ** 3, memoryBytes: 12 * 1024 ** 3 }
+    ? { model: fs.existsSync(path.join(target, "unnamed-model")) ? "" : "qwen3-8b", downloadBytes: 6 * 1024 ** 3, diskBytes: 8 * 1024 ** 3, memoryBytes: 12 * 1024 ** 3 }
     : { model: "", downloadBytes: null, diskBytes: null, memoryBytes: null };
   if (fs.existsSync(path.join(home, "tool-download"))) {
     // The first check downloads the localmodels tool, counted before the report.
@@ -131,14 +132,14 @@ if (args.includes("--inspect")) {
     while (!fs.existsSync(path.join(home, "tool-ready")))
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
   }
-  if (fs.existsSync(path.join(home, "check-fails"))) {
+  if (fs.existsSync(path.join(target, "check-fails"))) {
     // A failed check names its cause on stderr and prints null.
     process.stderr.write("The check failed: Unsupported or changed Codex provider configuration\n");
     process.stdout.write("null\n");
     process.exit(1);
   }
   process.stderr.write("Checked this computer in 1.5s.\n");
-  const lowMemory = eligible && fs.existsSync(path.join(home, "low-memory"));
+  const lowMemory = eligible && fs.existsSync(path.join(target, "low-memory"));
   const reasons = eligible
     ? lowMemory
       ? [{ code: "free-memory-required", message: "Close other programs before installing.", freeBytes: 2899102924, requiredBytes: 13689304433 }]
@@ -154,6 +155,8 @@ if (args.includes("--inspect")) {
   process.stdout.write(JSON.stringify({ hardware, localModels: { ...local, reasons, estimate }, recommendation }) + "\n");
   process.exit(0);
 }
+fs.mkdirSync(path.join(home, "installer"), { recursive: true });
+fs.writeFileSync(path.join(home, "installer", "args.json"), JSON.stringify(args));
 if (args.includes("--resume")) {
   const code = fs.existsSync(path.join(home, "resume-fails")) ? 1 : 0;
   const runtimeFile = path.join(home, "resume-runtime.json");
@@ -499,6 +502,11 @@ const fixture = (
 const installerArgs = (home: string) =>
   JSON.parse(
     readFileSync(path.join(home, "installer", "args.json"), "utf8"),
+  ) as string[];
+
+const inspectArgs = (home: string) =>
+  JSON.parse(
+    readFileSync(path.join(home, "runtime", "inspect-args.json"), "utf8"),
   ) as string[];
 
 // A developer's linger checkout (LINGER_CHECKOUT) in the home folder.
@@ -1588,7 +1596,13 @@ describe("LocalServerModule", () => {
         recommendation: "local-models",
       }),
     );
-    expect(installerArgs(f.home)).toEqual(["--home", f.home, "--inspect"]);
+    expect(inspectArgs(f.home)).toEqual([
+      "--home",
+      f.home,
+      "--inspect",
+      "--inspect-target",
+      f.home,
+    ]);
     // How long the check took, as the installer reported it.
     expect(info).toHaveBeenCalledWith("local_server.inspect_log", {
       line: "Checked this computer in 1.5s.",
@@ -2281,6 +2295,158 @@ describe("LocalServerModule", () => {
 });
 
 describe("LocalServerModule install location", () => {
+  it.each(["empty", "missing", "nonempty"])(
+    "leaves the %s candidate untouched when selecting, resetting and selecting it again",
+    async (kind) => {
+      const f = fixture({ checkout: "/src" });
+      const picked = path.join(f.root, "data");
+      if (kind !== "missing") mkdirSync(picked);
+      if (kind === "nonempty")
+        writeFileSync(path.join(picked, "notes.txt"), "keep");
+      const target = kind === "nonempty" ? path.join(picked, "Linger") : picked;
+      await f.host.start();
+      try {
+        f.module.inspect();
+        await vi.waitFor(() =>
+          expect(f.module.status().localModels.state).toBe("checked"),
+        );
+        for (let attempt = 0; attempt < 2; attempt++) {
+          await f.module.chooseLocation(picked);
+          await vi.waitFor(() =>
+            expect(f.module.status().localModels.state).toBe("checked"),
+          );
+          expect(f.module.status().location.path).toBe(target);
+          expect(
+            kind === "missing" ? existsSync(picked) : readdirSync(picked),
+          ).toEqual(
+            kind === "missing" ? false : kind === "empty" ? [] : ["notes.txt"],
+          );
+          if (kind === "nonempty") expect(existsSync(target)).toBe(false);
+          await f.module.chooseLocation(null);
+          await vi.waitFor(() =>
+            expect(f.module.status().localModels.state).toBe("checked"),
+          );
+        }
+      } finally {
+        await f.host.stop("quit");
+      }
+    },
+  );
+
+  it("rechecks a new location and allows manual checks after installation fails", async () => {
+    const f = fixture(
+      withCheckout,
+      {},
+      checkout,
+      installerApi([], { state: "failed", message: "Disk full" }),
+    );
+    const picked = path.join(f.root, "models");
+    await f.host.start();
+    try {
+      f.module.inspect();
+      await vi.waitFor(() =>
+        expect(f.module.status().localModels).toMatchObject({
+          state: "checked",
+          eligible: true,
+        }),
+      );
+      await expect(f.module.begin()).rejects.toThrow("Disk full");
+      expect(f.module.status().phase).toBe("failed");
+      mkdirSync(path.join(picked, "instances"), { recursive: true });
+      writeFileSync(path.join(picked, "small-computer"), "");
+      await f.module.chooseLocation(picked);
+      await vi.waitFor(() =>
+        expect(f.module.status().localModels).toMatchObject({
+          state: "checked",
+          eligible: false,
+        }),
+      );
+      expect(inspectArgs(f.home)).toContain(picked);
+      rmSync(path.join(picked, "small-computer"));
+      f.module.recheck();
+      await vi.waitFor(() =>
+        expect(f.module.status().localModels).toMatchObject({
+          state: "checked",
+          eligible: true,
+        }),
+      );
+    } finally {
+      await f.host.stop("quit");
+    }
+  });
+
+  it("checks the folder selected before the first model check", async () => {
+    const f = fixture({ checkout: "/src" });
+    const picked = path.join(f.root, "models");
+    await f.host.start();
+    try {
+      await f.module.chooseLocation(picked);
+      f.module.inspect();
+      await vi.waitFor(() =>
+        expect(f.module.status().localModels.state).toBe("checked"),
+      );
+      expect(inspectArgs(f.home)).toEqual([
+        "--home",
+        f.home,
+        "--inspect",
+        "--inspect-target",
+        picked,
+      ]);
+      expect(existsSync(picked)).toBe(false);
+      expect(existsSync(path.join(f.home, "installer", "args.json"))).toBe(
+        false,
+      );
+    } finally {
+      await f.host.stop("quit");
+    }
+  });
+
+  it.each([false, true])(
+    "rechecks the selected folder when an earlier check finishes (failed: %s)",
+    async (failed) => {
+      const f = fixture({ checkout: "/src" });
+      const picked = path.join(f.root, "models");
+      writeFileSync(path.join(f.home, "tool-download"), "");
+      if (failed) writeFileSync(path.join(f.home, "check-fails"), "");
+      await f.host.start();
+      try {
+        f.module.inspect();
+        await vi.waitFor(() =>
+          expect(inspectArgs(f.home)).toContain("--inspect"),
+        );
+        await f.module.chooseLocation(picked);
+        writeFileSync(path.join(f.home, "tool-ready"), "");
+        await vi.waitFor(() =>
+          expect(inspectArgs(f.home)).toEqual([
+            "--home",
+            f.home,
+            "--inspect",
+            "--inspect-target",
+            picked,
+          ]),
+        );
+        await vi.waitFor(() =>
+          expect(f.module.status().localModels).toMatchObject({
+            state: "checked",
+            eligible: true,
+          }),
+        );
+        rmSync(path.join(f.home, "check-fails"), { force: true });
+        writeFileSync(path.join(f.home, "small-computer"), "");
+        await f.module.chooseLocation(null);
+        await vi.waitFor(() =>
+          expect(f.module.status().localModels).toMatchObject({
+            state: "checked",
+            eligible: false,
+          }),
+        );
+      } finally {
+        writeFileSync(path.join(f.home, "tool-ready"), "");
+        await f.host.stop("quit");
+      }
+    },
+  );
+
   it("installs into the folder picked on the setup page", async () => {
     const archive = sourceArchive(tempDirectory());
     const file = path.join(tempDirectory(), "linger.tar.gz");

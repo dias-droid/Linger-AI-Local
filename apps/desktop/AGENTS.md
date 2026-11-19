@@ -144,8 +144,11 @@ Gateway and runs Agents. The daemon exits with the app.
   [Packaging Details](../../docs/desktop-release.md#packaging-details) for
   where the minimum comes from.
   Quick Install installs the `recommendation` of the localmodels setup
-  report (`installer.js --inspect`, run once as the setup window opens):
-  `local-models` is the planned model served by Pi, shown with the model,
+  report (`installer.js --inspect`, run for the selected install location
+  as the setup window opens and again when that location changes, including
+  after a failed install). Checks keep their tool cache in the default home,
+  leave alternative locations untouched, and never migrate installations.
+  In the report, `local-models` is the planned model served by Pi, shown with the model,
   GPU, memory and download (the card's memory is the whole stack's, so
   "with its services"); otherwise the named runtime, with why there is no
   local model. The page words each reason by its code and the counts it

@@ -100,6 +100,10 @@ still be running. The full `--stop` command reports the same failure. Windows
 uninstall aborts on that failure; replacement setup reports it and proceeds.
 A missing pinned kit has nothing to stop.
 
+`--inspect` checks without migrating installations. Its optional
+`--inspect-target` selects the home whose disk and runtimes are checked;
+`--home` still owns the inspection tool cache and state.
+
 Every other mode first converts an install from before the rename to Linger
 (`migrateLegacyInstallation`); `--migrate` does only that and exits, for the
 desktop client. An instance it could not convert never stops the
