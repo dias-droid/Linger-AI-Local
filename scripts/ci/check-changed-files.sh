@@ -8,12 +8,25 @@ set -euo pipefail
 # Usage: check-changed-files.sh <base> <head>   diff two commits (the gate)
 #        check-changed-files.sh <base> --worktree
 #          diff the working tree, plus untracked files (local make check)
+#        check-changed-files.sh <base> <head> <app-linted-paths>
+#          also skip ESLint under the prefixes listed one per line in the
+#          file; prettier and the English-only check still cover them
 
-if (($# != 2)); then
-  echo "Usage: $0 <base> (<head> | --worktree)" >&2
+if (($# != 2 && $# != 3)); then
+  echo "Usage: $0 <base> (<head> [<app-linted-paths>] | --worktree)" >&2
   exit 2
 fi
 base=$1
+app_linted=()
+if (($# == 3)); then
+  [[ "$2" != --worktree ]] || {
+    echo "Usage: $0 <base> (<head> [<app-linted-paths>] | --worktree)" >&2
+    exit 2
+  }
+  while IFS= read -r prefix; do
+    if [[ -n "$prefix" ]]; then app_linted+=("$prefix"); fi
+  done <"$3"
+fi
 if [[ "$2" == --worktree ]]; then
   list_changed() {
     git -c core.quotePath=false diff -z --name-only --no-renames --diff-filter=ACMRT "$base"
@@ -38,7 +51,16 @@ while IFS= read -r -d '' file; do
       ;;
   esac
   case "$file" in
-    *.cjs | *.cts | *.js | *.jsx | *.mjs | *.mts | *.ts | *.tsx) eslint_files+=("$file") ;;
+    *.cjs | *.cts | *.js | *.jsx | *.mjs | *.mts | *.ts | *.tsx)
+      app_lints=false
+      for prefix in ${app_linted[@]+"${app_linted[@]}"}; do
+        if [[ "$file" == "$prefix"* ]]; then
+          app_lints=true
+          break
+        fi
+      done
+      if [[ "$app_lints" == false ]]; then eslint_files+=("$file"); fi
+      ;;
   esac
   changed_files+=("$file")
 done < <(list_changed)

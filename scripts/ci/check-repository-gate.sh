@@ -37,7 +37,10 @@ fi
 pnpm env:inventory:check
 
 # Format, lint and check the English-only rule on the files this branch adds
-# or changes.
-bash "$script_root/check-changed-files.sh" "$base" "$head_sha"
+# or changes. ESLint skips the prefixes in app-linted-paths.txt: CI selects
+# the owning app's check whenever a path under a prefix changes, and that
+# check lints the whole prefix with --max-warnings=0.
+bash "$script_root/check-changed-files.sh" "$base" "$head_sha" \
+  "$script_root/app-linted-paths.txt"
 
 make check-scripts-fast check-docs
