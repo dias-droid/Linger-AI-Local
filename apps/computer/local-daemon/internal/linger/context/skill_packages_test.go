@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 const demoSkillDigest = "b46c269b8ee9240b2626d113988e1a5e431a5f928997f30f38a0737b974944a7"
@@ -149,5 +150,41 @@ func TestEnsureReportsAnUnavailableSkillPackage(t *testing.T) {
 		[]Skill{{PackageName: "demo", ManifestID: "manifest_revoked", PackageSHA256: demoSkillDigest}})
 	if _, err := store.Ensure(t.Context(), testRequest("context-1", digest), source); !errors.Is(err, ErrSkillPackageUnavailable) {
 		t.Fatalf("unavailable package error=%v", err)
+	}
+}
+
+func TestEnsureFetchesTheSkillPackagesOfAViewTogether(t *testing.T) {
+	content := newTestContent(t)
+	store := openTestStore(t)
+	archives := map[string][]byte{}
+	var skills []Skill
+	for _, name := range []string{"first", "second"} {
+		archive := skillArchive(t, []zipEntry{{name: "SKILL.md", body: "---\nname: " + name + "\n---\n"}})
+		files, err := extractSkillPackage(archive, filepath.Join(t.TempDir(), "files"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		archives["manifest_"+name] = archive
+		skills = append(skills, Skill{PackageName: name, ManifestID: "manifest_" + name, PackageSHA256: skillPackageDigest(files)})
+	}
+	// Each fetch answers only once the other has started, so fetches made one
+	// after another never finish.
+	started := make(chan struct{}, len(skills))
+	source := ContentSource{ContentURL: content.url(), FetchSkillPackage: func(ctx context.Context, manifestID string) (io.ReadCloser, error) {
+		started <- struct{}{}
+		for len(started) < len(skills) {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(5 * time.Millisecond):
+			}
+		}
+		return io.NopCloser(bytes.NewReader(archives[manifestID])), nil
+	}}
+	digest := content.publish(t, "context-1", "runtime-1", nil, nil, skills)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	if _, err := store.Ensure(ctx, testRequest("context-1", digest), source); err != nil {
+		t.Fatalf("packages fetched one at a time: %v", err)
 	}
 }
