@@ -12,6 +12,7 @@ import {
   makeRoomSelection,
   makesRoom,
   memoryGuidance,
+  memoryReclaimable,
   memorySummary,
   modelCapabilities,
   modelEntries,
@@ -20,7 +21,6 @@ import {
   placeName,
   poolLabel,
   poolOtherBytes,
-  poolRoomCheck,
   safeModelSourceUrl,
   speedLabel,
   usedByBadge,
@@ -108,51 +108,114 @@ describe("local models rules", () => {
       used_bytes: gb(18),
     };
     expect(poolOtherBytes(busyGpu)).toBe(gb(14));
-    expect(poolRoomCheck(labView(), busyGpu, gb(8))?.freeBytes).toBe(gb(6));
-
-    // A game holds 14 GB on a 24 GB card, so a 14 GB model is marked MEMORY_INSUFFICIENT.
-    const blockedDownload = labView({
+    const eightGbAvailableView = labView({
       models: [
         modelView(
           localModel({
-            availability: {
-              downloadable: false,
-              reason: {
-                code: "MEMORY_INSUFFICIENT",
-                have_bytes: gb(6),
-                need_bytes: gb(14),
-              },
-            },
-            fit: "none",
-            id: "qwen3.8-27b:IQ3_S",
-            name: "Qwen3.8 27B",
-            pool: undefined,
+            id: "small:Q4",
+            memory_bytes: gb(5),
+            name: "Small",
+            pool: "gpu:0",
           }),
         ),
       ],
       pools: [busyGpu],
     });
+    expect(memoryGuidance(eightGbAvailableView)).toBeNull();
+
+    const constrainedGpuView = labView({
+      models: [
+        modelView(
+          localModel({
+            id: "medium:Q4",
+            memory_bytes: gb(12),
+            name: "Medium",
+            pool: "gpu:0",
+          }),
+        ),
+      ],
+      pools: [busyGpu],
+    });
+    expect(memoryGuidance(constrainedGpuView)).toMatchObject({
+      gpu: true,
+      kind: "constrained_pool",
+      otherBytes: gb(14),
+    });
+
+    // A game holds 14 GB on a 24 GB card, so a 14 GB model is marked MEMORY_INSUFFICIENT.
+    const blockedDownloadModel = localModel({
+      availability: {
+        downloadable: false,
+        reason: {
+          code: "MEMORY_INSUFFICIENT",
+          have_bytes: gb(6),
+          need_bytes: gb(14),
+        },
+      },
+      fit: "none",
+      id: "qwen3.8-27b:IQ3_S",
+      name: "Qwen3.8 27B",
+      pool: undefined,
+    });
+    const blockedDownload = labView({
+      models: [modelView(blockedDownloadModel)],
+      pools: [busyGpu],
+    });
+    expect(memoryReclaimable(blockedDownload, blockedDownloadModel)).toBe(true);
     expect(memoryGuidance(blockedDownload)).toMatchObject({
       gpu: true,
       kind: "blocked_download",
       otherBytes: gb(14),
     });
 
+    // On an 8 GB GPU + 64 GB RAM host, a 40 GB GPU-pool miss cannot fit by closing browser GPU tabs.
+    const smallGpuBusy = labView({
+      computer: {
+        ...labView().computer,
+        host: {
+          ...labView().computer.host!,
+          gpus: [
+            {
+              free_bytes: gb(4),
+              index: 0,
+              name: "RTX 4060",
+              total_bytes: gb(8),
+            },
+          ],
+          ram_total_bytes: gb(64),
+        },
+      },
+      pools: [{ ...gpuPool(0, 8), used_bytes: gb(4) }],
+    });
+    const fortyGbModel = localModel({
+      availability: {
+        downloadable: false,
+        reason: {
+          code: "MEMORY_INSUFFICIENT",
+          have_bytes: gb(4),
+          need_bytes: gb(40),
+        },
+      },
+      fit: "none",
+      id: "huge:Q4",
+      name: "Huge 40B",
+      pool: undefined,
+    });
+    expect(memoryReclaimable(smallGpuBusy, fortyGbModel)).toBe(false);
+
+    const blockedLoadModel = localModel({
+      id: "gemma3-12b:Q4_K_M",
+      memory_bytes: gb(10),
+      name: "Gemma 3 12B",
+      note: { code: "NO_ROOM_TO_LOAD" },
+      pool: "gpu:0",
+      state: "idle",
+    });
     const blockedLoad = labView({
-      models: [
-        modelView(
-          localModel({
-            id: "gemma3-12b:Q4_K_M",
-            memory_bytes: gb(10),
-            name: "Gemma 3 12B",
-            note: { code: "NO_ROOM_TO_LOAD" },
-            pool: "gpu:0",
-            state: "idle",
-          }),
-        ),
-      ],
+      models: [modelView(blockedLoadModel)],
       pools: [busyGpu],
     });
+    expect(loadCheck(blockedLoad, blockedLoadModel)?.freeBytes).toBe(gb(6));
     expect(memoryGuidance(blockedLoad)).toMatchObject({
       gpu: true,
       kind: "blocked_load",

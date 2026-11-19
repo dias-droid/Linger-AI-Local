@@ -1849,6 +1849,100 @@ describe("Model source", () => {
     ).toBeInTheDocument();
   });
 
+  it("clears preselected agent unloads after Recheck memory shows enough room", async () => {
+    const busyMac = macView({
+      models: [
+        macView().models[0]!,
+        modelView(
+          localModel({
+            download_bytes: gb(20),
+            fit: "unified",
+            id: "gemma3-27b:Q4_K_M",
+            memory_bytes: gb(30),
+            name: "Gemma 3 27B",
+            pool: "unified",
+            state: "idle",
+          }),
+        ),
+      ],
+      pools: [
+        {
+          holders: [
+            {
+              bytes: gb(14.3),
+              id: "gpt-oss-20b:Q4_K_M",
+              kind: "model",
+              name: "GPT-OSS 20B",
+            },
+          ],
+          id: "unified",
+          kind: "unified",
+          total_bytes: gb(51.2),
+          used_bytes: gb(34.3),
+        },
+      ],
+    });
+    const fixture = setup([busyMac]);
+    await renderPage(fixture);
+    await findModels();
+
+    fireEvent.click(screen.getByRole("button", { name: "Load Gemma 3 27B" }));
+    const dialog = screen.getByRole("dialog", { name: "Make room to load" });
+    expect(
+      within(dialog).getByRole("checkbox", { name: /GPT-OSS 20B/ }),
+    ).toBeChecked();
+    expect(dialog).toHaveTextContent(
+      "Another Me can't answer until their model is loaded again.",
+    );
+    expect(
+      within(dialog).getByRole("button", { name: "Unload and load" }),
+    ).toBeEnabled();
+
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Recheck memory" }),
+    );
+    await waitFor(() => expect(fixture.refreshes).toEqual(["computer-mac"]));
+
+    // Closing the external app frees 20 GB so 36.9 GB is free without unloading GPT-OSS 20B.
+    publishSnapshot(fixture, {
+      ...busyMac,
+      observed_at: "2026-11-13T10:07:00.000Z",
+      pools: [
+        {
+          holders: [
+            {
+              bytes: gb(14.3),
+              id: "gpt-oss-20b:Q4_K_M",
+              kind: "model",
+              name: "GPT-OSS 20B",
+            },
+          ],
+          id: "unified",
+          kind: "unified",
+          total_bytes: gb(51.2),
+          used_bytes: gb(14.3),
+        },
+      ],
+    });
+
+    await waitFor(() =>
+      expect(dialog).toHaveTextContent(
+        "Enough memory is free now (36.9 GB available).",
+      ),
+    );
+    expect(dialog).not.toHaveTextContent("Another Me can't answer");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Load" }));
+    await waitFor(() =>
+      expect(fixture.actions).toEqual([
+        {
+          body: { action: "load" },
+          computerId: "computer-mac",
+          modelId: "gemma3-27b:Q4_K_M",
+        },
+      ]),
+    );
+  });
+
   it("lets the owner choose a loaded larger model in SwitchToLocalNotice and Use for Agents", async () => {
     const small = localModel({
       id: "spark-4b:Q4_K_M",

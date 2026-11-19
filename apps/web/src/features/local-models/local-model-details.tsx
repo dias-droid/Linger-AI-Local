@@ -24,6 +24,7 @@ import {
   downloadStopped,
   formatGigabytes,
   isModelOnComputer,
+  memoryReclaimable,
   modelCapabilities,
   modelSourceLabel,
   parametersLabel,
@@ -110,21 +111,7 @@ export function ModelFacts({
   const parameters = parametersLabel(model);
   const speed = speedLabel(model);
   const sourceUrl = safeModelSourceUrl(model.source_url);
-  const externalBytes = view.pools.reduce(
-    (sum, item) => sum + poolOtherBytes(item),
-    0,
-  );
-  const maxHardware = Math.max(
-    view.computer.host?.ram_total_bytes ?? 0,
-    ...(view.computer.host?.gpus.map((gpu) => gpu.total_bytes) ?? [0]),
-    ...view.pools.map((item) => item.total_bytes),
-    0,
-  );
-  const reclaimable =
-    externalBytes > 0 &&
-    model.availability.reason?.code === "MEMORY_INSUFFICIENT" &&
-    model.availability.reason.need_bytes !== undefined &&
-    model.availability.reason.need_bytes <= maxHardware;
+  const reclaimable = memoryReclaimable(view, model);
   const availableNeedsRoom =
     status === "available" &&
     pool !== undefined &&

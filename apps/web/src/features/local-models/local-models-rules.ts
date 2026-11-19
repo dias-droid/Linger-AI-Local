@@ -187,6 +187,27 @@ function maxHardwareCapacity(view: LocalModelsView) {
 }
 
 /**
+ * Whether an unavailable model failed only because external apps currently
+ * hold memory on hardware that could otherwise fit it.
+ */
+export function memoryReclaimable(
+  view: LocalModelsView,
+  model: LocalModel,
+): boolean {
+  const reason = model.availability.reason;
+  if (
+    reason?.code !== "MEMORY_INSUFFICIENT" ||
+    reason.need_bytes === undefined
+  ) {
+    return false;
+  }
+  return (
+    view.pools.some((pool) => poolOtherBytes(pool) > 0) &&
+    reason.need_bytes <= maxHardwareCapacity(view)
+  );
+}
+
+/**
  * Whether external apps hold enough GPU or system memory that closing them
  * and rechecking could let a larger model download or load.
  */
@@ -227,16 +248,10 @@ export function memoryGuidance(view: LocalModelsView): MemoryGuidance | null {
     };
   }
 
-  const hardwareMax = maxHardwareCapacity(view);
-  const blockedDownload = modelEntries(view).some((entry) => {
-    const reason = entry.model.availability.reason;
-    return (
-      entry.status === "unavailable" &&
-      reason?.code === "MEMORY_INSUFFICIENT" &&
-      reason.need_bytes !== undefined &&
-      reason.need_bytes <= hardwareMax
-    );
-  });
+  const blockedDownload = modelEntries(view).some(
+    (entry) =>
+      entry.status === "unavailable" && memoryReclaimable(view, entry.model),
+  );
   if (blockedDownload) {
     return {
       freeBytes: summary.freeBytes,
@@ -257,10 +272,7 @@ export function memoryGuidance(view: LocalModelsView): MemoryGuidance | null {
     );
   });
   const twoGigabytes = 2 * 1024 ** 3;
-  if (
-    otherBytes >= twoGigabytes &&
-    (constrainedAvailable || externalPools.length > 0)
-  ) {
+  if (otherBytes >= twoGigabytes && constrainedAvailable) {
     return {
       freeBytes: summary.freeBytes,
       gpu: top.pool.kind === "gpu" || summary.gpu,
@@ -280,41 +292,24 @@ export interface LoadCheck {
   loaded: ModelEntry[];
 }
 
-/**
- * Why a model cannot load into `pool` now, or `null` when that pool reports
- * room for `needBytes`.
- */
-export function poolRoomCheck(
+/** Why a model cannot load now, or `null` when its pool reports room for it. */
+export function loadCheck(
   view: LocalModelsView,
-  pool: LocalModelPool | undefined,
-  needBytes: number,
-  excludeModelId?: string,
+  model: LocalModel,
 ): LoadCheck | null {
-  if (!pool || poolFreeBytes(pool) >= needBytes) return null;
+  const pool = poolOf(view, model.pool);
+  if (!pool || poolFreeBytes(pool) >= model.memory_bytes) return null;
   return {
     freeBytes: poolFreeBytes(pool),
     loaded: modelEntries(view).filter(
       (entry) =>
         entry.status === "loaded" &&
         entry.model.pool === pool.id &&
-        entry.model.id !== excludeModelId,
+        entry.model.id !== model.id,
     ),
-    needBytes,
+    needBytes: model.memory_bytes,
     pool,
   };
-}
-
-/** Why a model cannot load now, or `null` when its pool reports room for it. */
-export function loadCheck(
-  view: LocalModelsView,
-  model: LocalModel,
-): LoadCheck | null {
-  return poolRoomCheck(
-    view,
-    poolOf(view, model.pool),
-    model.memory_bytes,
-    model.id,
-  );
 }
 
 function freedBytes(entries: ModelEntry[]) {
@@ -515,10 +510,6 @@ export function modelSourceLabel(url: string) {
   return `${parsed.host}${parsed.pathname.replace(/\/+$/, "")}`;
 }
 
-/**
- * The model a switch to Local model runs: a loaded one, else one on disk. None
- * when the Computer has no model downloaded yet.
- */
 /** Candidate local models on disk ordered loaded-first, recommended, then largest. */
 export function localSwitchTargets(view: LocalModelsView): LocalModel[] {
   return view.models
@@ -535,6 +526,10 @@ export function localSwitchTargets(view: LocalModelsView): LocalModel[] {
     });
 }
 
+/**
+ * The model a switch to Local model runs by default: a loaded one, else one
+ * on disk. None when the Computer has no model downloaded yet.
+ */
 export function localSwitchTarget(view: LocalModelsView) {
   return localSwitchTargets(view)[0];
 }

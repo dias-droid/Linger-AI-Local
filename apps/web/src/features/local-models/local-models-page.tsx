@@ -54,7 +54,6 @@ import {
   modelEntries,
   poolFreeBytes,
   poolOf,
-  poolRoomCheck,
   type ModelEntry,
   type ModelStatus,
 } from "./local-models-rules";
@@ -557,12 +556,7 @@ function Library({
     : undefined;
   const makeRoom =
     dialog?.kind === "makeRoom" && dialogEntry
-      ? (poolRoomCheck(
-          view,
-          dialogPool,
-          dialogEntry.model.memory_bytes,
-          dialogEntry.model.id,
-        ) ??
+      ? (loadCheck(view, dialogEntry.model) ??
         (dialogPool
           ? {
               freeBytes: poolFreeBytes(dialogPool),

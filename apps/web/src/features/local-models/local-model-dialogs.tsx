@@ -60,8 +60,9 @@ export function MakeRoomDialog({
   view: LocalModelsView;
 }) {
   const [selected, setSelected] = useState(() => makeRoomSelection(check));
-  const chosen = new Set(selected);
   const roomFreeNow = check.freeBytes >= check.needBytes;
+  const effectiveSelected = roomFreeNow ? [] : selected;
+  const chosen = new Set(effectiveSelected);
   const enough = roomFreeNow || makesRoom(check, chosen);
   const otherBytes = poolOtherBytes(check.pool);
   const unifiedFitsHardware =
@@ -88,10 +89,10 @@ export function MakeRoomDialog({
           <Button onClick={onClose}>Cancel</Button>
           <Button
             disabled={disabled || !enough}
-            onClick={() => onConfirm(selected)}
+            onClick={() => onConfirm(effectiveSelected)}
             tone="primary"
           >
-            {selected.length ? "Unload and load" : "Load"}
+            {effectiveSelected.length ? "Unload and load" : "Load"}
           </Button>
         </>
       }
