@@ -437,6 +437,16 @@ describe("local models rules", () => {
       }),
     ).toBeUndefined();
     expect(
+      usedByBadge(
+        {
+          model: localModel({ id: "m", name: "M", state: "loaded" }),
+          status: "loaded",
+          used_by: [],
+        },
+        ["Research", "Delegate"],
+      ),
+    ).toBe("2 Agents");
+    expect(
       usedByBadge({
         model: localModel({ id: "m", name: "M", state: "absent" }),
         status: "available",

@@ -1,9 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { type FormEvent, useId } from "react";
+import { Link } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import { ModalDialog } from "@/components/ui/modal-dialog";
 import { Select, SelectItem } from "@/components/ui/select";
+import { localComputersQueryKey } from "@/features/local-computer/local-computer-queries";
 import type { TeamHubClient } from "@/features/teamhub/teamhub-client";
 import type {
   TeamHubAgentReasoningEffort,
@@ -60,7 +62,7 @@ export function EditAgentRuntimeDialog({
   const formId = useId();
   const computers = useQuery({
     queryFn: () => client.listTenantLocalComputers(tenantId),
-    queryKey: ["teamhub", "local-computers", tenantId],
+    queryKey: localComputersQueryKey(tenantId),
     retry: false,
     refetchInterval: 5_000,
   });
@@ -149,27 +151,45 @@ export function EditAgentRuntimeDialog({
               ))}
             </Select>
           </label>
-          <label className="block">
-            <span className="mb-1.5 block text-sm font-medium">Model</span>
-            <Select
-              aria-label="Agent model"
-              className="ui-field-control w-full"
-              disabled={field === "reasoning"}
-              onValueChange={selection.selectModel}
-              value={model}
-            >
-              {model && !modelIsAvailable ? (
-                <SelectItem value={model} disabled>
-                  {model} · Unavailable
-                </SelectItem>
-              ) : null}
-              {selection.modelOptions.map((item) => (
-                <SelectItem key={item.id} value={item.id}>
-                  {item.label}
-                </SelectItem>
-              ))}
-            </Select>
-          </label>
+          <div className="space-y-1.5">
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium">Model</span>
+              <Select
+                aria-label="Agent model"
+                className="ui-field-control w-full"
+                disabled={field === "reasoning"}
+                onValueChange={selection.selectModel}
+                value={model}
+              >
+                {model && !modelIsAvailable ? (
+                  <SelectItem value={model} disabled>
+                    {model} · Unavailable
+                  </SelectItem>
+                ) : null}
+                {selection.modelOptions.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.label}
+                  </SelectItem>
+                ))}
+              </Select>
+            </label>
+            {selection.runtimeType === "pi" &&
+            selection.computerId &&
+            !loading &&
+            !unavailable &&
+            localReady &&
+            selection.modelOptions.length > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Manage downloaded models in{" "}
+                <LocalModelsLink
+                  computerId={selection.computerId}
+                  onNavigate={onClose}
+                  tenantId={tenantId}
+                />
+                .
+              </p>
+            ) : null}
+          </div>
           <ReasoningField
             allowed={selection.selectedModel?.allowed_reasoning_effort}
             onChange={selection.selectReasoningEffort}
@@ -215,6 +235,21 @@ export function EditAgentRuntimeDialog({
             <p className="text-sm text-app-danger" role="alert">
               {runtime?.message ??
                 "Install and sign in to this runtime on the computer, then wait for it to become ready."}
+            </p>
+          ) : null}
+          {selection.runtimeType === "pi" &&
+          selection.computerId &&
+          !loading &&
+          !unavailable &&
+          (!localReady || selection.modelOptions.length === 0) ? (
+            <p className="text-xs text-muted-foreground">
+              Download and load a local model in{" "}
+              <LocalModelsLink
+                computerId={selection.computerId}
+                onNavigate={onClose}
+                tenantId={tenantId}
+              />{" "}
+              to run Agents with Pi on this computer.
             </p>
           ) : null}
           {unavailable ? (
@@ -295,5 +330,26 @@ function ReasoningField({
         ))}
       </Select>
     </label>
+  );
+}
+
+function LocalModelsLink({
+  computerId,
+  onNavigate,
+  tenantId,
+}: {
+  computerId: string;
+  onNavigate: () => void;
+  tenantId: string;
+}) {
+  const to = `/t/${encodeURIComponent(tenantId)}/settings/models?computer=${encodeURIComponent(computerId)}`;
+  return (
+    <Link
+      className="font-medium text-foreground underline underline-offset-2"
+      onClick={onNavigate}
+      to={to}
+    >
+      Settings › Models
+    </Link>
   );
 }

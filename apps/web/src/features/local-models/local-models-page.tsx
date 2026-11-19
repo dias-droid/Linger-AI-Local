@@ -6,7 +6,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 
 import { Button } from "@/components/ui/button";
@@ -16,11 +16,29 @@ import { Select, SelectItem } from "@/components/ui/select";
 import { relativeTime } from "@/features/local-computer/computer-relative-time";
 import { useDesktopComputer } from "@/features/local-computer/desktop-computer";
 import { localComputersQueryOptions } from "@/features/local-computer/local-computer-queries";
+import {
+  anotherMeQueryOptions,
+  teamHubIdentityQueryOptions,
+  tenantAgentAvailabilityQueryKey,
+  tenantAgentAvailabilityQueryOptions,
+  tenantAgentsQueryKey,
+  tenantAgentsQueryOptions,
+} from "@/features/rooms/room-queries";
 import { requireRoomRouteParam } from "@/features/rooms/room-route-params";
+import { teamHubData } from "@/features/teamhub/teamhub-api";
 import { TeamHubError } from "@/features/teamhub/teamhub-error";
 import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
-import type { TeamHubLocalComputerPage } from "@/features/teamhub/teamhub-types";
+import type {
+  TeamHubLocalComputerPage,
+  TeamHubTenantAgent,
+} from "@/features/teamhub/teamhub-types";
 
+import {
+  type AssignableLocalModelAgent,
+  assignableLocalModelAgents,
+  buildLocalModelRuntimeUpdate,
+  isAgentUsingModel,
+} from "./local-model-agents";
 import { AdvancedDialog } from "./local-model-details";
 import { ModelRow } from "./local-model-row";
 import {
@@ -138,9 +156,9 @@ export function ModelsPage() {
         />
       ) : computer ? (
         <ComputerModels
+          computer={computer}
           computerId={computer.computer_id}
           displayName={computer.display_name}
-          runtimes={computer.runtimes}
           computerPicker={
             computers.length > 1 ? (
               <Select
@@ -219,19 +237,20 @@ function Notice({ children }: { children: ReactNode }) {
 }
 
 function ComputerModels({
+  computer,
   computerId,
   computerPicker,
   displayName,
-  runtimes = [],
   tenantId,
 }: {
+  computer?: InventoryComputer;
   computerId: string;
   computerPicker: ReactNode;
   /** Absent for a Computer outside the viewer's own inventory. */
   displayName?: string;
-  runtimes?: readonly LocalComputerRuntime[];
   tenantId: string;
 }) {
+  const runtimes: readonly LocalComputerRuntime[] = computer?.runtimes ?? [];
   const { client } = useTeamHubRuntime();
   const queryClient = useQueryClient();
   const query = useQuery(localModelsQueryOptions(client, tenantId, computerId));
@@ -396,6 +415,7 @@ function ComputerModels({
             />
           ) : null}
           <Library
+            computer={computer}
             dialog={dialog}
             guidance={guidance}
             onRefresh={() => refresh.mutate()}
@@ -442,6 +462,7 @@ function ComputerModels({
 }
 
 function Library({
+  computer,
   dialog,
   guidance,
   onRefresh,
@@ -454,6 +475,7 @@ function Library({
   tenantId,
   view,
 }: {
+  computer?: InventoryComputer;
   dialog: Dialog | null;
   guidance: ReturnType<typeof memoryGuidance>;
   onRefresh: () => void;
@@ -470,11 +492,30 @@ function Library({
   const queryClient = useQueryClient();
   const computerId = view.computer.computer_id;
   const name = view.computer.display_name;
+  const offline = view.computer.status === "offline";
+  const readOnly = !view.viewer_is_owner;
+  const canManageAgents = !readOnly;
+  const piReady =
+    !computer ||
+    computer.runtimes.some(
+      (runtime) => runtime.type === "pi" && runtime.status === "ready",
+    );
+  const canSwitchAgents =
+    !offline &&
+    canManageAgents &&
+    piReady &&
+    (!status?.mode || status.mode === "local");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [failure, setFailure] = useState<{
     code?: string;
     modelId: string;
   } | null>(null);
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [pendingSwitch, setPendingSwitch] = useState<{
+    agentIds: string[];
+    modelId: string;
+  } | null>(null);
+  const completedSwitchKeyRef = useRef<string | null>(null);
   // An action the Computer accepted, shown on its row until a snapshot moves
   // the model on: a different status or a newer snapshot.
   const [accepted, setAccepted] = useState<
@@ -483,7 +524,54 @@ function Library({
       { action: LocalModelAction; from?: ModelStatus; observedAt?: string }
     >
   >({});
-  const entries = view.available ? modelEntries(view) : [];
+  const identityQuery = useQuery({
+    ...teamHubIdentityQueryOptions(client),
+    enabled: canManageAgents,
+  });
+  const anotherMeQuery = useQuery({
+    ...anotherMeQueryOptions(client, tenantId),
+    enabled: canManageAgents,
+  });
+  const agentsQuery = useQuery({
+    ...tenantAgentsQueryOptions(client, tenantId),
+    enabled: canManageAgents,
+  });
+  const availabilityQuery = useQuery({
+    ...tenantAgentAvailabilityQueryOptions(client, tenantId),
+    enabled: canManageAgents,
+  });
+  const currentActorId = identityQuery.data?.actors.find(
+    (candidate) => candidate.tenant_id === tenantId,
+  )?.id;
+  const assignableAgents = useMemo(
+    () =>
+      canManageAgents
+        ? assignableLocalModelAgents({
+            agents: agentsQuery.data?.items,
+            anotherMeActorId: anotherMeQuery.data?.agent_actor_id,
+            availability: availabilityQuery.data?.items,
+            computer,
+            computerId,
+            currentActorId,
+          })
+        : [],
+    [
+      agentsQuery.data?.items,
+      anotherMeQuery.data?.agent_actor_id,
+      availabilityQuery.data?.items,
+      canManageAgents,
+      computer,
+      computerId,
+      currentActorId,
+    ],
+  );
+  const anotherMeChatHref = anotherMeQuery.data?.room_id
+    ? `/t/${encodeURIComponent(tenantId)}/rooms/${encodeURIComponent(anotherMeQuery.data.room_id)}/chat`
+    : undefined;
+  const entries = useMemo(
+    () => (view.available ? modelEntries(view) : []),
+    [view],
+  );
   const find = (modelId: string) =>
     entries.find((entry) => entry.model.id === modelId);
   const mutationKey = localModelActionMutationKey(tenantId, computerId);
@@ -491,11 +579,15 @@ function Library({
     mutationFn: (input: LocalModelActionInput) =>
       actOnLocalComputerModel(client, tenantId, computerId, input),
     mutationKey,
-    onError: (error, input) =>
+    onError: (error, input) => {
       setFailure({
         code: error instanceof TeamHubError ? error.code : undefined,
         modelId: input.modelId,
-      }),
+      });
+      setPendingSwitch((current) =>
+        current?.modelId === input.modelId ? null : current,
+      );
+    },
     onMutate: (input) => {
       setFailure(null);
       return { from: find(input.modelId)?.status };
@@ -518,6 +610,70 @@ function Library({
         queryKey: localModelsQueryKey(tenantId, computerId),
       }),
   });
+  const assignMutation = useMutation({
+    mutationFn: ({
+      agent,
+      piModel,
+    }: {
+      agent: AssignableLocalModelAgent;
+      piModel: string;
+    }) =>
+      teamHubData(
+        client.api.PATCH("/v0/tenants/{tenantId}/agents/{agentId}", {
+          body: {
+            expected_configuration_revision: agent.configurationRevision,
+            runtime: buildLocalModelRuntimeUpdate(
+              agent,
+              piModel,
+              computerId,
+              computer,
+            ),
+          },
+          params: { path: { agentId: agent.actorId, tenantId } },
+        }),
+      ),
+    onError: (error) => {
+      setAssignError(
+        error instanceof Error
+          ? error.message
+          : "Couldn't switch the Agent to this model. Try again.",
+      );
+    },
+    onMutate: () => {
+      setAssignError(null);
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(
+        tenantAgentsQueryKey(tenantId),
+        (current: { items: TeamHubTenantAgent[] } | undefined) =>
+          current
+            ? {
+                ...current,
+                items: current.items.map((item) =>
+                  item.actor.id === updated.actor.id
+                    ? { ...item, ...updated }
+                    : item,
+                ),
+              }
+            : current,
+      );
+      void Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: tenantAgentsQueryKey(tenantId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: localModelsQueryKey(tenantId, computerId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: tenantAgentAvailabilityQueryKey(tenantId),
+        }),
+      ]);
+    },
+  });
+  const { mutateAsync: applyAgentAssignment } = assignMutation;
+  const assigningAgentId = assignMutation.isPending
+    ? assignMutation.variables?.agent.actorId
+    : undefined;
   const sending = useMutationState({
     filters: { mutationKey, status: "pending" },
     select: (mutation) =>
@@ -542,8 +698,56 @@ function Library({
     requests.has(modelId) &&
     (requests.get(modelId) !== "download" ||
       sending.some((input) => input?.modelId === modelId));
-  const offline = view.computer.status === "offline";
-  const readOnly = !view.viewer_is_owner;
+  const pendingLoadInFlight = pendingSwitch
+    ? requests.get(pendingSwitch.modelId) === "load"
+    : false;
+  useEffect(() => {
+    if (!pendingSwitch) return;
+    const target = entries.find(
+      (entry) => entry.model.id === pendingSwitch.modelId,
+    );
+    if (
+      !target ||
+      (!pendingLoadInFlight &&
+        (target.status === "failed" ||
+          target.status === "available" ||
+          target.status === "unavailable"))
+    ) {
+      setPendingSwitch(null);
+      return;
+    }
+    if (target.status !== "loaded" || !target.model.pi_model) return;
+    const key = `${pendingSwitch.modelId}:${view.observed_at ?? ""}:${pendingSwitch.agentIds.join(",")}`;
+    if (completedSwitchKeyRef.current === key) return;
+    completedSwitchKeyRef.current = key;
+    const piModel = target.model.pi_model;
+    const matching = assignableAgents.filter(
+      (agent) =>
+        pendingSwitch.agentIds.includes(agent.actorId) &&
+        !isAgentUsingModel(target, agent, computerId),
+    );
+    const busySkipped = matching.filter((agent) => agent.busy);
+    const targets = matching.filter((agent) => !agent.busy);
+    setPendingSwitch(null);
+    if (busySkipped.length) {
+      const names = busySkipped.map((agent) => agent.name).join(", ");
+      setAssignError(
+        `Couldn't switch ${names} to ${target.model.name} while working. Switch once the current turn finishes.`,
+      );
+    }
+    if (!targets.length) return;
+    void Promise.all(
+      targets.map((agent) => applyAgentAssignment({ agent, piModel })),
+    ).catch(() => undefined);
+  }, [
+    applyAgentAssignment,
+    assignableAgents,
+    computerId,
+    entries,
+    pendingLoadInFlight,
+    pendingSwitch,
+    view.observed_at,
+  ]);
   // A dialog stays open across snapshots, so its confirm checks the model
   // and Computer as they are now, the way the row's buttons do.
   const confirmable = (
@@ -581,6 +785,14 @@ function Library({
 
   function act(input: LocalModelActionInput) {
     setDialog(null);
+    if (
+      (input.action === "cancel" ||
+        input.action === "remove" ||
+        input.action === "unload") &&
+      pendingSwitch?.modelId === input.modelId
+    ) {
+      setPendingSwitch(null);
+    }
     action.mutate(input);
   }
 
@@ -646,6 +858,11 @@ function Library({
               </FormFeedback>
             </div>
           ) : null}
+          {assignError ? (
+            <div className="mt-6">
+              <FormFeedback tone="danger">{assignError}</FormFeedback>
+            </div>
+          ) : null}
           {guidanceCopy ? (
             <aside
               aria-label="Memory guidance"
@@ -678,10 +895,23 @@ function Library({
                 entry.model.id !== status.runtime_model;
               return (
                 <ModelRow
+                  anotherMeChatHref={anotherMeChatHref}
+                  assignableAgents={assignableAgents}
+                  assigningAgentId={assigningAgentId}
+                  computer={computer}
                   disabled={offline || readOnly || switching || busy(modelId)}
                   entry={entry}
                   expanded={expandedId === modelId}
                   key={modelId}
+                  onAssignAgent={
+                    entry.model.pi_model && canSwitchAgents
+                      ? (agent) =>
+                          assignMutation.mutate({
+                            agent,
+                            piModel: entry.model.pi_model!,
+                          })
+                      : undefined
+                  }
                   onCancel={() => act({ action: "cancel", modelId })}
                   onDownload={() => act({ action: "download", modelId })}
                   onLoad={() => load(entry)}
@@ -710,17 +940,24 @@ function Library({
       ) : null}
       {dialogEntry && makeRoom ? (
         <MakeRoomDialog
+          assignableAgents={assignableAgents}
           check={makeRoom}
           disabled={!confirmable(dialogEntry, "load")}
           entry={dialogEntry}
           onClose={() => setDialog(null)}
-          onConfirm={(unloadFirst) =>
+          onConfirm={(unloadFirst, switchAgentIds) => {
+            completedSwitchKeyRef.current = null;
+            setPendingSwitch(
+              canSwitchAgents && switchAgentIds.length
+                ? { agentIds: switchAgentIds, modelId: dialogEntry.model.id }
+                : null,
+            );
             act({
               action: "load",
               modelId: dialogEntry.model.id,
               unloadFirst,
-            })
-          }
+            });
+          }}
           onRecheck={!offline && !readOnly ? onRefresh : undefined}
           rechecking={rechecking}
           view={view}

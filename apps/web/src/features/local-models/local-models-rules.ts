@@ -386,13 +386,13 @@ export function agentNames(entry: Pick<LocalModelView, "used_by">) {
 /** Compact Agent count chip for a model on the Computer, or undefined when unused. */
 export function usedByBadge(
   entry: Pick<ModelEntry, "model" | "status" | "used_by">,
+  names?: readonly string[],
 ): string | undefined {
-  if (!isModelOnComputer(entry.model, entry.status) || !entry.used_by.length) {
+  const count = names ? names.length : entry.used_by.length;
+  if (!isModelOnComputer(entry.model, entry.status) || !count) {
     return undefined;
   }
-  return entry.used_by.length === 1
-    ? "1 Agent"
-    : `${entry.used_by.length} Agents`;
+  return count === 1 ? "1 Agent" : `${count} Agents`;
 }
 
 export type LocalModelCapability = NonNullable<
