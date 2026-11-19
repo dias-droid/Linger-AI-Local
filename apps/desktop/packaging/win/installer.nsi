@@ -19,7 +19,11 @@ InstallDirRegKey HKCU "${UNINSTALL_KEY}" "InstallLocation"
 !define APP_ID "com.simplexai.linger.desktop.preview"
 !define RUN_KEY "Software\Microsoft\Windows\CurrentVersion\Run"
 RequestExecutionLevel user
-SetCompressor /SOLID lzma
+; Use zlib without datablock deduplication: single-threaded LZMA spends
+; minutes re-compressing bundled archives, and datablock optimization scans
+; quadratically across the thousands of files in computer-tools.
+SetCompressor zlib
+SetDatablockOptimize off
 
 VIProductVersion "${NUMERIC_VERSION}.0"
 VIAddVersionKey "ProductName" "Linger"

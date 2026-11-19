@@ -206,9 +206,20 @@ cmd_compile() {
   )
 }
 
+ensure_docker_image() {
+  local tag="$1" dir="$2" sha current
+  sha="$(sha256_of "$dir/Dockerfile")"
+  current="$(docker image inspect --format '{{index .Config.Labels "linger.dockerfile.sha256"}}' "$tag" 2>/dev/null || true)"
+  if [[ "$current" == "$sha" ]]; then
+    echo "desktop-release: reusing cached Docker image $tag"
+    return 0
+  fi
+  docker build -q --label "linger.dockerfile.sha256=$sha" -t "$tag" "$dir" >/dev/null
+}
+
 package_darwin() {
   local version="$1" pkg="$2" assets="$3" args=()
-  docker build -q -t dmgtool "$desktop/packaging/mac" >/dev/null
+  ensure_docker_image dmgtool "$desktop/packaging/mac"
   args+=(--arch arm64 --rcodesign "${RCODESIGN:-rcodesign}" --out "$pkg")
   if [[ -n "${MACOS_DEVELOPER_ID_P12:-}" ]]; then
     args+=(--developer-id "$MACOS_DEVELOPER_ID_P12" --developer-id-password "${MACOS_DEVELOPER_ID_PASSWORD_FILE:?MACOS_DEVELOPER_ID_PASSWORD_FILE is required with MACOS_DEVELOPER_ID_P12}")
@@ -231,7 +242,7 @@ package_linux() {
 
 package_windows() {
   local version="$1" pkg="$2" assets="$3" setup
-  docker build -q -t wintool "$desktop/packaging/win" >/dev/null
+  ensure_docker_image wintool "$desktop/packaging/win"
   (cd "$desktop" && python3 packaging/win/package.py --out "$pkg")
   setup="$pkg/Linger-$version-x64-setup.exe"
   if [[ -n "${WINDOWS_SIGNING_P12:-}" ]]; then
