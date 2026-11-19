@@ -93,7 +93,9 @@ Codex's workspace mode turns off the shell and unified exec and keeps only the
 code-mode host's `apply_patch`, with the working directory as the only writable
 root. It therefore reads no files, and the Daemon appends the workspace files'
 contents to the end of the prompt, because the `workspace-write` sandbox limits
-writes but not reads.
+writes but not reads. Codex feature disables use `-c`/`--config
+features.<name>=false` rather than `--disable <name>` so older Codex versions
+ignore features they do not define instead of aborting on startup.
 
 `go test -tags live_model_invoke ./internal/provider -run TestLiveCodex` runs one
 structured call and one workspace call with the locally signed-in Codex (checking

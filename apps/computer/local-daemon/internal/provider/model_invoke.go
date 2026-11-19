@@ -57,11 +57,12 @@ const (
 	ModelInvokeFailed              = "failed"
 )
 
-// codexInvokeDisabledFeatures turns off every Codex 0.166 tool family a
-// one-shot call must not reach: shell and code execution, sub-agents, goals,
-// browsers, computer use, connected apps, plugins, hooks, image tools, tool
-// discovery, Skills and sleeping. An unknown name makes Codex refuse to start,
-// which is reported as runtime_incompatible.
+// codexInvokeDisabledFeatures turns off every Codex tool family a one-shot
+// call must not reach: shell and code execution, sub-agents, goals, browsers,
+// computer use, connected apps, plugins, hooks, image tools, tool discovery,
+// Skills and sleeping. Each name is passed as a features.<name>=false config
+// override rather than --disable so older Codex releases ignore features they
+// do not define instead of refusing to start.
 var codexInvokeDisabledFeatures = []string{
 	"shell_tool", "unified_exec", "code_mode_host", "multi_agent", "goals",
 	"browser_use", "browser_use_external", "browser_use_full_cdp_access",
@@ -358,7 +359,7 @@ func (m ModelInvoker) sessionInvoke(ctx context.Context, request ModelInvokeRequ
 	environment["CODEX_HOME"] = home
 	args := append([]string{"--config", `web_search="disabled"`}, codexInvokeSandboxConfig(runtime.GOOS)...)
 	for _, feature := range codexInvokeDisabledFeatures {
-		args = append(args, "--disable", feature)
+		args = append(args, "--config", "features."+feature+"=false")
 	}
 	invokeCtx, cancel := context.WithTimeout(ctx, modelInvokeTimeout(request.Timeout))
 	defer cancel()
@@ -519,7 +520,7 @@ func codexModelInvokeArgs(mode, effort, work, schemaPath, lastPath string) []str
 		if mode == ModelInvokeWorkspace && codexWorkspaceKeptFeatures[feature] {
 			continue
 		}
-		args = append(args, "--disable", feature)
+		args = append(args, "-c", "features."+feature+"=false")
 	}
 	if schemaPath != "" {
 		args = append(args, "--output-schema", schemaPath)
