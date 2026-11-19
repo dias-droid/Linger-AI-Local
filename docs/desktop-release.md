@@ -113,6 +113,57 @@ gh release upload native-deps <archive> --repo simplexai-labs/linger
    `SHA256SUMS.txt`. A test release is removed with its tag:
    `gh release delete desktop-v0.16.36-rc.1 --repo simplexai-labs/linger --cleanup-tag`.
 
+### Physical Windows acceptance
+
+This is a manual verification flow for real Windows machines; it does not run
+in CI and does not gate releases. Use a digest-verified Windows Setup
+candidate on a clean, ordinary-user desktop with working mouse and keyboard,
+free disk, default Defender, and access from Windows to the configured external
+model endpoint. Pre-stage the Setup; do not build on the test laptop. Codex CLI
+and CC Switch are not prerequisites.
+
+1. Install through the actual Setup UI and complete Quick Install in Pi mode
+   with the configured external model. Record signing/SmartScreen and setup
+   independently. Confirm the Computer is online and its Pi catalog and
+   workspace grant are ready.
+2. Run one unique Room journey using
+   [`room-journey.mjs`](../scripts/acceptance/room-journey.mjs).
+   An aborted Run is a failure as soon as TeamHub persists it for the test
+   message. Success requires a completed Run, its persisted reply linked to
+   that Run with the matching SHA-256 digest, exact new file bytes, and the
+   successful write and terminal events for that Run.
+   Quit and reopen the installed Desktop, then verify that the configuration,
+   Room reply, and file persist.
+3. Test the real graphical uninstaller independently of the Room outcome.
+   Record the app payload, per-user uninstall and startup registrations,
+   shortcuts, process identities, listeners, and retained data checksums
+   before and after. Exit code zero alone does not prove cleanup; report
+   remaining payload, running processes or listeners, and any retry
+   separately from the first attempt.
+
+Keep fault injection and recovery matrices on disposable environments;
+label Windows ARM and native Windows x64 evidence separately. Record build,
+transfer, setup, operator wait, Room terminal detection, reopen, and uninstall
+times separately to show where the next optimization belongs.
+
+For the Room helper, set `LINGER_ACCEPTANCE_BASE_URL` (loopback),
+`LINGER_ACCEPTANCE_OWNER_FILE` (private local owner JSON), and
+`LINGER_ACCEPTANCE_COMPUTER_ID`; use `LINGER_ACCEPTANCE_MODEL` to select a
+specific catalog entry and `LINGER_ACCEPTANCE_TIMEOUT_SECONDS` to override the
+180-second budget. For one-command verification on the isolated host, set
+`LINGER_ACCEPTANCE_CONTEXT_VIEWS` to the daemon's `context-views` directory and
+`LINGER_ACCEPTANCE_AGENT_LOG_ROOT` to the Agent Service's log directory
+containing `agents/`. Alternatively set an exact
+`LINGER_ACCEPTANCE_WORKSPACE` and `LINGER_ACCEPTANCE_AGENT_LOG`. Paths for
+evidence are absolute. Invoke `node scripts/acceptance/room-journey.mjs`.
+Across hosts, `room_observed` means only the Run and persisted reply were
+linked; verify the file bytes and Agent logs separately with
+[`local-runner-message-evidence.mjs`](../scripts/local-runner-message-evidence.mjs)
+(`node scripts/local-runner-message-evidence.mjs --run-evidence` with
+`LINGER_ACCEPTANCE_FILE`, `LINGER_ACCEPTANCE_EXPECTED` or
+`LINGER_ACCEPTANCE_EXPECTED_SHA256`, `LINGER_ACCEPTANCE_AGENT_LOG`, and
+`LINGER_ACCEPTANCE_RUN_ID`).
+
 ## Release Files
 
 | File                                        | Contents                                                        |
