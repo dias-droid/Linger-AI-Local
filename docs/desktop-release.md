@@ -42,11 +42,23 @@ The workflow runs for `desktop-v*` tags and from Actions → Desktop release →
 Run workflow. Its `build` jobs
 run on `ubuntu-24.04` (the macOS and Windows runners have no Docker) and keep
 the files as workflow artifacts for 14 days: `desktop-<target>`, a zip of
-every file for the platform, and the installer on its own, not zipped (the
-`.dmg`, the `-setup.exe`, the Linux `.tar.gz`), for testers to download
-directly. `release` writes `SHA256SUMS.txt`
-and creates the GitHub Release, or uploads the files again to an existing one.
-A manual run publishes only with `publish` set.
+every file for the platform (with the Windows portable archive split into
+`desktop-win32-x64-portable` so `desktop-win32-x64` carries only the Setup and
+its `windows-setup.sha256` digest), and the installer on its own, not zipped
+(the `.dmg`, the `-setup.exe`, the Linux `.tar.gz`), for testers to download
+directly. `windows-smoke` downloads `desktop-win32-x64`, verifies the Setup
+against `windows-setup.sha256`, and installs those bytes silently under a fresh
+standard user on `windows-2022`. It requests only packaged Pi preparation and
+checks the real Pi RPC handshake (`get_state`, `get_commands`) and the
+registered `mcp` command from the bundled managed MCP extension, with no
+`NODE_PATH` override. It starts no full Linger services, uses no model
+credentials, downloads no model weights, and does not verify the graphical
+installer, model inference, restart persistence, or uninstallation. `release`
+requires `windows-smoke` to pass, downloads `desktop-*`, checks the same
+`windows-setup.sha256` digest before removing that file, writes
+`SHA256SUMS.txt`, and creates the GitHub Release (or uploads the files again to
+an existing one). A manual run publishes only with `publish` set, and a
+`publish=false` run still executes `windows-smoke`.
 
 The release goes to `RELEASE_REPO`, `simplexai-labs/linger` by default:
 
