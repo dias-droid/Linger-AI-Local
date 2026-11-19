@@ -198,6 +198,13 @@ Gateway and runs Agents. The daemon exits with the app.
   with any remembered `computerId` for that origin and owner so re-enrolling or
   recovering an interrupted exchange renews the existing Computer ID and
   surfaces `DAEMON_IDENTITY_IN_USE` / `DAEMON_IDENTITY_MISMATCH` conflicts.
+  It sends `daemon_id` only when the server's `/v0/me` lists the
+  `local_computer_enrollment_daemon_id` server capability; a TeamHub older
+  than the desktop omits it and would reject the field. `config.json` keeps
+  the `daemonId` the active enrollment named, and at start an enrollment that
+  named none or another one is renewed once the server lists the capability,
+  so a computer an earlier Set Up Again paired anew gets back the Computer
+  that holds its Daemon Identity, with its Agents.
   Before installing or resuming it moves the
   `COMPOSIO_API_KEY`, `SONIOX_API_KEY`, `XAI_API_KEY` and `TZ` of an unpacked
   source package's `.env` into `<home>/instances/desktop/user.env` once and

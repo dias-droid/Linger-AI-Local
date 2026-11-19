@@ -677,6 +677,16 @@ components:
           description: Active Human Actor identities available to this Account, one per Tenant in V0.
           items:
             $ref: "#/components/schemas/Actor"
+        server_capabilities:
+          type: array
+          description: >-
+            Request fields this TeamHub accepts that earlier releases rejected, so a client
+            newer than its server sends one only when the server lists it. A TeamHub that
+            predates this list omits it. local_computer_enrollment_daemon_id: Local Computer
+            enrollment accepts daemon_id.
+          items:
+            type: string
+            enum: [local_computer_enrollment_daemon_id]
     Session:
       type: object
       additionalProperties: false

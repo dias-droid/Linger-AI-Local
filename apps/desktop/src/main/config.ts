@@ -31,6 +31,9 @@ const desktopConfig = z.object({
   computerId: z.string().optional(),
   tenantId: z.string().optional(),
   ownerActorId: z.string().optional(),
+  // The Daemon ID the active enrollment named; an enrollment that named none
+  // or another one is renewed once at start.
+  daemonId: z.string().optional(),
   // Previous enrollments by server origin so re-enrolling after a local reset
   // or server switch renews the same Computer ID for the same account.
   savedEnrollments: z.record(z.string(), savedEnrollment).optional(),

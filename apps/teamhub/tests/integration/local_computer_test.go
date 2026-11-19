@@ -365,6 +365,13 @@ func TestLocalComputerEnrollmentDaemonIdentityHTTP(t *testing.T) {
 	alice := env.login("alice", alicePassword)
 	bob := seedPeerHuman(t, env)
 
+	// A desktop newer than its server names its Daemon only when /v0/me lists
+	// the capability, because an older TeamHub rejects the unknown field.
+	if status, _, meBody := env.request(alice, http.MethodGet, "/v0/me", nil, ""); status != http.StatusOK ||
+		!strings.Contains(string(meBody), `"server_capabilities":["local_computer_enrollment_daemon_id"]`) {
+		t.Fatalf("read the enrollment capability status=%d body=%s", status, meBody)
+	}
+
 	computerA := enrollLocalComputerOverHTTP(t, env, alice, "Alice's Mac", "")
 	if _, err := pool.Exec(t.Context(), `
 		INSERT INTO actors(id,tenant_id,kind,display_name,handle)
@@ -447,6 +454,28 @@ func TestLocalComputerEnrollmentDaemonIdentityHTTP(t *testing.T) {
 	status, body = agentRuntimeStateRequest(t, application.Handler(), http.MethodPost, "/v0/agent-runtime/local-computers/connect", teamHubInternalToken, connectBody(computerA, "actor_acme_alice", "1"))
 	if status != http.StatusOK || !containsJSONText(body, "agent-management-local-reset") {
 		t.Fatalf("reconnect renewed Computer A status=%d body=%s", status, body)
+	}
+
+	// A desktop whose earlier release paired a new Computer without naming its
+	// Daemon renews at start naming both; the owner's Computer holding the
+	// Daemon Identity is renewed instead of the never-connected one.
+	orphan := enrollLocalComputerOverHTTP(t, env, alice, "Alice's Mac", "")
+	status, _, healBody := env.request(alice, http.MethodPost, "/v0/tenants/"+acmeTenant+"/local-computer-enrollments", map[string]any{
+		"computer_id":    orphan,
+		"daemon_id":      daemonID,
+		"display_name":   "Alice's Mac",
+		"redirect_uri":   "http://127.0.0.1:45123/callback",
+		"code_challenge": challengeB64,
+	}, "")
+	var healed struct {
+		ComputerID string `json:"computer_id"`
+	}
+	if status != http.StatusCreated {
+		t.Fatalf("renew the orphan naming the Daemon status=%d body=%s", status, healBody)
+	}
+	decode(t, healBody, &healed)
+	if healed.ComputerID != computerA {
+		t.Fatalf("renew the orphan naming the Daemon computer_id=%q, want %q", healed.ComputerID, computerA)
 	}
 
 	status, _, mismatchBody := env.request(alice, http.MethodPost, "/v0/tenants/"+acmeTenant+"/local-computer-enrollments", map[string]any{

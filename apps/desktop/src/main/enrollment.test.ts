@@ -5,6 +5,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { CredentialStore } from "./computer-credential.js";
+import type { DesktopConfig } from "./config.js";
 import {
   EnrollmentError,
   EnrollmentModule,
@@ -28,10 +29,20 @@ interface Call {
   readonly body: Record<string, unknown> | undefined;
 }
 
+// The /v0/me server capability of a TeamHub whose enrollment accepts
+// daemon_id; an older TeamHub lists none and rejects the field.
+const DAEMON_CAPABLE = ["local_computer_enrollment_daemon_id"];
+
 interface ServerOverrides {
+  // The server_capabilities /v0/me lists; null omits the list, as a TeamHub
+  // that predates it does.
+  readonly capabilities?: readonly string[] | null;
   readonly exchangeStatus?: number;
   readonly bundle?: Record<string, unknown>;
   readonly meActorId?: string;
+  // The Computer that holds the daemon's identity, which TeamHub renews when
+  // an enrollment names the daemon.
+  readonly daemonHeldBy?: string;
   readonly onCreate?: (
     body: Record<string, unknown> | undefined,
   ) => Response | undefined;
@@ -65,6 +76,9 @@ const fakeServer = (
             ...(overrides.meActorId ? { id: overrides.meActorId } : {}),
           },
         ],
+        ...(overrides.capabilities === null
+          ? {}
+          : { server_capabilities: overrides.capabilities ?? DAEMON_CAPABLE }),
       });
     if (input.pathname.endsWith("/local-computer-enrollments")) {
       const custom = overrides.onCreate?.(body);
@@ -73,9 +87,11 @@ const fakeServer = (
       return json({
         enrollment_id: "enr_1",
         computer_id:
-          typeof body?.computer_id === "string"
-            ? body.computer_id
-            : "computer_1",
+          overrides.daemonHeldBy && body?.daemon_id
+            ? overrides.daemonHeldBy
+            : typeof body?.computer_id === "string"
+              ? body.computer_id
+              : "computer_1",
         authorization_code: "code_1",
         expires_at: "2026-10-16T08:00:00Z",
       });
@@ -209,13 +225,33 @@ describe("enrollComputer", () => {
 
   it("includes daemon_id when provided", async () => {
     const server = fakeServer();
-    await enrollComputer({
+    const enrolled = await enrollComputer({
       ...input,
       daemonId: "A".repeat(43),
       fetch: server.fetch,
     });
     expect(server.calls[1]?.body?.daemon_id).toBe("A".repeat(43));
+    expect(enrolled.daemonId).toBe("A".repeat(43));
   });
+
+  it.each([
+    ["predates the capability list", null],
+    ["does not list the capability", []],
+  ] as const)(
+    "omits daemon_id for a server that %s",
+    async (_name, capabilities) => {
+      // TeamHub decodes request bodies strictly, so an older one rejects it.
+      const server = fakeServer({ capabilities });
+      const enrolled = await enrollComputer({
+        ...input,
+        daemonId: "A".repeat(43),
+        fetch: server.fetch,
+      });
+      expect(server.calls[1]?.body).not.toHaveProperty("daemon_id");
+      expect(enrolled.computerId).toBe("computer_1");
+      expect(enrolled).not.toHaveProperty("daemonId");
+    },
+  );
 
   it("omits saved computer_id only when another owner signed in", async () => {
     const otherOwner = fakeServer({ meActorId: "actor_bob" });
@@ -356,6 +392,7 @@ describe("EnrollmentModule", () => {
   const setupModule = (
     serverOverrides: ServerOverrides = {},
     initialServerUrl = "https://linger.example.com",
+    initialConfig: Partial<DesktopConfig> = {},
   ) => {
     const dir = tempDirectory();
     const daemonIdentityFile = path.join(dir, "daemon-identity.json");
@@ -372,11 +409,86 @@ describe("EnrollmentModule", () => {
     });
     const host = testHost(
       [stubModule("Config"), enrollment],
-      { serverUrl: initialServerUrl },
+      { serverUrl: initialServerUrl, ...initialConfig },
       bus,
     );
     return { enrollment, host, bus, server, credentials, daemonId };
   };
+
+  // A computer enrolled by a release that did not name its daemon: Set Up
+  // Again there paired computer_orphan while the daemon's identity stayed
+  // bound to the Computer it had before.
+  const enrolledWithoutDaemon = (
+    serverOverrides: ServerOverrides = {},
+    initialConfig: Partial<DesktopConfig> = {},
+  ) => {
+    const setup = setupModule(serverOverrides, "https://linger.example.com", {
+      computerId: "computer_orphan",
+      tenantId: "tenant_acme",
+      ownerActorId: "actor_ann",
+      ...initialConfig,
+    });
+    setup.credentials.write({
+      computerId: "computer_orphan",
+      gatewayUrl: "wss://linger.example.com/v1/runner",
+      token: TOKEN,
+    });
+    return setup;
+  };
+  const enrollmentCalls = (calls: readonly Call[]): Call[] =>
+    calls.filter((call) => call.url.endsWith("/local-computer-enrollments"));
+
+  it("renews once at start an enrollment that did not name the daemon", async () => {
+    const { host, server, daemonId } = enrolledWithoutDaemon({
+      daemonHeldBy: "computer_1",
+    });
+    await host.start();
+    await vi.waitFor(() =>
+      expect(host.ctx.config.get().computerId).toBe("computer_1"),
+    );
+    const creates = enrollmentCalls(server.calls);
+    expect(creates).toHaveLength(1);
+    expect(creates[0]?.body).toMatchObject({
+      computer_id: "computer_orphan",
+      daemon_id: daemonId,
+    });
+    expect(host.ctx.config.get().daemonId).toBe(daemonId);
+    await host.stop("quit");
+  });
+
+  it("does not renew at start an enrollment that named the daemon", async () => {
+    const { host, server, daemonId } = enrolledWithoutDaemon();
+    host.ctx.config.update({ daemonId });
+    await host.start();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(server.calls).toEqual([]);
+    expect(host.ctx.config.get().computerId).toBe("computer_orphan");
+    await host.stop("quit");
+  });
+
+  it("does not renew at start only to name the daemon to a server that cannot take it", async () => {
+    const { host, server } = enrolledWithoutDaemon({ capabilities: null });
+    await host.start();
+    await vi.waitFor(() =>
+      expect(server.calls.map((call) => call.url)).toEqual(["/v0/me"]),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(server.calls.map((call) => call.url)).toEqual(["/v0/me"]);
+    expect(host.ctx.config.get().computerId).toBe("computer_orphan");
+    await host.stop("quit");
+  });
+
+  it("enrolls without the daemon's identity on a server that does not accept it", async () => {
+    const { enrollment, host, server } = setupModule({ capabilities: null });
+    await host.start();
+    await enrollment.enroll();
+    expect(enrollmentCalls(server.calls)[0]?.body).not.toHaveProperty(
+      "daemon_id",
+    );
+    expect(host.ctx.config.get().computerId).toBe("computer_1");
+    expect(host.ctx.config.get().daemonId).toBeUndefined();
+    await host.stop("quit");
+  });
 
   it("renews the same Computer ID after unenroll using savedEnrollments and daemonId", async () => {
     const { enrollment, host, server, daemonId } = setupModule();

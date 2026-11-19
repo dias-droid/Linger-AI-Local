@@ -839,6 +839,21 @@ func (e CreatableAgentType) Valid() bool {
 	}
 }
 
+// Defines values for CurrentIdentityServerCapabilities.
+const (
+	LocalComputerEnrollmentDaemonId CurrentIdentityServerCapabilities = "local_computer_enrollment_daemon_id"
+)
+
+// Valid indicates whether the value is a known member of the CurrentIdentityServerCapabilities enum.
+func (e CurrentIdentityServerCapabilities) Valid() bool {
+	switch e {
+	case LocalComputerEnrollmentDaemonId:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DecisionAnswerDecision.
 const (
 	DecisionAnswerApprove    DecisionAnswerDecision = "approve"
@@ -5022,7 +5037,13 @@ type CurrentIdentity struct {
 
 	// Actors Active Human Actor identities available to this Account, one per Tenant in V0.
 	Actors []Actor `json:"actors"`
+
+	// ServerCapabilities Request fields this TeamHub accepts that earlier releases rejected, so a client newer than its server sends one only when the server lists it. A TeamHub that predates this list omits it. local_computer_enrollment_daemon_id: Local Computer enrollment accepts daemon_id.
+	ServerCapabilities *[]CurrentIdentityServerCapabilities `json:"server_capabilities,omitempty"`
 }
+
+// CurrentIdentityServerCapabilities defines model for CurrentIdentity.ServerCapabilities.
+type CurrentIdentityServerCapabilities string
 
 // Cursor Opaque pagination cursor. Clients must not parse or modify it.
 type Cursor = string

@@ -4175,6 +4175,8 @@ export interface components {
       account: components["schemas"]["Account"];
       /** @description Active Human Actor identities available to this Account, one per Tenant in V0. */
       actors: components["schemas"]["Actor"][];
+      /** @description Request fields this TeamHub accepts that earlier releases rejected, so a client newer than its server sends one only when the server lists it. A TeamHub that predates this list omits it. local_computer_enrollment_daemon_id: Local Computer enrollment accepts daemon_id. */
+      server_capabilities?: "local_computer_enrollment_daemon_id"[];
     };
     Session: {
       id: components["schemas"]["Id"];

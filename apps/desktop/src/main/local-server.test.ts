@@ -2987,6 +2987,7 @@ describe("LocalServerModule after a restart", () => {
       if (url.pathname === "/v0/me")
         return Response.json({
           actors: [{ id: "actor_ann", kind: "human", tenant_id: "t1" }],
+          server_capabilities: ["local_computer_enrollment_daemon_id"],
         });
       if (url.pathname === "/v0/tenants/t1/local-computer-enrollments") {
         const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
