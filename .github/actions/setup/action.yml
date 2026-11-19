@@ -11,6 +11,9 @@ inputs:
   go:
     description: Set up Go. Checks that build or run no Go pass false.
     default: "true"
+  save-node-modules:
+    description: Save the installed node_modules when no entry matched. Only one job passes true, so the other jobs never upload the same tree.
+    default: "false"
 
 runs:
   using: composite
@@ -47,6 +50,21 @@ runs:
       with:
         path: ${{ runner.tool_cache }}/go/${{ steps.versions.outputs.go }}
         key: toolcache-go-${{ runner.os }}-${{ runner.arch }}-${{ steps.versions.outputs.go }}
+    # The installed tree, keyed on everything that decides its contents. Only an
+    # exact match is restored: a partial tree would make the install below
+    # fetch without the pnpm store. The paths match pnpm-workspace.yaml's
+    # `packages` globs and must stay identical in the save step below, since
+    # the cache version hashes them.
+    - id: node-modules
+      uses: actions/cache/restore@v4
+      if: inputs.install == 'true'
+      with:
+        path: |
+          node_modules
+          apps/*/node_modules
+          packages/*/node_modules
+          contracts/generated/typescript/node_modules
+        key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.versions.outputs.node }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc', 'patches/**', 'package.json', 'apps/*/package.json', 'packages/*/package.json', 'contracts/generated/typescript/package.json') }}
     # Reads the version from packageManager in package.json.
     - uses: pnpm/action-setup@v4
       if: inputs.install == 'true'
@@ -54,7 +72,8 @@ runs:
       if: inputs.node == 'true'
       with:
         node-version-file: .node-version
-        cache: ${{ inputs.install == 'true' && 'pnpm' || '' }}
+        # The pnpm store is needed only when the node_modules entry missed.
+        cache: ${{ inputs.install == 'true' && steps.node-modules.outputs.cache-hit != 'true' && 'pnpm' || '' }}
     # The caller caches Go per job: setup-go's one shared entry is saved by
     # whichever job finishes first, often one that compiled no Go, and its key
     # never changes while go.sum stays the same.
@@ -64,6 +83,18 @@ runs:
         go-version-file: apps/teamhub/go.mod
         cache: false
     # No install scripts: none of the checks that run here loads a native addon.
+    # On a restored tree this only verifies it against the lockfile.
     - shell: bash
       if: inputs.install == 'true'
       run: pnpm install --frozen-lockfile --ignore-scripts
+    # Saved before any check runs, so tool caches such as node_modules/.vite
+    # never enter the entry.
+    - uses: actions/cache/save@v4
+      if: inputs.install == 'true' && inputs.save-node-modules == 'true' && steps.node-modules.outputs.cache-hit != 'true'
+      with:
+        path: |
+          node_modules
+          apps/*/node_modules
+          packages/*/node_modules
+          contracts/generated/typescript/node_modules
+        key: ${{ steps.node-modules.outputs.cache-primary-key }}

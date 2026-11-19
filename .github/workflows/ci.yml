@@ -72,6 +72,9 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           go: false
+          # Runs on every push to main, so it alone saves the node_modules
+          # entry the other jobs restore.
+          save-node-modules: ${{ github.event_name == 'push' }}
       - run: make check-repository-gate BASE="$BASE"
 
   web-static:
