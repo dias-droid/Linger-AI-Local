@@ -13,9 +13,7 @@ export class ActorAssetError extends Error {
     readonly code: ActorAssetErrorCode,
     message: string,
     readonly disposition: GenerationFailureDisposition = code ===
-      "WIKI_OPERATION_FAILED" ||
-    code === "WIKI_RUNTIME_INCOMPATIBLE" ||
-    code === "WIKI_RUNTIME_AUTH_REQUIRED"
+    "WIKI_OPERATION_FAILED"
       ? "terminal"
       : "retryable",
     options?: ErrorOptions,

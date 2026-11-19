@@ -34,9 +34,10 @@ export function WikiRefreshBanner({
       />
     );
   if (!failed) return null;
-  const message = failureReason
-    ? failureMessages[failureReason]
-    : "Wiki update failed";
+  const message =
+    failureReason && Object.hasOwn(failureMessages, failureReason)
+      ? failureMessages[failureReason]
+      : "Wiki update failed";
   return (
     <div
       className="mb-6 flex min-h-9 items-center gap-2 rounded-lg border border-[var(--app-status-danger-border)] bg-[var(--app-status-danger-surface)] px-4 py-2 text-xs font-medium text-[var(--app-status-danger-text)]"

@@ -53,6 +53,44 @@ const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/u;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
 const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
 
+type RuntimeActorAssetErrorCode =
+  | "WIKI_RUNTIME_INCOMPATIBLE"
+  | "WIKI_RUNTIME_AUTH_REQUIRED"
+  | "WIKI_RUNTIME_UNAVAILABLE";
+
+interface RuntimeActorErrorSpec {
+  readonly disposition: "retryable" | "terminal";
+  readonly status: 500 | 503;
+  readonly message: string;
+}
+
+const RUNTIME_ACTOR_ERRORS: Record<
+  RuntimeActorAssetErrorCode,
+  RuntimeActorErrorSpec
+> = {
+  WIKI_RUNTIME_INCOMPATIBLE: {
+    disposition: "terminal",
+    status: 500,
+    message: "The Wiki owner's Local Computer Runtime is incompatible",
+  },
+  WIKI_RUNTIME_AUTH_REQUIRED: {
+    disposition: "terminal",
+    status: 500,
+    message: "The Wiki owner's Local Computer Runtime requires sign-in",
+  },
+  WIKI_RUNTIME_UNAVAILABLE: {
+    disposition: "retryable",
+    status: 503,
+    message: "The Wiki owner's Local Computer Runtime is unavailable",
+  },
+};
+
+function isRuntimeActorAssetErrorCode(
+  code: ActorAssetError["code"],
+): code is RuntimeActorAssetErrorCode {
+  return Object.hasOwn(RUNTIME_ACTOR_ERRORS, code);
+}
+
 export class WikiRefreshCandidateError extends Error {
   constructor(
     readonly code:
@@ -225,37 +263,14 @@ export class WikiRefreshCandidateService {
         }
         if (
           error instanceof ActorAssetError &&
-          error.code === "WIKI_RUNTIME_INCOMPATIBLE"
+          isRuntimeActorAssetErrorCode(error.code)
         ) {
+          const spec = RUNTIME_ACTOR_ERRORS[error.code];
           throw new WikiRefreshCandidateError(
-            "WIKI_RUNTIME_INCOMPATIBLE",
-            "terminal",
-            500,
-            "The Wiki owner's Local Computer Runtime is incompatible",
-            { cause: error },
-          );
-        }
-        if (
-          error instanceof ActorAssetError &&
-          error.code === "WIKI_RUNTIME_AUTH_REQUIRED"
-        ) {
-          throw new WikiRefreshCandidateError(
-            "WIKI_RUNTIME_AUTH_REQUIRED",
-            "terminal",
-            500,
-            "The Wiki owner's Local Computer Runtime requires sign-in",
-            { cause: error },
-          );
-        }
-        if (
-          error instanceof ActorAssetError &&
-          error.code === "WIKI_RUNTIME_UNAVAILABLE"
-        ) {
-          throw new WikiRefreshCandidateError(
-            "WIKI_RUNTIME_UNAVAILABLE",
-            "retryable",
-            503,
-            "The Wiki owner's Local Computer Runtime is unavailable",
+            error.code,
+            spec.disposition,
+            spec.status,
+            spec.message,
             { cause: error },
           );
         }

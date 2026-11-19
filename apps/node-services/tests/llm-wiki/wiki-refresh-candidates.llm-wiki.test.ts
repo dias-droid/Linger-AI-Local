@@ -712,7 +712,7 @@ describe("Wiki refresh candidate HTTP API", () => {
         backend: {
           id: "test-openwiki",
           async generate() {
-            throw new ActorAssetError(code, message);
+            throw new ActorAssetError(code, message, disposition);
           },
         },
       });
