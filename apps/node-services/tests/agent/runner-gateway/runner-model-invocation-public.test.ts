@@ -24,6 +24,7 @@ import { CURRENT_RUNNER_CAPABILITIES } from "../test-support/runner-capabilities
 import { createTestRunnerGateway } from "../test-support/runner-gateway.js";
 import {
   acceptReadyConnection,
+  defaultAgentPlacement,
   hello,
   RecordingPeer,
   event,
@@ -98,6 +99,7 @@ const invoked = (
 
 const connect = async (
   value: RunnerHello = invokingHello(),
+  placement = defaultAgentPlacement(),
 ): Promise<{
   gateway: RunnerGateway;
   peer: RecordingPeer;
@@ -107,11 +109,129 @@ const connect = async (
     createId: sequenceIds(),
   });
   const peer = new RecordingPeer();
-  const connection = await acceptReadyConnection(gateway, peer, value);
+  const connection = await acceptReadyConnection(
+    gateway,
+    peer,
+    value,
+    placement,
+  );
   return { gateway, peer, connection };
 };
 
 describe("RunnerGateway model invocation", () => {
+  it("runs Memory and Wiki on a Pi-only Computer", async () => {
+    const { gateway, peer, connection } = await connect(
+      {
+        ...invokingHello(),
+        runtimes: ["pi"],
+        runtime_diagnostics: runtimeDiagnostics({ ready: ["pi"], link: "api" }),
+      },
+      defaultAgentPlacement({
+        agentId: "agent-another-me",
+        runtime: { type: "pi" },
+      }),
+    );
+    const owner = { tenantId: "tenant-acme", ownerActorId: "human-alice" };
+    const anotherMe = {
+      tenantId: "tenant-acme",
+      agentActorId: "actor-another-me",
+    };
+    const model = createRuntimeModelCall({
+      gateway: runtimeModelGateway(gateway),
+      placements: async () => [
+        {
+          ...owner,
+          agentId: "agent-another-me",
+          agentActorId: anotherMe.agentActorId,
+          computerId: "runner-local",
+          runtimeType: "pi",
+        },
+      ],
+    });
+    try {
+      expect(gateway.supportsModelInvoke("runner-local", "pi")).toBe(true);
+      const memory = model.chain(
+        { kind: "memory", key: "facts", owner },
+        (chain) =>
+          chain.call({
+            step: "extract",
+            schemaName: "facts",
+            outputSchema: { type: "object" },
+            input: "Room fact",
+          }),
+      );
+      await vi.waitFor(() => expect(sentInvocations(peer)).toHaveLength(1));
+      expect(sentInvocations(peer)[0]).toMatchObject({
+        runtime_type: "pi",
+        mode: "structured",
+      });
+      await invoked(connection, sentInvocations(peer)[0]!);
+      await expect(memory).resolves.toMatchObject({
+        output: { summary: "ok" },
+      });
+
+      const wiki = model.chain(
+        { kind: "wiki", key: "refresh", anotherMe },
+        (chain) => chain.text({ step: "write", input: "Wiki evidence" }),
+      );
+      await vi.waitFor(() => expect(sentInvocations(peer)).toHaveLength(2));
+      expect(sentInvocations(peer)[1]).toMatchObject({
+        runtime_type: "pi",
+        mode: "text",
+      });
+      await invoked(connection, sentInvocations(peer)[1]!);
+      await expect(wiki).resolves.toMatchObject({ output: '{"summary":"ok"}' });
+    } finally {
+      model.close();
+      connection.disconnect();
+    }
+  });
+
+  it.each([
+    { daemonVersion: "0.54.0", piReady: true },
+    { daemonVersion: "dev", piReady: false },
+  ])(
+    "never routes an unsupported Pi placement to ready Codex ($daemonVersion, $piReady)",
+    async ({ daemonVersion, piReady }) => {
+      const { gateway, peer, connection } = await connect({
+        ...invokingHello(),
+        daemon_version: daemonVersion,
+        runtimes: piReady ? ["codex", "pi"] : ["codex"],
+        runtime_diagnostics: runtimeDiagnostics({
+          ready: piReady ? ["codex", "pi"] : ["codex"],
+        }),
+      });
+      const model = createRuntimeModelCall({
+        gateway: runtimeModelGateway(gateway),
+        placements: async () => [],
+      });
+      try {
+        expect(gateway.supportsModelInvoke("runner-local", "codex")).toBe(true);
+        await expect(
+          model.text({
+            kind: "memory",
+            key: "facts",
+            input: "Room fact",
+            placement: {
+              tenantId: "tenant-acme",
+              ownerActorId: "human-alice",
+              agentId: "agent-reviewer",
+              computerId: "runner-local",
+              runtimeType: "pi",
+            },
+          }),
+        ).rejects.toMatchObject({
+          kind: "runtime_unavailable",
+          message: expect.stringContaining("Pi"),
+        });
+        expect(sentInvocations(peer)).toEqual([]);
+      } finally {
+        model.close();
+        connection.disconnect();
+      }
+    },
+  );
+
   it("sends model.invoke and resolves with the Daemon's outcome", async () => {
     const { gateway, peer, connection } = await connect();
     try {

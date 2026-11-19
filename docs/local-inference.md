@@ -36,6 +36,21 @@ model, and leaving Local model unloads the local models to free memory. When an
 agent is still working, the switch asks first and ends that work only if you
 confirm.
 
+## Background Memory and Wiki
+
+Memory facts and reports, Agent Memory, and personal Wiki generation use the
+Runtime on the Computer where the relevant Agent is placed. On Pi, these calls
+require a Computer Daemon at 0.55.0 or later and a default Pi model loaded in
+the local library and served over loopback. Downloaded is not Loaded. Use the
+local model setup or **Settings › Models** to load the model and use it for
+Agents. Background Pi calls run without tools or a saved Pi session. If Pi
+or its loaded local default is unavailable, they wait or fail with a Runtime
+error; they do not switch to Codex, Claude Code or a remote Pi model.
+
+A Codex or Claude Code placement can still use the other ready Runtime on
+that Computer. These calls use the chosen Runtime's default endpoint; if
+that endpoint is remote, it receives the input needed for the task.
+
 ## Planning
 
 The planner chooses hardware and model settings together: layer by layer, the

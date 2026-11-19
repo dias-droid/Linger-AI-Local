@@ -336,6 +336,10 @@ func TestGatewayModelInvocationKeepsIdentityAndRawRequest(t *testing.T) {
 		request.InvokeID != "invoke-1" || request.Input != "Question" || string(request.OutputSchema) != `{"type":"object"}` {
 		t.Fatalf("command = %+v request = %+v", command, request)
 	}
+	pi, err := decodeGatewayCommand([]byte(strings.Replace(valid, `"runtime_type":"codex"`, `"runtime_type":"pi"`, 1)))
+	if err != nil || pi.RuntimeType != "pi" {
+		t.Fatalf("Pi model invocation decoded as %+v: %v", pi, err)
+	}
 	for _, change := range [][2]string{
 		{`"protocol_version":"2"`, `"protocol_version":"1.2"`},
 		{`"tenant_id":"tenant-1",`, ""},

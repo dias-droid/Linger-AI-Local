@@ -406,9 +406,9 @@ func TestModelInvokerRejectsUnsupportedOrMissingRuntimes(t *testing.T) {
 	called := false
 	fixture := newCodexInvokeFixture(t, func(context.Context, *exec.Cmd) error { called = true; return nil })
 	request := structuredRequest()
-	request.RuntimeType = "pi"
+	request.RuntimeType = "unsupported"
 	if result := fixture.invoker.Invoke(context.Background(), request); result.Outcome != ModelInvokeRuntimeUnavailable {
-		t.Fatalf("pi result = %+v", result)
+		t.Fatalf("unsupported result = %+v", result)
 	}
 	request.RuntimeType = "claude"
 	if result := fixture.invoker.Invoke(context.Background(), request); result.Outcome != ModelInvokeRuntimeUnavailable {

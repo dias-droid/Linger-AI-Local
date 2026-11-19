@@ -67,7 +67,7 @@ func (t *piTurn) drive(prompt string) {
 func (t *piTurn) startup(prompt string) error {
 	ctx, cancel := context.WithTimeout(t.runCtx, piStartupBudget)
 	defer cancel()
-	if !t.reused {
+	if !t.reused && !t.oneShot {
 		if _, err := t.proc.sessionState(ctx); err != nil {
 			return err
 		}
@@ -201,8 +201,10 @@ func (t *piTurn) settledStatus() (string, string) {
 	case p.waitErr != nil:
 		return statusFailed, "Pi exited unsuccessfully: " + p.waitErr.Error()
 	}
-	if err := piValidateSession(p.sessionDir, p.sessionID, p.contextDir); err != nil {
-		return statusFailed, err.Error()
+	if !t.oneShot {
+		if err := piValidateSession(p.sessionDir, p.sessionID, p.contextDir); err != nil {
+			return statusFailed, err.Error()
+		}
 	}
 	return statusCompleted, ""
 }

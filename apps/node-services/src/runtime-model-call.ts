@@ -20,9 +20,8 @@ import { modelCallPolicies, type ModelCallKind } from "./model-tasks.js";
 type AnotherMePlacement = components["schemas"]["AnotherMePlacement"];
 
 /**
- * Background model calls run on the owner's own Agent Runtime (Codex or
- * Claude) through the Daemon's one-shot model invocation, with the Runtime's
- * default model. No gateway, API key or model name is involved.
+ * Background model calls use the Daemon's one-shot model invocation and the
+ * selected Runtime's default model. The request names no endpoint, key or model.
  */
 
 export type ModelCallEffort = ModelInvoke["reasoning_effort"];
@@ -217,7 +216,7 @@ export interface RuntimeModelCall extends ModelCall {
 export type ModelCallErrorKind =
   /** Offline, updating or draining: retry once the Computer is back. */
   | "computer_offline"
-  /** No model invocation support or no ready Codex or Claude on the Computer. */
+  /** No supported, ready Runtime on the Computer. */
   | "runtime_unavailable"
   /** No owner given and not exactly one Another Me, or the owner or Another
    * Me has no placement. */
@@ -712,11 +711,8 @@ async function resolvePlacement(
   return { placement, key };
 }
 
-/** Where a call on this placement runs: the placement's own Runtime when it
- * can run model calls, else the other ready one on that Computer, and the
- * model that Runtime runs by default, since a model invocation names none.
- * With neither Runtime ready the placement's is still tried, so an offline
- * Computer reports offline. */
+/** Pi stays on Pi, even when it is unavailable. Codex and Claude retain
+ * their same-Computer fallback. Invocations use the selected Runtime's default. */
 function resolveTarget(
   gateway: RuntimeModelGateway,
   placement: ModelPlacement,
@@ -725,14 +721,14 @@ function resolveTarget(
   readonly offline: boolean;
   readonly model?: RuntimeModelInfo;
 } {
-  const preferred: readonly ModelInvoke["runtime_type"][] =
-    placement.runtimeType === "claude"
-      ? ["claude", "codex"]
-      : ["codex", "claude"];
+  const preferred = placement.runtimeType;
+  const fallback = preferred === "claude" ? "codex" : "claude";
   const runtimeType =
-    preferred.find((runtime) =>
-      gateway.supportsModelInvoke(placement.computerId, runtime),
-    ) ?? preferred[0]!;
+    preferred !== "pi" &&
+    !gateway.supportsModelInvoke(placement.computerId, preferred) &&
+    gateway.supportsModelInvoke(placement.computerId, fallback)
+      ? fallback
+      : preferred;
   const models = gateway.runtimeModels(placement.computerId, runtimeType);
   const model = models?.find(({ isDefault }) => isDefault);
   return {

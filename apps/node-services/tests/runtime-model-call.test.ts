@@ -301,9 +301,8 @@ describe("Runtime model call", () => {
   });
 
   it("falls back to the other ready Runtime, and tries its own when none is ready", async () => {
-    const pi = { ...alice, runtimeType: "pi" as const };
     const fallback = setup({
-      placements: [pi],
+      placements: [alice],
       ready: (_computer, runtime) => runtime === "claude",
     });
     await fallback.modelCall.call({ ...ask, input: "x" });

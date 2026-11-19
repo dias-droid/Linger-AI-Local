@@ -4594,7 +4594,7 @@ export const runnerGatewayEnvelopeSchema = {
           $ref: "#/$defs/Id",
         },
         runtime_type: {
-          enum: ["codex", "claude"],
+          enum: ["codex", "claude", "pi"],
         },
         mode: {
           enum: ["structured", "text", "workspace"],

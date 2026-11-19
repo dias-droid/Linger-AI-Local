@@ -25,6 +25,7 @@ import {
   LocalRuntimeAdmissionUnavailableError,
   MINIMUM_CURRENT_COMPUTER_VERSION,
   FIRST_MODEL_INVOKE_CANCEL_COMPUTER_VERSION,
+  FIRST_PI_MODEL_INVOKE_COMPUTER_VERSION,
   FIRST_SERVICE_FEATURES_COMPUTER_VERSION,
   type LocalPlacementRequirement,
   type LocalReasoningEffort,
@@ -814,7 +815,11 @@ export class RunnerConnections {
     const connection = this.#connections.get(runnerId);
     return (
       isServingConnection(connection) &&
-      (runtimeType === "codex" || runtimeType === "claude") &&
+      (runtimeType !== "pi" ||
+        isComputerVersionAtLeast(
+          connection.hello.daemon_version,
+          FIRST_PI_MODEL_INVOKE_COMPUTER_VERSION,
+        )) &&
       connection.hello.runtime_diagnostics.some(
         ({ type, status }) => type === runtimeType && status === "ready",
       )

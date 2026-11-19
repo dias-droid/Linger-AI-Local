@@ -39,6 +39,8 @@ export const FIRST_MODEL_INVOKE_CANCEL_COMPUTER_VERSION = "0.53.0";
 // The first release that runs `model_source` commands. An older Computer
 // closes the connection on a command kind it cannot decode.
 export const FIRST_MODEL_SOURCE_COMPUTER_VERSION = "0.54.0";
+// Older Daemons do not decode Pi as a model_invoke Runtime.
+export const FIRST_PI_MODEL_INVOKE_COMPUTER_VERSION = "0.55.0";
 
 const COMPUTER_RELEASE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 

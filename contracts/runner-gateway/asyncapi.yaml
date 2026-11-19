@@ -41,8 +41,10 @@ info:
     shared_task_scope, and the Computer links the shared Task directory into
     the playground.
     execute with kind model_invoke is a one-shot model call on the Computer's
-    signed-in Codex or Claude CLI that has no Context, takes no execution slot
-    and is not in the Operation ledger. The Agent Service's model scheduler
+    Codex, Claude or Pi Runtime that has no Context, takes no execution slot
+    and is not in the Operation ledger. A Pi call needs a loaded local default
+    model and has no workspace tools. The service sends Pi calls only to a
+    Computer release that can decode them. The Agent Service's model scheduler
     decides when a call is sent; the Daemon runs every call it receives. Its
     optional session_key lets a Daemon answer the structured Codex calls of
     one session in one resident thread; the result is the same either way.

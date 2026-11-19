@@ -409,9 +409,13 @@ func run(args []string) (resultErr error) {
 			RuntimeHomeRoot:  filepath.Join(computer.StateDirectory, "runtime-homes"),
 			Lookup: func(ctx context.Context, runtimeType string) (provider.ModelInvokeRuntime, bool, error) {
 				installed, ok, err := providerCatalog.Lookup(ctx, runtimeType)
-				return provider.ModelInvokeRuntime{
+				runtime := provider.ModelInvokeRuntime{
 					ExecutablePath: installed.ExecutablePath, Environment: installed.Environment, Version: installed.Version,
-				}, ok, err
+				}
+				if runtimeType == "pi" {
+					runtime.LoadedPiModels = localModels.LoadedPiModels()
+				}
+				return runtime, ok, err
 			},
 		},
 	})

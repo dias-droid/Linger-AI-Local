@@ -1022,7 +1022,7 @@ export interface ModelInvoke {
   tenant_id: Id;
   owner_actor_id: Id;
   agent_id: Id;
-  runtime_type: "codex" | "claude";
+  runtime_type: "codex" | "claude" | "pi";
   mode: "structured" | "text" | "workspace";
   reasoning_effort: "low" | "medium" | "high";
   instructions?: string;

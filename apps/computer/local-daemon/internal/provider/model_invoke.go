@@ -106,6 +106,7 @@ type ModelInvokeRuntime struct {
 	ExecutablePath string
 	Environment    map[string]string
 	Version        string
+	LoadedPiModels []string
 }
 
 // ModelInvokeFile is one workspace file, relative to the working directory.
@@ -149,7 +150,7 @@ type ModelInvokeResult struct {
 	Reason         string
 }
 
-// ModelInvoker runs one-shot model calls on the installed Codex or Claude CLI
+// ModelInvoker runs one-shot model calls on the installed Runtime
 // in a fresh temporary directory. It never injects the Linger CLI credential
 // and never loads the user's instructions, MCP servers, hooks or Skills.
 type ModelInvoker struct {
@@ -220,7 +221,7 @@ type modelInvocation struct {
 // Invoke runs one model call and always returns a result; failures are
 // classified into outcomes instead of returned as errors.
 func (m ModelInvoker) Invoke(ctx context.Context, request ModelInvokeRequest) ModelInvokeResult {
-	if request.RuntimeType != "codex" && request.RuntimeType != "claude" {
+	if !native.Supports(request.RuntimeType) {
 		return ModelInvokeResult{Outcome: ModelInvokeRuntimeUnavailable, Reason: "Runtime does not support model invocation"}
 	}
 	if m.Lookup == nil {
@@ -250,6 +251,9 @@ func (m ModelInvoker) invoke(ctx context.Context, request ModelInvokeRequest, in
 		if err := os.Mkdir(directory, 0o700); err != nil {
 			return ModelInvokeResult{Outcome: ModelInvokeFailed, Reason: "Prepare model invocation directory: " + err.Error()}
 		}
+	}
+	if request.RuntimeType == "pi" {
+		return invokePiModel(ctx, request, installed, work, scratch)
 	}
 	if request.Mode == ModelInvokeWorkspace {
 		if err := writeModelInvokeFiles(work, request.WorkspaceFiles); err != nil {

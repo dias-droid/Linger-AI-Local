@@ -32,13 +32,15 @@ take precedence.
 
 - Keep model/provider behavior behind the existing runtime interfaces. The only
   exception is `src/runtime-model-call.ts`: a stateless prompt on the owner's
-  Agent Runtime (Codex or Claude, the Runtime's default model) through the
+  Agent Runtime (Codex, Claude or Pi, using its default model) through the
   Daemon's one-shot `model.invoke`, for tool-less service work such as Agent
-  Memory, also used by Memory, by the LLM Wiki (workspace mode), and exposed
+  Memory, also used by Memory, by the LLM Wiki, and exposed
   to TeamHub as `POST /v1/model-calls`.
   It is not a Runtime turn and never creates a Context, Local Run, or
   Operation. Callers name an owner (or an Agent placement) and a reasoning
-  effort; never add a model name, gateway, or model environment variable.
+  effort; never add a model name, gateway, or model environment variable. Pi
+  stays on Pi and requires a loaded local default. It serves structured and
+  text calls without tools; workspace mode remains on Codex and Claude.
 - TeamHub owns persisted Agent Runtime configuration, Execution Context,
   accepted input, Inbox cursor, Local Run, RuntimeSession, Runtime status,
   Local Computer and Agent placement state. Agent Runners and Operations live
