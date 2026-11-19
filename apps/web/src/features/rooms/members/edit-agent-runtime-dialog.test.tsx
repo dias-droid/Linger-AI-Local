@@ -414,15 +414,106 @@ describe("EditAgentRuntimeDialog", () => {
     expect(screen.getByRole("button", { name: "Move Agent" })).toBeDisabled();
     expect(onSave).not.toHaveBeenCalled();
   });
+
+  it("links Pi runtime settings to Local models when ready with models", async () => {
+    const onClose = vi.fn();
+    const computer = localComputer("computer-old", "Old Mac", "online");
+    computer.runtimes = [
+      ...computer.runtimes,
+      {
+        models: [
+          {
+            id: "localmodels-library/qwen3-coder-30b",
+            label: "Qwen3 Coder 30B",
+          },
+        ],
+        status: "ready",
+        type: "pi",
+      },
+    ];
+    renderDialog({
+      computersOverride: { items: [computer] },
+      onClose,
+      onSave: vi.fn(),
+    });
+    const runtime = await screen.findByRole("combobox", {
+      name: "Agent runtime",
+    });
+    fireEvent.click(runtime);
+    fireEvent.click(await screen.findByRole("option", { name: "Pi" }));
+
+    const link = await screen.findByRole("link", { name: "Settings › Models" });
+    expect(link).toHaveAttribute(
+      "href",
+      "/t/tenant-northstar/settings/models?computer=computer-old",
+    );
+    expect(link.closest("p")).toHaveTextContent(
+      "Manage downloaded models in Settings › Models.",
+    );
+    fireEvent.click(link);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["ready-empty", "not-installed"] as const)(
+    "guides Pi setup in Local models when %s",
+    async (mode) => {
+      const onClose = vi.fn();
+      const computer = localComputer("computer-old", "Old Mac", "online");
+      computer.runtimes = [
+        ...computer.runtimes,
+        mode === "ready-empty"
+          ? {
+              models: [],
+              status: "ready",
+              type: "pi",
+            }
+          : {
+              message: "Install Pi on this computer.",
+              models: [],
+              status: "not_installed",
+              type: "pi",
+            },
+      ];
+      renderDialog({
+        computersOverride: { items: [computer] },
+        onClose,
+        onSave: vi.fn(),
+      });
+      const runtime = await screen.findByRole("combobox", {
+        name: "Agent runtime",
+      });
+      fireEvent.click(runtime);
+      fireEvent.click(
+        await screen.findByRole("option", {
+          name: mode === "ready-empty" ? "Pi" : "Pi · Unavailable",
+        }),
+      );
+
+      const link = await screen.findByRole("link", {
+        name: "Settings › Models",
+      });
+      expect(link).toHaveAttribute(
+        "href",
+        "/t/tenant-northstar/settings/models?computer=computer-old",
+      );
+      expect(link.closest("p")).toHaveTextContent(
+        "Download and load a local model in Settings › Models to run Agents with Pi on this computer.",
+      );
+      fireEvent.click(link);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    },
+  );
 });
 
 function renderDialog({
   field = "runtime",
+  onClose = vi.fn(),
   onSave,
   registration = localCodexAgent(),
   computersOverride,
 }: {
   field?: AgentRuntimeField;
+  onClose?: () => void;
   onSave: (input: AgentRuntimeUpdateInput) => void;
   registration?: TeamHubTenantAgent;
   computersOverride?: TeamHubLocalComputerPage;
@@ -447,7 +538,7 @@ function renderDialog({
         field={field}
         client={client}
         isPending={false}
-        onClose={vi.fn()}
+        onClose={onClose}
         onSave={onSave}
         registration={registration}
         tenantId="tenant-northstar"

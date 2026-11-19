@@ -9,6 +9,7 @@ import {
 import { describe, expect, it, vi } from "vitest";
 
 import { createTestTeamHubRuntime } from "@/test/teamhub-test-runtime";
+import { labView } from "@/features/local-models/local-models-test-support";
 import type { TestRouteHandler } from "@/test/teamhub-test-server";
 import type {
   TeamHubTenantAgent,
@@ -105,6 +106,66 @@ describe("Direct Agent runtime settings", () => {
     ).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(updateTenantAgent).not.toHaveBeenCalled();
+  });
+
+  it("resolves Bifrost localmodels-library model names from local-models before Pi lists them", async () => {
+    const base = localAgent();
+    const piAgent: TeamHubTenantAgent = {
+      ...base,
+      runtime: {
+        model: "localmodels-library/qwen3-coder-30b",
+        placement: {
+          computer_id: "computer-1",
+          runtime_type: "pi",
+          type: "local",
+          workspace_grant_id: "grant-1",
+        },
+      },
+    };
+    const runtime = createTestTeamHubRuntime();
+    runtime.server.on("GET", "/v0/tenants/{tenantId}/local-computers", () => ({
+      items: [
+        {
+          computer_id: "computer-1",
+          display_name: "Computer",
+          runtimes: [{ models: [], status: "ready", type: "pi" }],
+          status: "online",
+          workspace_grants: [
+            {
+              grant_id: "grant-1",
+              label: "Workspace",
+              mode: "workspace-write",
+            },
+          ],
+        },
+      ],
+    }));
+    runtime.server.on(
+      "GET",
+      "/v0/tenants/{tenantId}/local-computers/{computerId}/local-models",
+      () => labView(),
+    );
+
+    render(
+      <QueryClientProvider
+        client={
+          new QueryClient({
+            defaultOptions: { queries: { retry: false } },
+          })
+        }
+      >
+        <DirectAgentModelSwitch
+          client={runtime.client}
+          currentActorId="actor-jenny"
+          registration={piAgent}
+          tenantId="tenant-northstar"
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByRole("button", { name: "Qwen3 Coder 30B" }),
+    ).toBeVisible();
   });
 });
 

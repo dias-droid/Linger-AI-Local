@@ -13,11 +13,19 @@ import {
   QwenIcon,
 } from "@hugeicons/core-free-icons";
 import { useId, type MouseEvent } from "react";
+import { Link, useInRouterContext } from "react-router";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonClassName } from "@/components/ui/button";
 import { Icon, type IconSvgElement } from "@/components/ui/icon";
+import type { TeamHubLocalComputerPage } from "@/features/teamhub/teamhub-types";
 import { cn } from "@/lib/cn";
 
+import {
+  type AssignableLocalModelAgent,
+  isAgentUsingModel,
+  primaryLocalModelAgent,
+  usedByAgentNames,
+} from "./local-model-agents";
 import { ModelFacts } from "./local-model-details";
 import { unavailableShortCopy } from "./local-models-copy";
 import type {
@@ -26,14 +34,13 @@ import type {
   LocalModelsView,
 } from "./local-models-queries";
 import {
-  agentNames,
   collapsedRowBadges,
   downloadPercent,
   downloadStatusDetail,
   downloadStopped,
   formatGigabytes,
+  isModelOnComputer,
   placeName,
-  usedByBadge,
   type ModelEntry,
   type ModelStatus,
 } from "./local-models-rules";
@@ -155,6 +162,32 @@ function stopRowClick(event: MouseEvent) {
   event.stopPropagation();
 }
 
+function OpenChatLink({
+  href,
+  onClick,
+}: {
+  href: string;
+  onClick: (event: MouseEvent) => void;
+}) {
+  const className = buttonClassName({
+    className: "px-2.5",
+    size: "compact",
+    tone: "ghost",
+  });
+  if (useInRouterContext()) {
+    return (
+      <Link className={className} onClick={onClick} to={href}>
+        Open chat
+      </Link>
+    );
+  }
+  return (
+    <a className={className} href={href} onClick={onClick}>
+      Open chat
+    </a>
+  );
+}
+
 function RowStatusLine({
   detail,
   download,
@@ -221,16 +254,16 @@ function RowStatusLine({
 
 function RowMetadataPills({
   badges,
-  entry,
   overflowTitle,
   status,
   usedBy,
+  usedByTitle,
 }: {
   badges: string[];
-  entry: ModelEntry;
   overflowTitle?: string;
   status: ModelStatus;
   usedBy?: string;
+  usedByTitle?: string;
 }) {
   return (
     <div
@@ -247,7 +280,7 @@ function RowMetadataPills({
               ? "bg-[var(--app-status-success-surface)] text-app-success"
               : "bg-muted text-secondary-foreground",
           )}
-          title={`Used by ${agentNames(entry)}`}
+          title={usedByTitle}
         >
           {usedBy}
         </span>
@@ -300,18 +333,28 @@ function DownloadProgress({
  * header carries the status and one action, and which expands to the details.
  */
 export function ModelRow({
+  anotherMeChatHref,
+  assignableAgents = [],
+  assigningAgentId,
+  computer,
   disabled,
   entry,
   expanded,
+  onAssignAgent,
   requested,
   switchingForAgents = false,
   view,
   ...handlers
 }: Handlers & {
+  anotherMeChatHref?: string;
+  assignableAgents?: readonly AssignableLocalModelAgent[];
+  assigningAgentId?: string;
+  computer?: TeamHubLocalComputerPage["items"][number];
   /** Actions are off: the Computer is offline, the viewer only reads, or one is pending. */
   disabled: boolean;
   entry: ModelEntry;
   expanded: boolean;
+  onAssignAgent?: (agent: AssignableLocalModelAgent) => void;
   /** An action asked for and not yet in a snapshot. */
   requested?: LocalModelAction;
   switchingForAgents?: boolean;
@@ -339,7 +382,26 @@ export function ModelRow({
   const slower =
     status === "available" && !model.recommended && model.fit === "system";
   const brand = familyBrand(model.family);
-  const usedBy = usedByBadge(entry);
+  const computerId = view.computer.computer_id;
+  const usedNames = usedByAgentNames(entry, assignableAgents, computerId);
+  const usedBy =
+    isModelOnComputer(model, status) && usedNames.length
+      ? usedNames.length === 1
+        ? "1 Agent"
+        : `${usedNames.length} Agents`
+      : undefined;
+  const usedByTitle = usedNames.length
+    ? `Used by ${usedNames.join(", ")}`
+    : undefined;
+  const primaryAgent = primaryLocalModelAgent(assignableAgents);
+  const primaryUsing = primaryAgent
+    ? isAgentUsingModel(entry, primaryAgent, computerId)
+    : false;
+  const canUsePrimary =
+    status === "loaded" &&
+    Boolean(model.pi_model) &&
+    Boolean(primaryAgent) &&
+    Boolean(onAssignAgent);
   const { badges, overflowTitle } = collapsedRowBadges(model);
   const hasMeta = Boolean(usedBy) || badges.length > 0;
   const detail = {
@@ -430,10 +492,10 @@ export function ModelRow({
         {hasMeta ? (
           <RowMetadataPills
             badges={badges}
-            entry={entry}
             overflowTitle={overflowTitle}
             status={status}
             usedBy={usedBy}
+            usedByTitle={usedByTitle}
           />
         ) : null}
         <div
@@ -457,6 +519,37 @@ export function ModelRow({
             >
               Use for Agents
             </Button>
+          ) : canUsePrimary &&
+            primaryAgent &&
+            !primaryUsing &&
+            onAssignAgent ? (
+            <Button
+              aria-label={`Use ${model.name} with ${primaryAgent.name}`}
+              className="px-2.5"
+              disabled={
+                disabled || primaryAgent.busy || Boolean(assigningAgentId)
+              }
+              loading={assigningAgentId === primaryAgent.actorId}
+              onClick={(event) => {
+                stopRowClick(event);
+                onAssignAgent(primaryAgent);
+              }}
+              size="compact"
+              title={
+                primaryAgent.busy
+                  ? `Wait for ${primaryAgent.name} to finish the current turn`
+                  : undefined
+              }
+              tone="primary"
+            >
+              Use with {primaryAgent.name}
+            </Button>
+          ) : !handlers.onUseForAgents &&
+            canUsePrimary &&
+            primaryAgent?.isAnotherMe &&
+            primaryUsing &&
+            anotherMeChatHref ? (
+            <OpenChatLink href={anotherMeChatHref} onClick={stopRowClick} />
           ) : null}
           {action ? (
             <Button
@@ -514,7 +607,15 @@ export function ModelRow({
               {model.description}
             </p>
           ) : null}
-          <ModelFacts entry={entry} view={view} />
+          <ModelFacts
+            assignableAgents={assignableAgents}
+            assigningAgentId={assigningAgentId}
+            computer={computer}
+            disabled={disabled}
+            entry={entry}
+            onAssignAgent={onAssignAgent}
+            view={view}
+          />
           {removable || stopped ? (
             <div className="mt-2 border-t border-border/70 pt-2.5">
               {removable ? (
