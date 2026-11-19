@@ -26,8 +26,11 @@ import {
   modelSourceModeLabels,
   modelSourceRuntimeLabels,
 } from "./local-models-copy";
-import { tenantLocalModelsQueryKey } from "./local-models-queries";
-import { contextLabel } from "./local-models-rules";
+import {
+  type LocalModel,
+  tenantLocalModelsQueryKey,
+} from "./local-models-queries";
+import { contextLabel, formatGigabytes } from "./local-models-rules";
 import {
   type ByokInput,
   type ByokModel,
@@ -268,38 +271,63 @@ function Panel({ children, title }: { children: ReactNode; title: string }) {
 /** Offered above the library while the Agents use another source. */
 export function SwitchToLocalNotice({
   disabled,
-  modelId,
-  modelName,
+  models,
   switcher,
 }: {
   disabled: boolean;
-  modelId: string | undefined;
-  modelName: string | undefined;
+  models: readonly LocalModel[];
   switcher: ModelSourceSwitcher;
 }) {
+  const [selectedId, setSelectedId] = useState<string | undefined>(
+    () => models[0]?.id,
+  );
+  const chosen = models.find((model) => model.id === selectedId) ?? models[0];
+  const single = models.length === 1 ? models[0] : undefined;
+
   return (
-    <div className="mt-6 flex items-center justify-between gap-4 rounded-xl bg-muted px-4 py-3">
-      <p className="text-sm text-muted-foreground">
-        {modelName ? (
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-muted px-4 py-3">
+      <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+        {single ? (
           <>
-            <span className="text-foreground">{modelName}</span> is on this
+            <span className="text-foreground">{single.name}</span> is on this
             computer and can run your Agents locally.
           </>
+        ) : models.length > 1 ? (
+          "Choose a model on this computer to run your Agents locally."
         ) : (
           "Download a model below to run your Agents locally."
         )}
       </p>
-      <Button
-        disabled={disabled || !modelId}
-        loading={switcher.pending?.mode === "local"}
-        onClick={() =>
-          switcher.request({ local_model_id: modelId, mode: "local" })
-        }
-        size="compact"
-        tone="primary"
-      >
-        Switch to Local model
-      </Button>
+      <div className="flex shrink-0 flex-wrap items-center gap-2">
+        {models.length > 1 && chosen ? (
+          <Select
+            aria-label="Local model"
+            onValueChange={setSelectedId}
+            value={chosen.id}
+            variant="pill"
+          >
+            {models.map((model) => (
+              <SelectItem key={model.id} value={model.id}>
+                {model.name} ·{" "}
+                {model.state === "loaded" ? "Loaded" : "Downloaded"} ·{" "}
+                {formatGigabytes(model.memory_bytes)}
+              </SelectItem>
+            ))}
+          </Select>
+        ) : null}
+        <Button
+          disabled={disabled || !chosen}
+          loading={switcher.pending?.mode === "local"}
+          onClick={() =>
+            chosen &&
+            switcher.request({ local_model_id: chosen.id, mode: "local" })
+          }
+          size="compact"
+          tone="primary"
+        >
+          Switch to Local model
+        </Button>
+      </div>
     </div>
   );
 }

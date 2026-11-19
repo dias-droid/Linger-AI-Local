@@ -8,8 +8,10 @@ import {
   formatGigabytes,
   isModelOnComputer,
   loadCheck,
+  localSwitchTargets,
   makeRoomSelection,
   makesRoom,
+  memoryGuidance,
   memorySummary,
   modelCapabilities,
   modelEntries,
@@ -17,6 +19,8 @@ import {
   parametersLabel,
   placeName,
   poolLabel,
+  poolOtherBytes,
+  poolRoomCheck,
   safeModelSourceUrl,
   speedLabel,
   usedByBadge,
@@ -82,15 +86,112 @@ describe("local models rules", () => {
 
   it("adds up GPU memory, or the memory of a Computer without GPUs", () => {
     expect(memorySummary(labView())).toEqual({
+      freeBytes: gb(2.6) + gb(22.9),
       gpu: true,
       totalBytes: gb(24) * 2,
       usedBytes: gb(21.4) + gb(1.1),
     });
     expect(memorySummary(macView())).toEqual({
+      freeBytes: gb(51.2) - gb(14.3),
       gpu: false,
       totalBytes: gb(51.2),
       usedBytes: gb(14.3),
     });
+  });
+
+  it("detects external app memory and surfaces cleanup guidance when it blocks models", () => {
+    expect(memoryGuidance(labView())).toBeNull();
+    expect(memoryGuidance(macView())).toBeNull();
+
+    const busyGpu = {
+      ...gpuPool(0, 24, [{ gb: 4, id: "small", name: "Small" }]),
+      used_bytes: gb(18),
+    };
+    expect(poolOtherBytes(busyGpu)).toBe(gb(14));
+    expect(poolRoomCheck(labView(), busyGpu, gb(8))?.freeBytes).toBe(gb(6));
+
+    // A game holds 14 GB on a 24 GB card, so a 14 GB model is marked MEMORY_INSUFFICIENT.
+    const blockedDownload = labView({
+      models: [
+        modelView(
+          localModel({
+            availability: {
+              downloadable: false,
+              reason: {
+                code: "MEMORY_INSUFFICIENT",
+                have_bytes: gb(6),
+                need_bytes: gb(14),
+              },
+            },
+            fit: "none",
+            id: "qwen3.8-27b:IQ3_S",
+            name: "Qwen3.8 27B",
+            pool: undefined,
+          }),
+        ),
+      ],
+      pools: [busyGpu],
+    });
+    expect(memoryGuidance(blockedDownload)).toMatchObject({
+      gpu: true,
+      kind: "blocked_download",
+      otherBytes: gb(14),
+    });
+
+    const blockedLoad = labView({
+      models: [
+        modelView(
+          localModel({
+            id: "gemma3-12b:Q4_K_M",
+            memory_bytes: gb(10),
+            name: "Gemma 3 12B",
+            note: { code: "NO_ROOM_TO_LOAD" },
+            pool: "gpu:0",
+            state: "idle",
+          }),
+        ),
+      ],
+      pools: [busyGpu],
+    });
+    expect(memoryGuidance(blockedLoad)).toMatchObject({
+      gpu: true,
+      kind: "blocked_load",
+      otherBytes: gb(14),
+    });
+  });
+
+  it("orders local switch targets with loaded models first, then recommended, then largest", () => {
+    const idleLarge = localModel({
+      id: "large:Q4",
+      memory_bytes: gb(20),
+      name: "Large",
+      state: "idle",
+    });
+    const idleSmallRec = localModel({
+      id: "small:Q4",
+      memory_bytes: gb(4),
+      name: "Small",
+      recommended: true,
+      state: "idle",
+    });
+    const loadedOther = localModel({
+      id: "loaded:Q4",
+      memory_bytes: gb(8),
+      name: "Loaded",
+      state: "loaded",
+    });
+    const view = macView({
+      models: [
+        modelView(idleLarge),
+        modelView(idleSmallRec),
+        modelView(loadedOther),
+      ],
+    });
+    expect(localSwitchTargets(view).map((model) => model.id)).toEqual([
+      "loaded:Q4",
+      "small:Q4",
+      "large:Q4",
+    ]);
   });
 
   it("loads at once when the reported pool has room", () => {

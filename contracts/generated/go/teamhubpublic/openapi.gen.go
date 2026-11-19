@@ -2444,6 +2444,21 @@ func (e LocalModelsErrorCode) Valid() bool {
 	}
 }
 
+// Defines values for LocalModelsRefreshAcceptedAction.
+const (
+	LocalModelsRefreshAcceptedRefresh LocalModelsRefreshAcceptedAction = "refresh"
+)
+
+// Valid indicates whether the value is a known member of the LocalModelsRefreshAcceptedAction enum.
+func (e LocalModelsRefreshAcceptedAction) Valid() bool {
+	switch e {
+	case LocalModelsRefreshAcceptedRefresh:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LocalModelsViewUnavailableReasonCode.
 const (
 	LocalModelsViewNotReported      LocalModelsViewUnavailableReasonCode = "NOT_REPORTED"
@@ -2801,6 +2816,7 @@ const (
 	ModelSourceErrorCodeByokUnreachable               ModelSourceErrorCode = "BYOK_UNREACHABLE"
 	ModelSourceErrorCodeByokUpstreamRejected          ModelSourceErrorCode = "BYOK_UPSTREAM_REJECTED"
 	ModelSourceErrorCodeLocalComputerOffline          ModelSourceErrorCode = "LOCAL_COMPUTER_OFFLINE"
+	ModelSourceErrorCodeLocalModelNoRoom              ModelSourceErrorCode = "LOCAL_MODEL_NO_ROOM"
 	ModelSourceErrorCodeLocalModelUnknown             ModelSourceErrorCode = "LOCAL_MODEL_UNKNOWN"
 	ModelSourceErrorCodeModelSourceFailed             ModelSourceErrorCode = "MODEL_SOURCE_FAILED"
 	ModelSourceErrorCodeModelSourceForbidden          ModelSourceErrorCode = "MODEL_SOURCE_FORBIDDEN"
@@ -2826,6 +2842,8 @@ func (e ModelSourceErrorCode) Valid() bool {
 	case ModelSourceErrorCodeByokUpstreamRejected:
 		return true
 	case ModelSourceErrorCodeLocalComputerOffline:
+		return true
+	case ModelSourceErrorCodeLocalModelNoRoom:
 		return true
 	case ModelSourceErrorCodeLocalModelUnknown:
 		return true
@@ -6708,6 +6726,17 @@ type LocalModelsErrorResponse struct {
 	Error LocalModelsError `json:"error"`
 }
 
+// LocalModelsRefreshAccepted defines model for LocalModelsRefreshAccepted.
+type LocalModelsRefreshAccepted struct {
+	Action LocalModelsRefreshAcceptedAction `json:"action"`
+
+	// ComputerId Opaque, case-sensitive identifier. Clients must not infer type or time from it.
+	ComputerId Id `json:"computer_id"`
+}
+
+// LocalModelsRefreshAcceptedAction defines model for LocalModelsRefreshAccepted.Action.
+type LocalModelsRefreshAcceptedAction string
+
 // LocalModelsView One Computer's model library as last reported. Only the Computer owner can act (viewer_is_owner); other Tenant members who can see the Computer read it.
 type LocalModelsView struct {
 	Available bool                `json:"available"`
@@ -7212,7 +7241,7 @@ type MessageThreadSummaryUpdatedPayload struct {
 
 // ModelSourceError The common error body with error.code narrowed to ModelSourceErrorCode.
 type ModelSourceError struct {
-	// Code error.code of a refused model-source request (403, 409, 502, 503, 504); 400, 401, and 404 use the common codes. LOCAL_COMPUTER_OFFLINE: the Computer is not connected. MODEL_SOURCE_FORBIDDEN: the viewer is not the Computer owner. MODEL_SOURCE_UNAVAILABLE: the Computer has no localmodels tool or cannot switch model sources. AGENT_HAS_ACTIVE_RUNS: Agents on the Computer have running work and force_terminate was false; details carries one entry per such Agent, with field "agent" and the Agent's display name as reason. RUNTIME_NOT_ENABLED, LOCAL_MODEL_UNKNOWN, and the BYOK_ codes are the Computer's refusals (409). MODEL_SOURCE_FAILED: the Computer failed with an error that has no code of its own here (502). MODEL_SOURCE_SERVICE_UNAVAILABLE: Agent Service could not be reached (503). MODEL_SOURCE_UNCONFIRMED: the Computer had not answered by the deadline; it may still switch (504).
+	// Code error.code of a refused model-source request (403, 409, 502, 503, 504); 400, 401, and 404 use the common codes. LOCAL_COMPUTER_OFFLINE: the Computer is not connected. MODEL_SOURCE_FORBIDDEN: the viewer is not the Computer owner. MODEL_SOURCE_UNAVAILABLE: the Computer has no localmodels tool or cannot switch model sources. AGENT_HAS_ACTIVE_RUNS: Agents on the Computer have running work and force_terminate was false; details carries one entry per such Agent, with field "agent" and the Agent's display name as reason. RUNTIME_NOT_ENABLED, LOCAL_MODEL_NO_ROOM, LOCAL_MODEL_UNKNOWN, and the BYOK_ codes are the Computer's refusals (409). MODEL_SOURCE_FAILED: the Computer failed with an error that has no code of its own here (502). MODEL_SOURCE_SERVICE_UNAVAILABLE: Agent Service could not be reached (503). MODEL_SOURCE_UNCONFIRMED: the Computer had not answered by the deadline; it may still switch (504).
 	Code    ModelSourceErrorCode `json:"code"`
 	Details *[]ErrorDetail       `json:"details,omitempty"`
 
@@ -7221,7 +7250,7 @@ type ModelSourceError struct {
 	RequestId string `json:"request_id"`
 }
 
-// ModelSourceErrorCode error.code of a refused model-source request (403, 409, 502, 503, 504); 400, 401, and 404 use the common codes. LOCAL_COMPUTER_OFFLINE: the Computer is not connected. MODEL_SOURCE_FORBIDDEN: the viewer is not the Computer owner. MODEL_SOURCE_UNAVAILABLE: the Computer has no localmodels tool or cannot switch model sources. AGENT_HAS_ACTIVE_RUNS: Agents on the Computer have running work and force_terminate was false; details carries one entry per such Agent, with field "agent" and the Agent's display name as reason. RUNTIME_NOT_ENABLED, LOCAL_MODEL_UNKNOWN, and the BYOK_ codes are the Computer's refusals (409). MODEL_SOURCE_FAILED: the Computer failed with an error that has no code of its own here (502). MODEL_SOURCE_SERVICE_UNAVAILABLE: Agent Service could not be reached (503). MODEL_SOURCE_UNCONFIRMED: the Computer had not answered by the deadline; it may still switch (504).
+// ModelSourceErrorCode error.code of a refused model-source request (403, 409, 502, 503, 504); 400, 401, and 404 use the common codes. LOCAL_COMPUTER_OFFLINE: the Computer is not connected. MODEL_SOURCE_FORBIDDEN: the viewer is not the Computer owner. MODEL_SOURCE_UNAVAILABLE: the Computer has no localmodels tool or cannot switch model sources. AGENT_HAS_ACTIVE_RUNS: Agents on the Computer have running work and force_terminate was false; details carries one entry per such Agent, with field "agent" and the Agent's display name as reason. RUNTIME_NOT_ENABLED, LOCAL_MODEL_NO_ROOM, LOCAL_MODEL_UNKNOWN, and the BYOK_ codes are the Computer's refusals (409). MODEL_SOURCE_FAILED: the Computer failed with an error that has no code of its own here (502). MODEL_SOURCE_SERVICE_UNAVAILABLE: Agent Service could not be reached (503). MODEL_SOURCE_UNCONFIRMED: the Computer had not answered by the deadline; it may still switch (504).
 type ModelSourceErrorCode string
 
 // ModelSourceErrorResponse defines model for ModelSourceErrorResponse.

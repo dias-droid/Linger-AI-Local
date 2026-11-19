@@ -1,6 +1,6 @@
 import type { components } from "@linger/wire-contracts/teamhub-public/types";
 
-import { formatGigabytes } from "./local-models-rules";
+import { formatGigabytes, type MemoryGuidance } from "./local-models-rules";
 
 type Schemas = components["schemas"];
 
@@ -28,7 +28,7 @@ const actionRefusals: Record<Schemas["LocalModelsErrorCode"], string> = {
   LOCAL_MODEL_MEMORY_INSUFFICIENT:
     "The computer doesn't have enough memory for this model.",
   LOCAL_MODEL_NO_ROOM:
-    "There isn't enough free memory to load it. Unload another model first.",
+    "There isn't enough free memory to load it. Close memory-heavy apps or unload another model, then recheck memory.",
   LOCAL_MODEL_PLATFORM_UNSUPPORTED: "This model doesn't run on this computer.",
   LOCAL_MODEL_UNKNOWN: "The computer doesn't have this model anymore.",
   LOCAL_MODELS_SERVICE_UNAVAILABLE:
@@ -105,7 +105,10 @@ export function unavailableShortCopy(reason: AvailabilityReason | undefined) {
 }
 
 /** The full reason a model can't be downloaded, shown in its details. */
-export function unavailableCopy(reason: AvailabilityReason | undefined) {
+export function unavailableCopy(
+  reason: AvailabilityReason | undefined,
+  reclaimable = false,
+) {
   const need =
     reason?.need_bytes === undefined
       ? undefined
@@ -115,10 +118,15 @@ export function unavailableCopy(reason: AvailabilityReason | undefined) {
       ? undefined
       : formatGigabytes(reason.have_bytes);
   switch (reason?.code) {
-    case "MEMORY_INSUFFICIENT":
-      return need && have
-        ? `Needs ${need} of memory; this computer has ${have} for models.`
-        : "This computer doesn't have enough memory for it.";
+    case "MEMORY_INSUFFICIENT": {
+      const base =
+        need && have
+          ? `Needs ${need} of memory; this computer has ${have} for models.`
+          : "This computer doesn't have enough memory for it.";
+      return reclaimable
+        ? `${base} Close memory-heavy apps and recheck memory.`
+        : base;
+    }
     case "DISK_INSUFFICIENT":
       return need && have
         ? `Needs ${need} of disk; ${have} is free.`
@@ -190,6 +198,8 @@ const modelSourceRefusals: Record<Schemas["ModelSourceErrorCode"], string> = {
   BYOK_UPSTREAM_REJECTED: "The endpoint rejected the test request.",
   LOCAL_COMPUTER_OFFLINE:
     "The computer is offline. Reconnect it in Computers, then try again.",
+  LOCAL_MODEL_NO_ROOM:
+    "There isn't enough free memory on the computer to load that model. Close memory-heavy apps or unload another model, recheck memory, and try again.",
   LOCAL_MODEL_UNKNOWN: "The computer doesn't have this model anymore.",
   MODEL_SOURCE_FAILED: "The computer couldn't switch. Try again.",
   MODEL_SOURCE_FORBIDDEN:
@@ -223,3 +233,28 @@ export const byokProtocolLabels: Record<Schemas["ByokProtocol"], string> = {
   "openai-chat": "OpenAI Chat Completions",
   "openai-responses": "OpenAI Responses",
 };
+
+/** Guidance telling the owner how freeing external memory unlocks larger models. */
+export function memoryGuidanceCopy(guidance: MemoryGuidance) {
+  const memoryKind = guidance.gpu ? "GPU memory" : "memory";
+  const other = formatGigabytes(guidance.otherBytes);
+  const free = formatGigabytes(guidance.freeBytes);
+  const total = formatGigabytes(guidance.totalBytes);
+  switch (guidance.kind) {
+    case "blocked_load":
+      return {
+        body: `Other apps are holding ${other} of ${memoryKind} (${free} of ${total} free). Forcing a model into tight memory can freeze the computer. Close video players, games, browsers, or other memory-heavy apps, then click Recheck memory to load it.`,
+        title: `Free ${memoryKind} before loading`,
+      };
+    case "blocked_download":
+      return {
+        body: `Other apps are holding ${other} of ${memoryKind} (${free} of ${total} free), so larger models look unavailable right now. Close unnecessary apps (such as video players, games, or browsers) and click Recheck memory to detect all free memory before installing.`,
+        title: `Free ${memoryKind} to install a larger model`,
+      };
+    case "constrained_pool":
+      return {
+        body: `Other apps are using ${other} of ${memoryKind} (${free} of ${total} free). To avoid loading failures or system freezes, close unnecessary apps and click Recheck memory so you can load a better model.`,
+        title: `Other apps are using ${memoryKind}`,
+      };
+  }
+}

@@ -222,11 +222,16 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
   `runtime_model` equals the model's `pi_model` exactly (loaded or not), limited to the
   Agents the reader sees in the Agent directory. Only the owner acts
   (`LOCAL_MODEL_ACTION_FORBIDDEN`), and only while the Computer is online by
-  the Computers page's 60-second rule (`LOCAL_COMPUTER_OFFLINE`). A connected
-  Computer that has not decided within the action's 10 seconds answers 504
+  the Computers page's 60-second rule (`LOCAL_COMPUTER_OFFLINE`). `POST .../local-models`
+  (`refreshLocalComputerModels`) forwards an empty-model `refresh` command through
+  the same owner/online gate, while `POST .../local-models/{modelId}/actions` acts on
+  one model (`refresh` stays invalid there). A connected Computer that has not
+  decided within the action's 10 seconds answers 504
   `LOCAL_MODEL_ACTION_UNCONFIRMED`: it may still act, and the snapshots show
   the outcome. The Computer's refusal codes map to `LocalModelsErrorCode` in
-  `internal/app/handlers_local_models.go`.
+  `internal/app/handlers_local_models.go` (and `LOAD_NO_ROOM` / `MEMORY_INSUFFICIENT`
+  on model-source switches map to `LOCAL_MODEL_NO_ROOM` in
+  `internal/app/handlers_model_source.go`).
 - A Computer's model source lives on the Computer
   (`internal/app/handlers_model_source.go`); TeamHub never stores a BYOK key.
   A switch checks for running work, runs `apply` on the Computer, then moves

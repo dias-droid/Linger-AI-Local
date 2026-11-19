@@ -175,6 +175,7 @@ func (a *App) publicRoutes() []contractRoute {
 		route(http.MethodGet, "/v0/tenants/:tenantId/local-computers/:computerId/browser-connection", nil, session, a.getLocalComputerBrowserConnection),
 		route(http.MethodPut, "/v0/tenants/:tenantId/local-computers/:computerId/browser-connection", nil, session, a.putLocalComputerBrowserConnection),
 		route(http.MethodGet, "/v0/tenants/:tenantId/local-computers/:computerId/local-models", nil, session, a.getLocalComputerModels),
+		route(http.MethodPost, "/v0/tenants/:tenantId/local-computers/:computerId/local-models", nil, session, a.refreshLocalComputerModels),
 		route(http.MethodPost, "/v0/tenants/:tenantId/local-computers/:computerId/local-models/:modelId/actions", nil, session, a.actOnLocalComputerModel),
 		route(http.MethodGet, "/v0/tenants/:tenantId/local-computers/:computerId/model-source", nil, session, a.getLocalComputerModelSource),
 		route(http.MethodPost, "/v0/tenants/:tenantId/local-computers/:computerId/model-source", nil, session, a.switchLocalComputerModelSource),

@@ -6,6 +6,7 @@ import {
 } from "@hugeicons/core-free-icons";
 
 import { Button } from "@/components/ui/button";
+import { FormFeedback } from "@/components/ui/form-feedback";
 import { Icon } from "@/components/ui/icon";
 import { ModalDialog } from "@/components/ui/modal-dialog";
 import { cn } from "@/lib/cn";
@@ -30,6 +31,7 @@ import {
   poolFreeBytes,
   poolLabel,
   poolOf,
+  poolOtherBytes,
   safeModelSourceUrl,
   speedLabel,
   type ModelEntry,
@@ -108,6 +110,26 @@ export function ModelFacts({
   const parameters = parametersLabel(model);
   const speed = speedLabel(model);
   const sourceUrl = safeModelSourceUrl(model.source_url);
+  const externalBytes = view.pools.reduce(
+    (sum, item) => sum + poolOtherBytes(item),
+    0,
+  );
+  const maxHardware = Math.max(
+    view.computer.host?.ram_total_bytes ?? 0,
+    ...(view.computer.host?.gpus.map((gpu) => gpu.total_bytes) ?? [0]),
+    ...view.pools.map((item) => item.total_bytes),
+    0,
+  );
+  const reclaimable =
+    externalBytes > 0 &&
+    model.availability.reason?.code === "MEMORY_INSUFFICIENT" &&
+    model.availability.reason.need_bytes !== undefined &&
+    model.availability.reason.need_bytes <= maxHardware;
+  const availableNeedsRoom =
+    status === "available" &&
+    pool !== undefined &&
+    poolOtherBytes(pool) > 0 &&
+    poolFreeBytes(pool) < model.memory_bytes;
   return (
     <div>
       {model.error || status === "unavailable" ? (
@@ -125,7 +147,7 @@ export function ModelFacts({
           {status === "unavailable" ? (
             <Fact bordered={Boolean(model.error)} label="Why not">
               <span className="text-app-danger">
-                {unavailableCopy(model.availability.reason)}
+                {unavailableCopy(model.availability.reason, reclaimable)}
               </span>
             </Fact>
           ) : null}
@@ -138,6 +160,16 @@ export function ModelFacts({
               {modelNoteCopy(model.note.code, placeName(view, model.pool))}
             </span>
           </Fact>
+        </div>
+      ) : null}
+      {availableNeedsRoom ? (
+        <div className="my-1.5">
+          <FormFeedback tone="warning">
+            This model can download now, but only{" "}
+            {formatGigabytes(poolFreeBytes(pool))} is free on{" "}
+            {poolLabel(view, pool)}. Close memory-heavy apps and recheck memory
+            before loading it.
+          </FormFeedback>
         </div>
       ) : null}
       <div className="mt-1 grid grid-cols-1 gap-x-6 @xl:grid-cols-2">
@@ -224,11 +256,7 @@ function PoolBar({
   const label = poolLabel(view, pool);
   // used_bytes is the device's real use; on a shared card other processes
   // hold memory that no holder accounts for.
-  const otherBytes = Math.max(
-    0,
-    pool.used_bytes -
-      pool.holders.reduce((sum, holder) => sum + holder.bytes, 0),
-  );
+  const otherBytes = poolOtherBytes(pool);
   const width = (bytes: number) =>
     `${pool.total_bytes ? Math.min(100, (bytes / pool.total_bytes) * 100) : 0}%`;
   return (

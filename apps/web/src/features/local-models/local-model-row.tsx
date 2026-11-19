@@ -148,6 +148,7 @@ interface Handlers {
   onRemove: () => void;
   onToggle: () => void;
   onUnload: () => void;
+  onUseForAgents?: () => void;
 }
 
 function stopRowClick(event: MouseEvent) {
@@ -303,6 +304,7 @@ export function ModelRow({
   entry,
   expanded,
   requested,
+  switchingForAgents = false,
   view,
   ...handlers
 }: Handlers & {
@@ -312,6 +314,7 @@ export function ModelRow({
   expanded: boolean;
   /** An action asked for and not yet in a snapshot. */
   requested?: LocalModelAction;
+  switchingForAgents?: boolean;
   view: LocalModelsView;
 }) {
   const panelId = useId();
@@ -439,6 +442,22 @@ export function ModelRow({
             hasMeta && "@2xl:col-start-3",
           )}
         >
+          {status === "loaded" && handlers.onUseForAgents ? (
+            <Button
+              aria-label={`Use ${model.name} for Agents`}
+              className="px-2.5"
+              disabled={disabled}
+              loading={switchingForAgents}
+              onClick={(event) => {
+                stopRowClick(event);
+                handlers.onUseForAgents?.();
+              }}
+              size="compact"
+              tone="primary"
+            >
+              Use for Agents
+            </Button>
+          ) : null}
           {action ? (
             <Button
               aria-label={`${action[0]} ${model.name}`}

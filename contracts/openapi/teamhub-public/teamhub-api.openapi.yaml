@@ -768,6 +768,35 @@ paths:
           $ref: '../components/common.yaml#/components/responses/Unauthenticated'
         '404':
           $ref: '../components/common.yaml#/components/responses/NotFound'
+    post:
+      tags: [Local Computers]
+      operationId: refreshLocalComputerModels
+      summary: Ask an owned Local Computer to recheck memory and refresh its model library.
+      description: >-
+        Only the Computer owner may ask it to refresh. TeamHub forwards a refresh command to the
+        Computer, which answers at once; 202 means the Computer will re-probe free memory and
+        models and send a fresh snapshot.
+      responses:
+        '202':
+          description: The Computer started refreshing its model library.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/local-models.yaml#/components/schemas/LocalModelsRefreshAccepted'
+        '401':
+          $ref: '../components/common.yaml#/components/responses/Unauthenticated'
+        '403':
+          $ref: '../components/local-models.yaml#/components/responses/LocalModelsRefused'
+        '404':
+          $ref: '../components/common.yaml#/components/responses/NotFound'
+        '409':
+          $ref: '../components/local-models.yaml#/components/responses/LocalModelsRefused'
+        '502':
+          $ref: '../components/local-models.yaml#/components/responses/LocalModelsRefused'
+        '503':
+          $ref: '../components/local-models.yaml#/components/responses/LocalModelsRefused'
+        '504':
+          $ref: '../components/local-models.yaml#/components/responses/LocalModelsRefused'
   /v0/tenants/{tenantId}/local-computers/{computerId}/local-models/{modelId}/actions:
     parameters:
       - $ref: '#/components/parameters/TenantId'

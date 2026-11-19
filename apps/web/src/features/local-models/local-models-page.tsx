@@ -28,12 +28,18 @@ import {
   RemoveModelDialog,
   UnloadModelDialog,
 } from "./local-model-dialogs";
-import { actionErrorCopy, libraryUnavailableCopy } from "./local-models-copy";
+import {
+  actionErrorCopy,
+  libraryUnavailableCopy,
+  memoryGuidanceCopy,
+} from "./local-models-copy";
 import {
   actOnLocalComputerModel,
   localModelActionMutationKey,
   localModelsQueryKey,
   localModelsQueryOptions,
+  localModelsRefreshMutationKey,
+  refreshLocalComputerModels,
   type LocalModelAction,
   type LocalModelActionInput,
   type LocalModelsView,
@@ -42,9 +48,13 @@ import {
   downloadStopped,
   formatGigabytes,
   loadCheck,
-  localSwitchTarget,
+  localSwitchTargets,
+  memoryGuidance,
   memorySummary,
   modelEntries,
+  poolFreeBytes,
+  poolOf,
+  poolRoomCheck,
   type ModelEntry,
   type ModelStatus,
 } from "./local-models-rules";
@@ -59,6 +69,7 @@ import {
 import {
   type ModelSourceMode,
   modelSourceQueryOptions,
+  type ModelSourceStatus,
 } from "./model-source-queries";
 
 type Dialog =
@@ -223,6 +234,7 @@ function ComputerModels({
   tenantId: string;
 }) {
   const { client } = useTeamHubRuntime();
+  const queryClient = useQueryClient();
   const query = useQuery(localModelsQueryOptions(client, tenantId, computerId));
   const view = query.data;
   const [dialog, setDialog] = useState<Dialog | null>(null);
@@ -243,7 +255,28 @@ function ComputerModels({
     tenantId,
   });
   const switching = switcher.pending !== undefined;
-  const target = view?.available ? localSwitchTarget(view) : undefined;
+  const switchTargets = view?.available ? localSwitchTargets(view) : [];
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const refresh = useMutation({
+    mutationFn: () => refreshLocalComputerModels(client, tenantId, computerId),
+    mutationKey: localModelsRefreshMutationKey(tenantId, computerId),
+    onError: (error) =>
+      setRefreshError(
+        error instanceof TeamHubError ? error.code : "REFRESH_FAILED",
+      ),
+    onMutate: () => setRefreshError(null),
+    onSettled: () =>
+      queryClient.invalidateQueries({
+        queryKey: localModelsQueryKey(tenantId, computerId),
+      }),
+  });
+  const canRecheck = Boolean(
+    view && view.viewer_is_owner && view.computer.status === "online",
+  );
+  const guidance = view?.available ? memoryGuidance(view) : null;
+  const subscriptionGuidanceCopy = guidance
+    ? memoryGuidanceCopy(guidance)
+    : undefined;
 
   return (
     <>
@@ -256,15 +289,32 @@ function ComputerModels({
             </p>
           ) : null}
           {summary?.totalBytes ? (
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              {formatGigabytes(summary.usedBytes)} of{" "}
-              {formatGigabytes(summary.totalBytes)}{" "}
-              {summary.gpu ? "GPU memory" : "memory"} in use
-            </p>
+            <>
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                {formatGigabytes(summary.usedBytes)} of{" "}
+                {formatGigabytes(summary.totalBytes)}{" "}
+                {summary.gpu ? "GPU memory" : "memory"} in use
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {formatGigabytes(summary.freeBytes)} free
+                {view?.observed_at
+                  ? ` · Checked ${relativeTime(view.observed_at)}`
+                  : ""}
+              </p>
+            </>
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {computerPicker}
+          {canRecheck ? (
+            <Button
+              loading={refresh.isPending}
+              onClick={() => refresh.mutate()}
+              size="compact"
+            >
+              Recheck memory
+            </Button>
+          ) : null}
           {view?.available ? (
             <Button
               onClick={() => setDialog({ kind: "advanced" })}
@@ -288,6 +338,13 @@ function ComputerModels({
           <FormFeedback tone="danger">{switcher.failure}</FormFeedback>
         </div>
       ) : null}
+      {refreshError ? (
+        <div className="mt-4">
+          <FormFeedback tone="danger">
+            {actionErrorCopy(refreshError)}
+          </FormFeedback>
+        </div>
+      ) : null}
       {switching ? (
         <p className="mt-4 text-sm text-muted-foreground" role="status">
           Switching {computerName}. This can take a few minutes the first time.
@@ -295,12 +352,32 @@ function ComputerModels({
       ) : null}
       {feedback}
       {status && shownTab === "subscription" ? (
-        <SubscriptionPanel
-          disabled={switching}
-          runtimes={runtimes}
-          status={status}
-          switcher={switcher}
-        />
+        <>
+          <SubscriptionPanel
+            disabled={switching}
+            runtimes={runtimes}
+            status={status}
+            switcher={switcher}
+          />
+          {subscriptionGuidanceCopy ? (
+            <aside
+              aria-label="Local model tip"
+              className="mt-6 flex flex-wrap items-start justify-between gap-3 rounded-xl bg-muted px-4 py-3"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-foreground">
+                  {subscriptionGuidanceCopy.title}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {subscriptionGuidanceCopy.body}
+                </p>
+              </div>
+              <Button onClick={() => setTab("local")} size="compact">
+                Open Local model
+              </Button>
+            </aside>
+          ) : null}
+        </>
       ) : status && shownTab === "byok" ? (
         <ByokPanel
           computerId={computerId}
@@ -315,14 +392,26 @@ function ComputerModels({
           {status && status.mode !== "local" ? (
             <SwitchToLocalNotice
               disabled={switching || view.computer.status === "offline"}
-              modelId={target?.id}
-              modelName={target?.name}
+              models={switchTargets}
               switcher={switcher}
             />
           ) : null}
           <Library
             dialog={dialog}
+            guidance={guidance}
+            onRefresh={() => refresh.mutate()}
+            onUseForAgents={(modelId) =>
+              switcher.request({ local_model_id: modelId, mode: "local" })
+            }
+            rechecking={refresh.isPending}
             setDialog={setDialog}
+            status={status}
+            switchingModelId={
+              switcher.pending?.mode === "local"
+                ? switcher.pending.local_model_id
+                : undefined
+            }
+            switching={switching}
             tenantId={tenantId}
             view={view}
           />
@@ -355,12 +444,26 @@ function ComputerModels({
 
 function Library({
   dialog,
+  guidance,
+  onRefresh,
+  onUseForAgents,
+  rechecking,
   setDialog,
+  status,
+  switching,
+  switchingModelId,
   tenantId,
   view,
 }: {
   dialog: Dialog | null;
+  guidance: ReturnType<typeof memoryGuidance>;
+  onRefresh: () => void;
+  onUseForAgents: (modelId: string) => void;
+  rechecking: boolean;
   setDialog: (dialog: Dialog | null) => void;
+  status: ModelSourceStatus | undefined;
+  switching: boolean;
+  switchingModelId: string | undefined;
   tenantId: string;
   view: LocalModelsView;
 }) {
@@ -449,11 +552,31 @@ function Library({
     actionStatuses[action].includes(entry.status);
   const dialogEntry =
     dialog && dialog.kind !== "advanced" ? find(dialog.modelId) : undefined;
+  const dialogPool = dialogEntry
+    ? poolOf(view, dialogEntry.model.pool)
+    : undefined;
   const makeRoom =
     dialog?.kind === "makeRoom" && dialogEntry
-      ? loadCheck(view, dialogEntry.model)
+      ? (poolRoomCheck(
+          view,
+          dialogPool,
+          dialogEntry.model.memory_bytes,
+          dialogEntry.model.id,
+        ) ??
+        (dialogPool
+          ? {
+              freeBytes: poolFreeBytes(dialogPool),
+              loaded: [],
+              needBytes: dialogEntry.model.memory_bytes,
+              pool: dialogPool,
+            }
+          : null))
       : null;
   const failedEntry = failure ? find(failure.modelId) : undefined;
+  const guidanceCopy =
+    !offline && view.available && guidance
+      ? memoryGuidanceCopy(guidance)
+      : undefined;
 
   function act(input: LocalModelActionInput) {
     setDialog(null);
@@ -522,12 +645,41 @@ function Library({
               </FormFeedback>
             </div>
           ) : null}
+          {guidanceCopy ? (
+            <aside
+              aria-label="Memory guidance"
+              className="mt-6 flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[var(--app-status-warning-border)] bg-[var(--app-status-warning-surface)] px-4 py-3"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-app-warning">
+                  {guidanceCopy.title}
+                </p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {guidanceCopy.body}
+                </p>
+              </div>
+              {readOnly ? null : (
+                <Button loading={rechecking} onClick={onRefresh} size="compact">
+                  Recheck memory
+                </Button>
+              )}
+            </aside>
+          ) : null}
           <section aria-label="Models" className="mt-6 grid gap-2">
             {entries.map((entry) => {
               const modelId = entry.model.id;
+              const canUseForAgents =
+                !offline &&
+                !readOnly &&
+                status?.mode === "local" &&
+                entry.status === "loaded" &&
+                entry.model.pi_model !== status.runtime_model &&
+                entry.model.id !== status.runtime_model;
               return (
                 <ModelRow
-                  disabled={offline || readOnly || requests.has(modelId)}
+                  disabled={
+                    offline || readOnly || switching || requests.has(modelId)
+                  }
                   entry={entry}
                   expanded={expandedId === modelId}
                   key={modelId}
@@ -541,7 +693,11 @@ function Library({
                     )
                   }
                   onUnload={() => unload(entry)}
+                  onUseForAgents={
+                    canUseForAgents ? () => onUseForAgents(modelId) : undefined
+                  }
                   requested={requests.get(modelId)}
+                  switchingForAgents={switchingModelId === modelId}
                   view={view}
                 />
               );
@@ -566,6 +722,8 @@ function Library({
               unloadFirst,
             })
           }
+          onRecheck={!offline && !readOnly ? onRefresh : undefined}
+          rechecking={rechecking}
           view={view}
         />
       ) : null}

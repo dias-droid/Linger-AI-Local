@@ -680,6 +680,17 @@ components:
               LocalModelActionAcceptedUnload,
               LocalModelActionAcceptedRemove,
             ]
+    LocalModelsRefreshAccepted:
+      type: object
+      additionalProperties: false
+      required: [computer_id, action]
+      properties:
+        computer_id:
+          $ref: "./common.yaml#/components/schemas/Id"
+        action:
+          type: string
+          enum: [refresh]
+          x-enum-varnames: [LocalModelsRefreshAcceptedRefresh]
     LocalModelsErrorCode:
       description: >-
         error.code of a refused local-models action (403, 409, 502, 503, 504);

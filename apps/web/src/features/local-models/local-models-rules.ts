@@ -133,15 +133,143 @@ export function poolFreeBytes(pool: LocalModelPool) {
   return Math.max(0, pool.total_bytes - pool.used_bytes);
 }
 
+/** Memory held by known models and foundation components in one pool. */
+export function poolHolderBytes(pool: LocalModelPool) {
+  return pool.holders.reduce((sum, holder) => sum + holder.bytes, 0);
+}
+
+/** Memory in the pool used by other apps (games, browsers, video players). */
+export function poolOtherBytes(pool: LocalModelPool) {
+  return Math.max(0, pool.used_bytes - poolHolderBytes(pool));
+}
+
+/** Free memory plus memory currently held by external apps in one pool. */
+export function poolReclaimableBytes(pool: LocalModelPool) {
+  return poolFreeBytes(pool) + poolOtherBytes(pool);
+}
+
 /** What the header adds up: GPU memory when the Computer has GPUs, else its memory. */
 export function memorySummary(view: LocalModelsView) {
   const gpus = view.pools.filter((pool) => pool.kind === "gpu");
   const pools = gpus.length ? gpus : view.pools;
+  const totalBytes = pools.reduce((sum, pool) => sum + pool.total_bytes, 0);
+  const usedBytes = pools.reduce((sum, pool) => sum + pool.used_bytes, 0);
   return {
+    freeBytes: Math.max(0, totalBytes - usedBytes),
     gpu: gpus.length > 0,
-    totalBytes: pools.reduce((sum, pool) => sum + pool.total_bytes, 0),
-    usedBytes: pools.reduce((sum, pool) => sum + pool.used_bytes, 0),
+    totalBytes,
+    usedBytes,
   };
+}
+
+export interface MemoryGuidance {
+  kind: "blocked_download" | "blocked_load" | "constrained_pool";
+  gpu: boolean;
+  otherBytes: number;
+  freeBytes: number;
+  totalBytes: number;
+}
+
+function maxHardwareCapacity(view: LocalModelsView) {
+  const gpus = view.pools.filter((pool) => pool.kind === "gpu");
+  if (gpus.length) {
+    return Math.max(
+      ...gpus.map((pool) => pool.total_bytes),
+      ...(view.computer.host?.gpus.map((gpu) => gpu.total_bytes) ?? [0]),
+    );
+  }
+  const unifiedOrSystem = view.pools.map((pool) => pool.total_bytes);
+  return Math.max(
+    view.computer.host?.ram_total_bytes ?? 0,
+    ...unifiedOrSystem,
+    0,
+  );
+}
+
+/**
+ * Whether external apps hold enough GPU or system memory that closing them
+ * and rechecking could let a larger model download or load.
+ */
+export function memoryGuidance(view: LocalModelsView): MemoryGuidance | null {
+  if (!view.available || !view.pools.length) return null;
+  const summary = memorySummary(view);
+  const externalPools = view.pools
+    .map((pool) => ({ external: poolOtherBytes(pool), pool }))
+    .filter((item) => item.external > 0)
+    .sort((left, right) => right.external - left.external);
+  if (!externalPools.length) return null;
+
+  const top = externalPools[0]!;
+  const otherBytes = externalPools.reduce(
+    (sum, item) => sum + item.external,
+    0,
+  );
+  const blockedLoad = modelEntries(view).some((entry) => {
+    const { model, status } = entry;
+    if (status !== "idle" && status !== "failed") return false;
+    const pool = poolOf(view, model.pool);
+    const poolHasExternal = pool ? poolOtherBytes(pool) > 0 : false;
+    if (!poolHasExternal) return false;
+    return (
+      model.note?.code === "NO_ROOM_TO_LOAD" ||
+      model.error?.code === "LOAD_NO_ROOM" ||
+      model.error?.code === "OUT_OF_MEMORY" ||
+      loadCheck(view, model) !== null
+    );
+  });
+  if (blockedLoad) {
+    return {
+      freeBytes: summary.freeBytes,
+      gpu: top.pool.kind === "gpu" || summary.gpu,
+      kind: "blocked_load",
+      otherBytes,
+      totalBytes: summary.totalBytes,
+    };
+  }
+
+  const hardwareMax = maxHardwareCapacity(view);
+  const blockedDownload = modelEntries(view).some((entry) => {
+    const reason = entry.model.availability.reason;
+    return (
+      entry.status === "unavailable" &&
+      reason?.code === "MEMORY_INSUFFICIENT" &&
+      reason.need_bytes !== undefined &&
+      reason.need_bytes <= hardwareMax
+    );
+  });
+  if (blockedDownload) {
+    return {
+      freeBytes: summary.freeBytes,
+      gpu: top.pool.kind === "gpu" || summary.gpu,
+      kind: "blocked_download",
+      otherBytes,
+      totalBytes: summary.totalBytes,
+    };
+  }
+
+  const constrainedAvailable = modelEntries(view).some((entry) => {
+    if (entry.status !== "available") return false;
+    const pool = poolOf(view, entry.model.pool);
+    return (
+      pool !== undefined &&
+      poolOtherBytes(pool) > 0 &&
+      entry.model.memory_bytes > poolFreeBytes(pool)
+    );
+  });
+  const twoGigabytes = 2 * 1024 ** 3;
+  if (
+    otherBytes >= twoGigabytes &&
+    (constrainedAvailable || externalPools.length > 0)
+  ) {
+    return {
+      freeBytes: summary.freeBytes,
+      gpu: top.pool.kind === "gpu" || summary.gpu,
+      kind: "constrained_pool",
+      otherBytes,
+      totalBytes: summary.totalBytes,
+    };
+  }
+  return null;
 }
 
 export interface LoadCheck {
@@ -152,24 +280,41 @@ export interface LoadCheck {
   loaded: ModelEntry[];
 }
 
-/** Why a model cannot load now, or `null` when its pool reports room for it. */
-export function loadCheck(
+/**
+ * Why a model cannot load into `pool` now, or `null` when that pool reports
+ * room for `needBytes`.
+ */
+export function poolRoomCheck(
   view: LocalModelsView,
-  model: LocalModel,
+  pool: LocalModelPool | undefined,
+  needBytes: number,
+  excludeModelId?: string,
 ): LoadCheck | null {
-  const pool = poolOf(view, model.pool);
-  if (!pool || poolFreeBytes(pool) >= model.memory_bytes) return null;
+  if (!pool || poolFreeBytes(pool) >= needBytes) return null;
   return {
     freeBytes: poolFreeBytes(pool),
     loaded: modelEntries(view).filter(
       (entry) =>
         entry.status === "loaded" &&
         entry.model.pool === pool.id &&
-        entry.model.id !== model.id,
+        entry.model.id !== excludeModelId,
     ),
-    needBytes: model.memory_bytes,
+    needBytes,
     pool,
   };
+}
+
+/** Why a model cannot load now, or `null` when its pool reports room for it. */
+export function loadCheck(
+  view: LocalModelsView,
+  model: LocalModel,
+): LoadCheck | null {
+  return poolRoomCheck(
+    view,
+    poolOf(view, model.pool),
+    model.memory_bytes,
+    model.id,
+  );
 }
 
 function freedBytes(entries: ModelEntry[]) {
@@ -374,10 +519,22 @@ export function modelSourceLabel(url: string) {
  * The model a switch to Local model runs: a loaded one, else one on disk. None
  * when the Computer has no model downloaded yet.
  */
+/** Candidate local models on disk ordered loaded-first, recommended, then largest. */
+export function localSwitchTargets(view: LocalModelsView): LocalModel[] {
+  return view.models
+    .map((item) => item.model)
+    .filter((model) => model.state === "loaded" || model.state === "idle")
+    .sort((left, right) => {
+      if (left.state !== right.state) {
+        return left.state === "loaded" ? -1 : 1;
+      }
+      if (left.recommended !== right.recommended) {
+        return left.recommended ? -1 : 1;
+      }
+      return right.memory_bytes - left.memory_bytes;
+    });
+}
+
 export function localSwitchTarget(view: LocalModelsView) {
-  const models = view.models.map((item) => item.model);
-  return (
-    models.find((model) => model.state === "loaded") ??
-    models.find((model) => model.state === "idle")
-  );
+  return localSwitchTargets(view)[0];
 }

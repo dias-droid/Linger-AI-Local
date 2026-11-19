@@ -266,11 +266,12 @@ components:
         Agents on the Computer have running work and force_terminate was
         false; details carries one entry per such Agent, with field "agent"
         and the Agent's display name as reason. RUNTIME_NOT_ENABLED,
-        LOCAL_MODEL_UNKNOWN, and the BYOK_ codes are the Computer's refusals
-        (409). MODEL_SOURCE_FAILED: the Computer failed with an error that has
-        no code of its own here (502). MODEL_SOURCE_SERVICE_UNAVAILABLE: Agent
-        Service could not be reached (503). MODEL_SOURCE_UNCONFIRMED: the
-        Computer had not answered by the deadline; it may still switch (504).
+        LOCAL_MODEL_NO_ROOM, LOCAL_MODEL_UNKNOWN, and the BYOK_ codes are the
+        Computer's refusals (409). MODEL_SOURCE_FAILED: the Computer failed
+        with an error that has no code of its own here (502).
+        MODEL_SOURCE_SERVICE_UNAVAILABLE: Agent Service could not be reached
+        (503). MODEL_SOURCE_UNCONFIRMED: the Computer had not answered by the
+        deadline; it may still switch (504).
       type: string
       enum:
         - LOCAL_COMPUTER_OFFLINE
@@ -278,6 +279,7 @@ components:
         - MODEL_SOURCE_UNAVAILABLE
         - AGENT_HAS_ACTIVE_RUNS
         - RUNTIME_NOT_ENABLED
+        - LOCAL_MODEL_NO_ROOM
         - LOCAL_MODEL_UNKNOWN
         - BYOK_INVALID_CONFIG
         - BYOK_AUTH_FAILED
@@ -293,6 +295,7 @@ components:
         - ModelSourceErrorCodeModelSourceUnavailable
         - ModelSourceErrorCodeAgentHasActiveRuns
         - ModelSourceErrorCodeRuntimeNotEnabled
+        - ModelSourceErrorCodeLocalModelNoRoom
         - ModelSourceErrorCodeLocalModelUnknown
         - ModelSourceErrorCodeByokInvalidConfig
         - ModelSourceErrorCodeByokAuthFailed

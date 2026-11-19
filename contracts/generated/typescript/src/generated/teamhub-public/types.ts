@@ -463,7 +463,11 @@ export interface paths {
      */
     get: operations["getLocalComputerModels"];
     put?: never;
-    post?: never;
+    /**
+     * Ask an owned Local Computer to recheck memory and refresh its model library.
+     * @description Only the Computer owner may ask it to refresh. TeamHub forwards a refresh command to the Computer, which answers at once; 202 means the Computer will re-probe free memory and models and send a fresh snapshot.
+     */
+    post: operations["refreshLocalComputerModels"];
     delete?: never;
     options?: never;
     head?: never;
@@ -4791,18 +4795,10 @@ export interface components {
       pools: components["schemas"]["LocalModelPool"][];
       models: components["schemas"]["LocalModelView"][];
     };
-    /** @description A Human's action on one model. The click is the approval; there is no separate confirm step on the Computer. unload_first only with load. */
-    LocalModelActionRequest: {
-      /** @enum {string} */
-      action: "download" | "cancel" | "load" | "unload" | "remove";
-      /** @description Loaded models in the same pool to unload before the load starts. */
-      unload_first?: components["schemas"]["LocalModelId"][];
-    };
-    LocalModelActionAccepted: {
+    LocalModelsRefreshAccepted: {
       computer_id: components["schemas"]["Id"];
-      model_id: components["schemas"]["LocalModelId"];
       /** @enum {string} */
-      action: "download" | "cancel" | "load" | "unload" | "remove";
+      action: "refresh";
     };
     /**
      * @description error.code of a refused local-models action (403, 409, 502, 503, 504); 400, 401, and 404 use the common codes. LOCAL_COMPUTER_OFFLINE: the Computer is not connected. LOCAL_MODEL_ACTION_FORBIDDEN: the viewer is not the Computer owner. LOCAL_MODELS_UNAVAILABLE: the Computer has no usable localmodels tool. LOCAL_MODEL_ACTION_FAILED: the Computer refused with a library error that has no code of its own here (502). LOCAL_MODELS_SERVICE_UNAVAILABLE: Agent Service could not be reached (503). LOCAL_MODEL_ACTION_UNCONFIRMED: the connected Computer had not decided by the action's deadline; it may still run the action, and the library snapshots show the outcome (504). The other LOCAL_MODEL_ codes are the Computer's refusal codes of the same name (409).
@@ -4834,6 +4830,19 @@ export interface components {
     };
     LocalModelsErrorResponse: {
       error: components["schemas"]["LocalModelsError"];
+    };
+    /** @description A Human's action on one model. The click is the approval; there is no separate confirm step on the Computer. unload_first only with load. */
+    LocalModelActionRequest: {
+      /** @enum {string} */
+      action: "download" | "cancel" | "load" | "unload" | "remove";
+      /** @description Loaded models in the same pool to unload before the load starts. */
+      unload_first?: components["schemas"]["LocalModelId"][];
+    };
+    LocalModelActionAccepted: {
+      computer_id: components["schemas"]["Id"];
+      model_id: components["schemas"]["LocalModelId"];
+      /** @enum {string} */
+      action: "download" | "cancel" | "load" | "unload" | "remove";
     };
     /**
      * @description Active model source mode on a Local Computer.
@@ -4879,7 +4888,7 @@ export interface components {
       terminated_run_count?: number;
     };
     /**
-     * @description error.code of a refused model-source request (403, 409, 502, 503, 504); 400, 401, and 404 use the common codes. LOCAL_COMPUTER_OFFLINE: the Computer is not connected. MODEL_SOURCE_FORBIDDEN: the viewer is not the Computer owner. MODEL_SOURCE_UNAVAILABLE: the Computer has no localmodels tool or cannot switch model sources. AGENT_HAS_ACTIVE_RUNS: Agents on the Computer have running work and force_terminate was false; details carries one entry per such Agent, with field "agent" and the Agent's display name as reason. RUNTIME_NOT_ENABLED, LOCAL_MODEL_UNKNOWN, and the BYOK_ codes are the Computer's refusals (409). MODEL_SOURCE_FAILED: the Computer failed with an error that has no code of its own here (502). MODEL_SOURCE_SERVICE_UNAVAILABLE: Agent Service could not be reached (503). MODEL_SOURCE_UNCONFIRMED: the Computer had not answered by the deadline; it may still switch (504).
+     * @description error.code of a refused model-source request (403, 409, 502, 503, 504); 400, 401, and 404 use the common codes. LOCAL_COMPUTER_OFFLINE: the Computer is not connected. MODEL_SOURCE_FORBIDDEN: the viewer is not the Computer owner. MODEL_SOURCE_UNAVAILABLE: the Computer has no localmodels tool or cannot switch model sources. AGENT_HAS_ACTIVE_RUNS: Agents on the Computer have running work and force_terminate was false; details carries one entry per such Agent, with field "agent" and the Agent's display name as reason. RUNTIME_NOT_ENABLED, LOCAL_MODEL_NO_ROOM, LOCAL_MODEL_UNKNOWN, and the BYOK_ codes are the Computer's refusals (409). MODEL_SOURCE_FAILED: the Computer failed with an error that has no code of its own here (502). MODEL_SOURCE_SERVICE_UNAVAILABLE: Agent Service could not be reached (503). MODEL_SOURCE_UNCONFIRMED: the Computer had not answered by the deadline; it may still switch (504).
      * @enum {string}
      */
     ModelSourceErrorCode:
@@ -4888,6 +4897,7 @@ export interface components {
       | "MODEL_SOURCE_UNAVAILABLE"
       | "AGENT_HAS_ACTIVE_RUNS"
       | "RUNTIME_NOT_ENABLED"
+      | "LOCAL_MODEL_NO_ROOM"
       | "LOCAL_MODEL_UNKNOWN"
       | "BYOK_INVALID_CONFIG"
       | "BYOK_AUTH_FAILED"
@@ -9108,6 +9118,36 @@ export interface operations {
       };
       401: components["responses"]["Unauthenticated"];
       404: components["responses"]["NotFound"];
+    };
+  };
+  refreshLocalComputerModels: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        tenantId: components["parameters"]["TenantId"];
+        computerId: components["parameters"]["ComputerId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The Computer started refreshing its model library. */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["LocalModelsRefreshAccepted"];
+        };
+      };
+      401: components["responses"]["Unauthenticated"];
+      403: components["responses"]["LocalModelsRefused"];
+      404: components["responses"]["NotFound"];
+      409: components["responses"]["LocalModelsRefused"];
+      502: components["responses"]["LocalModelsRefused"];
+      503: components["responses"]["LocalModelsRefused"];
+      504: components["responses"]["LocalModelsRefused"];
     };
   };
   actOnLocalComputerModel: {

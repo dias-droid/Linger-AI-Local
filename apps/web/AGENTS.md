@@ -31,7 +31,12 @@ build:assets` to check the initial JS budget.
   owner confirms. The Local model tab is one Computer's model library as
   TeamHub last stored it. The Computer decides
   fit, availability, placement, the recommendation and memory; the page only
-  orders and labels them, picks the Make room default, renders tinted family
+  orders and labels them, picks the Make room default (including external-app
+  cleanup & `Recheck memory` prompts when other apps occupy pool memory or
+  unified memory is constrained), shows an explicit `Memory guidance` banner and
+  `Recheck memory` button (`POST .../local-models`), lets owners pick among
+  installed local models in `SwitchToLocalNotice` or click `Use for Agents` on a
+  loaded row, renders tinted family
   icon tiles, Agent usage counts, structured capability/parameter badges (never
   matched against `name` or `description`), state-distinct cards (`loaded`,
   `recommended`, `failed`, `unavailable`), download speed/ETA, and top

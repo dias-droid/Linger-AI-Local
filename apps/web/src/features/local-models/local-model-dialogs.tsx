@@ -14,6 +14,7 @@ import {
   makesRoom,
   poolLabel,
   poolOf,
+  poolOtherBytes,
   type LoadCheck,
   type ModelEntry,
 } from "./local-models-rules";
@@ -37,13 +38,15 @@ function AffectedAgents({
   );
 }
 
-/** Loading would overfill the pool: offer to unload loaded models first. */
+/** Loading would overfill the pool: offer to unload loaded models or recheck memory. */
 export function MakeRoomDialog({
   check,
   disabled,
   entry,
   onClose,
   onConfirm,
+  onRecheck,
+  rechecking = false,
   view,
 }: {
   check: LoadCheck;
@@ -52,11 +55,18 @@ export function MakeRoomDialog({
   entry: ModelEntry;
   onClose: () => void;
   onConfirm: (unloadIds: string[]) => void;
+  onRecheck?: () => void;
+  rechecking?: boolean;
   view: LocalModelsView;
 }) {
   const [selected, setSelected] = useState(() => makeRoomSelection(check));
   const chosen = new Set(selected);
-  const enough = makesRoom(check, chosen);
+  const roomFreeNow = check.freeBytes >= check.needBytes;
+  const enough = roomFreeNow || makesRoom(check, chosen);
+  const otherBytes = poolOtherBytes(check.pool);
+  const unifiedFitsHardware =
+    check.pool.kind === "unified" &&
+    (view.computer.host?.ram_total_bytes ?? 0) >= check.needBytes;
   const affected = check.loaded.flatMap((item) =>
     chosen.has(item.model.id) ? item.used_by.map((user) => user.name) : [],
   );
@@ -66,6 +76,15 @@ export function MakeRoomDialog({
       description={`${entry.model.name} needs ${formatGigabytes(check.needBytes)} on ${poolLabel(view, check.pool)}; ${formatGigabytes(check.freeBytes)} is free.`}
       footer={
         <>
+          {onRecheck ? (
+            <Button
+              disabled={disabled}
+              loading={rechecking}
+              onClick={onRecheck}
+            >
+              Recheck memory
+            </Button>
+          ) : null}
           <Button onClick={onClose}>Cancel</Button>
           <Button
             disabled={disabled || !enough}
@@ -81,7 +100,12 @@ export function MakeRoomDialog({
       title="Make room to load"
     >
       <div className="grid gap-3 px-5 py-4">
-        {check.loaded.length ? (
+        {roomFreeNow ? (
+          <FormFeedback tone="success">
+            Enough memory is free now ({formatGigabytes(check.freeBytes)}{" "}
+            available). Click Load to start.
+          </FormFeedback>
+        ) : check.loaded.length ? (
           <fieldset className="grid gap-0.5">
             <legend className="mb-1.5 text-sm text-muted-foreground">
               Unload these to free memory:
@@ -124,10 +148,19 @@ export function MakeRoomDialog({
           </fieldset>
         ) : (
           <FormFeedback tone="danger">
-            Nothing else is loaded there. This model doesn&apos;t fit even when
-            the memory is empty.
+            Nothing else is loaded there.
+            {otherBytes > 0 || unifiedFitsHardware
+              ? `${otherBytes > 0 ? ` Other apps are using ${formatGigabytes(otherBytes)}.` : ""} Close video players, games, or other memory-heavy apps, then click Recheck memory so loading won't overload your computer.`
+              : " This model doesn't fit even when the memory is empty."}
           </FormFeedback>
         )}
+        {check.loaded.length > 0 && !enough && otherBytes > 0 ? (
+          <FormFeedback tone="warning">
+            Other apps are using {formatGigabytes(otherBytes)} on{" "}
+            {poolLabel(view, check.pool)}. Close unnecessary apps and click
+            Recheck memory to free the remaining room.
+          </FormFeedback>
+        ) : null}
         {affected.length ? (
           <FormFeedback tone="warning">
             {affected.join(", ")} can&apos;t answer until their model is loaded

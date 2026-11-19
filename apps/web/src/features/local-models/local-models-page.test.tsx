@@ -45,6 +45,7 @@ type InventoryComputer = TeamHubLocalComputerPage["items"][number];
 
 interface Fixture {
   actions: { body: unknown; computerId: string; modelId: string }[];
+  refreshes: string[];
   runtime: TestTeamHubRuntime;
   views: Record<string, LocalModelsView>;
 }
@@ -65,6 +66,7 @@ function setup(
     }));
   const fixture: Fixture = {
     actions: [],
+    refreshes: [],
     runtime,
     views: Object.fromEntries(
       views.map((view) => [view.computer.computer_id, view]),
@@ -82,6 +84,13 @@ function setup(
     .on("GET", viewPath, ({ params }) => {
       const view = fixture.views[params.computerId!];
       return view ?? teamHubErrorResponse(404, "LOCAL_COMPUTER_NOT_FOUND");
+    })
+    .on("POST", viewPath, ({ params }) => {
+      fixture.refreshes.push(params.computerId!);
+      return Response.json(
+        { action: "refresh", computer_id: params.computerId },
+        { status: 202 },
+      );
     })
     .on("POST", actionPath, ({ body, params }) => {
       fixture.actions.push({
@@ -929,7 +938,7 @@ describe("LocalModelsPage", () => {
 
     answer();
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Gemma 3 27B: There isn't enough free memory to load it. Unload another model first.",
+      "Gemma 3 27B: There isn't enough free memory to load it. Close memory-heavy apps or unload another model, then recheck memory.",
     );
     expect(statusOf("Gemma 3 27B")).toMatch(/^Downloaded/);
     expect(
@@ -947,7 +956,7 @@ describe("LocalModelsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Load Gemma 3 27B" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Gemma 3 27B: There isn't enough free memory to load it. Unload another model first.",
+      "Gemma 3 27B: There isn't enough free memory to load it. Close memory-heavy apps or unload another model, then recheck memory.",
     );
     expect(screen.queryByText(/raw refusal detail/)).not.toBeInTheDocument();
   });
@@ -1662,5 +1671,315 @@ describe("Model source", () => {
     expect(
       (switches[0] as { local_model_id?: string }).local_model_id,
     ).toBeTruthy();
+  });
+
+  it("guides users to free external memory, rechecks, and clears guidance when room returns", async () => {
+    const blockedPool = {
+      ...gpuPool(0, 24),
+      used_bytes: gb(16),
+    };
+    const busyView = labView({
+      models: [
+        modelView(
+          localModel({
+            availability: {
+              downloadable: false,
+              reason: {
+                code: "MEMORY_INSUFFICIENT",
+                have_bytes: gb(8),
+                need_bytes: gb(16),
+              },
+            },
+            fit: "none",
+            id: "qwen3.8-27b:IQ3_S",
+            memory_bytes: gb(16),
+            name: "Qwen3.8 27B",
+            pool: undefined,
+          }),
+        ),
+        modelView(
+          localModel({
+            id: "spark-4b:Q4_K_M",
+            memory_bytes: gb(4),
+            name: "Spark 4B",
+            pool: "gpu:0",
+          }),
+        ),
+      ],
+      pools: [blockedPool],
+    });
+    const fixture = setup([busyView]);
+    withSource(fixture, {
+      ...byokStatus,
+      mode: "subscription",
+      runtime: "claude",
+      runtime_model: "claude-sonnet",
+    });
+    await renderPage(fixture);
+
+    const tip = await screen.findByRole("complementary", {
+      name: "Local model tip",
+    });
+    expect(tip).toHaveTextContent("16 GB");
+    fireEvent.click(
+      within(tip).getByRole("button", { name: "Open Local model" }),
+    );
+
+    const guidance = await screen.findByRole("complementary", {
+      name: "Memory guidance",
+    });
+    expect(guidance).toHaveTextContent(
+      "Free GPU memory to install a larger model",
+    );
+    fireEvent.click(
+      within(guidance).getByRole("button", { name: "Recheck memory" }),
+    );
+    await waitFor(() => expect(fixture.refreshes).toEqual(["computer-lab"]));
+
+    // After closing external GPU apps, the snapshot clears the warning and unlocks the 27B model.
+    publishSnapshot(
+      fixture,
+      labView({
+        models: [
+          modelView(
+            localModel({
+              id: "qwen3.8-27b:IQ3_S",
+              memory_bytes: gb(16),
+              name: "Qwen3.8 27B",
+              pool: "gpu:0",
+              recommended: true,
+            }),
+          ),
+        ],
+        observed_at: "2026-11-13T10:05:00.000Z",
+        pools: [gpuPool(0, 24)],
+      }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("complementary", { name: "Memory guidance" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole("button", { name: "Download Qwen3.8 27B" }),
+    ).toBeEnabled();
+  });
+
+  it("rechecks memory from Make room to load on unified Macs and surfaces refresh failures", async () => {
+    const busyMac = macView({
+      models: [
+        modelView(
+          localModel({
+            download_bytes: gb(42.5),
+            error: { code: "LOAD_NO_ROOM", detail: "need 46 GiB" },
+            fit: "unified",
+            id: "llama3.3-70b:Q4_K_M",
+            memory_bytes: gb(46),
+            name: "Llama 3.3 70B",
+            pool: "unified",
+            state: "failed",
+          }),
+        ),
+      ],
+      pools: [
+        {
+          holders: [],
+          id: "unified",
+          kind: "unified",
+          total_bytes: gb(51.2),
+          used_bytes: gb(20),
+        },
+      ],
+    });
+    const fixture = setup([busyMac]);
+    await renderPage(fixture);
+    await findModels();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry Llama 3.3 70B" }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "Make room to load" });
+    expect(dialog).toHaveTextContent("Other apps are using 20 GB.");
+
+    fireEvent.click(
+      within(dialog).getByRole("button", { name: "Recheck memory" }),
+    );
+    await waitFor(() => expect(fixture.refreshes).toEqual(["computer-mac"]));
+
+    publishSnapshot(fixture, {
+      ...busyMac,
+      observed_at: "2026-11-13T10:06:00.000Z",
+      pools: [
+        {
+          holders: [],
+          id: "unified",
+          kind: "unified",
+          total_bytes: gb(51.2),
+          used_bytes: 0,
+        },
+      ],
+    });
+
+    await waitFor(() =>
+      expect(dialog).toHaveTextContent(
+        "Enough memory is free now (51.2 GB available).",
+      ),
+    );
+    fireEvent.click(within(dialog).getByRole("button", { name: "Load" }));
+    await waitFor(() =>
+      expect(fixture.actions).toEqual([
+        {
+          body: { action: "load" },
+          computerId: "computer-mac",
+          modelId: "llama3.3-70b:Q4_K_M",
+        },
+      ]),
+    );
+
+    // Failed rechecks show a retryable action error without crashing the library.
+    fixture.runtime.server.on("POST", viewPath, () =>
+      teamHubErrorResponse(503, "LOCAL_COMPUTER_OFFLINE"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Recheck memory" }));
+    expect(
+      await screen.findByText(
+        "The computer is offline. Reconnect it in Computers, then try again.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("lets the owner choose a loaded larger model in SwitchToLocalNotice and Use for Agents", async () => {
+    const small = localModel({
+      id: "spark-4b:Q4_K_M",
+      memory_bytes: gb(4),
+      name: "Spark 4B",
+      pi_model: "localmodels-library/spark-4b",
+      pool: "gpu:0",
+      state: "loaded",
+    });
+    const large = localModel({
+      id: "qwen3.8-27b:IQ3_S",
+      memory_bytes: gb(16),
+      name: "Qwen3.8 27B",
+      pi_model: "localmodels-library/qwen3.8-27b",
+      pool: "gpu:0",
+      state: "loaded",
+    });
+    const view = labView({
+      models: [modelView(small), modelView(large)],
+    });
+    const fixture = setup([view]);
+    const { switches } = withSource(fixture, {
+      ...byokStatus,
+      mode: "byok",
+      runtime: "pi",
+      runtime_model: "localmodels-byok",
+    });
+    fixture.runtime.server.on("POST", switchPath, ({ body }) => {
+      switches.push(body);
+      return Response.json({
+        computer_id: "computer-lab",
+        online: true,
+        status: {
+          ...byokStatus,
+          mode: "local",
+          runtime: "pi",
+          runtime_model: "localmodels-library/spark-4b",
+        },
+        viewer_is_owner: true,
+      });
+    });
+    await renderPage(fixture);
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Local model" }));
+    const modelSelect = await screen.findByRole("combobox", {
+      name: "Local model",
+    });
+    fireEvent.click(modelSelect);
+    fireEvent.click(await screen.findByRole("option", { name: /Spark 4B/u }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Switch to Local model" }),
+    );
+    await waitFor(() => expect(switches).toHaveLength(1));
+    expect(switches[0]).toEqual({
+      local_model_id: "spark-4b:Q4_K_M",
+      mode: "local",
+    });
+
+    // Once on Local model mode running Spark 4B, loaded Qwen3.8 27B offers Use for Agents.
+    const useLarge = await screen.findByRole("button", {
+      name: "Use Qwen3.8 27B for Agents",
+    });
+    expect(
+      screen.queryByRole("button", { name: "Use Spark 4B for Agents" }),
+    ).toBeNull();
+    fireEvent.click(useLarge);
+    await waitFor(() => expect(switches).toHaveLength(2));
+    expect(switches[1]).toEqual({
+      local_model_id: "qwen3.8-27b:IQ3_S",
+      mode: "local",
+    });
+  });
+
+  it("hides Recheck memory and Use for Agents when read-only or offline while keeping one status notice", async () => {
+    const busyView = labView({
+      models: [
+        modelView(
+          localModel({
+            availability: {
+              downloadable: false,
+              reason: {
+                code: "MEMORY_INSUFFICIENT",
+                have_bytes: gb(8),
+                need_bytes: gb(16),
+              },
+            },
+            fit: "none",
+            id: "qwen3.8-27b:IQ3_S",
+            memory_bytes: gb(16),
+            name: "Qwen3.8 27B",
+            pool: undefined,
+          }),
+        ),
+        modelView(
+          localModel({
+            id: "loaded:Q4",
+            memory_bytes: gb(4),
+            name: "Loaded Model",
+            pi_model: "localmodels-library/loaded",
+            pool: "gpu:0",
+            state: "loaded",
+          }),
+        ),
+      ],
+      pools: [{ ...gpuPool(0, 24), used_bytes: gb(16) }],
+      viewer_is_owner: false,
+    });
+    const readOnlyFixture = setup([busyView]);
+    await renderPage(readOnlyFixture);
+    await findModels();
+
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(
+      screen.queryByRole("button", { name: "Recheck memory" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Use .* for Agents/u }),
+    ).not.toBeInTheDocument();
+
+    cleanup();
+    const offlineView = labView({
+      ...busyView,
+      computer: { ...busyView.computer, status: "offline" },
+      viewer_is_owner: true,
+    });
+    await renderPage(setup([offlineView]));
+    await findModels();
+
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(
+      screen.queryByRole("button", { name: "Recheck memory" }),
+    ).not.toBeInTheDocument();
   });
 });

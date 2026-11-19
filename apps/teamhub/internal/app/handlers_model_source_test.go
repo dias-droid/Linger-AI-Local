@@ -37,3 +37,15 @@ func TestValidModelSourceSwitchMatchesRuntimeAndInputsToMode(t *testing.T) {
 		}
 	}
 }
+
+func TestModelSourceRefusalCodesMapRoomErrors(t *testing.T) {
+	for _, computerCode := range []string{"LOAD_NO_ROOM", "MEMORY_INSUFFICIENT"} {
+		got, ok := modelSourceRefusalCodes[computerCode]
+		if !ok || got != httpapi.ModelSourceErrorCodeLocalModelNoRoom {
+			t.Fatalf("%s mapped to %q (ok=%v), want %q", computerCode, got, ok, httpapi.ModelSourceErrorCodeLocalModelNoRoom)
+		}
+	}
+	if modelSourceErrorMessages[httpapi.ModelSourceErrorCodeLocalModelNoRoom] == "" {
+		t.Fatal("LOCAL_MODEL_NO_ROOM has no message")
+	}
+}
