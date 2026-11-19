@@ -35,8 +35,9 @@ type fakeScript struct {
 }
 
 type fakeLine struct {
-	Line    json.RawMessage `json:"line"`
-	DelayMS int             `json:"delay_ms,omitempty"`
+	Line     json.RawMessage `json:"line"`
+	DelayMS  int             `json:"delay_ms,omitempty"`
+	WaitFile string          `json:"wait_file,omitempty"`
 	// CancelAware lines stop the call with CANCELLED once a cancel ran.
 	CancelAware bool `json:"cancel_aware,omitempty"`
 }
@@ -83,6 +84,9 @@ func runFakeTool(args []string) int {
 		_ = os.WriteFile(filepath.Join(state, "cancelled"), nil, 0o600)
 	}
 	for _, line := range script.Lines {
+		if line.WaitFile != "" {
+			waitForGateRemoval(filepath.Join(state, line.WaitFile), 30*time.Second)
+		}
 		time.Sleep(time.Duration(line.DelayMS) * time.Millisecond)
 		if _, err := os.Stat(filepath.Join(state, "cancelled")); line.CancelAware && err == nil {
 			fmt.Printf(`{"schema":"localmodels.library-event/v1","event":"error","ok":false,"code":"CANCELLED","detail":"the download was cancelled","model":%q}`+"\n", args[6])
@@ -94,6 +98,16 @@ func runFakeTool(args []string) int {
 		_ = os.WriteFile(filepath.Join(state, "status.json"), script.StatusAfter, 0o600)
 	}
 	return script.Exit
+}
+
+func waitForGateRemoval(gatePath string, timeout time.Duration) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(gatePath); err != nil {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func workingDirectory() string {
@@ -137,13 +151,7 @@ func runFakeHarness(state string, args []string) int {
 		waitGate := filepath.Join(state, "harness-plan-wait")
 		if _, err := os.Stat(waitGate); err == nil {
 			_ = os.WriteFile(filepath.Join(state, "harness-plan-entered"), []byte("1"), 0o600)
-			deadline := time.Now().Add(10 * time.Second)
-			for time.Now().Before(deadline) {
-				if _, statErr := os.Stat(waitGate); statErr != nil {
-					break
-				}
-				time.Sleep(10 * time.Millisecond)
-			}
+			waitForGateRemoval(waitGate, 30*time.Second)
 		}
 		if _, err := os.Stat(filepath.Join(state, "harness-plan-fail")); err == nil {
 			return 1

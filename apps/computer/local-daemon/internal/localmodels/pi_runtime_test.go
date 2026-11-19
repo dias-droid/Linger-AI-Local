@@ -261,10 +261,14 @@ func TestEnsurePiRunsOutsideRefreshLockAndBacksOffOnFailure(t *testing.T) {
 		t.Fatalf("second Refresh=%+v", second)
 	}
 	downloaded, _ := json.Marshal(status(model(testModel, "loaded"), model(otherModel, "idle")))
+	downloadWait := filepath.Join(fake.state, "download-wait")
+	if err := os.WriteFile(downloadWait, []byte("1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	fake.script("download", fakeScript{
 		Lines: []fakeLine{
 			{Line: progressLine(otherModel, "download", 10, 100)},
-			{Line: resultLine(otherModel), DelayMS: 40},
+			{Line: resultLine(otherModel), WaitFile: "download-wait"},
 		},
 		StatusAfter: downloaded,
 	})
@@ -275,13 +279,23 @@ func TestEnsurePiRunsOutsideRefreshLockAndBacksOffOnFailure(t *testing.T) {
 		state := modelState(record.last(), otherModel)
 		return state != nil && state.State == "downloading"
 	})
+	if got := library.PiExecutable(); got != "" {
+		t.Fatalf("EnsurePi finished before waitGate was released: %q", got)
+	}
 
+	if err := os.Remove(downloadWait); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Remove(waitGate); err != nil {
 		t.Fatal(err)
 	}
 	want := filepath.Join(harnessDir, "tools", "pi", "1.3.0", "pi")
 	waitFor(t, "blocked EnsurePi finished after gate released", func() bool {
 		return library.PiExecutable() == want && record.changes() == 1
+	})
+	waitFor(t, "gated download completed after gate released", func() bool {
+		state := modelState(record.last(), otherModel)
+		return state != nil && state.State == "idle"
 	})
 
 	// Failed installs back off instead of retrying on every Refresh, then retry
