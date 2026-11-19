@@ -5,6 +5,7 @@ import type {
 } from "../executor/types.js";
 import type { MetaRoomKind } from "../executor/context-ref.js";
 import {
+  connectableAppsOnly,
   connectableAppsRule,
   connectedAppsAtRunStart,
 } from "./connected-apps.js";
@@ -225,13 +226,6 @@ const WORKSPACE = `Your workspace
   - Python: uv --directory ./agent add <package>, then uv --directory ./agent run python ....
   - npm and uv are not always installed. If npm, uv, or a system tool you need is missing, ask the user whether to install it. Don't install anything globally (apt, brew, conda, pip --user, npm -g) without the user's yes: that changes the user's computer.
   - Extract archives with tar --no-same-owner.`;
-
-// Without a provider key, no account or app command applies yet; only the
-// route to an authorization card does.
-const connectableAppsOnly = (connectableAppKeys: readonly string[]): string =>
-  connectableAppKeys.length === 0
-    ? ""
-    : `\n- Connected apps: no app has an account you can use yet.${connectableAppsRule(connectableAppKeys)}`;
 
 const connectedAppsCommands = (
   connectedAppKeys: readonly string[],

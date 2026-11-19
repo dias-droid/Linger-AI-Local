@@ -3,6 +3,7 @@ import type { MetaRoomKind } from "../executor/context-ref.js";
 import { COMPACT_PACKAGE_ENVIRONMENT } from "./environment-knowledge.js";
 import type { MetaInstructionsInput } from "./meta-instructions.js";
 import {
+  connectableAppsOnly,
   connectableAppsRule,
   connectedAppsAtRunStart,
 } from "./connected-apps.js";
@@ -151,13 +152,6 @@ const authority = (agentType: AgentType, roomKind: MetaRoomKind): string => {
       : []),
   ].join("\n\n");
 };
-
-// Without a provider key, no account or app command applies yet; only the
-// route to an authorization card does.
-const connectableAppsOnly = (connectableAppKeys: readonly string[]): string =>
-  connectableAppKeys.length === 0
-    ? ""
-    : `\n- Connected apps: no app has an account you can use yet.${connectableAppsRule(connectableAppKeys)}`;
 
 const connectedAppsCommands = (
   connectedAppKeys: readonly string[],
