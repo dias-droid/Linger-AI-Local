@@ -2592,6 +2592,28 @@ Options:
 {"command":["room","create"],"description":"Request Human approval for a Room and its first message.","read_only":false,"input_schema":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"name":{"type":"string","description":"Name of the proposed collaboration Room.","minLength":1,"maxLength":120},"description":{"type":"string","description":"Optional description of the proposed collaboration Room.","maxLength":2000},"member_ids":{"minItems":1,"maxItems":100,"type":"array","items":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9][A-Za-z0-9_-]*$","description":"Stable TeamHub Actor identifier of one proposed member."},"description":"TeamHub Actors who will join the Room after approval.","uniqueItems":true},"artifacts":{"description":"Optional existing Documents delivered with the initial message after approval.","minItems":1,"maxItems":5,"type":"array","items":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9][A-Za-z0-9_-]*$","description":"Stable unified Document identifier delivered with the initial Room message."},"uniqueItems":true},"initial_message_segments":{"minItems":1,"maxItems":1000,"type":"array","items":{"oneOf":[{"type":"object","properties":{"type":{"type":"string","const":"text","description":"Discriminator identifying the message segment kind."},"content":{"type":"string","description":"User-visible text carried by this segment.","minLength":1,"maxLength":50000}},"required":["type","content"],"additionalProperties":false,"description":"Plain text segment. Include both fields, for example {\\"type\\":\\"text\\",\\"content\\":\\"Start here.\\"}."},{"type":"object","properties":{"type":{"type":"string","const":"reference","description":"Discriminator identifying the message segment kind."},"content":{"type":"string","description":"User-visible text carried by this segment.","minLength":1,"maxLength":50000},"target":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9][A-Za-z0-9_-]*$","description":"Stable TeamHub Actor identifier referenced by this segment."},"target_type":{"type":"string","enum":["agent","user"],"description":"Declared Actor kind; TeamHub verifies it against the target."}},"required":["type","content","target","target_type"],"additionalProperties":false,"description":"Actor-reference segment. Include type:\\"reference\\", content, target, and target_type; for example {\\"type\\":\\"reference\\",\\"content\\":\\"@Analyst\\",\\"target\\":\\"actor_analyst\\",\\"target_type\\":\\"agent\\"}."}],"description":"One text or Actor-reference segment of the initial message."},"description":"Ordered structured segments of the initial message created after approval."}},"required":["name","member_ids","initial_message_segments"],"additionalProperties":false,"description":"Arguments accepted by the create_room tool."},"output_schema":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"accepted":{"type":"boolean","const":true,"description":"Whether TeamHub accepted the Creation request."},"status":{"type":"string","const":"pending_approval","description":"Current state of the Creation request."},"creation_approval_request_id":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9][A-Za-z0-9_-]*$","description":"Stable identifier of the Creation approval request."},"message_id":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9][A-Za-z0-9_-]*$","description":"Stable identifier of the Human approval card message."}},"required":["accepted","status","creation_approval_request_id","message_id"],"additionalProperties":false,"description":"Successful result returned by the create_room tool."},"cli":{"usage":["teamhub room create [flags]"],"arguments":[],"options":{"--name":{"description":"Proposed Room name."},"--description":{"description":"Optional description."},"--member-id":{"description":"Explicit member Actor ID; repeat for each member.","repeatable":true},"--member-ids":{"description":"Explicit member Actor ID array as JSON."},"--content":{"description":"Inline Markdown body; outside code, \\\\n, \\\\t and \\\\\\\\ are decoded."},"--file":{"description":"Read UTF-8 body from a file or - for stdin."},"--initial-message-segments":{"description":"Initial text/reference segments as a JSON array."},"--initial-message-segments-file":{"description":"Read initial-message-segments JSON from a file or - for stdin."},"--artifact-id":{"description":"Authorized existing Document ID; repeat up to five times.","repeatable":true},"--artifacts":{"description":"Authorized Document IDs as a JSON array."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true},"--operation-id":{"description":"Stable operation identity for recovery."}},"notes":[]}}
 ",
   },
+  "room handoff": {
+    "help": "exit 0
+teamhub room handoff [flags]
+Hand your Human's request from your direct chat to yourself in another Room you both are in.
+
+Options:
+  --inbox <value>  room:<room-id> of another Room where you and your Human are both members.
+  --content <value>  Inline Markdown body; outside code, \\n, \\t and \\\\ are decoded.
+  --file <value>  Read UTF-8 body from a file or - for stdin.
+  --json  Return machine-readable JSON.
+  --help  Show this offline command reference.
+  -h  Show help.
+  --schema  Show offline input and output schemas.
+  --operation-id <value>  Stable operation identity for recovery.
+Only Another Me, from its direct chat with its Human, in a turn the Human started by writing to it or deciding one of its cards.
+The instruction is hidden from that Room. You there are woken with it, read that Room, and post and @ the Agents yourself; the direct chat's messages are not copied.
+Results come back to the direct chat through teamhub message direct.
+",
+    "schema": "exit 0
+{"command":["room","handoff"],"description":"Hand your Human's request from your direct chat to yourself in another Room you both are in.","read_only":false,"input_schema":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"room_id":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9][A-Za-z0-9_-]*$","description":"Another Room where you and your Human are both members."},"instruction":{"type":"string","minLength":1,"maxLength":8000,"description":"Self-contained instruction for you in that Room; hidden from its timeline."}},"required":["room_id","instruction"],"additionalProperties":false,"description":"Arguments accepted by the hand_off_to_room tool."},"output_schema":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"duplicate_request":{"type":"boolean","description":"Whether TeamHub returned an earlier handoff of this operation."},"reason":{"description":"Public explanation of a committed replay.","type":"string","minLength":1},"accepted":{"type":"boolean","const":true,"description":"Whether TeamHub posted the handoff."},"inbox_id":{"type":"string","pattern":"^room:[A-Za-z0-9][A-Za-z0-9_-]*$","description":"Inbox of the Room that received the handoff."},"handoff_id":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9][A-Za-z0-9_-]*$","description":"Identifier of the hidden handoff."}},"required":["duplicate_request","accepted","inbox_id","handoff_id"],"additionalProperties":false,"description":"Successful result returned by the hand_off_to_room tool."},"cli":{"usage":["teamhub room handoff [flags]"],"arguments":[],"options":{"--inbox":{"description":"room:<room-id> of another Room where you and your Human are both members."},"--content":{"description":"Inline Markdown body; outside code, \\\\n, \\\\t and \\\\\\\\ are decoded."},"--file":{"description":"Read UTF-8 body from a file or - for stdin."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true},"--operation-id":{"description":"Stable operation identity for recovery."}},"notes":["Only Another Me, from its direct chat with its Human, in a turn the Human started by writing to it or deciding one of its cards.","The instruction is hidden from that Room. You there are woken with it, read that Room, and post and @ the Agents yourself; the direct chat's messages are not copied.","Results come back to the direct chat through teamhub message direct."]}}
+",
+  },
   "room invite": {
     "help": "exit 0
 teamhub room invite [flags]
@@ -4093,6 +4115,22 @@ Options:
   --operation-id <value>  Stable operation identity for recovery.
 The Agent joins at once with your sponsor's authority; wake it there with an Agent reference.
 A Direct Room or Thread keeps its members; create a collaboration Room with teamhub room create instead.
+
+teamhub room handoff [flags]
+Hand your Human's request from your direct chat to yourself in another Room you both are in.
+
+Options:
+  --inbox <value>  room:<room-id> of another Room where you and your Human are both members.
+  --content <value>  Inline Markdown body; outside code, \\n, \\t and \\\\ are decoded.
+  --file <value>  Read UTF-8 body from a file or - for stdin.
+  --json  Return machine-readable JSON.
+  --help  Show this offline command reference.
+  -h  Show help.
+  --schema  Show offline input and output schemas.
+  --operation-id <value>  Stable operation identity for recovery.
+Only Another Me, from its direct chat with its Human, in a turn the Human started by writing to it or deciding one of its cards.
+The instruction is hidden from that Room. You there are woken with it, read that Room, and post and @ the Agents yourself; the direct chat's messages are not copied.
+Results come back to the direct chat through teamhub message direct.
 
 teamhub room protocol [flags]
 Read the current collaboration protocol of the configured Room.

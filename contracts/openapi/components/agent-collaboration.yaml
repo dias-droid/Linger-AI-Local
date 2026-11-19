@@ -439,6 +439,58 @@ components:
             description: One non-empty user-visible private message body.
             minLength: 1
             maxLength: 50000
+    AgentRoomHandoffRequest:
+      type: object
+      description: >-
+        The Room to hand the Human's request to and the instruction the AnotherMe's
+        Context there carries out. The caller, its direct chat and its Human are
+        derived by TeamHub, never accepted from the caller.
+      additionalProperties: false
+      required:
+        - invocation_id
+        - room_id
+        - instruction
+      properties:
+        invocation_id:
+          $ref: "#/components/schemas/AgentInvocationId"
+        room_id:
+          $ref: "./common.yaml#/components/schemas/Id"
+        instruction:
+          type: string
+          description: >-
+            Self-contained instruction for the AnotherMe in the target Room. Hidden from
+            the Room's timeline; the receiving Context decides what to post there.
+          minLength: 1
+          maxLength: 8000
+    AgentRoomHandoffResponse:
+      type: object
+      description: The handoff posted in the target Room.
+      additionalProperties: false
+      required:
+        - duplicate_request
+        - accepted
+        - inbox_id
+        - handoff_id
+      properties:
+        duplicate_request:
+          type: boolean
+          description: True only when the server recovered a prior committed operation.
+        reason:
+          type: string
+          minLength: 1
+          description: Optional public receipt explanation.
+        accepted:
+          type: boolean
+          const: true
+          description: Whether TeamHub posted the handoff.
+        inbox_id:
+          type: string
+          description: Canonical public Inbox of the target Room.
+          minLength: 6
+          maxLength: 69
+          pattern: "^room:[A-Za-z0-9][A-Za-z0-9_-]*$"
+        handoff_id:
+          $ref: "./common.yaml#/components/schemas/Id"
     AgentSendDirectMessageResponse:
       type: object
       description: >-

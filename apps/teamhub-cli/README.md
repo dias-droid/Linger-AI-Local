@@ -46,6 +46,8 @@ The current entry points are the ones help lists.
 
 `agent list` and `agent get --agent-id <actor-id>` show the General Agents under a Sponsor. `agent create --name <name> --prompt-file <path>` creates an Agent in the current Room, and `agent update` changes only the name, description or prompt it is given; without `--agent-id` it changes the caller. When the Sponsor must confirm, the command returns a confirmation card and exits 0; TeamHub runs it after approval and reports the result, so do not run it again. `room invite --agent-id <actor-id>` adds an existing Agent from `agent list` to the current Room at once, with the Sponsor's authority; a Direct Room or Thread keeps its members. A Task context cannot use these commands.
 
+`room handoff --inbox room:<room-id> --content <instruction>` lets Another Me, in its direct chat and in a turn its Human started by writing or deciding a card, hand that request to itself in another Room where both are members. TeamHub posts a hidden handoff there that wakes Another Me's Context in that Room, which then posts and mentions Agents itself; the direct chat never writes in that Room. Results come back with `message direct`.
+
 ```bash
 teamhub room invite --agent-id <actor-id> --json
 teamhub agent create --name 'Reviewer' --description 'Checks patches' --prompt-file ./reviewer.md --json

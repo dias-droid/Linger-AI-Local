@@ -564,6 +564,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/agent/v1/room-handoffs": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Hand a Human's request from the direct chat to the calling AnotherMe in another Room
+     * @description Authorizes an AnotherMe Meta Context in its direct chat with its Human, in a Run that the Human's own message there started. TeamHub posts one hidden handoff message in the target Room, where the Human and the AnotherMe must both be members, and it wakes the AnotherMe's Context in that Room to carry out the instruction. The caller never writes in the target Room itself. The invocation_id makes a replay return the original handoff.
+     */
+    post: operations["handOffAgentRoomWork"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/agent/v1/routines": {
     parameters: {
       query?: never;
@@ -2340,6 +2360,28 @@ export interface components {
       /** @description Whether this invocation created the sponsor Direct Room. */
       room_created: boolean;
     };
+    /** @description The Room to hand the Human's request to and the instruction the AnotherMe's Context there carries out. The caller, its direct chat and its Human are derived by TeamHub, never accepted from the caller. */
+    AgentRoomHandoffRequest: {
+      invocation_id: components["schemas"]["AgentInvocationId"];
+      room_id: components["schemas"]["Id"];
+      /** @description Self-contained instruction for the AnotherMe in the target Room. Hidden from the Room's timeline; the receiving Context decides what to post there. */
+      instruction: string;
+    };
+    /** @description The handoff posted in the target Room. */
+    AgentRoomHandoffResponse: {
+      /** @description True only when the server recovered a prior committed operation. */
+      duplicate_request: boolean;
+      /** @description Optional public receipt explanation. */
+      reason?: string;
+      /**
+       * @description Whether TeamHub posted the handoff.
+       * @constant
+       */
+      accepted: true;
+      /** @description Canonical public Inbox of the target Room. */
+      inbox_id: string;
+      handoff_id: components["schemas"]["Id"];
+    };
     /** @enum {string} */
     AgentRoutineWeekday:
       | "monday"
@@ -3809,6 +3851,36 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["AgentSendDirectMessageResponse"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthenticated"];
+      403: components["responses"]["Forbidden"];
+      409: components["responses"]["Conflict"];
+      503: components["responses"]["ServiceUnavailable"];
+      default: components["responses"]["InternalError"];
+    };
+  };
+  handOffAgentRoomWork: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AgentRoomHandoffRequest"];
+      };
+    };
+    responses: {
+      /** @description The handoff is in the target Room and wakes the AnotherMe there. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AgentRoomHandoffResponse"];
         };
       };
       400: components["responses"]["BadRequest"];

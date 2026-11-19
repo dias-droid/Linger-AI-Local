@@ -101,6 +101,19 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
   Document reads are live-latest and mutations retain CAS. CLI business
   operations use current Agent/resource authority, not Context/Run prerequisites.
 
+- An Agent writes only in its Context Room. To act in another Room, an
+  AnotherMe in its direct chat uses Room handoff (`internal/agentroomhandoff`,
+  `teamhub room handoff`): TeamHub posts a hidden `agent_runtime` message,
+  authored by the Human and mentioning the AnotherMe, in another live Room
+  where both are members, and it wakes the AnotherMe's Context there, which
+  then speaks for itself. Only a Run whose inputs carry a message the Human
+  wrote, or a card they decided, in the direct chat may hand off
+  (`X-TeamHub-Run-Id`); proactive wakes, Routines and Task callbacks may not,
+  because they often carry outside content. A refusal names its reason in an
+  error issue, which the CLI shows the Agent. The handoff body is hidden from the Web timeline but other
+  Agents in that Room can read it. Results come back through
+  `send_direct_message`.
+
 - Go generates only types for the contracts TeamHub serves. Mount each
   operation in the caller's route table in `internal/app/routes_*.go`;
   `TestRoutesMountEveryContractOperationExactlyOnce` fails on a missing,

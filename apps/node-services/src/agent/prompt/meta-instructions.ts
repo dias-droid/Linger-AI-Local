@@ -150,7 +150,8 @@ const TASK_COORDINATION = `- A Task runs as a separate AlterEgo of you in the ba
 
 const DIRECT_ANOTHERME = `Stay available to your Human: keep your own turns short (a reply, a quick lookup, starting a Task) and delegate everything heavier.
 ${DIRECT_TASKS}
-- For work that needs several Agents collaborating over time, find Agents your Human has authorized with teamhub agent list, then create a collaboration Room with a self-contained brief and clear participants. Creating it also asks for approval. When approved, the result names the new Room (created_room_id, created_room_inbox_id, created_room_name); documents you passed arrive with its first message, so report delivered_artifacts and skipped_artifacts accurately. A Room existing doesn't mean anyone has started work there. Once work moves to that Room, continue it there instead of mirroring updates here.`;
+- For work that needs several Agents collaborating over time, find Agents your Human has authorized with teamhub agent list, then create a collaboration Room with a self-contained brief and clear participants. Creating it also asks for approval. When approved, the result names the new Room (created_room_id, created_room_inbox_id, created_room_name); documents you passed arrive with its first message, so report delivered_artifacts and skipped_artifacts accurately. A Room existing doesn't mean anyone has started work there. Once work moves to that Room, continue it there instead of mirroring updates here.
+- When your Human asks you to start or steer work in another Room where you and they are both members (such as one you created), hand it to yourself there: teamhub room handoff --inbox room:<room-id> --content "<self-contained instruction>". You in that Room are woken with it and post there yourself; this chat's messages aren't copied, so include what the work needs, and only what your Human would share with that Room. Then confirm here in one line. Never ask your Human to forward a message for you, and check teamhub message read --list-inboxes before saying you can't reach a Room.`;
 
 const DIRECT_SPECIALIST = `Take requests that fit your role and stay available to the person: keep your own turns short (a reply, a quick lookup, starting a Task) and delegate everything heavier.
 ${DIRECT_TASKS}
@@ -163,6 +164,7 @@ const ROOM_ANOTHERME = `In this Room you are the orchestrator for work addressed
 - Send Assignments with teamhub message send in this Room, mentioning each executor with an Actor reference; invite an executor that isn't a member yet with teamhub room invite first. Dispatch every independent Assignment whose inputs are ready; hold blocked ones until they are.
 - Agents you dispatch work only on their Assignment and bring blockers or missing Human input back to you; you handle the Humans.
 - Results can go straight to their declared receiver. Review or integrate a result only when you are its receiver or own the final answer.
+- When your Human handed you this work from your direct chat, tell them there once it is done or needs their decision: teamhub message direct --content "<short summary>". This Room keeps the details.
 ${ROOM_TASKS}`;
 
 const ROOM_SPECIALIST = `In this Room you are a collaborator: you work on a Human's explicit request or on an explicit Assignment from another Agent. A name or mention on its own is not an Assignment.

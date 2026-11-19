@@ -827,6 +827,40 @@ const roomInvite = definition(
     ],
   },
 );
+const roomHandoff = definition(
+  ["room", "handoff"],
+  "hand_off_to_room",
+  "Hand your Human's request from your direct chat to yourself in another Room you both are in.",
+  {
+    "--inbox": flag(
+      "room:<room-id> of another Room where you and your Human are both members.",
+    ),
+    ...bodyOptions,
+  },
+  async (args, reader) => {
+    assertPositionals(args, 0);
+    const room = /^room:([A-Za-z0-9][A-Za-z0-9_-]*)$/u.exec(
+      requiredOption(args, "--inbox"),
+    );
+    if (!room) invalid("--inbox accepts only a room: address.");
+    return {
+      input: await validate("hand_off_to_room", {
+        room_id: room[1],
+        instruction: await markdownBodySource(args, reader),
+      }),
+    };
+  },
+  {
+    defaultTarget: "room",
+    unavailableInTask:
+      "A Task cannot hand off work. Say in your final reply which Room should take it; the Meta that started the Task can hand it off.",
+    notes: [
+      "Only Another Me, from its direct chat with its Human, in a turn the Human started by writing to it or deciding one of its cards.",
+      "The instruction is hidden from that Room. You there are woken with it, read that Room, and post and @ the Agents yourself; the direct chat's messages are not copied.",
+      "Results come back to the direct chat through teamhub message direct.",
+    ],
+  },
+);
 const roomProtocol = definition(
   ["room", "protocol"],
   "get_team_md",
@@ -1285,6 +1319,7 @@ export const businessCommandDefinitions: readonly CommandDefinition[] = [
   collaborate,
   roomMembers,
   roomInvite,
+  roomHandoff,
   roomProtocol,
   taskCreate,
   taskCheck,

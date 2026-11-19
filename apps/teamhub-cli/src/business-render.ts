@@ -197,6 +197,8 @@ export function renderBusinessResult(command: string, result: Json): string {
     return result.added
       ? `Added Agent ${singleLine(result.actor_id)} to Room ${singleLine(result.room_id)}. Wake it with an Agent reference in that Room.`
       : `Agent ${singleLine(result.actor_id)} is already a member of Room ${singleLine(result.room_id)}.`;
+  if (command === "room handoff")
+    return `${result.duplicate_request === true ? "Already handed off" : "Handed off"} to you in ${singleLine(result.inbox_id)}; you there carry it out. Confirm to your Human in one line.`;
   if (command === "room protocol")
     return result.published === false
       ? "No team.md collaboration protocol has been published in this Room yet."

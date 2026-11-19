@@ -2244,6 +2244,36 @@ type AgentRoomCreationEffectivePayload struct {
 	Name string `json:"name"`
 }
 
+// AgentRoomHandoffRequest The Room to hand the Human's request to and the instruction the AnotherMe's Context there carries out. The caller, its direct chat and its Human are derived by TeamHub, never accepted from the caller.
+type AgentRoomHandoffRequest struct {
+	// Instruction Self-contained instruction for the AnotherMe in the target Room. Hidden from the Room's timeline; the receiving Context decides what to post there.
+	Instruction string `json:"instruction"`
+
+	// InvocationId Stable SHA-256 operation identity derived by the CLI from the Agent identity, command, and caller operation ID. Credential rotation and Runtime restarts do not change it.
+	InvocationId AgentInvocationId `json:"invocation_id"`
+
+	// RoomId Opaque, case-sensitive identifier. Clients must not infer type or time from it.
+	RoomId Id `json:"room_id"`
+}
+
+// AgentRoomHandoffResponse The handoff posted in the target Room.
+type AgentRoomHandoffResponse struct {
+	// Accepted Whether TeamHub posted the handoff.
+	Accepted bool `json:"accepted"`
+
+	// DuplicateRequest True only when the server recovered a prior committed operation.
+	DuplicateRequest bool `json:"duplicate_request"`
+
+	// HandoffId Opaque, case-sensitive identifier. Clients must not infer type or time from it.
+	HandoffId Id `json:"handoff_id"`
+
+	// InboxId Canonical public Inbox of the target Room.
+	InboxId string `json:"inbox_id"`
+
+	// Reason Optional public receipt explanation.
+	Reason *string `json:"reason,omitempty"`
+}
+
 // AgentRoomMembersRequest defines model for AgentRoomMembersRequest.
 type AgentRoomMembersRequest struct {
 	InboxId string `json:"inbox_id"`
@@ -3308,6 +3338,9 @@ type WriteAgentPersonalProfileJSONRequestBody = AgentPersonalProfileWriteRequest
 
 // SendAgentPresentationSequenceJSONRequestBody defines body for SendAgentPresentationSequence for application/json ContentType.
 type SendAgentPresentationSequenceJSONRequestBody = AgentSendPresentationSequenceRequest
+
+// HandOffAgentRoomWorkJSONRequestBody defines body for HandOffAgentRoomWork for application/json ContentType.
+type HandOffAgentRoomWorkJSONRequestBody = AgentRoomHandoffRequest
 
 // AddAgentRoomMemberJSONRequestBody defines body for AddAgentRoomMember for application/json ContentType.
 type AddAgentRoomMemberJSONRequestBody = AgentAddRoomMemberRequest

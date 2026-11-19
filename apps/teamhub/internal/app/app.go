@@ -39,6 +39,7 @@ import (
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/agentcreationapproval"
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/agentdirectmessage"
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/agentdocument"
+	"github.com/simplexai-labs/linger/apps/teamhub/internal/agentroomhandoff"
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/agentruntimestate"
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/agentsendmessage"
 	artifactstore "github.com/simplexai-labs/linger/apps/teamhub/internal/artifact"
@@ -142,6 +143,7 @@ type App struct {
 	mcpContexts                    mcpContextService
 	agentAuth                      agentauth.Authorizer
 	agentDirectMessages            agentDirectMessageService
+	agentRoomHandoffs              agentRoomHandoffService
 	agentDocumentCreations         agentDocumentCreateService
 	agentDocumentComments          agentDocumentCommentService
 	agentDocumentSemanticMutations agentDocumentSemanticService
@@ -634,6 +636,7 @@ func (a *App) registerAgentTools(cfg config.Config, deps Deps, agentAuthorizatio
 	a.agentDocumentCreations = agentdocument.NewCreateTool(agentAuthorization, a.documents)
 	a.agentDocumentSemanticMutations = agentdocument.NewSemanticTool(agentAuthorization, a.documents)
 	a.agentDirectMessages = agentdirectmessage.New(a.pool, agentAuthorization)
+	a.agentRoomHandoffs = agentroomhandoff.New(a.pool, agentAuthorization)
 	messageSender := agentsendmessage.New(a.pool, agentAuthorization, a.documents, a.artifacts)
 	a.agentSendMessages = messageSender
 	a.registerPermissionReview(cfg.PermissionReview, models, deps.PermissionJudge)

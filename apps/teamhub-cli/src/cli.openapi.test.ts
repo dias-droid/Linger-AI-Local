@@ -199,6 +199,13 @@ async function respond(request: Request): Promise<Response> {
       room_created: true,
       duplicate_request: false,
     });
+  if (endpoint.endsWith("/room-handoffs"))
+    return Response.json({
+      accepted: true,
+      inbox_id: "room:room_two",
+      handoff_id: "message_handoff",
+      duplicate_request: false,
+    });
   if (endpoint.endsWith("/emoji-reactions"))
     return Response.json({
       accepted: true,
