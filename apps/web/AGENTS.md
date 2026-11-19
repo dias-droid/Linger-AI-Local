@@ -109,6 +109,10 @@ build:assets` to check the initial JS budget.
   Recording moves one portal host between documents so paused state, Ask
   drafts and transcript scroll survive the move. Hide it while classifying a
   native close, and ignore a late result after unmount or a replacement window.
+- Pausing a recording mutes the shared microphone for that recording only:
+  the microphone track can outlive it, so a new recording turns the
+  microphone back on before it starts, and Start on a running paused
+  recording keeps it paused.
 - Gmail and Outlook message approvals show the subject and recipients once.
   The subject row toggles the preview and owns its hover highlight; the
   recipient line stays outside the control. The shared AutoHeight transition

@@ -42,6 +42,8 @@ const media = vi.hoisted(() => ({
   listeners: new Map<string, () => void>(),
   publish: vi.fn(async () => undefined),
   stop: vi.fn(),
+  mute: vi.fn(async () => undefined),
+  unmute: vi.fn(async () => undefined),
   disconnect: vi.fn(async () => undefined),
   unpublish: vi.fn<() => Promise<void>>(async () => undefined),
   tracks: [] as EventTarget[],
@@ -75,6 +77,8 @@ vi.mock("livekit-client", () => ({
     media.tracks.push(track);
     return {
       stop: media.stop,
+      mute: media.mute,
+      unmute: media.unmute,
       mediaStreamTrack: track,
       setDeviceId: async () => undefined,
     };
@@ -126,6 +130,10 @@ function ListenerState({ autoEnable = true }: { autoEnable?: boolean }) {
       <button onClick={() => void voice.startCapture()}>Start</button>
       <button onClick={() => void voice.startNewCapture()}>Start new</button>
       <button onClick={() => void voice.stopCapture()}>Stop</button>
+      <button onClick={() => void voice.setMicrophoneMuted(true)}>Pause</button>
+      <div aria-label="microphone">
+        {voice.microphoneMuted ? "muted" : "on"}
+      </div>
       <div aria-label="transcript">
         {voice.transcriptItems.map((item) => (
           <p key={item.id}>{item.text}</p>
@@ -1169,6 +1177,61 @@ describe("LiveKit voice input lifecycle", () => {
       `recording:${capture.id}`,
     );
     expect(stop).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  it("starts a new Capture with the microphone on after the previous one ended paused", async () => {
+    const runtime = createTestTeamHubRuntime();
+    const accepted = acceptVoice(runtime);
+
+    const start = spyVoiceRoute(
+      runtime,
+      accepted,
+      "POST",
+      "/v0/voice-sessions/{voiceSessionId}/captures",
+    );
+    const view = render(
+      <TeamHubRuntimeProvider runtime={runtime}>
+        <MemoryRouter>
+          <LiveKitVoiceControlProvider tenantId="tenant-northstar">
+            <ListenerState />
+          </LiveKitVoiceControlProvider>
+        </MemoryRouter>
+      </TeamHubRuntimeProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("listening"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("capture")).toHaveTextContent("recording:"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("microphone")).toHaveTextContent("muted"),
+    );
+    expect(media.mute).toHaveBeenCalledOnce();
+    // Start on the Capture that is still running keeps its pause.
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await waitFor(() => expect(start).toHaveBeenCalledOnce());
+    expect(media.unmute).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("capture")).toHaveTextContent("completed:"),
+    );
+    expect(media.unmute).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Start new" }));
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.getByLabelText("capture")).toHaveTextContent("recording:"),
+    );
+    expect(screen.getByLabelText("microphone")).toHaveTextContent("on");
+    expect(media.unmute).toHaveBeenCalledOnce();
+    // The recorder and transcription hear the new Capture from its first moment.
+    expect(media.unmute.mock.invocationCallOrder[0]).toBeLessThan(
+      start.mock.invocationCallOrder[1]!,
+    );
     view.unmount();
   });
 
