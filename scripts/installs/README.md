@@ -120,10 +120,12 @@ The installer resolves the region once per process, in this order:
 1. `SIMPLEX_REGION`: `cn` or `global` forces that region; `auto` or unset
    does not. Any other value is an error.
 2. `<LINGER_HOME>/runtime/region.json` when it was resolved within the last
-   7 days.
-3. A probe: the pinned pnpm tarball from `registry.npmjs.org` and from
-   `cdn.npmmirror.com` for 4 seconds; `cn` when the China mirror delivers
-   more. A probe that reaches neither uses `global` and is not saved.
+   24 hours.
+3. A probe: up to three rounds racing the first 1 MiB of the pinned pnpm
+   tarball from `registry.npmjs.org` and `cdn.npmmirror.com` (4 seconds per
+   round), stopping once one registry wins two rounds or leads clearly over a
+   full window; `cn` when the China mirror wins. A probe that reaches neither
+   uses `global` and is not saved.
 
 ```json
 {
@@ -134,9 +136,10 @@ The installer resolves the region once per process, in this order:
 }
 ```
 
-`method` is `env`, `probe` or `fallback`. When every source of the preferred
-region fails and the other region serves the download, the file is rewritten
-with that region and `fallback`, and later downloads start there (unless
+`method` is `env`, `probe` or `fallback`. When the preferred region fails or
+downloads slowly with substantial work left and a source in the other region
+proves faster and finishes the download, the file is rewritten with that
+region and `fallback`, and later downloads start there (unless
 `SIMPLEX_REGION` forces a region).
 
 | Download                             | global first         | cn first                                 |

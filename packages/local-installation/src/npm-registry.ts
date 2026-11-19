@@ -35,53 +35,153 @@ export function configuredNpmRegistry() {
   );
 }
 
+export interface NpmRegistryProbe {
+  registry: string;
+  bytes: number;
+  elapsedMs: number;
+}
+
+// 1 MiB measures real body throughput without waiting the full window on a fast
+// host, and avoids tying when both registries finish the full 4.5 MiB tarball.
+const PROBE_TARGET_BYTES = 1024 * 1024;
+const DECISIVE_RATIO = 2;
+const MAX_PROBE_ROUNDS = 3;
+
+function compareProbe(left: NpmRegistryProbe, right: NpmRegistryProbe): number {
+  if (left.bytes > 0 !== right.bytes > 0) return left.bytes > 0 ? -1 : 1;
+  if (left.bytes <= 0) return 0;
+  return right.bytes - left.bytes || left.elapsedMs - right.elapsedMs;
+}
+
+function roundRatio(first: NpmRegistryProbe, second: NpmRegistryProbe): number {
+  if (first.bytes <= 0) return 0;
+  if (second.bytes <= 0) return Number.POSITIVE_INFINITY;
+  const firstRate = first.bytes / Math.max(first.elapsedMs, 1);
+  const secondRate = second.bytes / Math.max(second.elapsedMs, 1);
+  return firstRate / secondRate;
+}
+
+async function probeOnce(
+  signal: AbortSignal,
+  fetcher: typeof fetch,
+  probeMs: number,
+): Promise<{ results: NpmRegistryProbe[]; timedOut: boolean }> {
+  signal.throwIfAborted();
+  const registries = [npmRegistry, npmMirrorRegistry];
+  const round = new AbortController();
+  let timedOut = false;
+  const onParentAbort = () => round.abort();
+  signal.addEventListener("abort", onParentAbort, { once: true });
+  const timer = setTimeout(() => {
+    timedOut = true;
+    round.abort();
+  }, probeMs);
+  // A body that ignores the signal still stops counting when the round ends.
+  const closed = new Promise<never>((_resolve, reject) =>
+    round.signal.addEventListener("abort", () => reject(new Error()), {
+      once: true,
+    }),
+  );
+  closed.catch(() => {});
+  const startedAt = performance.now();
+  try {
+    const measured = await Promise.all(
+      registries.map(async (registry): Promise<NpmRegistryProbe> => {
+        let bytes = 0;
+        let elapsedMs = 0;
+        try {
+          const response = await fetcher(
+            npmTarballUrl(registry, "pnpm", "11.7.0"),
+            { redirect: "error", signal: round.signal },
+          );
+          if (!response.ok || !response.body) {
+            elapsedMs = performance.now() - startedAt;
+            await response.body?.cancel();
+            return { registry, bytes: -1, elapsedMs };
+          }
+          const reader = response.body.getReader();
+          try {
+            for (;;) {
+              const { done, value } = await Promise.race([
+                reader.read(),
+                closed,
+              ]);
+              if (done) break;
+              bytes = Math.min(bytes + value.byteLength, PROBE_TARGET_BYTES);
+              if (bytes >= PROBE_TARGET_BYTES) {
+                elapsedMs = performance.now() - startedAt;
+                round.abort();
+                break;
+              }
+            }
+            if (!elapsedMs) elapsedMs = performance.now() - startedAt;
+          } finally {
+            await reader.cancel().catch(() => {});
+          }
+        } catch {
+          // The round ending mid-body still measured progress.
+          if (!elapsedMs) elapsedMs = performance.now() - startedAt;
+        }
+        return { registry, bytes, elapsedMs };
+      }),
+    );
+    signal.throwIfAborted();
+    return { results: measured.sort(compareProbe), timedOut };
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", onParentAbort);
+  }
+}
+
 /**
- * Measures how many bytes of the same tarball the public registry and its
- * China mirror each deliver within the probe window, most first; -1 when a
- * registry refused. region.ts decides the download region from it.
+ * Races the public registry and its China mirror on the same tarball (up to
+ * 1 MiB per round, fastest first; -1 when a registry refused). Confirms in a
+ * best-of-three sequence unless neither answers or a full-window round already
+ * shows a clear margin. region.ts decides the download region from it.
  */
 export async function probeNpmRegistries(
   signal: AbortSignal,
   fetcher: typeof fetch = fetch,
   probeMs = 4_000,
-): Promise<{ registry: string; bytes: number }[]> {
-  const registries = [npmRegistry, npmMirrorRegistry];
-  const window = AbortSignal.any([signal, AbortSignal.timeout(probeMs)]);
-  // A body that ignores the signal still stops counting when the window ends.
-  const closed = new Promise<never>((_resolve, reject) =>
-    window.addEventListener("abort", () => reject(new Error())),
+): Promise<NpmRegistryProbe[]> {
+  const samples = new Map<string, NpmRegistryProbe[]>(
+    [npmRegistry, npmMirrorRegistry].map((registry) => [registry, []]),
   );
-  closed.catch(() => {});
-  const received = await Promise.all(
-    registries.map(async (registry) => {
-      let bytes = 0;
-      try {
-        const response = await fetcher(
-          npmTarballUrl(registry, "pnpm", "11.7.0"),
-          { redirect: "error", signal: window },
-        );
-        if (!response.ok || !response.body) {
-          await response.body?.cancel();
-          return -1;
-        }
-        const reader = response.body.getReader();
-        try {
-          for (;;) {
-            const { done, value } = await Promise.race([reader.read(), closed]);
-            if (done) break;
-            bytes += value.byteLength;
-          }
-        } finally {
-          await reader.cancel().catch(() => {});
-        }
-      } catch {
-        // The probe window ending mid-body still measured progress.
-      }
-      return bytes;
-    }),
-  );
-  signal.throwIfAborted();
-  return registries
-    .map((registry, index) => ({ registry, bytes: received[index]! }))
-    .sort((left, right) => right.bytes - left.bytes);
+  const wins = new Map<string, number>();
+  let lastRound: NpmRegistryProbe[] = [];
+  for (let attempt = 0; attempt < MAX_PROBE_ROUNDS; attempt += 1) {
+    const { results, timedOut } = await probeOnce(signal, fetcher, probeMs);
+    lastRound = results;
+    for (const entry of results) samples.get(entry.registry)?.push(entry);
+    const [first, second] = results;
+    if (!first || first.bytes <= 0) {
+      if (attempt === 0) return results;
+      continue;
+    }
+    wins.set(first.registry, (wins.get(first.registry) ?? 0) + 1);
+    // A full-window probe with a clear lead already measured sustained speed.
+    if (
+      attempt === 0 &&
+      timedOut &&
+      second &&
+      roundRatio(first, second) >= DECISIVE_RATIO
+    )
+      return results;
+    if ((wins.get(first.registry) ?? 0) >= 2) break;
+  }
+  if ((samples.get(npmRegistry)?.length ?? 0) <= 1) return lastRound;
+  return [npmRegistry, npmMirrorRegistry]
+    .map((registry) => {
+      const entries = [...(samples.get(registry) ?? [])].sort(compareProbe);
+      // Lower-median sample resists a single outlier across 2 or 3 rounds.
+      const median = entries[Math.floor((entries.length - 1) / 2)]!;
+      return { median, wins: wins.get(registry) ?? 0 };
+    })
+    .sort((left, right) => {
+      if (left.median.bytes > 0 !== right.median.bytes > 0)
+        return left.median.bytes > 0 ? -1 : 1;
+      if (left.median.bytes <= 0) return 0;
+      return right.wins - left.wins || compareProbe(left.median, right.median);
+    })
+    .map((item) => item.median);
 }

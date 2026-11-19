@@ -171,8 +171,10 @@ leave PostgreSQL holding `postmaster.pid` against every retry.
 Every download offered by both a global host and a mainland-China mirror
 goes through `downloadInRegion` (`region.ts`), which tries the home's
 download region first and never drops a source; the region is
-`SIMPLEX_REGION`, else `<home>/runtime/region.json` (7 days), else the npm
-registry probe, and a fallback to the other region rewrites the file. The
+`SIMPLEX_REGION`, else `<home>/runtime/region.json` (24 hours), else a
+best-of-three npm registry probe (up to 1 MiB per round, fastest wins). When
+the preferred region fails or transfers slowly while a mirror in the other
+region proves faster, the transfer resumes there and rewrites the file. The
 resolved region reaches every `localmodels` child and native service as
 `SIMPLEX_REGION`. The contract is in `scripts/installs/README.md`.
 

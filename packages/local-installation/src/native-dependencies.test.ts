@@ -685,6 +685,47 @@ it("prepares real executable launchers and reuses verified warm dependencies ent
       })
     ).env.GOPROXY,
   ).toBe("https://proxy.example");
+  // When downloading Go falls back to the China mirror, GOPROXY and the
+  // package registry order switch to cn in the same preparation.
+  vi.stubEnv("GOPROXY", "");
+  const fallbackHome = path.join(root, "home-fallback");
+  await mkdir(path.dirname(regionFile(fallbackHome)), { recursive: true });
+  await writeFile(
+    regionFile(fallbackHome),
+    JSON.stringify({
+      schema: REGION_SCHEMA,
+      region: "global",
+      resolved_at: new Date().toISOString(),
+      method: "probe",
+    }),
+  );
+  download.mockClear();
+  download.mockImplementation(async (options) => {
+    const name = options.url.includes("/go")
+      ? "go"
+      : options.url.includes("/pnpm/")
+        ? "pnpm"
+        : options.url.includes("/npm/")
+          ? "npm"
+          : "postgres";
+    await writeFile(options.output, await readFile(archives[name]!));
+    return name === "go" ? (options.mirrors?.[0] ?? options.url) : options.url;
+  });
+  const fallenBack = await prepareNativeDependencies({
+    repo,
+    home: fallbackHome,
+    signal: new AbortController().signal,
+  });
+  expect(fallenBack.registries).toEqual([
+    "https://registry.npmmirror.com/",
+    "https://registry.npmjs.org/",
+  ]);
+  expect(fallenBack.env.pnpm_config_registry).toBe(
+    "https://registry.npmmirror.com/",
+  );
+  expect(fallenBack.env.GOPROXY).toBe(
+    "https://goproxy.cn|https://proxy.golang.org|direct",
+  );
 }, 15000);
 describe("native voice tools", () => {
   const voice = {

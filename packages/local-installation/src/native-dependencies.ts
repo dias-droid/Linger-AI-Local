@@ -579,23 +579,10 @@ export async function prepareNativeDependencies(options: {
   const configuredRegistry = configuredNpmRegistry();
   // Only downloads resolve the region: a checkout that brings its services
   // and TeamHub binaries prepares offline.
-  const region =
-    withGo || withPackages
-      ? await resolveRegion(options.home, {
-          signal: options.signal,
-          fetcher: options.fetcher,
-        })
-      : undefined;
-  const registries = !withPackages
-    ? []
-    : configuredRegistry
-      ? [configuredRegistry]
-      : orderByRegion(region!, [npmRegistry, npmMirrorRegistry]);
-  if (registries[0])
-    options.onEvent?.({
-      kind: "log",
-      stage: "release",
-      message: `Using package registry ${new URL(registries[0]).host}.\n`,
+  if (withGo || withPackages)
+    await resolveRegion(options.home, {
+      signal: options.signal,
+      fetcher: options.fetcher,
     });
   const component = async (name: string, artifact: Artifact) => {
     const startedAt = Date.now();
@@ -647,6 +634,26 @@ export async function prepareNativeDependencies(options: {
       maxBytes: 32 * 1024 ** 2,
     });
   }
+  // Re-read after toolchain downloads so GOPROXY and package registries pick
+  // up any region fallback recorded during those downloads.
+  const region =
+    withGo || withPackages
+      ? await resolveRegion(options.home, {
+          signal: options.signal,
+          fetcher: options.fetcher,
+        })
+      : undefined;
+  const registries = !withPackages
+    ? []
+    : configuredRegistry
+      ? [configuredRegistry]
+      : orderByRegion(region!, [npmRegistry, npmMirrorRegistry]);
+  if (registries[0])
+    options.onEvent?.({
+      kind: "log",
+      stage: "release",
+      message: `Using package registry ${new URL(registries[0]).host}.\n`,
+    });
   const pg = await component(
     `PostgreSQL ${postgres.postgresVersion} / pgvector ${postgres.pgvectorVersion}`,
     {

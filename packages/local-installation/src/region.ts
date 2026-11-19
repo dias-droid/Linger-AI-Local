@@ -9,7 +9,7 @@ export type { Region };
 
 // The record localmodels shares: see scripts/installs/README.md.
 export const REGION_SCHEMA = "simplex.region/v1";
-const STALE_MS = 7 * 24 * 60 * 60_000;
+const STALE_MS = 24 * 60 * 60_000;
 export interface RegionRecord {
   schema: typeof REGION_SCHEMA;
   region: Region;
@@ -106,8 +106,8 @@ async function resolve(
 
 /**
  * The download region of `home`: SIMPLEX_REGION when it names one, else a
- * region.json resolved within the last 7 days, else the npm registry probe
- * (cn when the China mirror delivers more). Resolved once per process.
+ * region.json resolved within the last 24 hours, else the npm registry probe
+ * (cn when the China mirror wins). Resolved once per process.
  */
 export function resolveRegion(
   home: string,
