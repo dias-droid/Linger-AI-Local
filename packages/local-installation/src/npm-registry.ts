@@ -163,11 +163,7 @@ export async function probeNpmRegistries(
       roundRatio(first, second) >= DECISIVE_RATIO
     )
       return results;
-    if ((wins.get(first.registry) ?? 0) >= 2) break;
+    if ((wins.get(first.registry) ?? 0) >= 2) return results;
   }
-  return [...lastAnswered].sort(
-    (left, right) =>
-      (wins.get(right.registry) ?? 0) - (wins.get(left.registry) ?? 0) ||
-      compareProbe(left, right),
-  );
+  return lastAnswered;
 }
