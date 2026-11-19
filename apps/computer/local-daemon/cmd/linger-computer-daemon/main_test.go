@@ -262,3 +262,46 @@ func TestByokRuntimeCatalogsShowTheEnteredModel(t *testing.T) {
 		}
 	}
 }
+
+func TestWithManagedPiPathRespectsConfiguredPiAndClonesSafely(t *testing.T) {
+	if got := withManagedPiPath(nil, ""); got != nil {
+		t.Fatalf("empty managed path returned %v", got)
+	}
+	configured := map[string]string{"codex": "/bin/codex", "pi": "/custom/pi"}
+	if got := withManagedPiPath(configured, "/managed/pi"); got["pi"] != "/custom/pi" {
+		t.Fatalf("managed Pi overwrote configured path: %v", got)
+	}
+	original := map[string]string{"codex": "/bin/codex"}
+	merged := withManagedPiPath(original, "/managed/pi")
+	if merged["pi"] != "/managed/pi" || original["pi"] != "" {
+		t.Fatalf("merged=%v original=%v", merged, original)
+	}
+}
+
+func TestWithPiProvisionStatusMarksNotInstalledPiAsErrorWhenFailed(t *testing.T) {
+	original := []provider.RuntimeDiagnostic{
+		{Type: "codex", Status: "not_installed", Error: &provider.DiagnosticError{Code: "RUNTIME_NOT_INSTALLED", Message: "missing"}},
+		{Type: "pi", Status: "not_installed", Error: &provider.DiagnosticError{Code: "RUNTIME_NOT_INSTALLED", Message: "missing"}},
+		{Type: "claude", Status: "ready"},
+	}
+	unchanged := withPiProvisionStatus(original, false)
+	if unchanged[1].Status != "not_installed" {
+		t.Fatalf("expected not_installed when failed=false, got %+v", unchanged[1])
+	}
+
+	marked := withPiProvisionStatus(original, true)
+	if marked[1].Status != "error" || marked[1].Error == nil || marked[1].Error.Code != "RUNTIME_DIAGNOSTIC_FAILED" {
+		t.Fatalf("expected Pi error status when failed=true, got %+v", marked[1])
+	}
+	if marked[0].Status != "not_installed" || marked[2].Status != "ready" {
+		t.Fatalf("non-Pi diagnostics changed unexpectedly: %+v", marked)
+	}
+	if original[1].Status != "not_installed" {
+		t.Fatalf("input diagnostics mutated in place: %+v", original[1])
+	}
+
+	readyPi := []provider.RuntimeDiagnostic{{Type: "pi", Status: "ready"}}
+	if got := withPiProvisionStatus(readyPi, true); got[0].Status != "ready" {
+		t.Fatalf("ready Pi overwritten: %+v", got[0])
+	}
+}

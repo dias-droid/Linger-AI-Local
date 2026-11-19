@@ -159,11 +159,19 @@ model.
   with that code; the model's next accepted job, or a row that moved on,
   drops them. They live in memory, so after a Daemon restart the row shows
   only its code.
-- Pi. When the loaded models change, the Daemon asks the Runtime monitor for a
-  full discovery, so TeamHub sees Pi's new model list. Each model's
-  `pi_model` (`<provider>/<id>`, as an Agent's `runtime_model` stores it) is
-  passed through as `localmodels` reports it; the endpoint keeps only the
-  loaded engine's `base_url`.
+- Pi. The Daemon sets `PI_CODING_AGENT_DIR` on `localmodels` tool calls
+  through `OverlayEnvironment` and `workspace.PiSourceEnvironment` so loaded
+  models land in the profile Pi probes and runs. When a model is loaded on a
+  Computer with Pi enabled and not yet installed, `internal/localmodels`
+  installs the pinned Pi runtime asynchronously in the background under
+  `HarnessRoot` (passing the bundled Node binary via `--node` when available,
+  matching the installer's 2 m status/plan and 20 m apply budgets, and backing
+  off from 30 s up to 5 m on failure while surfacing
+  `RUNTIME_DIAGNOSTIC_FAILED` after a failed attempt) before asking the Runtime
+  monitor for a full discovery, so TeamHub sees Pi become ready with the loaded
+  model. Each model's `pi_model` (`<provider>/<id>`, as an Agent's
+  `runtime_model` stores it) is passed through as `localmodels` reports it; the
+  endpoint keeps only the loaded engine's `base_url`.
 
 ## Model source
 

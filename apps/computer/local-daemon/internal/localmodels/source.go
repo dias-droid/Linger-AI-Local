@@ -1,7 +1,6 @@
 package localmodels
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,7 +14,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/simplexai-labs/linger/apps/computer/local-daemon/internal/process"
 	localworkspace "github.com/simplexai-labs/linger/apps/computer/local-daemon/internal/workspace"
 	wire "github.com/simplexai-labs/linger/contracts-go/runnergateway"
 )
@@ -192,8 +190,8 @@ func OverlayRuntimePaths(configured map[string]string, stateDir string) map[stri
 			}
 		}
 	}
-	if stateDir != "" {
-		binDir := filepath.Clean(filepath.Join(stateDir, "..", "..", "harness", "bin"))
+	if harness := HarnessRoot(stateDir); harness != "" {
+		binDir := filepath.Join(harness, "bin")
 		for _, rt := range []string{"claude", "codex", "pi"} {
 			if result[rt] != "" {
 				continue
@@ -251,8 +249,8 @@ type ModelSource struct {
 // NewModelSource constructs a ModelSource controller for the given localmodels Tool.
 func NewModelSource(options ModelSourceOptions) *ModelSource {
 	harnessRoot := options.HarnessRoot
-	if harnessRoot == "" && options.Tool != nil && options.Tool.StateDirectory != "" {
-		harnessRoot = filepath.Clean(filepath.Join(options.Tool.StateDirectory, "..", "..", "harness"))
+	if harnessRoot == "" && options.Tool != nil {
+		harnessRoot = HarnessRoot(options.Tool.StateDirectory)
 	}
 	statusTimeout := options.StatusTimeout
 	if statusTimeout <= 0 {
@@ -660,53 +658,10 @@ func (m *ModelSource) runTool(ctx context.Context, label string, args []string, 
 	dir := m.jobDirectory
 	if dir == "" {
 		dir = os.TempDir()
-	} else if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, -1, err
 	}
-	stdout, err := os.CreateTemp(dir, "model-source-*.out")
-	if err != nil {
-		return nil, -1, err
+	output, _, exitCode, err := m.tool.runBuffered(ctx, m.environment, dir, "model-source", maxEventLine, args, stdin)
+	if err != nil && ctx.Err() != nil {
+		return nil, -1, errors.Join(fmt.Errorf("%s cancelled", label), err)
 	}
-	defer func() { _ = os.Remove(stdout.Name()) }()
-
-	cmd := exec.Command(m.tool.Python, args...)
-	cmd.Dir = m.tool.ModuleDirectory
-	values := make(map[string]string, len(m.environment)+4)
-	for key, value := range m.environment {
-		switch strings.ToUpper(key) {
-		case "PYTHONHOME", "PYTHONSTARTUP", "PYTHONINSPECT", "PYTHONPATH", "LOCALMODELS_STATE":
-			continue
-		}
-		values[key] = value
-	}
-	values["PYTHONPATH"] = m.tool.ModuleDirectory
-	values["LOCALMODELS_STATE"] = m.tool.StateDirectory
-	values["PYTHONNOUSERSITE"] = "1"
-	values["PYTHONDONTWRITEBYTECODE"] = "1"
-	cmd.Env = make([]string, 0, len(values))
-	for key, value := range values {
-		cmd.Env = append(cmd.Env, key+"="+value)
-	}
-	if len(stdin) > 0 {
-		cmd.Stdin = bytes.NewReader(stdin)
-	}
-	cmd.Stdout = stdout
-	process.Prepare(cmd)
-	startErr := cmd.Start()
-	_ = stdout.Close()
-	if startErr != nil {
-		return nil, -1, startErr
-	}
-	exited := make(chan error, 1)
-	go func() { exited <- cmd.Wait() }()
-	select {
-	case <-exited:
-	case <-ctx.Done():
-		_ = cmd.Process.Kill()
-		<-exited
-		return nil, -1, errors.Join(fmt.Errorf("%s cancelled", label), context.Cause(ctx))
-	}
-	exitCode := cmd.ProcessState.ExitCode()
-	output, readErr := readBounded(stdout.Name(), maxEventLine)
-	return output, exitCode, readErr
+	return output, exitCode, err
 }
