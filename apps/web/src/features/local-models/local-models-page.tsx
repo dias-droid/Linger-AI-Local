@@ -940,7 +940,7 @@ function Library({
       ) : null}
       {dialogEntry && makeRoom ? (
         <MakeRoomDialog
-          assignableAgents={assignableAgents}
+          assignableAgents={canSwitchAgents ? assignableAgents : []}
           check={makeRoom}
           disabled={!confirmable(dialogEntry, "load")}
           entry={dialogEntry}

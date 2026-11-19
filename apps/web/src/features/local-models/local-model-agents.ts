@@ -127,9 +127,7 @@ export function usedByAgentNames(
   for (const agent of assignableAgents) {
     if (
       isAgentUsingModel(entry, agent, computerId) &&
-      !entry.used_by.some(
-        (user) => user.agent_id === agent.actorId || user.name === agent.name,
-      )
+      !entry.used_by.some((user) => user.agent_id === agent.actorId)
     ) {
       names.push(agent.name);
     }

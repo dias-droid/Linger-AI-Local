@@ -1856,6 +1856,42 @@ describe("LocalModelsPage", () => {
       ),
     ).toHaveLength(0);
   });
+
+  it("hides the Make room handoff checkbox when Pi is not ready for Agent switching", async () => {
+    const mac = withModel(macView(), "llama3.3-70b:Q4_K_M", {
+      pi_model: "localmodels-library/llama3.3-70b",
+    });
+    const fixture = setup([mac]);
+    fixture.runtime.seed.tenantAgents = fixture.runtime.seed.tenantAgents.map(
+      (agent) =>
+        agent.actor.id === "actor-delegate"
+          ? {
+              ...agent,
+              runtime: {
+                model: "localmodels-library/gpt-oss-20b",
+                placement: {
+                  computer_id: "computer-mac",
+                  runtime_type: "pi",
+                  type: "local",
+                  workspace_grant_id: "grant-linger-workspace",
+                },
+              },
+            }
+          : agent,
+    );
+    await renderPage(fixture, "?computer=computer-mac");
+    await findModels();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry Llama 3.3 70B" }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "Make room to load" });
+    expect(
+      within(dialog).queryByRole("checkbox", {
+        name: /Switch Jenny's Delegate/u,
+      }),
+    ).toBeNull();
+  });
 });
 
 describe("Model source", () => {

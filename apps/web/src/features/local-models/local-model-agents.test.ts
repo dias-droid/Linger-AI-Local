@@ -163,6 +163,15 @@ describe("local-model-agents", () => {
       "Research agent",
       "Jenny's Delegate",
     ]);
+
+    const sameNameAgent = { ...agent!, name: "Helper" };
+    const sameNameEntry = {
+      ...entry,
+      used_by: [{ agent_id: "agent-other", name: "Helper" }],
+    };
+    expect(
+      usedByAgentNames(sameNameEntry, [sameNameAgent], "computer-lab"),
+    ).toEqual(["Helper", "Helper"]);
   });
 
   it("omits incompatible Claude reasoning efforts when Pi has not listed the model yet, and preserves valid Pi efforts when listed", () => {
