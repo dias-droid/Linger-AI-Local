@@ -144,20 +144,16 @@ export async function probeNpmRegistries(
   fetcher: typeof fetch = fetch,
   probeMs = 4_000,
 ): Promise<NpmRegistryProbe[]> {
-  const samples = new Map<string, NpmRegistryProbe[]>(
-    [npmRegistry, npmMirrorRegistry].map((registry) => [registry, []]),
-  );
   const wins = new Map<string, number>();
-  let lastRound: NpmRegistryProbe[] = [];
+  let lastAnswered: NpmRegistryProbe[] = [];
   for (let attempt = 0; attempt < MAX_PROBE_ROUNDS; attempt += 1) {
     const { results, timedOut } = await probeOnce(signal, fetcher, probeMs);
-    lastRound = results;
-    for (const entry of results) samples.get(entry.registry)?.push(entry);
     const [first, second] = results;
     if (!first || first.bytes <= 0) {
       if (attempt === 0) return results;
       continue;
     }
+    lastAnswered = results;
     wins.set(first.registry, (wins.get(first.registry) ?? 0) + 1);
     // A full-window probe with a clear lead already measured sustained speed.
     if (
@@ -169,19 +165,9 @@ export async function probeNpmRegistries(
       return results;
     if ((wins.get(first.registry) ?? 0) >= 2) break;
   }
-  if ((samples.get(npmRegistry)?.length ?? 0) <= 1) return lastRound;
-  return [npmRegistry, npmMirrorRegistry]
-    .map((registry) => {
-      const entries = [...(samples.get(registry) ?? [])].sort(compareProbe);
-      // Lower-median sample resists a single outlier across 2 or 3 rounds.
-      const median = entries[Math.floor((entries.length - 1) / 2)]!;
-      return { median, wins: wins.get(registry) ?? 0 };
-    })
-    .sort((left, right) => {
-      if (left.median.bytes > 0 !== right.median.bytes > 0)
-        return left.median.bytes > 0 ? -1 : 1;
-      if (left.median.bytes <= 0) return 0;
-      return right.wins - left.wins || compareProbe(left.median, right.median);
-    })
-    .map((item) => item.median);
+  return [...lastAnswered].sort(
+    (left, right) =>
+      (wins.get(right.registry) ?? 0) - (wins.get(left.registry) ?? 0) ||
+      compareProbe(left, right),
+  );
 }

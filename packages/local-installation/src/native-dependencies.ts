@@ -577,13 +577,6 @@ export async function prepareNativeDependencies(options: {
   );
   await privateDirectory(toolchainRoot);
   const configuredRegistry = configuredNpmRegistry();
-  // Only downloads resolve the region: a checkout that brings its services
-  // and TeamHub binaries prepares offline.
-  if (withGo || withPackages)
-    await resolveRegion(options.home, {
-      signal: options.signal,
-      fetcher: options.fetcher,
-    });
   const component = async (name: string, artifact: Artifact) => {
     const startedAt = Date.now();
     const directory = await acquire(name, artifact);
@@ -634,8 +627,9 @@ export async function prepareNativeDependencies(options: {
       maxBytes: 32 * 1024 ** 2,
     });
   }
-  // Re-read after toolchain downloads so GOPROXY and package registries pick
-  // up any region fallback recorded during those downloads.
+  // Only downloads resolve the region: a checkout that brings its services
+  // and TeamHub binaries prepares offline. Reading after toolchain downloads
+  // picks up any fallback recorded during them.
   const region =
     withGo || withPackages
       ? await resolveRegion(options.home, {
