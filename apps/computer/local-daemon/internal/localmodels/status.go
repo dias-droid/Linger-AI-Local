@@ -56,7 +56,7 @@ func unavailable(code, detail string, now time.Time) wire.LocalModelsSnapshot {
 	return wire.LocalModelsSnapshot{
 		Available:  false,
 		Reason:     &wire.LocalModelsUnavailableReason{Code: code, Detail: clip(detail, 4000)},
-		ObservedAt: now.UTC().Format(time.RFC3339),
+		ObservedAt: now.UTC().Format(time.RFC3339Nano),
 		Pools:      []wire.LocalModelPool{}, Models: []wire.LocalModel{},
 	}
 }
@@ -106,9 +106,9 @@ func mapStatus(encoded []byte, now time.Time) (wire.LocalModelsSnapshot, error) 
 	if host.Gpus == nil {
 		host.Gpus = []wire.LocalModelGpu{}
 	}
-	observedAt := now.UTC().Format(time.RFC3339)
-	if parsed, err := time.Parse(time.RFC3339, status.ObservedAt); err == nil {
-		observedAt = parsed.UTC().Format(time.RFC3339)
+	observedAt := now.UTC().Format(time.RFC3339Nano)
+	if parsed, err := time.Parse(time.RFC3339Nano, status.ObservedAt); err == nil {
+		observedAt = parsed.UTC().Format(time.RFC3339Nano)
 	}
 	snapshot := wire.LocalModelsSnapshot{
 		Available: true, ObservedAt: observedAt, ToolVersion: clip(status.ToolVersion, 64), Host: &host,
