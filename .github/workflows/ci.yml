@@ -2,7 +2,7 @@ name: CI
 
 # The repository gate runs on every pull request and merge-queue build; each
 # app's fast check runs only when its paths change; the web check is split
-# into a static job and sharded test jobs. An unchanged app's job is skipped,
+# into a static job and two test shards. An unchanged app's job is skipped,
 # which GitHub reports as success for its required check; a failed path
 # filter makes every app check fail instead of skipping. A merge-queue build
 # checks the paths its whole group changes, on top of the latest main. Pushes
@@ -91,20 +91,20 @@ jobs:
       - run: make check-web-static BASE="$BASE"
 
   web-tests:
-    name: web tests (${{ matrix.shard }}/3)
+    name: web tests (${{ matrix.shard }}/2)
     needs: changes
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           go: false
-      - run: make check-web-tests SHARD=${{ matrix.shard }}/3
+      - run: make check-web-tests SHARD=${{ matrix.shard }}/2
 
   # Reports the required `check (web)` context from the split web jobs. When
   # web paths changed, every web job must succeed (an unexpected skip fails);

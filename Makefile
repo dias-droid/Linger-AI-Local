@@ -98,7 +98,7 @@ check-web:
 		"$(WEB_TESTS)" \
 		"$(WEB_DOCTOR)"
 
-# CI runs these as separate jobs (tests in shards, e.g. SHARD=2/3);
+# CI runs these as separate jobs (tests in shards, e.g. SHARD=2/2);
 # check-web stays the local entry point.
 check-web-static:
 	pnpm exec concurrently --success all --names types,lint,doctor \
