@@ -57,7 +57,10 @@ import {
 import { createUserMemoryTracker } from "../agent-features/user-memory/index.js";
 import type { Flashback } from "../../flashback.js";
 import type { FlashbackSettings } from "../agent-features/flashback/index.js";
-import { RunWakeDispatcher } from "../agent-features/inbox-source/index.js";
+import {
+  RunWakeDispatcher,
+  type RunWakeKind,
+} from "../agent-features/inbox-source/index.js";
 import {
   createTeamHubContextRuntimeState,
   readRuntimeSessionCheckpoint,
@@ -550,6 +553,12 @@ export const createAgentManagerApplication = (
 
   const agentManager = new ExecutorRegistry<LocalRuntimeSettings>({
     features,
+    ...(runWakes
+      ? {
+          redeliverWake: (contextKey: string, kind: RunWakeKind) =>
+            runWakes.wake(contextKey, kind),
+        }
+      : {}),
     identityResolver: options.identityResolver,
     ghostStore,
     contextStore,
