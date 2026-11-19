@@ -15,7 +15,7 @@ import {
   SettingsRow,
   SettingsRowText,
 } from "@/components/ui/settings-group";
-import { teamHubData, teamHubDone } from "@/features/teamhub/teamhub-api";
+import { teamHubData } from "@/features/teamhub/teamhub-api";
 import { type TeamHubClient } from "@/features/teamhub/teamhub-client";
 import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
 import type {
@@ -39,7 +39,7 @@ import {
   isEditableRoutine,
   isScheduled,
 } from "./routine-cadence";
-import { RoutineDialog } from "./routine-dialog";
+import { deleteRoomRoutine, RoutineDialog } from "./routine-dialog";
 import { PanelLoading } from "./panel-loading";
 
 /** One Agent's Routines in a Room, laid out by the day they next run. */
@@ -153,6 +153,7 @@ function RoutineAgenda({
 }) {
   const queryClient = useQueryClient();
   const [showDone, setShowDone] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   // The Routine as the last pause or enable left it, offered for undo for a
   // few seconds.
   const [offer, setOffer] = useState<{
@@ -202,10 +203,12 @@ function RoutineAgenda({
     );
   }
   const onToggled = (routine: TeamHubRoutine) => {
+    setDeleteError(null);
     undo.reset();
     setOffer({ routine, secondsLeft: UNDO_SECONDS });
   };
   const onDeleted = (routineId: string) => {
+    setDeleteError(null);
     setOffer((current) => (current?.routine.id === routineId ? null : current));
   };
   const scheduled = routines.filter(isScheduled);
@@ -225,9 +228,21 @@ function RoutineAgenda({
   );
   const done = scheduled.filter(isDone);
   const upcoming = [...reminders].sort((a, b) => runTime(a) - runTime(b));
-  const rowProps = { agentActorId, client, onDeleted, onToggled, tenantId };
+  const rowProps = {
+    agentActorId,
+    client,
+    onDeleteError: setDeleteError,
+    onDeleted,
+    onToggled,
+    tenantId,
+  };
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 pb-6 font-(family-name:--app-room-font)">
+      {deleteError ? (
+        <p className="px-1.5 text-sm text-destructive" role="alert">
+          {deleteError}
+        </p>
+      ) : null}
       {scheduled.length === 0 && listeners.length === 0 ? (
         <SettingsGroup ariaLabel="No routines">
           <SettingsRow icon={<Icon icon={Clock01Icon} size={16} />}>
@@ -404,6 +419,7 @@ interface ToggleProps {
 function RoutineRow({
   agentActorId,
   detail,
+  onDeleteError,
   onDeleted,
   onOpen,
   routine,
@@ -411,6 +427,7 @@ function RoutineRow({
 }: ToggleProps & {
   agentActorId?: string;
   detail: string;
+  onDeleteError: (message: string | null) => void;
   onDeleted: (routineId: string) => void;
   onOpen: () => void;
   routine: TeamHubScheduledRoutine;
@@ -445,6 +462,7 @@ function RoutineRow({
             <RoutineDeleteButton
               client={toggle.client}
               onDeleted={() => onDeleted(routine.id)}
+              onError={onDeleteError}
               routine={routine}
               tenantId={toggle.tenantId}
             />
@@ -477,31 +495,30 @@ function RoutineRow({
 function RoutineDeleteButton({
   client,
   onDeleted,
+  onError,
   routine,
   tenantId,
 }: {
   client: TeamHubClient;
   onDeleted: () => void;
+  onError: (message: string | null) => void;
   routine: TeamHubScheduledRoutine;
   tenantId: string;
 }) {
   const queryClient = useQueryClient();
   const remove = useMutation({
-    mutationFn: () =>
-      teamHubDone(
-        client.api.DELETE("/v0/routines/{routineId}", {
-          params: {
-            path: { routineId: routine.id },
-            query: { expected_revision: routine.revision },
-          },
-        }),
-      ),
+    mutationFn: () => deleteRoomRoutine(client, routine),
+    onMutate: () => onError(null),
     onSuccess: async () => {
       onDeleted();
       await queryClient.invalidateQueries({
         queryKey: roomRoutinesQueryKey(tenantId, routine.room_id),
       });
     },
+    onError: (cause) =>
+      onError(
+        cause instanceof Error ? cause.message : "Could not delete routine.",
+      ),
   });
   return (
     <button

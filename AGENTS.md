@@ -67,12 +67,13 @@ Memory, and Voice services.
   fast checks in the same pull request, not only the one being fixed.
 - A feature is done when no code it made unnecessary and no abstraction the
   request does not require is left behind.
-- When retiring or reshaping a feature, delete its code and drop its tables,
-  columns, rows, and stored files in a forward migration. Data that must
-  survive is converted once inside the migration; do not keep dual-read or
-  fallback paths for old shapes. This covers persisted state, config, and
-  caches written by the Daemon or CLI on users' machines, but not
-  compatibility with third-party tool versions such as Codex CLI.
+- Prefer forward and backward compatibility across upgrades, rolling deploys,
+  and mixed client/server versions (including Desktop, Daemon, CLI, and Web
+  talking to newer or older TeamHub releases, as well as persisted state,
+  config, and caches on users' machines). Accept previous request, config, and
+  flag shapes where feasible instead of hard-cutting them. Only introduce a
+  breaking change when compatibility is impractical, and explain the reason and
+  rollout impact explicitly in the pull request.
 - During local development, run the focused tests for the changed behavior and
   the affected fast checks. Focused Vitest or Go unit tests do not
   replace those checks. Do not run complete integration, E2E, container, or

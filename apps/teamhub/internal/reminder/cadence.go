@@ -99,7 +99,7 @@ func ParseSchedule(schedule Schedule) (Cadence, error) {
 	kind := strings.TrimSpace(schedule.Kind)
 	switch kind {
 	case "daily", "weekly":
-		if schedule.IntervalMinutes != nil || schedule.RunAt != nil || (kind == "daily" && schedule.Weekdays != nil) {
+		if schedule.IntervalMinutes != nil || schedule.IntervalHours != nil || schedule.RunAt != nil || (kind == "daily" && schedule.Weekdays != nil) {
 			return Cadence{}, ErrInvalid
 		}
 		hour, minute, err := parseClock(schedule.Time)
@@ -114,7 +114,7 @@ func ParseSchedule(schedule Schedule) (Cadence, error) {
 		}
 		return validateCadence(cadence)
 	case "every_n_minutes":
-		if strings.TrimSpace(schedule.Time) != "" || strings.TrimSpace(schedule.Timezone) != "" || schedule.Weekdays != nil || schedule.RunAt != nil {
+		if strings.TrimSpace(schedule.Time) != "" || strings.TrimSpace(schedule.Timezone) != "" || schedule.Weekdays != nil || schedule.RunAt != nil || schedule.IntervalHours != nil {
 			return Cadence{}, ErrInvalid
 		}
 		if schedule.IntervalMinutes == nil {
@@ -122,9 +122,18 @@ func ParseSchedule(schedule Schedule) (Cadence, error) {
 		}
 		minutes := *schedule.IntervalMinutes
 		return validateCadence(Cadence{Kind: kind, Timezone: "UTC", IntervalMinutes: &minutes})
+	case "every_n_hours":
+		if strings.TrimSpace(schedule.Time) != "" || strings.TrimSpace(schedule.Timezone) != "" || schedule.Weekdays != nil || schedule.RunAt != nil || schedule.IntervalMinutes != nil {
+			return Cadence{}, ErrInvalid
+		}
+		if schedule.IntervalHours == nil || *schedule.IntervalHours < 1 || *schedule.IntervalHours > maxIntervalMinutes/60 {
+			return Cadence{}, ErrIntervalInvalid
+		}
+		minutes := *schedule.IntervalHours * 60
+		return validateCadence(Cadence{Kind: "every_n_minutes", Timezone: "UTC", IntervalMinutes: &minutes})
 	case "once":
 		if strings.TrimSpace(schedule.Time) != "" || schedule.Weekdays != nil ||
-			schedule.IntervalMinutes != nil || schedule.RunAt == nil {
+			schedule.IntervalMinutes != nil || schedule.IntervalHours != nil || schedule.RunAt == nil {
 			return Cadence{}, ErrInvalid
 		}
 		timezone := strings.TrimSpace(schedule.Timezone)

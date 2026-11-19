@@ -237,7 +237,7 @@ WITH latest_wake AS (
     LIMIT 1
 ),
 latest_message AS (
-    SELECT m.id, m.created_at
+    SELECT m.id, m.created_at, m.mentioned_actor_ids
     FROM messages m
     WHERE m.room_id=sqlc.arg(room_id)::text
       AND m.fired_routine_id=sqlc.arg(routine_id)::text
@@ -273,10 +273,13 @@ SELECT
                 JOIN agent_local_runs run
                   ON run.context_key=relation.context_key
                  AND run.run_id=relation.run_id
-                WHERE ctx.room_id=sqlc.arg(room_id)::text
-                  AND (input.source_message_id=lm.id
-                       OR (jsonb_typeof(input.payload->'invocationMessageIds')='array'
-                           AND input.payload->'invocationMessageIds' @> to_jsonb(lm.id)))
+                WHERE ctx.context_kind='meta'
+                  AND ctx.room_id=sqlc.arg(room_id)::text
+                  AND ctx.agent_actor_id=ANY(lm.mentioned_actor_ids)
+                  AND input.source_kind='inbox'
+                  AND input.created_at>=lm.created_at
+                  AND jsonb_typeof(input.payload->'invocationMessageIds')='array'
+                  AND (input.payload->'invocationMessageIds') ? lm.id
                   AND run.status IN ('succeeded', 'failed', 'canceled')
             )
         )

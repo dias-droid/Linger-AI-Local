@@ -240,6 +240,10 @@ func reminderSchedule(schedule teamhubagentapi.AgentRoutineSchedule) reminder.Sc
 		minutes := *schedule.IntervalMinutes
 		parsed.IntervalMinutes = &minutes
 	}
+	if schedule.IntervalHours != nil {
+		hours := *schedule.IntervalHours
+		parsed.IntervalHours = &hours
+	}
 	parsed.RunAt = schedule.RunAt
 	return parsed
 }

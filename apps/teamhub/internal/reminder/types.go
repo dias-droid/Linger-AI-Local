@@ -45,6 +45,7 @@ type Schedule struct {
 	Timezone        string
 	Weekdays        []string
 	IntervalMinutes *int
+	IntervalHours   *int
 	// RunAt is the one moment a "once" Routine fires.
 	RunAt *time.Time
 }

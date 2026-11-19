@@ -2351,7 +2351,7 @@ export interface components {
       | "sunday";
     AgentRoutineSchedule: {
       /** @enum {string} */
-      kind: "daily" | "weekly" | "every_n_minutes" | "once";
+      kind: "daily" | "weekly" | "every_n_minutes" | "every_n_hours" | "once";
       /** @description Local 24-hour clock as HH:MM. Required for daily and weekly. */
       time?: string;
       /** @description IANA timezone. Required for daily and weekly. */
@@ -2360,6 +2360,8 @@ export interface components {
       weekdays?: components["schemas"]["AgentRoutineWeekday"][];
       /** @description Repeat interval in minutes for every_n_minutes (10 to 10080, in 10-minute increments). Do not send a clock or timezone with it. */
       interval_minutes?: number;
+      /** @description Repeat interval in whole hours for every_n_hours (1 to 168), accepted on input for compatibility with older clients and stored in minutes. Responses always use every_n_minutes with interval_minutes. Do not send a clock or timezone with it. */
+      interval_hours?: number;
       /**
        * Format: date-time
        * @description The one moment a once Routine fires (RFC 3339 with offset). It must be in the future; the Routine is done (disabled) after it fires. Timezone is optional and only used for display.

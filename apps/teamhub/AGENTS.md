@@ -90,10 +90,11 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
   increments), advance on a fixed `dueAt + k * interval` grid without drift or
   catch-up, and skip overlapping scheduled fires while an undelivered quiet
   wake or non-terminal trigger Message from the last 24 hours remains
-  unfinished. Agent API, CLI, and Live Voice expose only `every_n_minutes` +
-  `interval_minutes`; Web API keeps `every_n_hours` + `interval_hours` for
-  whole-hour intervals and uses `every_n_minutes` + `interval_minutes` for
-  non-whole-hour intervals.
+  unfinished. Agent API, CLI, and Live Voice standardize on `every_n_minutes` +
+  `interval_minutes` (and still accept `every_n_hours` + `interval_hours` on
+  input for compatibility with older CLI/Desktop builds); Web API keeps
+  `every_n_hours` + `interval_hours` for whole-hour intervals and uses
+  `every_n_minutes` + `interval_minutes` for non-whole-hour intervals.
 
 - Room input acceptance: Runtime State validates canonical
   conversation/targeted agent_runtime inputs atomically with Local Run and cursor.

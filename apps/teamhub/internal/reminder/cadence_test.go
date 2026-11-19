@@ -225,3 +225,30 @@ func TestOnceRunsAtItsTimeAndNeverAfter(t *testing.T) {
 		}
 	}
 }
+
+func TestParseScheduleAcceptsHourlyAliasForCompatibility(t *testing.T) {
+	hours := 2
+	cadence, err := ParseSchedule(Schedule{Kind: "every_n_hours", IntervalHours: &hours})
+	if err != nil {
+		t.Fatalf("ParseSchedule every_n_hours: %v", err)
+	}
+	if cadence.Kind != "every_n_minutes" || cadence.IntervalMinutes == nil || *cadence.IntervalMinutes != 120 {
+		t.Fatalf("cadence=%+v want every_n_minutes=120", cadence)
+	}
+	if back := ScheduleFromCadence(cadence); back.Kind != "every_n_minutes" || back.IntervalMinutes == nil || *back.IntervalMinutes != 120 || back.IntervalHours != nil {
+		t.Fatalf("ScheduleFromCadence=%+v want every_n_minutes=120", back)
+	}
+	for _, badHours := range []int{0, 169} {
+		h := badHours
+		if _, err := ParseSchedule(Schedule{Kind: "every_n_hours", IntervalHours: &h}); !errors.Is(err, ErrIntervalInvalid) {
+			t.Fatalf("hours=%d err=%v want ErrIntervalInvalid", badHours, err)
+		}
+	}
+	minutes := 60
+	if _, err := ParseSchedule(Schedule{Kind: "every_n_hours", IntervalHours: &hours, IntervalMinutes: &minutes}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("mixing interval_hours and interval_minutes err=%v want ErrInvalid", err)
+	}
+	if _, err := ParseSchedule(Schedule{Kind: "every_n_minutes", IntervalHours: &hours, IntervalMinutes: &minutes}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("every_n_minutes with interval_hours err=%v want ErrInvalid", err)
+	}
+}

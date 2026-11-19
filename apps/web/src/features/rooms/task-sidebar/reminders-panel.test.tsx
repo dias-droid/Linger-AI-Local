@@ -631,6 +631,42 @@ describe("minute-interval routines", () => {
     );
   });
 
+  it("shows an error alert when deleting a minute-interval routine fails", async () => {
+    const minuteRoutine: TeamHubRoutine = {
+      ...reminder,
+      id: "routine_min_conflict",
+      name: "Check build",
+      cadence: {
+        kind: "every_n_minutes",
+        timezone: "UTC",
+        interval_minutes: 10,
+      },
+      revision: 3,
+    };
+    const deleteRoutine = vi.fn<TestRouteHandler>(
+      () =>
+        new Response(
+          JSON.stringify({
+            error: {
+              code: "CONFLICT",
+              message: "Routine revision is out of date.",
+              request_id: "req-conflict",
+            },
+          }),
+          { status: 409, headers: { "content-type": "application/json" } },
+        ),
+    );
+    renderPanel({
+      listRoomRoutines: list([minuteRoutine]),
+      deleteRoutine,
+    });
+    expect(await screen.findByText("Check build")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Delete routine" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /revision is out of date/i,
+    );
+  });
+
   it("keeps creating and editing hourly routines unchanged without minute options", async () => {
     const createRoomRoutine = vi.fn<TestRouteHandler>(() => reminder);
     renderPanel({ listRoomRoutines: list([]), createRoomRoutine });

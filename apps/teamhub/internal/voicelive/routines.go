@@ -75,6 +75,7 @@ type RoutineArguments struct {
 	Timezone        string    `json:"timezone"`
 	Weekdays        []string  `json:"weekdays"`
 	IntervalMinutes int       `json:"interval_minutes"`
+	IntervalHours   int       `json:"interval_hours"`
 	AgentDoesIt     LooseBool `json:"agent_does_it"`
 	Confirmed       LooseBool `json:"confirmed"`
 }
@@ -100,6 +101,9 @@ func RoutineCadence(args RoutineArguments) (reminder.Cadence, error) {
 	case "every_n_minutes":
 		minutes := args.IntervalMinutes
 		schedule.IntervalMinutes = &minutes
+	case "every_n_hours":
+		hours := args.IntervalHours
+		schedule.IntervalHours = &hours
 	}
 	return reminder.ParseSchedule(schedule)
 }

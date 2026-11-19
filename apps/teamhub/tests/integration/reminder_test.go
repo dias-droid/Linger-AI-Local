@@ -908,6 +908,25 @@ func TestRoutineIntervalGridAndSkipRule(t *testing.T) {
 		tenID := createAgent("a1", 10)
 		sixtyID := createAgent("a2", 60)
 
+		// Compatibility with older CLI/Desktop clients sending every_n_hours.
+		legacyStatus, legacyBody := postAgentInRoom(t, env, issued.AccessToken, roomID, "/api/agent/v1/routines", map[string]any{
+			"invocation_id":    routineInvocation("a3"),
+			"name":             "Legacy hourly",
+			"instruction":      "Check status",
+			"mention_actor_id": "self",
+			"schedule":         map[string]any{"kind": "every_n_hours", "interval_hours": 2},
+		})
+		if legacyStatus != http.StatusOK || !strings.Contains(string(legacyBody), `"kind":"every_n_minutes"`) || !strings.Contains(string(legacyBody), `"interval_minutes":120`) {
+			t.Fatalf("legacy every_n_hours create=%d %s", legacyStatus, legacyBody)
+		}
+		var legacyResp struct {
+			Routine struct {
+				ID string `json:"id"`
+			} `json:"routine"`
+		}
+		decode(t, legacyBody, &legacyResp)
+		legacyID := legacyResp.Routine.ID
+
 		status, body := postAgentInRoom(t, env, issued.AccessToken, roomID, "/api/agent/v1/routines/query", map[string]any{})
 		if status != http.StatusOK || !strings.Contains(string(body), `"interval_minutes":10`) || !strings.Contains(string(body), `"interval_minutes":60`) {
 			t.Fatalf("agent list=%d %s", status, body)
@@ -964,7 +983,7 @@ func TestRoutineIntervalGridAndSkipRule(t *testing.T) {
 				t.Fatalf("web toggle altered cadence: %s", raw)
 			}
 		}
-		for _, id := range []string{tenID, sixtyID} {
+		for _, id := range []string{tenID, sixtyID, legacyID} {
 			if _, err := env.pool.Exec(t.Context(), `DELETE FROM room_reminders WHERE id=$1`, id); err != nil {
 				t.Fatal(err)
 			}
@@ -1119,6 +1138,38 @@ func TestRoutineIntervalGridAndSkipRule(t *testing.T) {
 				third := fireReminderOccurrence(t, env, routineID)
 				if third.MessageID == "" || third.MessageID == second.MessageID {
 					t.Fatalf("third fire after 24h TTL=%+v", third)
+				}
+
+				// Coalesced inbox input (only payload.invocationMessageIds references third.MessageID):
+				// blocks while running and unblocks once terminal.
+				coalescedRunID := "coalesced-run-" + tc.tag + "-" + suffix
+				coalescedInputID := coalescedRunID + "-input"
+				coalescedPayload, _ := json.Marshal(map[string]any{"invocationMessageIds": []string{third.MessageID}})
+				if _, err := env.pool.Exec(t.Context(), `INSERT INTO agent_local_runs(run_id,context_key,status,status_room_id,started_at) VALUES($1,$2,'running',$3,now())`,
+					coalescedRunID, ensured.Context.ContextKey, subRoom); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := env.pool.Exec(t.Context(), `INSERT INTO agent_runtime_inputs(context_key,input_id,input_sequence,payload,payload_hash,source_kind,source_inbox_id,status,local_run_id)
+					VALUES($1,$2,9999,$3,decode(repeat('b',64),'hex'),'inbox',$4,'handled',$5)`,
+					ensured.Context.ContextKey, coalescedInputID, coalescedPayload, "room:"+subRoom, coalescedRunID); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := env.pool.Exec(t.Context(), `INSERT INTO agent_local_run_inputs(run_id,context_key,input_id,relation,ordinal)
+					VALUES($1,$2,$3,'initial',0)`, coalescedRunID, ensured.Context.ContextKey, coalescedInputID); err != nil {
+					t.Fatal(err)
+				}
+				markReminderOverdue(t, env, routineID)
+				for _, res := range runReminderWorker(t, env) {
+					if res.ReminderID == routineID {
+						t.Fatalf("fired while coalesced run still running: %+v", res)
+					}
+				}
+				if _, err := env.pool.Exec(t.Context(), `UPDATE agent_local_runs SET status='succeeded', terminal='{"type":"succeeded"}', finished_at=now() WHERE run_id=$1`, coalescedRunID); err != nil {
+					t.Fatal(err)
+				}
+				fourth := fireReminderOccurrence(t, env, routineID)
+				if fourth.MessageID == "" || fourth.MessageID == third.MessageID {
+					t.Fatalf("fourth fire after coalesced terminal run=%+v", fourth)
 				}
 			})
 		}

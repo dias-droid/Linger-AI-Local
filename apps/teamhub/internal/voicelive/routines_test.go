@@ -33,6 +33,10 @@ func TestRoutineCadenceReadsEachKind(t *testing.T) {
 	if err != nil || RoutineWhen(sixtyMin) != "every 60 minutes" {
 		t.Fatalf("sixtyMin=%+v err=%v when=%q", sixtyMin, err, RoutineWhen(sixtyMin))
 	}
+	legacyHours, err := RoutineCadence(RoutineArguments{Kind: "every_n_hours", IntervalHours: 2})
+	if err != nil || RoutineWhen(legacyHours) != "every 120 minutes" {
+		t.Fatalf("legacyHours=%+v err=%v when=%q", legacyHours, err, RoutineWhen(legacyHours))
+	}
 }
 
 func TestRoutineCadenceRejectsIncompleteSchedules(t *testing.T) {
@@ -48,7 +52,8 @@ func TestRoutineCadenceRejectsIncompleteSchedules(t *testing.T) {
 		"minutes under ten":   {Kind: "every_n_minutes", IntervalMinutes: 5},
 		"minutes not step 10": {Kind: "every_n_minutes", IntervalMinutes: 15},
 		"minutes over 7 days": {Kind: "every_n_minutes", IntervalMinutes: 10090},
-		"legacy hours kind":   {Kind: "every_n_hours", IntervalMinutes: 60},
+		"hours zero":          {Kind: "every_n_hours"},
+		"hours over 7 days":   {Kind: "every_n_hours", IntervalHours: 169},
 	} {
 		if _, err := RoutineCadence(args); err == nil && name != "once in the past" {
 			t.Fatalf("%s accepted", name)
