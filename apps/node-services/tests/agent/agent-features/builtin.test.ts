@@ -415,7 +415,6 @@ describe("createBuiltinAgentFeatures", () => {
   it("propagates the shared Memory services' late start() binding loudly", async () => {
     const services = createAgentMemoryServices({
       memory: { read: vi.fn(), commit: vi.fn() },
-      contextHost: { ensureAgentRoots: vi.fn() },
       runtimeState: {} as never,
       logger: logger(),
     });

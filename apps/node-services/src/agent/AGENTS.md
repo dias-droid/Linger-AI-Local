@@ -93,6 +93,10 @@ take precedence.
   Agent Service stores no Skill bytes. TeamHub configuration still selects
   versions; cached bytes confer no authority. Do not reintroduce Run Tokens,
   Run grants, Run-scoped resource snapshots, staging, or checkpoint hooks.
+- Agent Memory files and the recall summary come from one published document
+  read at Context activation. The read-only files are inline Context View
+  content, retained with the View rather than backed by a shared directory.
+  Before-run synchronization neither rereads Agent Memory nor walks those files.
 - Local Runner Runtimes read collaboration resources through the
   standalone TeamHub CLI, authorized by current Agent identity on each request.
   Tenant workers, resource roots, file deltas, topology registration and
