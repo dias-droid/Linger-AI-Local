@@ -139,9 +139,14 @@ func run(args []string) (resultErr error) {
 	currentProviderEnvironment := func() map[string]string {
 		return localmodels.OverlayEnvironment(baseProviderEnvironment, localModelsStateDir)
 	}
+	var localModels *localmodels.Library
 	currentDiscoveryOptions := func() provider.DiscoveryOptions {
+		var managedPi string
+		if localModels != nil {
+			managedPi = localModels.PiExecutable()
+		}
 		return provider.DiscoveryOptions{
-			ConfiguredPaths:  localmodels.OverlayRuntimePaths(computer.RuntimePaths, localModelsStateDir),
+			ConfiguredPaths:  withManagedPiPath(localmodels.OverlayRuntimePaths(computer.RuntimePaths, localModelsStateDir), managedPi),
 			Runtimes:         computer.EnabledRuntimes,
 			PreferredRuntime: computer.PreferredRuntime,
 			RuntimeHomeRoot:  filepath.Join(computer.StateDirectory, "runtime-homes"),
@@ -313,9 +318,21 @@ func run(args []string) (resultErr error) {
 		}
 	}
 	jobDir := filepath.Join(computer.StateDirectory, "local-models", "jobs")
-	localModels := localmodels.New(localmodels.Options{
+	var nodePath string
+	if toolInstallation != nil {
+		nodePath = toolInstallation.NodePath
+	}
+	piEnabled := len(computer.EnabledRuntimes) == 0 || slices.Contains(computer.EnabledRuntimes, "pi")
+	_, hasPi := discovered.Installations["pi"]
+	libraryHarnessDir := ""
+	if piEnabled && !hasPi {
+		libraryHarnessDir = localmodels.HarnessRoot(localModelsStateDir)
+	}
+	localModels = localmodels.New(localmodels.Options{
 		Tool: localModelsTool, Environment: baseProviderEnvironment,
-		JobDirectory: jobDir,
+		JobDirectory:     jobDir,
+		HarnessDirectory: libraryHarnessDir,
+		NodePath:         nodePath,
 		// The library publishes only from Act and Refresh, which the Daemon
 		// calls once it runs.
 		Publish: func(snapshot wire.LocalModelsSnapshot) { localDaemon.PublishLocalModels(snapshot) },
@@ -335,10 +352,6 @@ func run(args []string) (resultErr error) {
 			controller.UpdateDiagnostics(next.Diagnostics)
 		}
 		return inventory.publish(publishCtx, nextRuntimes, next.Diagnostics)
-	}
-	var nodePath string
-	if toolInstallation != nil {
-		nodePath = toolInstallation.NodePath
 	}
 	modelSource := localmodels.NewModelSource(localmodels.ModelSourceOptions{
 		Tool:         localModelsTool,
@@ -756,6 +769,18 @@ func installedTeamHubCLIBinAt(executable string) string {
 		return ""
 	}
 	return directory
+}
+
+func withManagedPiPath(paths map[string]string, managed string) map[string]string {
+	if managed == "" || paths["pi"] != "" {
+		return paths
+	}
+	cloned := maps.Clone(paths)
+	if cloned == nil {
+		cloned = make(map[string]string, 1)
+	}
+	cloned["pi"] = managed
+	return cloned
 }
 
 func runtimeProviderEnvironment(source map[string]string, gatewayToken, codexAuthFile string) map[string]string {
