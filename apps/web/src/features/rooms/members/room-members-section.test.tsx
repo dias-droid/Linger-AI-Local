@@ -17,6 +17,12 @@ import {
 import { teamHubErrorResponse } from "@/test/teamhub-test-server";
 import { TeamHubRuntimeProvider } from "@/features/teamhub/teamhub-runtime";
 
+import {
+  roomMembersQueryOptions,
+  teamHubIdentityQueryOptions,
+  tenantActorsQueryOptions,
+} from "../room-queries";
+
 import { RoomMembersSection } from "./room-members-section";
 
 describe("RoomMembersSection", () => {
@@ -25,7 +31,7 @@ describe("RoomMembersSection", () => {
   it("issues Add member when the browser connectivity manager reports offline", async () => {
     const runtime = await runtimeWithOnlyCurrentMember();
 
-    renderPanel(runtime);
+    await renderPanel(runtime);
     await screen.findByRole("region", { name: "Room members" });
     window.dispatchEvent(new Event("offline"));
 
@@ -53,7 +59,7 @@ describe("RoomMembersSection", () => {
       ),
     );
 
-    renderPanel(runtime);
+    await renderPanel(runtime);
 
     await screen.findByRole("region", { name: "Room members" });
     fireEvent.click(screen.getByRole("button", { name: "Add member" }));
@@ -82,7 +88,7 @@ describe("RoomMembersSection", () => {
       .mockReturnValue({ items: [], page: { has_more: false } });
     runtime.server.on("GET", "/v0/tenants/{tenantId}/agents", listTenantAgents);
 
-    renderPanel(runtime);
+    await renderPanel(runtime);
     await screen.findByRole("region", { name: "Room members" });
     fireEvent.click(screen.getByRole("button", { name: "Add member" }));
     const dialog = screen.getByRole("dialog", { name: "Add Room member" });
@@ -121,7 +127,7 @@ describe("RoomMembersSection", () => {
       listTenantAgentAvailability,
     );
 
-    renderPanel(runtime);
+    await renderPanel(runtime);
     await screen.findByRole("region", { name: "Room members" });
     fireEvent.click(screen.getByRole("button", { name: "Add member" }));
     const dialog = screen.getByRole("dialog", { name: "Add Room member" });
@@ -147,7 +153,7 @@ describe("RoomMembersSection", () => {
   it("lets a non-owner add eligible members without exposing removal", async () => {
     const runtime = await runtimeWithOnlyCurrentMember("member");
 
-    renderPanel(runtime);
+    await renderPanel(runtime);
 
     await screen.findByRole("region", { name: "Room members" });
     expect(screen.getByRole("button", { name: "Add member" })).toBeVisible();
@@ -166,7 +172,7 @@ describe("RoomMembersSection", () => {
         "/v0/rooms/{roomId}/members/{actorId}",
       );
 
-    renderPanel(runtime);
+    await renderPanel(runtime);
     await screen.findByRole("region", { name: "Room members" });
     fireEvent.click(screen.getByRole("button", { name: "Remove Codex" }));
 
@@ -214,7 +220,7 @@ describe("RoomMembersSection", () => {
       deleteRoomMember,
     );
 
-    renderPanel(runtime);
+    await renderPanel(runtime);
     await screen.findByRole("region", { name: "Room members" });
     fireEvent.click(screen.getByRole("button", { name: "Remove Codex" }));
     const confirmation = screen.getByRole("dialog", {
@@ -240,7 +246,7 @@ describe("RoomMembersSection", () => {
 
     const onOpenProfile = vi.fn();
 
-    renderPanel(runtime, { onOpenProfile });
+    await renderPanel(runtime, { onOpenProfile });
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Open Codex profile" }),
@@ -252,7 +258,7 @@ describe("RoomMembersSection", () => {
     const runtime = createTestTeamHubRuntime();
     acceptRoomMembers(runtime);
 
-    const { unmount } = renderPanel(runtime);
+    const { unmount } = await renderPanel(runtime);
     await screen.findByRole("region", { name: "Room members" });
     fireEvent.click(await screen.findByRole("button", { name: "Add member" }));
     expect(
@@ -262,7 +268,7 @@ describe("RoomMembersSection", () => {
     ).toBeVisible();
 
     unmount();
-    renderPanel(runtime, { roomId: "room-dm-codex" });
+    await renderPanel(runtime, { roomId: "room-dm-codex" });
     fireEvent.click(await screen.findByRole("button", { name: "Add member" }));
     const dialog = screen.getByRole("dialog", { name: "Add Room member" });
     expect(
@@ -294,20 +300,33 @@ async function runtimeWithOnlyCurrentMember(
   return runtime;
 }
 
-function renderPanel(
+// Loading the suspending queries first skips React's Suspense reveal
+// throttle, which otherwise costs every test a fixed delay.
+async function renderPanel(
   runtime: ReturnType<typeof createTestTeamHubRuntime>,
   callbacks: {
     onOpenProfile?: (actorId: string) => void;
     roomId?: string;
   } = {},
 ) {
+  const queryClient = createAppQueryClient();
+  const roomId = callbacks.roomId ?? "room-all";
+  await Promise.all([
+    queryClient.ensureQueryData(teamHubIdentityQueryOptions(runtime.client)),
+    queryClient.ensureQueryData(
+      roomMembersQueryOptions(runtime.client, "tenant-northstar", roomId),
+    ),
+    queryClient.ensureQueryData(
+      tenantActorsQueryOptions(runtime.client, "tenant-northstar"),
+    ),
+  ]);
   return render(
-    <QueryClientProvider client={createAppQueryClient()}>
+    <QueryClientProvider client={queryClient}>
       <TeamHubRuntimeProvider runtime={runtime}>
         <Suspense fallback={<p>Loading members</p>}>
           <RoomMembersSection
             onOpenProfile={callbacks.onOpenProfile}
-            roomId={callbacks.roomId ?? "room-all"}
+            roomId={roomId}
             tenantId="tenant-northstar"
           />
         </Suspense>

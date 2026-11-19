@@ -35,7 +35,11 @@ import {
   TeamHubRuntimeProvider,
 } from "@/features/teamhub/teamhub-runtime";
 
-import { teamHubIdentityQueryKey } from "./room-queries";
+import {
+  teamHubIdentityQueryKey,
+  teamHubIdentityQueryOptions,
+  teamHubTenantQueryOptions,
+} from "./room-queries";
 import { browserRoomMessageOutbox } from "./chat/room-message-outbox";
 import { RoomShell } from "./room-shell";
 import {
@@ -413,6 +417,14 @@ describe("Room shell Tenant transition", () => {
       ],
       { initialEntries: ["/t/tenant-northstar/rooms/room-all/chat"] },
     );
+    // Loading what RoomShell suspends on before rendering skips React's
+    // Suspense reveal throttle, which otherwise costs the test a fixed delay.
+    await Promise.all([
+      queryClient.ensureQueryData(teamHubIdentityQueryOptions(runtime.client)),
+      queryClient.ensureQueryData(
+        teamHubTenantQueryOptions(runtime.client, "tenant-northstar"),
+      ),
+    ]);
     render(
       <QueryClientProvider client={queryClient}>
         <TeamHubRuntimeProvider runtime={runtime}>

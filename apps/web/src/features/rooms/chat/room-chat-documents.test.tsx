@@ -96,7 +96,7 @@ describe("Room Chat", () => {
         },
       });
 
-    const router = renderRoomChat(runtime, testQueryClient());
+    const router = await renderRoomChat(runtime, testQueryClient());
 
     const editor = await screen.findByLabelText("Message Room");
     fireEvent.change(editor, { target: { value: "@Cod" } });
@@ -189,7 +189,7 @@ describe("Room Chat", () => {
       ],
     };
     const queryClient = testQueryClient();
-    const router = renderRoomChat(runtime, queryClient);
+    const router = await renderRoomChat(runtime, queryClient);
     await screen.findByText(/Reviewed the checklist/);
     appendCommittedMessage(queryClient, contextMessage);
 
@@ -229,7 +229,7 @@ describe("Room Chat", () => {
       ],
     };
     const queryClient = testQueryClient();
-    renderRoomChat(runtime, queryClient);
+    await renderRoomChat(runtime, queryClient);
     await screen.findByText(/Reviewed the checklist/);
     appendCommittedMessage(queryClient, delivered);
 
@@ -277,7 +277,7 @@ describe("Room Chat", () => {
       };
     });
     const queryClient = testQueryClient();
-    renderRoomChat(runtime, queryClient);
+    await renderRoomChat(runtime, queryClient);
     await screen.findByText(/Reviewed the checklist/);
     appendCommittedMessage(queryClient, {
       ...message("message-mail-canvas", "Invitation"),
@@ -349,7 +349,7 @@ describe("Room Chat", () => {
       };
     });
     const queryClient = testQueryClient();
-    renderRoomChat(runtime, queryClient);
+    await renderRoomChat(runtime, queryClient);
     await screen.findByText(/Reviewed the checklist/);
     appendCommittedMessage(queryClient, {
       ...message("message-mail-readonly", "Pricing"),
@@ -389,7 +389,7 @@ describe("Room Chat", () => {
     const runtime = createTestTeamHubRuntime();
     const document = seedRoomDocument(runtime, "room-chat-surface-prefetch");
     const queryClient = testQueryClient();
-    renderRoomChat(runtime, queryClient);
+    await renderRoomChat(runtime, queryClient);
     await screen.findByText(/Reviewed the checklist/);
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(preload).not.toHaveBeenCalled();
@@ -414,7 +414,7 @@ describe("Room Chat", () => {
     window.localStorage.clear();
     const runtime = createTestTeamHubRuntime();
 
-    const router = renderRoomChat(runtime, testQueryClient());
+    const router = await renderRoomChat(runtime, testQueryClient());
     const editor = await screen.findByLabelText("Message Room");
 
     fireEvent.change(editor, {
@@ -539,7 +539,7 @@ describe("Room Chat", () => {
         ],
       };
     });
-    renderRoomChat(runtime, testQueryClient());
+    await renderRoomChat(runtime, testQueryClient());
     const editor = await screen.findByLabelText("Message Room");
     fireEvent.change(editor, { target: { selectionStart: 1, value: "@" } });
 
@@ -578,7 +578,7 @@ describe("Room Chat", () => {
       }),
     );
     const searches = () => queriesTo(runtime, "/v0/library/documents/search");
-    renderRoomChat(runtime, testQueryClient());
+    await renderRoomChat(runtime, testQueryClient());
     const editor = await screen.findByLabelText("Message Room");
     expect(list).not.toHaveBeenCalled();
     expect(searches()).toEqual([]);
@@ -644,7 +644,7 @@ describe("Room Chat", () => {
         skillReferences: [],
       },
     );
-    renderRoomChat(runtime, testQueryClient());
+    await renderRoomChat(runtime, testQueryClient());
 
     await waitFor(() =>
       expect(
@@ -675,7 +675,7 @@ describe("Room Chat", () => {
         bind,
       );
       const lists = () => queriesTo(runtime, "/v0/library/documents");
-      renderRoomChat(runtime, testQueryClient());
+      await renderRoomChat(runtime, testQueryClient());
       const editor = await screen.findByLabelText("Message Room");
       expect(lists()).toEqual([]);
       expect(bind).not.toHaveBeenCalled();
@@ -757,7 +757,7 @@ describe("Room Chat", () => {
       );
       const listDocuments = () =>
         runtime.server.requestsTo("GET", "/v0/rooms/{roomId}/documents");
-      const router = renderRoomChat(runtime, testQueryClient());
+      const router = await renderRoomChat(runtime, testQueryClient());
       const editor = await screen.findByLabelText("Message Room");
       await waitFor(() => expect(listDocuments().length).toBeGreaterThan(0));
       const initialDocumentLoads = listDocuments().length;
@@ -818,7 +818,7 @@ describe("Room Chat", () => {
   it("keeps a cross-Tenant Document URL out of the current Room Context", async () => {
     const runtime = createTestTeamHubRuntime();
 
-    renderRoomChat(runtime, testQueryClient());
+    await renderRoomChat(runtime, testQueryClient());
     const editor = await screen.findByLabelText("Message Room");
     await waitFor(() =>
       expect(

@@ -102,12 +102,20 @@ export function TestRoomChrome({ children }: { children: ReactNode }) {
   );
 }
 
-export function renderRoomChat(
+// Loading what RoomChat suspends on before rendering skips React's Suspense
+// reveal throttle, which otherwise costs every test a fixed delay.
+export async function renderRoomChat(
   runtime: TeamHubRuntime,
   queryClient: QueryClient,
   initialEntry = "/t/tenant-northstar/rooms/room-all/chat",
   focusComposer = false,
 ) {
+  const [, tenantId = "", roomId = ""] =
+    /^\/t\/([^/]+)\/rooms\/([^/]+)/.exec(initialEntry) ?? [];
+  // A failed load stays in the cache so RoomChat surfaces it as before.
+  await preloadRoomChat(runtime, queryClient, tenantId, roomId).catch(
+    () => undefined,
+  );
   const router = createMemoryRouter(
     [
       {
@@ -246,8 +254,16 @@ export function presentedAttachment(available: boolean) {
 // still start through their real mounted query and transport paths.
 export async function loadedRoomChatQueryClient(runtime: TeamHubRuntime) {
   const queryClient = testQueryClient();
-  const tenantId = "tenant-northstar";
-  const roomId = "room-all";
+  await preloadRoomChat(runtime, queryClient, "tenant-northstar", "room-all");
+  return queryClient;
+}
+
+async function preloadRoomChat(
+  runtime: TeamHubRuntime,
+  queryClient: QueryClient,
+  tenantId: string,
+  roomId: string,
+) {
   await Promise.all([
     queryClient.ensureInfiniteQueryData(
       roomMessagesInfiniteQueryOptions(runtime.client, tenantId, roomId),
@@ -260,7 +276,6 @@ export async function loadedRoomChatQueryClient(runtime: TeamHubRuntime) {
     ),
     queryClient.ensureQueryData(teamHubIdentityQueryOptions(runtime.client)),
   ]);
-  return queryClient;
 }
 
 export function testQueryClient() {

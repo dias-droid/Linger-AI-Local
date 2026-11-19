@@ -28,16 +28,23 @@ import type {
   TeamHubTenantAgentAvailabilitySnapshot,
 } from "@/features/teamhub/teamhub-types";
 
+import {
+  tenantAgentAvailabilityQueryOptions,
+  tenantAgentsQueryOptions,
+} from "@/features/rooms/room-queries";
 import { tenantLocalModelsQueryKey } from "@/features/local-models/local-models-queries";
 
 import { ComputersPage } from "./computers-page";
-import { localComputersQueryKey } from "./local-computer-queries";
+import {
+  localComputersQueryKey,
+  localComputersQueryOptions,
+} from "./local-computer-queries";
 import { publishLocalComputerEnrollment } from "./local-computer-enrollment-events";
 
 describe("ComputersPage", () => {
   it("links a Computer to its Local models page without reading its models", async () => {
     const runtime = await authenticatedFixture();
-    const queryClient = renderPage(
+    const queryClient = await renderPage(
       runtime,
       "/t/tenant-northstar/computers?computer=computer-offline-lab",
     );
@@ -78,7 +85,7 @@ describe("ComputersPage", () => {
 
   it("lists several Computers by readiness and opens each one's detail", async () => {
     const runtime = await authenticatedFixture();
-    renderPage(runtime);
+    await renderPage(runtime);
 
     const directory = await screen.findByRole("list", {
       name: "Local computers directory",
@@ -130,7 +137,7 @@ describe("ComputersPage", () => {
 
   it("waits for the exact server when another user's Computer connects first", async () => {
     const runtime = await authenticatedFixture();
-    const queryClient = renderPage(runtime);
+    const queryClient = await renderPage(runtime);
     fireEvent.click(
       await screen.findByRole("button", { name: "Connect a Local Computer" }),
     );
@@ -177,7 +184,7 @@ describe("ComputersPage", () => {
       }),
     );
 
-    renderPage(
+    await renderPage(
       runtime,
       "/t/tenant-northstar/computers?computer=computer-jenny-mac",
     );
@@ -219,7 +226,7 @@ describe("ComputersPage", () => {
       },
     };
 
-    renderPage(runtime);
+    await renderPage(runtime);
 
     const detail = await screen.findByRole("region", {
       name: "New Build Mac details",
@@ -239,7 +246,7 @@ describe("ComputersPage", () => {
       },
     };
 
-    renderPage(runtime);
+    await renderPage(runtime);
 
     expect(
       await screen.findByRole("heading", {
@@ -275,7 +282,7 @@ describe("ComputersPage", () => {
       },
     };
 
-    renderPage(runtime, "/t/tenant-northstar/computers?computer=missing");
+    await renderPage(runtime, "/t/tenant-northstar/computers?computer=missing");
 
     expect(await screen.findByText("Computer unavailable")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Back to computers" }));
@@ -287,7 +294,7 @@ describe("ComputersPage", () => {
 
   it("completes setup when polling finds a newly connected Computer from another browser", async () => {
     const runtime = await authenticatedFixture();
-    const queryClient = renderPage(runtime);
+    const queryClient = await renderPage(runtime);
 
     fireEvent.click(
       await screen.findByRole("button", { name: "Connect a Local Computer" }),
@@ -351,7 +358,7 @@ describe("ComputersPage", () => {
         page: { has_more: false },
       }));
 
-    renderPage(runtime);
+    await renderPage(runtime);
 
     const detail = await screen.findByRole("region", {
       name: "New Build Mac details",
@@ -383,7 +390,7 @@ describe("ComputersPage", () => {
       },
     };
 
-    renderPage(runtime);
+    await renderPage(runtime);
 
     const detail = await screen.findByRole("region", {
       name: "New Build Mac details",
@@ -448,7 +455,7 @@ describe("ComputersPage", () => {
         removeTenantLocalComputer,
       );
 
-    renderPage(runtime);
+    await renderPage(runtime);
     fireEvent.click(await screen.findByRole("button", { name: "Advanced" }));
     fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     const dialog = await screen.findByRole("dialog", {
@@ -488,7 +495,7 @@ describe("ComputersPage", () => {
         removeTenantLocalComputer,
       );
 
-    renderPage(
+    await renderPage(
       fixture,
       "/t/tenant-northstar/computers?computer=computer-jenny-mac",
     );
@@ -541,13 +548,26 @@ async function authenticatedFixture() {
   return runtime;
 }
 
-function renderPage(
+// Loading the suspending queries first skips React's Suspense reveal
+// throttle, which otherwise costs every test a fixed delay.
+async function renderPage(
   runtime: TeamHubRuntime,
   initialEntry = "/t/tenant-northstar/computers",
 ) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  await Promise.all([
+    queryClient.ensureQueryData(
+      localComputersQueryOptions(runtime.client, "tenant-northstar"),
+    ),
+    queryClient.ensureQueryData(
+      tenantAgentsQueryOptions(runtime.client, "tenant-northstar"),
+    ),
+    queryClient.ensureQueryData(
+      tenantAgentAvailabilityQueryOptions(runtime.client, "tenant-northstar"),
+    ),
+  ]);
   render(
     <QueryClientProvider client={queryClient}>
       <TeamHubRuntimeProvider runtime={runtime}>

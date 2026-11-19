@@ -60,7 +60,7 @@ describe("Room Chat", () => {
       getMessage,
     );
 
-    renderRoomChat(
+    await renderRoomChat(
       runtime,
       testQueryClient(),
       "/t/tenant-northstar/rooms/room-all/chat?message=message-source",
@@ -149,7 +149,7 @@ describe("Room Chat", () => {
         }
       });
     try {
-      renderRoomChat(
+      await renderRoomChat(
         runtime,
         queryClient,
         "/t/tenant-northstar/rooms/room-all/chat?message=message-source",
@@ -195,7 +195,7 @@ describe("Room Chat", () => {
     });
 
     try {
-      renderRoomChat(
+      await renderRoomChat(
         runtime,
         testQueryClient(),
         "/t/tenant-northstar/rooms/room-all/chat?message=message-2",
@@ -245,7 +245,7 @@ describe("Room Chat", () => {
     });
 
     try {
-      renderRoomChat(
+      await renderRoomChat(
         runtime,
         testQueryClient(),
         "/t/tenant-northstar/rooms/room-all/chat?message=message-source",
@@ -270,7 +270,7 @@ describe("Room Chat", () => {
   it("offers Copy and the same Thread action on every committed Message", async () => {
     const runtime = createTestTeamHubRuntime();
 
-    const router = renderRoomChat(runtime, testQueryClient());
+    const router = await renderRoomChat(runtime, testQueryClient());
 
     await screen.findByText(/Reviewed the checklist/);
     const activeRunMessage = screen
@@ -338,7 +338,7 @@ describe("Room Chat", () => {
   it("keeps Human avatars static while names mention and Agent avatars open Agent info", async () => {
     const runtime = createTestTeamHubRuntime();
 
-    const router = renderRoomChat(runtime, testQueryClient());
+    const router = await renderRoomChat(runtime, testQueryClient());
 
     await screen.findByText(/I moved the launch notes/);
     const mayaMessage = screen
@@ -407,7 +407,7 @@ describe("Room Chat", () => {
       events: fixture.events,
     };
 
-    renderRoomChat(runtime, testQueryClient());
+    await renderRoomChat(runtime, testQueryClient());
 
     await screen.findByText(/Reviewed the checklist/);
     expect(
@@ -444,7 +444,7 @@ describe("Room Chat", () => {
     fixture.server.on("GET", "/v0/rooms/{roomId}/messages", listMessages);
     const runtime = withoutRealtime(fixture);
 
-    renderRoomChat(runtime, testQueryClient());
+    await renderRoomChat(runtime, testQueryClient());
 
     await screen.findByText(/Keep the first release focused/);
     const timeline = screen.getByLabelText("Room timeline");
@@ -499,7 +499,7 @@ describe("Room Chat", () => {
     });
 
     try {
-      renderRoomChat(withoutRealtime(fixture), testQueryClient());
+      await renderRoomChat(withoutRealtime(fixture), testQueryClient());
 
       const timeline = await screen.findByLabelText("Room timeline");
       expect(timeline).toHaveAttribute("data-initial-scroll-ready", "true");
@@ -538,7 +538,7 @@ describe("Room Chat", () => {
     fixture.server.on("GET", "/v0/rooms/{roomId}/messages", listMessages);
     const queryClient = testQueryClient();
 
-    renderRoomChat(withoutRealtime(fixture), queryClient);
+    await renderRoomChat(withoutRealtime(fixture), queryClient);
 
     await screen.findByText(/Keep the first release focused/);
     const timeline = screen.getByLabelText("Room timeline");
@@ -579,7 +579,7 @@ describe("Room Chat", () => {
     const runtime = withoutRealtime(fixture);
     const queryClient = testQueryClient();
 
-    renderRoomChat(runtime, queryClient);
+    await renderRoomChat(runtime, queryClient);
 
     const timeline = await screen.findByLabelText("Room timeline");
     let scrollHeight = 500;

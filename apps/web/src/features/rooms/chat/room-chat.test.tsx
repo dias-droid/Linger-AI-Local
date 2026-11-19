@@ -68,7 +68,7 @@ describe("Room Chat", () => {
 
     try {
       await act(async () => {
-        renderRoomChat(runtime, await loadedRoomChatQueryClient(runtime));
+        await renderRoomChat(runtime, await loadedRoomChatQueryClient(runtime));
       });
       await waitFor(() => expect(actorsSpy).toHaveBeenCalled());
       await waitFor(() =>
@@ -306,7 +306,7 @@ describe("Room Chat", () => {
     const runtime = createTestTeamHubRuntime();
 
     await act(async () => {
-      renderRoomChat(runtime, await loadedRoomChatQueryClient(runtime));
+      await renderRoomChat(runtime, await loadedRoomChatQueryClient(runtime));
     });
 
     const status = await screen.findByRole("button", {
@@ -374,7 +374,7 @@ describe("Room Chat", () => {
       updated_at: "2026-10-20T02:00:00Z",
     };
 
-    renderRoomChat(
+    await renderRoomChat(
       runtime,
       testQueryClient(),
       "/t/tenant-northstar/rooms/room-dm-codex/chat",
@@ -450,7 +450,7 @@ describe("Room Chat", () => {
         },
       });
 
-    renderRoomChat(runtime, testQueryClient());
+    await renderRoomChat(runtime, testQueryClient());
 
     await screen.findByLabelText("Message Room");
     fireEvent.click(
@@ -514,7 +514,7 @@ describe("Room Chat", () => {
         message: message("dropped-declared", ""),
         presentation: { attachments: [], mentions: [] },
       });
-    renderRoomChat(runtime, testQueryClient());
+    await renderRoomChat(runtime, testQueryClient());
 
     await screen.findByLabelText("Message Room");
     const target = screen.getByTestId("room-chat-file-drop-target");
@@ -568,7 +568,7 @@ describe("Room Chat", () => {
         }),
     );
 
-    renderRoomChat(runtime, testQueryClient());
+    await renderRoomChat(runtime, testQueryClient());
 
     await screen.findByLabelText("Message Room");
     fireEvent.change(screen.getByLabelText("Choose message attachments"), {
@@ -605,7 +605,7 @@ describe("Room Chat", () => {
       .mockRejectedValueOnce(new TypeError("Failed to fetch"))
       .mockImplementation(originalCreateMessage);
 
-    renderRoomChat(runtime, testQueryClient());
+    await renderRoomChat(runtime, testQueryClient());
 
     const editor = await screen.findByLabelText("Message Room");
     fireEvent.change(editor, { target: { value: "Ambiguous delivery" } });
@@ -633,7 +633,7 @@ describe("Room Chat replied Run", () => {
     const scenario = repliedRunScenario();
     const queryClient = await loadedRoomChatQueryClient(scenario.runtime);
     await act(async () => {
-      renderRoomChat(scenario.runtime, queryClient);
+      await renderRoomChat(scenario.runtime, queryClient);
     });
     expect(
       await screen.findByRole("button", {
@@ -668,7 +668,7 @@ describe("Room Chat replied Run", () => {
       scenario.publish({ replied, revision: 2 });
       const queryClient = await loadedRoomChatQueryClient(scenario.runtime);
       await act(async () => {
-        renderRoomChat(scenario.runtime, queryClient);
+        await renderRoomChat(scenario.runtime, queryClient);
       });
 
       const editor = await screen.findByLabelText("Message Room");

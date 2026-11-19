@@ -48,7 +48,7 @@ describe("Room Chat", () => {
       "createMessage",
     );
 
-    renderRoomChat(
+    await renderRoomChat(
       runtime,
       testQueryClient(),
       "/t/tenant-northstar/rooms/room-dm-codex/chat",
@@ -77,7 +77,7 @@ describe("Room Chat", () => {
   it("does not project hardware Capture into a non-AnotherMe Direct Room", async () => {
     const runtime = createTestTeamHubRuntime();
 
-    renderRoomChat(
+    await renderRoomChat(
       runtime,
       testQueryClient(),
       "/t/tenant-northstar/rooms/room-dm-codex/chat",
@@ -89,7 +89,7 @@ describe("Room Chat", () => {
     ).not.toBeInTheDocument();
     cleanup();
 
-    renderRoomChat(
+    await renderRoomChat(
       runtime,
       testQueryClient(),
       "/t/tenant-northstar/rooms/room-all/chat",
@@ -114,7 +114,7 @@ describe("Room Chat", () => {
       direct_peer_active: false,
     }));
 
-    renderRoomChat(
+    await renderRoomChat(
       fixture,
       testQueryClient(),
       "/t/tenant-northstar/rooms/room-dm-codex/chat",
@@ -185,7 +185,7 @@ describe("Room Chat", () => {
         ),
       }),
     );
-    renderRoomChat(
+    await renderRoomChat(
       fixture,
       testQueryClient(),
       "/t/tenant-northstar/rooms/room-dm-codex/chat",
@@ -234,7 +234,7 @@ describe("Room Chat", () => {
         }),
       );
 
-      renderRoomChat(
+      await renderRoomChat(
         fixture,
         testQueryClient(),
         "/t/tenant-northstar/rooms/room-dm-codex/chat",
@@ -308,7 +308,7 @@ describe("Room Chat", () => {
       listAvailability,
     );
     const queryClient = testQueryClient();
-    renderRoomChat(
+    await renderRoomChat(
       fixture,
       queryClient,
       "/t/tenant-northstar/rooms/room-dm-codex/chat",
@@ -394,7 +394,7 @@ describe("Room Chat", () => {
       () => snapshot,
     );
     const queryClient = testQueryClient();
-    renderRoomChat(
+    await renderRoomChat(
       runtime,
       queryClient,
       "/t/tenant-northstar/rooms/room-dm-codex/chat",
@@ -444,7 +444,7 @@ describe("Room Chat", () => {
   it("focuses the composer once when an Agent DM entry requests it", async () => {
     const runtime = createTestTeamHubRuntime();
 
-    const router = renderRoomChat(
+    const router = await renderRoomChat(
       runtime,
       testQueryClient(),
       "/t/tenant-northstar/rooms/room-dm-codex/chat",
@@ -467,7 +467,7 @@ describe("Room Chat", () => {
       }),
     );
 
-    renderRoomChat(
+    await renderRoomChat(
       runtime,
       testQueryClient(),
       `/t/tenant-northstar/rooms/${room.id}/chat`,
@@ -506,7 +506,7 @@ describe("Room Chat", () => {
       "createMessage",
     );
 
-    renderRoomChat(runtime, testQueryClient());
+    await renderRoomChat(runtime, testQueryClient());
 
     const editor = await screen.findByLabelText("Message Room");
     expect(
@@ -542,7 +542,7 @@ describe("Room Chat", () => {
               "Directory unavailable.",
             ),
       );
-      renderRoomChat(
+      await renderRoomChat(
         runtime,
         testQueryClient(),
         "/t/tenant-northstar/rooms/room-dm-codex/chat",
@@ -572,7 +572,7 @@ describe("Room Chat", () => {
         "/v0/tenants/{tenantId}/agents",
         () => new Promise(() => {}),
       );
-      renderRoomChat(
+      await renderRoomChat(
         runtime,
         testQueryClient(),
         "/t/tenant-northstar/rooms/room-dm-codex/chat",
@@ -594,7 +594,7 @@ describe("Room Chat", () => {
       items: [],
       page: { has_more: false },
     }));
-    renderRoomChat(
+    await renderRoomChat(
       runtime,
       testQueryClient(),
       "/t/tenant-northstar/rooms/room-dm-codex/chat",
@@ -622,7 +622,7 @@ describe("Room Chat", () => {
       .mockReturnValue(agents);
     runtime.server.on("GET", "/v0/tenants/{tenantId}/agents", listTenantAgents);
 
-    renderRoomChat(
+    await renderRoomChat(
       runtime,
       testQueryClient(),
       "/t/tenant-northstar/rooms/room-dm-codex/chat",
