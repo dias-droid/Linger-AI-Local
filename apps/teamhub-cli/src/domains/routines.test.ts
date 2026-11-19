@@ -42,9 +42,46 @@ describe("TeamHub Collaboration routines", () => {
       createRoutineInputSchema.safeParse({
         name: "Morning",
         instruction: "Post it.",
-        schedule: { kind: "every_n_hours", interval_hours: 4, timezone: "UTC" },
+        schedule: {
+          kind: "every_n_minutes",
+          interval_minutes: 60,
+          timezone: "UTC",
+        },
       }).success,
     ).toBe(false);
+    expect(
+      createRoutineInputSchema.safeParse({
+        name: "Morning",
+        instruction: "Post it.",
+        schedule: { kind: "every_n_hours", interval_hours: 4 },
+      }).success,
+    ).toBe(false);
+    for (const invalidMinutes of [0, 5, 9, 15, 10090]) {
+      expect(
+        createRoutineInputSchema.safeParse({
+          name: "Interval",
+          instruction: "Post it.",
+          schedule: {
+            kind: "every_n_minutes",
+            interval_minutes: invalidMinutes,
+          },
+        }).success,
+        `interval_minutes=${invalidMinutes}`,
+      ).toBe(false);
+    }
+    for (const validMinutes of [10, 20, 60, 10080]) {
+      expect(
+        createRoutineInputSchema.safeParse({
+          name: "Interval",
+          instruction: "Post it.",
+          schedule: {
+            kind: "every_n_minutes",
+            interval_minutes: validMinutes,
+          },
+        }).success,
+        `interval_minutes=${validMinutes}`,
+      ).toBe(true);
+    }
     expect(
       createRoutineInputSchema.safeParse({
         name: "Morning",

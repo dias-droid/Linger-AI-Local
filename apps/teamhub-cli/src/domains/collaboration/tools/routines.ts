@@ -67,17 +67,20 @@ const weeklyScheduleSchema = z
 const intervalScheduleSchema = z
   .object({
     kind: z
-      .literal("every_n_hours")
-      .describe("Repeat a fixed number of hours after the previous post."),
-    interval_hours: z
+      .literal("every_n_minutes")
+      .describe("Repeat a fixed number of minutes on a fixed grid."),
+    interval_minutes: z
       .number()
       .int()
-      .min(1)
-      .max(168)
-      .describe("How many hours between posts, from 1 to 168."),
+      .min(10, "interval_minutes must be at least 10 minutes.")
+      .max(10_080, "interval_minutes must be at most 10080 minutes (7 days).")
+      .multipleOf(10, "interval_minutes must be a multiple of 10 minutes.")
+      .describe(
+        "How many minutes between posts, from 10 to 10080 in 10-minute increments.",
+      ),
   })
   .strict()
-  .describe("Repeat every N hours, starting from now.");
+  .describe("Repeat every N minutes, starting from now.");
 
 const onceScheduleSchema = z
   .object({
@@ -103,7 +106,7 @@ export const routineScheduleSchema = z
     onceScheduleSchema,
   ])
   .describe(
-    "When the Routine posts. daily and weekly use a clock time and timezone. every_n_hours repeats from now. once posts a single time at run_at.",
+    "When the Routine posts. daily and weekly use a clock time and timezone. every_n_minutes repeats from now. once posts a single time at run_at.",
   );
 
 const mentionSchema = teamHubIdSchema.describe(

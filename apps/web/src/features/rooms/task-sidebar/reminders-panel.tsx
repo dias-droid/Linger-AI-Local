@@ -4,6 +4,7 @@ import {
   ArrowRight01Icon,
   CheckmarkCircle02Icon,
   Clock01Icon,
+  Delete02Icon,
   PlusSignIcon,
 } from "@hugeicons/core-free-icons";
 import { useEffect, useState } from "react";
@@ -14,7 +15,7 @@ import {
   SettingsRow,
   SettingsRowText,
 } from "@/components/ui/settings-group";
-import { teamHubData } from "@/features/teamhub/teamhub-api";
+import { teamHubData, teamHubDone } from "@/features/teamhub/teamhub-api";
 import { type TeamHubClient } from "@/features/teamhub/teamhub-client";
 import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
 import type {
@@ -35,6 +36,7 @@ import {
   dayHeading,
   formatTimeOfDay,
   formatWhen,
+  isEditableRoutine,
   isScheduled,
 } from "./routine-cadence";
 import { RoutineDialog } from "./routine-dialog";
@@ -70,7 +72,9 @@ export function RemindersPanel({
   );
   const open =
     openId && openId !== "new"
-      ? routines.filter(isScheduled).find((item) => item.id === openId)
+      ? routines
+          .filter(isScheduled)
+          .find((item) => item.id === openId && isEditableRoutine(item))
       : undefined;
 
   return (
@@ -201,6 +205,9 @@ function RoutineAgenda({
     undo.reset();
     setOffer({ routine, secondsLeft: UNDO_SECONDS });
   };
+  const onDeleted = (routineId: string) => {
+    setOffer((current) => (current?.routine.id === routineId ? null : current));
+  };
   const scheduled = routines.filter(isScheduled);
   const listeners = routines.filter((routine) => !isScheduled(routine));
   const reminders = scheduled.filter(
@@ -218,7 +225,7 @@ function RoutineAgenda({
   );
   const done = scheduled.filter(isDone);
   const upcoming = [...reminders].sort((a, b) => runTime(a) - runTime(b));
-  const rowProps = { agentActorId, client, onToggled, tenantId };
+  const rowProps = { agentActorId, client, onDeleted, onToggled, tenantId };
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 pb-6 font-(family-name:--app-room-font)">
       {scheduled.length === 0 && listeners.length === 0 ? (
@@ -397,12 +404,14 @@ interface ToggleProps {
 function RoutineRow({
   agentActorId,
   detail,
+  onDeleted,
   onOpen,
   routine,
   ...toggle
 }: ToggleProps & {
   agentActorId?: string;
   detail: string;
+  onDeleted: (routineId: string) => void;
   onOpen: () => void;
   routine: TeamHubScheduledRoutine;
 }) {
@@ -422,6 +431,29 @@ function RoutineRow({
     : wakesOther
       ? `Wakes ${target?.actor.display_name ?? "an Agent"}`
       : undefined;
+  const description = [detail, audience].filter(Boolean).join(" · ");
+  if (!isEditableRoutine(routine)) {
+    return (
+      <li>
+        <SettingsRow icon={<Icon icon={Clock01Icon} size={16} />}>
+          <SettingsRowText
+            description={description}
+            muted={!routine.enabled}
+            title={routine.name}
+          />
+          <div className="flex shrink-0 items-center gap-2">
+            <RoutineDeleteButton
+              client={toggle.client}
+              onDeleted={() => onDeleted(routine.id)}
+              routine={routine}
+              tenantId={toggle.tenantId}
+            />
+            <RoutineSwitch routine={routine} {...toggle} />
+          </div>
+        </SettingsRow>
+      </li>
+    );
+  }
   return (
     <li className="group transition-colors duration-150 hover:bg-muted/40">
       <SettingsRow icon={<Icon icon={Clock01Icon} size={16} />}>
@@ -431,7 +463,7 @@ function RoutineRow({
           type="button"
         >
           <SettingsRowText
-            description={[detail, audience].filter(Boolean).join(" · ")}
+            description={description}
             muted={!routine.enabled}
             title={routine.name}
           />
@@ -439,6 +471,49 @@ function RoutineRow({
         <RoutineSwitch routine={routine} {...toggle} />
       </SettingsRow>
     </li>
+  );
+}
+
+function RoutineDeleteButton({
+  client,
+  onDeleted,
+  routine,
+  tenantId,
+}: {
+  client: TeamHubClient;
+  onDeleted: () => void;
+  routine: TeamHubScheduledRoutine;
+  tenantId: string;
+}) {
+  const queryClient = useQueryClient();
+  const remove = useMutation({
+    mutationFn: () =>
+      teamHubDone(
+        client.api.DELETE("/v0/routines/{routineId}", {
+          params: {
+            path: { routineId: routine.id },
+            query: { expected_revision: routine.revision },
+          },
+        }),
+      ),
+    onSuccess: async () => {
+      onDeleted();
+      await queryClient.invalidateQueries({
+        queryKey: roomRoutinesQueryKey(tenantId, routine.room_id),
+      });
+    },
+  });
+  return (
+    <button
+      aria-label="Delete routine"
+      className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+      disabled={remove.isPending}
+      onClick={() => remove.mutate()}
+      title="Delete routine"
+      type="button"
+    >
+      <Icon icon={Delete02Icon} size={14} />
+    </button>
   );
 }
 

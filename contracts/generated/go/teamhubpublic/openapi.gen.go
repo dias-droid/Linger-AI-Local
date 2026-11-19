@@ -3394,10 +3394,11 @@ func (e RoomSnapshotPayloadKind) Valid() bool {
 
 // Defines values for RoutineCadenceKind.
 const (
-	RoutineCadenceKindDaily       RoutineCadenceKind = "daily"
-	RoutineCadenceKindEveryNHours RoutineCadenceKind = "every_n_hours"
-	RoutineCadenceKindOnce        RoutineCadenceKind = "once"
-	RoutineCadenceKindWeekly      RoutineCadenceKind = "weekly"
+	RoutineCadenceKindDaily         RoutineCadenceKind = "daily"
+	RoutineCadenceKindEveryNHours   RoutineCadenceKind = "every_n_hours"
+	RoutineCadenceKindEveryNMinutes RoutineCadenceKind = "every_n_minutes"
+	RoutineCadenceKindOnce          RoutineCadenceKind = "once"
+	RoutineCadenceKindWeekly        RoutineCadenceKind = "weekly"
 )
 
 // Valid indicates whether the value is a known member of the RoutineCadenceKind enum.
@@ -3406,6 +3407,8 @@ func (e RoutineCadenceKind) Valid() bool {
 	case RoutineCadenceKindDaily:
 		return true
 	case RoutineCadenceKindEveryNHours:
+		return true
+	case RoutineCadenceKindEveryNMinutes:
 		return true
 	case RoutineCadenceKindOnce:
 		return true
@@ -8222,8 +8225,11 @@ type RoutineCadence struct {
 	Hour *int `json:"hour,omitempty"`
 
 	// IntervalHours Repeat interval for every_n_hours cadences.
-	IntervalHours *int               `json:"interval_hours,omitempty"`
-	Kind          RoutineCadenceKind `json:"kind"`
+	IntervalHours *int `json:"interval_hours,omitempty"`
+
+	// IntervalMinutes Repeat interval in minutes for every_n_minutes cadences, in 10-minute increments.
+	IntervalMinutes *int               `json:"interval_minutes,omitempty"`
+	Kind            RoutineCadenceKind `json:"kind"`
 
 	// Minute Local minute for daily and weekly cadences.
 	Minute *int `json:"minute,omitempty"`

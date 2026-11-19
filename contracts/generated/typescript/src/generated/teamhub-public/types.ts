@@ -5122,7 +5122,12 @@ export interface components {
     /** @description Stable catalog key. TeamHub validates app availability and capabilities. */
     ExternalAppKey: string;
     /** @enum {string} */
-    RoutineCadenceKind: "daily" | "weekly" | "every_n_hours" | "once";
+    RoutineCadenceKind:
+      | "daily"
+      | "weekly"
+      | "every_n_hours"
+      | "every_n_minutes"
+      | "once";
     /** @enum {string} */
     RoutineWeekday:
       | "monday"
@@ -5144,6 +5149,8 @@ export interface components {
       weekdays?: components["schemas"]["RoutineWeekday"][];
       /** @description Repeat interval for every_n_hours cadences. */
       interval_hours?: number;
+      /** @description Repeat interval in minutes for every_n_minutes cadences, in 10-minute increments. */
+      interval_minutes?: number;
       /**
        * Format: date-time
        * @description The one moment a once cadence fires; the Routine is done (disabled) afterwards.

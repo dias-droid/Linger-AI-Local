@@ -2351,15 +2351,15 @@ export interface components {
       | "sunday";
     AgentRoutineSchedule: {
       /** @enum {string} */
-      kind: "daily" | "weekly" | "every_n_hours" | "once";
+      kind: "daily" | "weekly" | "every_n_minutes" | "once";
       /** @description Local 24-hour clock as HH:MM. Required for daily and weekly. */
       time?: string;
       /** @description IANA timezone. Required for daily and weekly. */
       timezone?: string;
       /** @description Selected local weekdays. Required for weekly. Responses use Monday through Sunday order. */
       weekdays?: components["schemas"]["AgentRoutineWeekday"][];
-      /** @description Repeat interval for every_n_hours. Do not send a clock or timezone with it. */
-      interval_hours?: number;
+      /** @description Repeat interval in minutes for every_n_minutes (10 to 10080, in 10-minute increments). Do not send a clock or timezone with it. */
+      interval_minutes?: number;
       /**
        * Format: date-time
        * @description The one moment a once Routine fires (RFC 3339 with offset). It must be in the future; the Routine is done (disabled) after it fires. Timezone is optional and only used for display.

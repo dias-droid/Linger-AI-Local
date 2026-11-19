@@ -1551,7 +1551,6 @@ type RoomReminder struct {
 	Timezone             string             `json:"timezone"`
 	Hour                 pgtype.Int4        `json:"hour"`
 	Minute               pgtype.Int4        `json:"minute"`
-	IntervalHours        pgtype.Int4        `json:"interval_hours"`
 	Enabled              bool               `json:"enabled"`
 	NextRunAt            pgtype.Timestamptz `json:"next_run_at"`
 	Revision             int64              `json:"revision"`
@@ -1565,6 +1564,7 @@ type RoomReminder struct {
 	RunAt                pgtype.Timestamptz `json:"run_at"`
 	TrackingItemID       pgtype.Text        `json:"tracking_item_id"`
 	TrackingPurpose      pgtype.Text        `json:"tracking_purpose"`
+	IntervalMinutes      pgtype.Int4        `json:"interval_minutes"`
 }
 
 type RoomRoutineListener struct {

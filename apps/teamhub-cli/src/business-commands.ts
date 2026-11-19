@@ -953,7 +953,7 @@ async function schedule(
   );
   const daily = option(args, "--daily"),
     weekly = option(args, "--weekly"),
-    every = option(args, "--every-hours"),
+    every = option(args, "--every-minutes"),
     at = option(args, "--at"),
     timezone = option(args, "--timezone"),
     weekdays = values(args, "--weekday");
@@ -969,7 +969,7 @@ async function schedule(
   }
   if (simple !== 1)
     invalid(
-      "Choose --daily, --weekly, --every-hours, --at or complete schedule JSON.",
+      "Choose --daily, --weekly, --every-minutes, --at or complete schedule JSON.",
     );
   if (at !== undefined) {
     if (weekdays.length) invalid("--at cannot include weekday.");
@@ -981,10 +981,13 @@ async function schedule(
   }
   if (every !== undefined) {
     if (timezone !== undefined || weekdays.length)
-      invalid("--every-hours cannot include timezone or weekday.");
+      invalid("--every-minutes cannot include timezone or weekday.");
+    const minutes = integer(every, "--every-minutes", 10, 10_080)!;
+    if (minutes % 10 !== 0)
+      invalid("--every-minutes must be a multiple of 10 minutes.");
     return {
-      kind: "every_n_hours",
-      interval_hours: integer(every, "--every-hours", 1, 168),
+      kind: "every_n_minutes",
+      interval_minutes: minutes,
     };
   }
   if (timezone === undefined)
@@ -1013,13 +1016,15 @@ const routines = ["create", "list", "pause", "enable", "run", "delete"].map(
               ),
               ...jsonOptions(
                 "schedule",
-                "Complete daily, weekly, every_n_hours or once schedule JSON.",
+                "Complete daily, weekly, every_n_minutes or once schedule JSON.",
               ),
               "--daily": flag("Daily local time as HH:MM."),
               "--weekly": flag("Weekly local time as HH:MM."),
               "--weekday": flag("Selected weekday; repeat unique days.", true),
               "--timezone": flag("Explicit IANA timezone for daily or weekly."),
-              "--every-hours": flag("Repeat every 1-168 hours."),
+              "--every-minutes": flag(
+                "Repeat every 10-10080 minutes (multiples of 10).",
+              ),
               "--at": flag(
                 "Fire once at this RFC 3339 time (with offset); done afterwards.",
               ),

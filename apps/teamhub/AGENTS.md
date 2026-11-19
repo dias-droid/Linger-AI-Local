@@ -86,6 +86,14 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
 
 - A Room permits 100 Routines: recurring ones count while they exist, and
   one-shot ones count until they fire. There is no separate one-shot limit.
+  Interval Routines store `interval_minutes` (10 to 10080 in 10-minute
+  increments), advance on a fixed `dueAt + k * interval` grid without drift or
+  catch-up, and skip overlapping scheduled fires while an undelivered quiet
+  wake or non-terminal trigger Message from the last 24 hours remains
+  unfinished. Agent API, CLI, and Live Voice expose only `every_n_minutes` +
+  `interval_minutes`; Web API keeps `every_n_hours` + `interval_hours` for
+  whole-hour intervals and uses `every_n_minutes` + `interval_minutes` for
+  non-whole-hour intervals.
 
 - Room input acceptance: Runtime State validates canonical
   conversation/targeted agent_runtime inputs atomically with Local Run and cursor.

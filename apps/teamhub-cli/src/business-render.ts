@@ -41,8 +41,8 @@ function schedule(routine: Json): string {
   const listener = routine.listener as Json | undefined;
   if (listener) return `listens to ${String(listener.app)}`;
   const item = routine.schedule as Json;
-  if (item.kind === "every_n_hours")
-    return `every ${String(item.interval_hours)} hours`;
+  if (item.kind === "every_n_minutes")
+    return `every ${String(item.interval_minutes)} minutes`;
   if (item.kind === "once") return `once at ${String(item.run_at)}`;
   return `${String(item.kind)} ${Array.isArray(item.weekdays) ? `${item.weekdays.join(", ")} ` : ""}${String(item.time)} ${String(item.timezone)}`;
 }

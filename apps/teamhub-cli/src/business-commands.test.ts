@@ -316,9 +316,42 @@ describe("business command normalization", () => {
       timezone: "Asia/Shanghai",
       weekdays: ["monday", "friday"],
     });
+    expect(
+      (
+        await definition.normalize(
+          args({
+            "--name": "Check CI",
+            "--content": "Check pipeline",
+            "--every-minutes": "10",
+          }),
+          reader,
+        )
+      ).input.schedule,
+    ).toEqual({
+      kind: "every_n_minutes",
+      interval_minutes: 10,
+    });
+    expect(
+      (
+        await definition.normalize(
+          args({
+            "--name": "Hourly",
+            "--content": "Check pipeline",
+            "--every-minutes": "60",
+          }),
+          reader,
+        )
+      ).input.schedule,
+    ).toEqual({
+      kind: "every_n_minutes",
+      interval_minutes: 60,
+    });
     const invalidSchedules: Record<string, string | string[]>[] = [
       { "--daily": "09:00" },
-      { "--every-hours": "2", "--timezone": "UTC" },
+      { "--every-minutes": "20", "--timezone": "UTC" },
+      { "--every-minutes": "5" },
+      { "--every-minutes": "15" },
+      { "--every-minutes": "10090" },
       {
         "--weekly": "09:00",
         "--timezone": "UTC",

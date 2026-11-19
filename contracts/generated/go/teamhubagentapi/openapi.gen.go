@@ -661,10 +661,10 @@ func (e AgentRoutineListenerApp) Valid() bool {
 
 // Defines values for AgentRoutineScheduleKind.
 const (
-	Daily       AgentRoutineScheduleKind = "daily"
-	EveryNHours AgentRoutineScheduleKind = "every_n_hours"
-	Once        AgentRoutineScheduleKind = "once"
-	Weekly      AgentRoutineScheduleKind = "weekly"
+	Daily         AgentRoutineScheduleKind = "daily"
+	EveryNMinutes AgentRoutineScheduleKind = "every_n_minutes"
+	Once          AgentRoutineScheduleKind = "once"
+	Weekly        AgentRoutineScheduleKind = "weekly"
 )
 
 // Valid indicates whether the value is a known member of the AgentRoutineScheduleKind enum.
@@ -672,7 +672,7 @@ func (e AgentRoutineScheduleKind) Valid() bool {
 	switch e {
 	case Daily:
 		return true
-	case EveryNHours:
+	case EveryNMinutes:
 		return true
 	case Once:
 		return true
@@ -2306,9 +2306,9 @@ type AgentRoutineResponse struct {
 
 // AgentRoutineSchedule defines model for AgentRoutineSchedule.
 type AgentRoutineSchedule struct {
-	// IntervalHours Repeat interval for every_n_hours. Do not send a clock or timezone with it.
-	IntervalHours *int                     `json:"interval_hours,omitempty"`
-	Kind          AgentRoutineScheduleKind `json:"kind"`
+	// IntervalMinutes Repeat interval in minutes for every_n_minutes (10 to 10080, in 10-minute increments). Do not send a clock or timezone with it.
+	IntervalMinutes *int                     `json:"interval_minutes,omitempty"`
+	Kind            AgentRoutineScheduleKind `json:"kind"`
 
 	// RunAt The one moment a once Routine fires (RFC 3339 with offset). It must be in the future; the Routine is done (disabled) after it fires. Timezone is optional and only used for display.
 	RunAt *time.Time `json:"run_at,omitempty"`

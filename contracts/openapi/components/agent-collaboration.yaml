@@ -1365,7 +1365,7 @@ components:
       properties:
         kind:
           type: string
-          enum: [daily, weekly, every_n_hours, once]
+          enum: [daily, weekly, every_n_minutes, once]
         time:
           type: string
           description: Local 24-hour clock as HH:MM. Required for daily and weekly.
@@ -1383,11 +1383,12 @@ components:
           items:
             $ref: "#/components/schemas/AgentRoutineWeekday"
           description: Selected local weekdays. Required for weekly. Responses use Monday through Sunday order.
-        interval_hours:
+        interval_minutes:
           type: integer
-          minimum: 1
-          maximum: 168
-          description: Repeat interval for every_n_hours. Do not send a clock or timezone with it.
+          minimum: 10
+          maximum: 10080
+          multipleOf: 10
+          description: Repeat interval in minutes for every_n_minutes (10 to 10080, in 10-minute increments). Do not send a clock or timezone with it.
         run_at:
           type: string
           format: date-time
