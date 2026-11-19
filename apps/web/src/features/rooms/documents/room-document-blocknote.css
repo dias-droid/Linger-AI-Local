@@ -893,6 +893,11 @@
   flex-shrink: 0;
 }
 
+/* On the byline the actions keep the row's height, so it does not grow. */
+.room-document-content-lane > .room-document-header-actions {
+  margin-block: -4px;
+}
+
 .room-document-header-actions > button {
   width: 28px;
   height: 28px;
