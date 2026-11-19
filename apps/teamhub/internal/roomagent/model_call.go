@@ -1,7 +1,7 @@
 // Model calls ask the Agent Service for one stateless model answer
-// (POST /v1/model-calls). The Agent Service runs it on the Codex or Claude
-// Runtime of the owner's Another Me Computer with the Runtime's default model,
-// so TeamHub names only a reasoning effort and never a model.
+// (POST /v1/model-calls). The Agent Service runs it on the Runtime of the
+// owner's Another Me Computer (Codex, Claude or Pi) with the model that Runtime
+// serves by default, so TeamHub names only a reasoning effort and never a model.
 
 package roomagent
 

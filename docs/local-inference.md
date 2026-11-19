@@ -40,12 +40,12 @@ confirm.
 
 Memory facts and reports, Agent Memory, and personal Wiki generation use the
 Runtime on the Computer where the relevant Agent is placed. On Pi, these calls
-require a Computer Daemon at 0.55.0 or later and a default Pi model loaded in
-the local library and served over loopback. Downloaded is not Loaded. Use the
-local model setup or **Settings › Models** to load the model and use it for
-Agents. Background Pi calls run without tools or a saved Pi session. If Pi
-or its loaded local default is unavailable, they wait or fail with a Runtime
-error; they do not switch to Codex, Claude Code or a remote Pi model.
+require a Computer Daemon at 0.55.0 or later and run on the same model as
+Pi's own work: its default model, whether that is a local model or your own
+endpoint and key. Under Local model, downloaded is not loaded; load the model
+from setup or **Settings › Models**. Background Pi calls run without tools or
+a saved Pi session. If Pi or its model is unavailable, they wait or fail with
+a Runtime error; they never switch to Codex or Claude Code.
 
 A Codex or Claude Code placement can still use the other ready Runtime on
 that Computer. These calls use the chosen Runtime's default endpoint; if

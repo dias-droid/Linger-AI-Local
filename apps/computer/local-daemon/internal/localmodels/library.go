@@ -338,21 +338,6 @@ func (l *Library) commit(snapshot wire.LocalModelsSnapshot) {
 	l.publish(cloneSnapshot(snapshot))
 }
 
-// LoadedPiModels returns the Pi names of models loaded in the last library report.
-func (l *Library) LoadedPiModels() []string {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	var models []string
-	if l.current != nil && l.current.Available {
-		for _, model := range l.current.Models {
-			if model.State == "loaded" && model.PiModel != "" {
-				models = append(models, model.PiModel)
-			}
-		}
-	}
-	return models
-}
-
 // Act starts one action and returns the tool's answer: accepted (nil) or
 // its refusal. deadline is when the requester stops waiting. When it passes
 // before the tool has decided, answered is false: the Daemon does not guess

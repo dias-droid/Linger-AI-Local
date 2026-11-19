@@ -9,9 +9,9 @@ Docker Compose builds every service from this checkout and runs it, PostgreSQL
 and voice included. You need Docker with Compose. Linger needs no model
 gateway or API key of its own. Model calls run through a Runtime on the
 user's Computer, using its configured model endpoint. Memory and personal Wiki
-work on Pi when its default model is loaded in the Computer's local library
-and reached through the local gateway. This requires a Computer Daemon that
-supports Pi background calls (0.55.0 or later), not a Codex or Claude Code login.
+work on Pi runs on Pi's default model, local or your own API key. This
+requires a Computer Daemon that supports Pi background calls (0.55.0 or
+later), not a Codex or Claude Code login.
 See [Local Inference](local-inference.md#background-memory-and-wiki) for the
 background routing rules.
 

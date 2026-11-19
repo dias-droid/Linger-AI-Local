@@ -106,7 +106,6 @@ type ModelInvokeRuntime struct {
 	ExecutablePath string
 	Environment    map[string]string
 	Version        string
-	LoadedPiModels []string
 }
 
 // ModelInvokeFile is one workspace file, relative to the working directory.

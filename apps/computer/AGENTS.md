@@ -61,9 +61,9 @@
 
 ## Runtime And Safety
 
-- A Pi background model call uses one ephemeral RPC turn with no tools. It
-  checks the Runtime's actual default against the local library's loaded
-  models and a loopback endpoint before submitting the prompt.
+- A Pi background model call uses one ephemeral RPC turn with no tools on
+  whatever model Pi's profile selects by default, local or remote; the Daemon
+  does not check which.
 
 - Default tests use deterministic providers and real fixture child processes;
   they never call a live model.

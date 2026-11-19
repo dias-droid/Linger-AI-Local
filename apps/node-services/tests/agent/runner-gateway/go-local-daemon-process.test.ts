@@ -280,7 +280,7 @@ const publishContextView = async (
 };
 
 processTest(
-  "runs Memory and Wiki through a Pi-only Daemon and a loopback model endpoint",
+  "runs Memory and Wiki on a Pi-only Daemon with whatever model Pi defaults to",
   async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "go-daemon-pi-model-"));
     const computerId = "computer-pi-background";
@@ -370,46 +370,10 @@ processTest(
       const config = path.join(root, "computer.json");
       const profile = path.join(root, ".pi", "agent");
       const credential = path.join(root, "runner-token");
-      const library = path.join(root, "localmodels-fixture");
       await mkdir(profile, { recursive: true });
-      const report = JSON.stringify({
-        schema: "localmodels.library-status/v1",
-        tool_version: "fixture",
-        host: {
-          platform: "darwin",
-          arch: "arm64",
-          os_label: "fixture",
-          engine_label: "fixture",
-          ram_total_bytes: 1024,
-          disk_free_bytes: 1024,
-          gpus: [],
-        },
-        models: [
-          {
-            id: "model",
-            name: "Fixture",
-            description: "",
-            quant: "fixture",
-            context_tokens: 65536,
-            vision: false,
-            download_bytes: 0,
-            memory_bytes: 0,
-            fit: "none",
-            recommended: false,
-            availability: { downloadable: true },
-            state: "loaded",
-            pi_model: piModel,
-          },
-        ],
-      });
       await Promise.all([
         installDaemonBinary(binary),
         writeFile(credential, token, { mode: 0o600 }),
-        writeFile(
-          library,
-          `#!/bin/sh\n[ "$5 $6" = "library status" ] || exit 2\ncat <<'EOF'\n${report}\nEOF\n`,
-          { mode: 0o700 },
-        ),
         writeFile(
           path.join(profile, "settings.json"),
           JSON.stringify({
@@ -426,6 +390,13 @@ processTest(
                 api: "openai-completions",
                 apiKey: "fixture",
                 models: [{ id: "model" }],
+              },
+              // Stands in for the person's own endpoint and API key.
+              "fixture-own-key": {
+                baseUrl: `http://127.0.0.1:${port}/v1`,
+                api: "openai-completions",
+                apiKey: "fixture-own-key",
+                models: [{ id: "hosted" }],
               },
             },
           }),
@@ -451,12 +422,6 @@ processTest(
                 root_path: root,
               },
             ],
-            local_models: {
-              python: library,
-              module_directory: root,
-              state_directory: root,
-              base_directory: root,
-            },
           }),
           { mode: 0o600 },
         ),
@@ -480,11 +445,6 @@ processTest(
           expect(gateway.supportsModelInvoke(computerId, "pi"), stderr).toBe(
             true,
           );
-          expect(
-            testRegistryOf(gateway).localModels(computerId).at(-1)?.models[0]
-              ?.pi_model,
-            stderr,
-          ).toBe(piModel);
         },
         { timeout: 15_000 },
       );
@@ -516,6 +476,25 @@ processTest(
       ).resolves.toEqual({ output: "Wiki fixture reply.", model: piModel });
       expect(inputs).toHaveLength(2);
       expect(inputs[1]).toContain("Wiki fixture evidence");
+      // Background calls follow Pi's default, whichever provider serves it.
+      await writeFile(
+        path.join(profile, "settings.json"),
+        JSON.stringify({
+          defaultProvider: "fixture-own-key",
+          defaultModel: "hosted",
+        }),
+      );
+      await expect(
+        model.chain(
+          { kind: "wiki", key: "fixture-own-key", anotherMe, signal },
+          (chain) => chain.text({ step: "write", input: "Own key evidence" }),
+        ),
+      ).resolves.toEqual({
+        output: "Wiki fixture reply.",
+        model: "fixture-own-key/hosted",
+      });
+      expect(inputs).toHaveLength(3);
+      expect(inputs[2]).toContain("Own key evidence");
       expect(inputs.every((input) => !input.includes('"tools":[{'))).toBe(true);
     } finally {
       model.close();

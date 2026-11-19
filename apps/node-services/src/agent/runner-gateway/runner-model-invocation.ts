@@ -251,7 +251,7 @@ export class RunnerModelInvocation {
     if (!connections.supportsModelInvoke(computerId, runtimeType)) {
       throw new RunnerModelInvokeUnavailableError(
         runtimeType === "pi"
-          ? "Pi is not ready for background model calls. Update the Local Computer and load its local model."
+          ? "Pi is not ready for background model calls. Update the Local Computer and check that Pi is ready."
           : `Local Computer Runtime ${runtimeType} is not ready`,
       );
     }

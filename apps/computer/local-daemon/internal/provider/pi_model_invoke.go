@@ -2,10 +2,8 @@ package provider
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/simplexai-labs/linger/apps/computer/local-daemon/internal/provider/native"
 	localworkspace "github.com/simplexai-labs/linger/apps/computer/local-daemon/internal/workspace"
@@ -15,15 +13,7 @@ func invokePiModel(ctx context.Context, request ModelInvokeRequest, installed Mo
 	if request.Mode == ModelInvokeWorkspace {
 		return ModelInvokeResult{Outcome: ModelInvokeRuntimeUnavailable, Reason: "Pi background calls do not run file tools"}
 	}
-	environment := modelInvokeEnvironment(installed.Environment, scratch)
-	// The verified loopback endpoint must not be routed through a user proxy.
-	for key := range environment {
-		switch strings.ToUpper(key) {
-		case "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY":
-			delete(environment, key)
-		}
-	}
-	environment, err := localworkspace.PiSourceEnvironment(environment)
+	environment, err := localworkspace.PiSourceEnvironment(modelInvokeEnvironment(installed.Environment, scratch))
 	if err != nil {
 		return ModelInvokeResult{Outcome: ModelInvokeRuntimeUnavailable, Reason: "Pi background profile is unavailable"}
 	}
@@ -42,13 +32,11 @@ func invokePiModel(ctx context.Context, request ModelInvokeRequest, installed Mo
 	defer cancel()
 	answer, model, err := native.InvokePiModel(
 		invokeCtx, native.Profile{Program: installed.ExecutablePath, Env: environment},
-		work, instructionsFile, request.Input, request.ReasoningEffort, installed.LoadedPiModels,
+		work, instructionsFile, request.Input, request.ReasoningEffort,
 	)
 	switch {
 	case invokeCtx.Err() != nil:
 		return classifyModelInvokeFailure(ctx, invokeCtx, err, "", "")
-	case errors.Is(err, native.ErrPiLocalModelUnavailable):
-		return ModelInvokeResult{Outcome: ModelInvokeRuntimeUnavailable, Reason: err.Error()}
 	case err != nil || answer.Status != "completed" || !answer.ExitConfirmed:
 		// Pi errors may include provider URLs or credentials.
 		return ModelInvokeResult{Outcome: ModelInvokeFailed, Reason: "Pi background call did not complete"}

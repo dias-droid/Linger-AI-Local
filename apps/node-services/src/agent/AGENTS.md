@@ -39,8 +39,9 @@ take precedence.
   It is not a Runtime turn and never creates a Context, Local Run, or
   Operation. Callers name an owner (or an Agent placement) and a reasoning
   effort; never add a model name, gateway, or model environment variable. Pi
-  stays on Pi and requires a loaded local default. It serves structured and
-  text calls without tools; workspace mode remains on Codex and Claude.
+  stays on Pi, on whatever model Pi defaults to, and never falls back to
+  Codex or Claude. It serves structured and text calls without tools; workspace mode remains on
+  Codex and Claude.
 - TeamHub owns persisted Agent Runtime configuration, Execution Context,
   accepted input, Inbox cursor, Local Run, RuntimeSession, Runtime status,
   Local Computer and Agent placement state. Agent Runners and Operations live

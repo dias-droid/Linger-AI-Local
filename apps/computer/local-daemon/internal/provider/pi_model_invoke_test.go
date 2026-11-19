@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-func TestModelInvokerPiLocal(t *testing.T) {
+func TestModelInvokerPi(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fixture launches the POSIX pnpm Pi shim")
 	}
@@ -64,13 +64,12 @@ data: [DONE]
 	}
 	write("models.json", fmt.Sprintf(`{"providers":{"local-fixture":{"baseUrl":%q,"api":"openai-completions","apiKey":"fixture","models":[{"id":"fixture"}]}}}`, server.URL+"/v1"))
 	write("settings.json", `{"defaultProvider":"local-fixture","defaultModel":"fixture"}`)
-	loaded := []string{"local-fixture/fixture"}
 	invoker := ModelInvoker{
 		TempBase: root,
 		Lookup: func(_ context.Context, runtime string) (ModelInvokeRuntime, bool, error) {
 			return ModelInvokeRuntime{
-				ExecutablePath: pi, LoadedPiModels: loaded,
-				Environment: map[string]string{"HOME": root, "PI_CODING_AGENT_DIR": root, "PATH": os.Getenv("PATH")},
+				ExecutablePath: pi,
+				Environment:    map[string]string{"HOME": root, "PI_CODING_AGENT_DIR": root, "PATH": os.Getenv("PATH")},
 			}, runtime == "pi", nil
 		},
 	}
@@ -94,25 +93,15 @@ data: [DONE]
 			}
 		})
 	}
-	for _, test := range []struct {
-		name, mode, reason string
-		loaded             []string
-	}{
-		{name: "not loaded", mode: ModelInvokeText, reason: "loaded local model"},
-		{name: "default is not loaded", mode: ModelInvokeText, reason: "loaded local model", loaded: []string{"local-fixture/other"}},
-		{name: "file tools are not enabled", mode: ModelInvokeWorkspace, reason: "file tools", loaded: loaded},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			loaded = test.loaded
-			result := invoker.Invoke(t.Context(), ModelInvokeRequest{RuntimeType: "pi", Mode: test.mode, Input: "Must not be sent.", Timeout: 15 * time.Second})
-			if result.Outcome != ModelInvokeRuntimeUnavailable || !strings.Contains(result.Reason, test.reason) {
-				t.Fatalf("Pi invocation = %+v", result)
-			}
-			select {
-			case <-payloads:
-				t.Fatal("sent a prompt before Pi was eligible for the call")
-			default:
-			}
-		})
-	}
+	t.Run("file tools are not enabled", func(t *testing.T) {
+		result := invoker.Invoke(t.Context(), ModelInvokeRequest{RuntimeType: "pi", Mode: ModelInvokeWorkspace, Input: "Must not be sent.", Timeout: 15 * time.Second})
+		if result.Outcome != ModelInvokeRuntimeUnavailable || !strings.Contains(result.Reason, "file tools") {
+			t.Fatalf("Pi invocation = %+v", result)
+		}
+		select {
+		case <-payloads:
+			t.Fatal("sent a prompt for a workspace call")
+		default:
+		}
+	})
 }

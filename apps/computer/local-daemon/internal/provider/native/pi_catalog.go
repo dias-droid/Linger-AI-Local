@@ -24,7 +24,6 @@ type piCatalogState struct {
 	Model struct {
 		ID       string `json:"id"`
 		Provider string `json:"provider"`
-		BaseURL  string `json:"baseUrl"`
 	} `json:"model"`
 	ThinkingLevel string `json:"thinkingLevel"`
 }
