@@ -106,3 +106,49 @@ and this section carry that release's pin; do not edit them by hand. The version
 runs; it does not state which platforms or GPUs are supported.
 
 <!-- <<< llm-inference-lab: stack -->
+
+## Download region: `SIMPLEX_REGION` and `region.json`
+
+Linger and localmodels share one download region, so a computer in mainland
+China gets the China mirrors without first waiting for a foreign host to time
+out. The region only orders the sources of a download: no source is ever
+dropped, and the pinned SHA256, SHA512 or lockfile integrity still decides
+which bytes are used.
+
+The installer resolves the region once per process, in this order:
+
+1. `SIMPLEX_REGION`: `cn` or `global` forces that region; `auto` or unset
+   does not. Any other value is an error.
+2. `<LINGER_HOME>/runtime/region.json` when it was resolved within the last
+   7 days.
+3. A probe: the pinned pnpm tarball from `registry.npmjs.org` and from
+   `cdn.npmmirror.com` for 4 seconds; `cn` when the China mirror delivers
+   more. A probe that reaches neither uses `global` and is not saved.
+
+```json
+{
+  "schema": "simplex.region/v1",
+  "region": "cn",
+  "resolved_at": "2026-11-18T08:00:00.000Z",
+  "method": "probe"
+}
+```
+
+`method` is `env`, `probe` or `fallback`. When every source of the preferred
+region fails and the other region serves the download, the file is rewritten
+with that region and `fallback`, and later downloads start there (unless
+`SIMPLEX_REGION` forces a region).
+
+| Download                             | global first         | cn first                                 |
+| ------------------------------------ | -------------------- | ---------------------------------------- |
+| Node.js runtime (desktop app)        | `nodejs.org`         | `cdn.npmmirror.com`                      |
+| pnpm, npm and package installs       | `registry.npmjs.org` | `registry.npmmirror.com`                 |
+| Go toolchain                         | `dl.google.com`      | `mirrors.aliyun.com`                     |
+| Go modules (`GOPROXY`, unless set)   | `proxy.golang.org`   | `goproxy.cn`                             |
+| localmodels kit                      | CloudFront, then npm | `cdn.npmmirror.com` where it has the kit |
+| Voice model packages (node-services) | `registry.npmjs.org` | `registry.npmmirror.com`                 |
+
+A registry or `GOPROXY` the person configured still wins. The installer
+passes the resolved region as `SIMPLEX_REGION` to every `localmodels` child
+(stack, foundations, Harness) and to every native service, so none of them
+probes again.

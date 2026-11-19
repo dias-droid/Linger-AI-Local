@@ -148,7 +148,8 @@ export async function startVoiceService(options: {
   // workers wait for its first download and find it on NODE_PATH.
   const models = modelPackageNames("voice");
   const installModels =
-    options.installModels ?? (() => installModelPackages(models, env));
+    options.installModels ??
+    (() => installModelPackages(models, env, { region: config.region }));
   // Worker starts share one download, so concurrent starts never fetch twice.
   let installing: Promise<void> | undefined;
   const install = () =>

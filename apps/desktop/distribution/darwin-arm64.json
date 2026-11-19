@@ -3,6 +3,10 @@
   "arch": "arm64",
   "localmodelsTool": {
     "url": "https://d2ikbbcl3j6jz9.cloudfront.net/cli/localmodels/0.1.0.dev40/darwin-arm64.tgz",
+    "mirrors": [
+      "https://registry.npmjs.org/@simplexai/localmodels-darwin-arm64/-/localmodels-darwin-arm64-0.1.0-dev.40.tgz",
+      "https://cdn.npmmirror.com/packages/@simplexai/localmodels-darwin-arm64/0.1.0-dev.40/localmodels-darwin-arm64-0.1.0-dev.40.tgz"
+    ],
     "sha256": "648e8909915d8da2b87ae4f4797cd22f2d46d8a7cd025287ab9e6b5436119687",
     "bytes": 14953559,
     "sourceCommit": "a4de3e359d2a4f9b654f9ae7bdf6887c55896b7d",

@@ -17,6 +17,8 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import os from "node:os";
 import { withInstanceLock, type Instance } from "./instance.js";
+import { REGION_SCHEMA, regionFile } from "./region.js";
+import { requestUrlText } from "@linger/service-kit";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   ensureLocalmodelsTool,
@@ -46,6 +48,17 @@ const hash = (b: string | Buffer) =>
 async function fixture() {
   const home = await mkdtemp(path.join(os.tmpdir(), "linger-model-tool-"));
   roots.push(home);
+  // A region resolved earlier, so no test probes the registries.
+  await mkdir(path.dirname(regionFile(home)), { recursive: true });
+  await writeFile(
+    regionFile(home),
+    JSON.stringify({
+      schema: REGION_SCHEMA,
+      region: "global",
+      resolved_at: new Date().toISOString(),
+      method: "probe",
+    }),
+  );
   const manifest = {
     schemaVersion: 1,
     platform: process.platform,
@@ -279,6 +292,44 @@ test.skipIf(process.platform === "win32")(
     );
   },
 );
+test.skipIf(process.platform === "win32")(
+  "downloads the kit from the npm China mirror first in the cn region",
+  async () => {
+    const f = await fixture();
+    const bytes = await packed(f);
+    const npm = "https://registry.npmjs.org/@simplexai/kit/-/kit-1.tgz";
+    const mirror =
+      "https://cdn.npmmirror.com/packages/@simplexai/kit/1/kit-1.tgz";
+    const source = {
+      ...f.source,
+      mirrors: [npm, mirror],
+      sha256: hash(bytes),
+      bytes: bytes.length,
+    };
+    await writeFile(
+      regionFile(f.home),
+      JSON.stringify({
+        schema: REGION_SCHEMA,
+        region: "cn",
+        resolved_at: new Date().toISOString(),
+        method: "probe",
+      }),
+    );
+    const requested: string[] = [];
+    await ensureLocalmodelsTool(
+      f.home,
+      {},
+      {
+        source,
+        fetcher: async (url) => {
+          requested.push(requestUrlText(url));
+          return new Response(bytes);
+        },
+      },
+    );
+    expect(requested).toEqual([mirror]);
+  },
+);
 // A refused member must reject the install, not leave the extraction pending.
 for (const [label, add] of [
   [
@@ -353,6 +404,41 @@ test("invokes the verified upstream module with isolated module and state paths"
   expect(await readFile(path.join(f.directory, "tool.json"), "utf8")).toContain(
     "sourceCommit",
   );
+});
+test("passes the resolved download region to every localmodels child", async () => {
+  const f = await fixture();
+  vi.stubEnv("LINGER_LOCALMODELS_TOOL_JSON", JSON.stringify(f.source));
+  // The home's saved region decides: an inherited auto is replaced, so the
+  // child never probes again.
+  vi.stubEnv("SIMPLEX_REGION", "auto");
+  await writeFile(
+    regionFile(f.home),
+    JSON.stringify({
+      schema: REGION_SCHEMA,
+      region: "cn",
+      resolved_at: new Date().toISOString(),
+      method: "fallback",
+    }),
+  );
+  const run = vi.fn(async () => ({ code: 0, stdout: "{}", stderr: "" }));
+  for (const args of [
+    ["stack", "apply", "--json"],
+    ["foundations", "start", "--json"],
+    ["harness", "apply", "plan", "--jsonl"],
+  ])
+    await runLocalmodels(
+      f.home,
+      args,
+      { env: { SIMPLEX_REGION: "global" } },
+      { run },
+    );
+  expect(run).toHaveBeenCalledTimes(3);
+  for (const call of run.mock.calls as unknown as [
+    string,
+    string[],
+    { env: NodeJS.ProcessEnv },
+  ][])
+    expect(call[2].env.SIMPLEX_REGION).toBe("cn");
 });
 // What `library status` prints, cut to the fields the stop reads.
 const libraryStatus = (models: { id: string; state: string }[]) => ({

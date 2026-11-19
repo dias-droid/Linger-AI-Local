@@ -25,6 +25,7 @@ import {
   validateNativeVoiceTools,
 } from "./native-dependencies.js";
 import * as downloads from "./download.js";
+import { REGION_SCHEMA, regionFile } from "./region.js";
 import type { InstallerEvent } from "./events.js";
 const roots: string[] = [];
 afterEach(async () => {
@@ -520,6 +521,7 @@ it("prepares real executable launchers and reuses verified warm dependencies ent
             ? "npm"
             : "postgres";
       await writeFile(options.output, await readFile(archives[name]!));
+      return options.url;
     });
   const events: InstallerEvent[] = [];
   const result = await prepareNativeDependencies({
@@ -585,6 +587,7 @@ it("prepares real executable launchers and reuses verified warm dependencies ent
         ? "npm"
         : "postgres";
     await writeFile(options.output, await readFile(archives[name]!));
+    return options.url;
   });
   const withoutGo = await prepareNativeDependencies({
     repo,
@@ -605,6 +608,7 @@ it("prepares real executable launchers and reuses verified warm dependencies ent
     if (options.url !== source.url)
       throw new Error(`${options.url} downloaded`);
     await writeFile(options.output, await readFile(archives.postgres!));
+    return options.url;
   });
   const offline = await prepareNativeDependencies({
     repo,
@@ -621,6 +625,66 @@ it("prepares real executable launchers and reuses verified warm dependencies ent
   );
   expect(existsSync(path.join(offline.toolchainRoot, "bin/pnpm"))).toBe(false);
   expect(existsSync(path.join(offline.toolchainRoot, "bin/npm"))).toBe(false);
+  // In the cn region every toolchain download, the package registry and the
+  // Go module proxy start from the China mirrors; the others stay behind.
+  const china = path.join(root, "home-cn");
+  await mkdir(path.dirname(regionFile(china)), { recursive: true });
+  await writeFile(
+    regionFile(china),
+    JSON.stringify({
+      schema: REGION_SCHEMA,
+      region: "cn",
+      resolved_at: new Date().toISOString(),
+      method: "probe",
+    }),
+  );
+  download.mockClear();
+  download.mockImplementation(async (options) => {
+    const name = options.url.includes("/go")
+      ? "go"
+      : options.url.includes("/pnpm/")
+        ? "pnpm"
+        : options.url.includes("/npm/")
+          ? "npm"
+          : "postgres";
+    await writeFile(options.output, await readFile(archives[name]!));
+    return options.url;
+  });
+  const cn = await prepareNativeDependencies({
+    repo,
+    home: china,
+    signal: new AbortController().signal,
+  });
+  expect(
+    download.mock.calls.map(([options]) => [
+      new URL(options.url).host,
+      ...(options.mirrors ?? []).map((url) => new URL(url).host),
+    ]),
+  ).toEqual([
+    ["mirrors.aliyun.com", "dl.google.com"],
+    ["cdn.npmmirror.com", "registry.npmjs.org"],
+    ["cdn.npmmirror.com", "registry.npmjs.org"],
+    ["releases.example", "mirror.example"],
+  ]);
+  expect(cn.registries).toEqual([
+    "https://registry.npmmirror.com/",
+    "https://registry.npmjs.org/",
+  ]);
+  expect(cn.env.pnpm_config_registry).toBe("https://registry.npmmirror.com/");
+  expect(cn.env.GOPROXY).toBe(
+    "https://goproxy.cn|https://proxy.golang.org|direct",
+  );
+  // A Go module proxy the person set still wins.
+  vi.stubEnv("GOPROXY", "https://proxy.example");
+  expect(
+    (
+      await prepareNativeDependencies({
+        repo,
+        home: china,
+        signal: new AbortController().signal,
+      })
+    ).env.GOPROXY,
+  ).toBe("https://proxy.example");
 }, 15000);
 describe("native voice tools", () => {
   const voice = {

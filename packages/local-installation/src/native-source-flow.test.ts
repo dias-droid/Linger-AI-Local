@@ -30,6 +30,7 @@ import {
 } from "./native-source.js";
 import { localIdentityProof } from "./account.js";
 import { runProcess } from "./process.js";
+import { REGION_SCHEMA, regionFile } from "./region.js";
 import {
   installAppleDeveloperTools,
   needsAppleDeveloperTools,
@@ -137,6 +138,17 @@ afterEach(async () => {
 async function fixture() {
   const home = await mkdtemp(path.join(os.tmpdir(), "native-flow-"));
   roots.push(home);
+  // A region resolved earlier, so no test probes the registries.
+  await mkdir(path.dirname(regionFile(home)), { recursive: true });
+  await writeFile(
+    regionFile(home),
+    JSON.stringify({
+      schema: REGION_SCHEMA,
+      region: "global",
+      resolved_at: new Date().toISOString(),
+      method: "probe",
+    }),
+  );
   const repo = path.join(home, "checkout");
   await mkdir(path.join(repo, "scripts"), { recursive: true });
   await writeFile(path.join(repo, "scripts/source-native.mjs"), "");
@@ -484,6 +496,35 @@ test("a failed dependency install retries from the next registry and reports pac
     message: "Installing dependencies: 30 of 90 packages\n",
     progress: { completed: 30, total: 90, unit: "packages" },
   });
+  // The China mirror worked where the global registry failed: later runs
+  // start there.
+  expect(JSON.parse(await readFile(regionFile(f.home), "utf8"))).toMatchObject({
+    region: "cn",
+    method: "fallback",
+  });
+});
+test("every native service gets the resolved download region", async () => {
+  const f = await fixture();
+  vi.mocked(prepareRuntime).mockResolvedValue({
+    code: 0,
+    state: "ready",
+    message: "ready",
+  });
+  await installNativeSource({
+    ...f,
+    name: "native-flow",
+    setupChoice: "pi",
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+  const services = vi
+    .mocked(startNativeProcess)
+    .mock.calls.map(([options]) => [options.name, options.env.SIMPLEX_REGION]);
+  expect(services).toEqual([
+    ["teamhub", "global"],
+    ["node-services", "global"],
+    ["web", "global"],
+  ]);
 });
 test("failed preparation never stops services that were already running", async () => {
   const f = await fixture();

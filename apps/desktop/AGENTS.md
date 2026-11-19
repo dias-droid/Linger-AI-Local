@@ -52,7 +52,8 @@ Gateway and runs Agents. The daemon exits with the app.
   status summary, tray menu and tray icons, drawn from the logo PNGs in
   `resources/tray/` with a status badge.
 - `src/main/local-server.ts`: LocalServer, the setup page's Quick Install
-  path. It fetches the pinned Node runtime and unpacks the linger source package
+  path. It fetches the pinned Node runtime (sources in the download region's
+  order, `scripts/installs/README.md`) and unpacks the linger source package
   into the install location (the default home, or a folder picked under
   Customize; tar runs inside the target with relative paths, and the
   finished folder is moved into place with `renameRetrying`, which waits out

@@ -91,6 +91,7 @@ export const MODEL_PACKAGE_GROUPS = [
 export const modelPackageGroup = (name) =>
   MODEL_PACKAGE_GROUPS.find(([pattern]) => pattern.test(name))?.[1];
 // Registries holding the same tarballs; the lockfile integrity checks both.
+// Node Services tries the one in its download region (SIMPLEX_REGION) first.
 const MODEL_REGISTRIES = [
   "https://registry.npmjs.org/",
   "https://registry.npmmirror.com/",

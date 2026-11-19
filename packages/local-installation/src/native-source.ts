@@ -26,7 +26,9 @@ import {
 import { readLiveKitSettings, startNativeLiveKit } from "./native-livekit.js";
 import { checkNativeRuntime } from "./native-runtime.js";
 import { checkTeamhubBinaries } from "./teamhub-binaries.js";
+import { sourceRegion } from "@linger/service-kit";
 import { npmRegistryEnvironment } from "./npm-registry.js";
+import { recordRegionFallback, resolveRegion } from "./region.js";
 import { prepareNativeDatabase } from "./native-database.js";
 import {
   inspectNativeListeners,
@@ -633,10 +635,15 @@ async function runNativeSource(
             message:
               "Voice stays off: this installation has no voice tools for this computer.\n",
           });
+        // node-services downloads its voice model packages from the region's
+        // registry first, and nothing it starts probes again.
+        const region = await resolveRegion(home, { signal });
+        emit({ kind: "log", stage, message: `Download region: ${region}.\n` });
         const env: NodeJS.ProcessEnv = {
           ...process.env,
           ...tools.env,
           ...configured.env,
+          SIMPLEX_REGION: region,
           ...(voice
             ? {
                 // TeamHub and the voice workers run ffmpeg and ffprobe from PATH.
@@ -775,6 +782,8 @@ async function runNativeSource(
                 packages,
               );
               registries = registries.slice(index);
+              if (index > 0)
+                await recordRegionFallback(home, sourceRegion(registry));
               return;
             } catch (error) {
               signal.throwIfAborted();

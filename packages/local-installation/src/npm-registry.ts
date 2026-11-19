@@ -36,15 +36,15 @@ export function configuredNpmRegistry() {
 }
 
 /**
- * Orders the public registry and its China mirror by how many bytes of the
- * same tarball each delivers within the probe window. A registry that cannot
- * be reached at all goes last; the install still falls back to it.
+ * Measures how many bytes of the same tarball the public registry and its
+ * China mirror each deliver within the probe window, most first; -1 when a
+ * registry refused. region.ts decides the download region from it.
  */
-export async function rankNpmRegistries(
+export async function probeNpmRegistries(
   signal: AbortSignal,
   fetcher: typeof fetch = fetch,
   probeMs = 4_000,
-): Promise<string[]> {
+): Promise<{ registry: string; bytes: number }[]> {
   const registries = [npmRegistry, npmMirrorRegistry];
   const window = AbortSignal.any([signal, AbortSignal.timeout(probeMs)]);
   // A body that ignores the signal still stops counting when the window ends.
@@ -83,6 +83,5 @@ export async function rankNpmRegistries(
   signal.throwIfAborted();
   return registries
     .map((registry, index) => ({ registry, bytes: received[index]! }))
-    .sort((left, right) => right.bytes - left.bytes)
-    .map((item) => item.registry);
+    .sort((left, right) => right.bytes - left.bytes);
 }

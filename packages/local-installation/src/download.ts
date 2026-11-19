@@ -41,7 +41,7 @@ function publicUrl(value: string) {
  * Only a verified, bounded download may become an installation input. A
  * failed, slow or interrupted transfer moves on to the next mirror and
  * resumes there with an HTTP range request; the checksum still decides what
- * is published.
+ * is published. Resolves to the URL that delivered the last bytes.
  */
 export async function downloadVerified(
   options: {
@@ -59,7 +59,7 @@ export async function downloadVerified(
   },
   fetcher: typeof fetch = fetch,
   timing: DownloadTiming = defaultTiming,
-) {
+): Promise<string> {
   const urls = [options.url, ...(options.mirrors ?? [])].map(publicUrl);
   const digestLength = options.algorithm === "sha256" ? 64 : 128;
   if (!new RegExp(`^[a-f0-9]{${digestLength}}$`).test(options.digest))
@@ -184,6 +184,7 @@ export async function downloadVerified(
   };
 
   let published = false;
+  let served = urls[0]!;
   try {
     let result: "done" | "retry" | "next" = "next";
     // Hosts that cannot serve the file leave the rotation.
@@ -196,6 +197,7 @@ export async function downloadVerified(
         });
       for (const url of active) {
         result = await attempt(url);
+        served = url;
         if (result === "done") break rounds;
         if (result === "next") active = active.filter((item) => item !== url);
       }
@@ -216,6 +218,7 @@ export async function downloadVerified(
       signal: options.signal,
     });
     published = true;
+    return served.href;
   } finally {
     await handle.close().catch(() => {});
     // A resumable download keeps what it received for the next call.

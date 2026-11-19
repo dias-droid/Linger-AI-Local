@@ -3,7 +3,7 @@ import { createReadStream } from "node:fs";
 import { lstat, readdir, readFile, rename, rm, chmod } from "node:fs/promises";
 import path from "node:path";
 import { x as extract } from "tar";
-import { downloadVerified } from "./download.js";
+import { downloadInRegion, resolveRegion } from "./region.js";
 import {
   atomicPrivate,
   privateDirectory,
@@ -323,7 +323,8 @@ async function prepareLocalmodelsTool(
           ? "Repairing the model and Harness installation tool…"
           : "Preparing the model and Harness installation tool…",
       });
-      await downloadVerified(
+      await downloadInRegion(
+        home,
         {
           url: source.url,
           mirrors: source.mirrors,
@@ -427,6 +428,8 @@ export async function runLocalmodels(
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     ...options.env,
+    // localmodels downloads from the same region and does not probe again.
+    SIMPLEX_REGION: await resolveRegion(home, { signal: options.signal }),
     PYTHONPATH: tool.moduleDir,
     LOCALMODELS_STATE: state,
     PYTHONNOUSERSITE: "1",

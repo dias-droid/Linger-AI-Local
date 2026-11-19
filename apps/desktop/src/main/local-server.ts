@@ -33,7 +33,7 @@ import {
   readLocalIdentity,
   readLocalLogin,
 } from "@linger/local-installation/account";
-import { downloadVerified } from "@linger/local-installation/download";
+import { downloadInRegion } from "@linger/local-installation/region";
 import { latestLegacyBackup } from "@linger/local-installation/legacy-database";
 import { legacyMigrationPending } from "@linger/local-installation/home";
 import { validateSourceRepository } from "@linger/local-installation/source-checkout";
@@ -1900,7 +1900,9 @@ export class LocalServerModule implements Module {
 
   // Downloads a verified archive and unpacks its single top-level folder
   // into `directory`, which appears only once complete; `marker` is a file
-  // every complete one has.
+  // every complete one has. Sources in the installation's download region
+  // come first (nodejs.org or its China mirror for Node.js), and the
+  // installer it starts reads the region resolved here.
   async #unpack(
     archive: {
       url: string;
@@ -1921,7 +1923,8 @@ export class LocalServerModule implements Module {
     );
     const unpacked = `${directory}.partial`;
     try {
-      await downloadVerified(
+      await downloadInRegion(
+        this.#location ?? this.#home,
         {
           url: archive.url,
           ...(archive.mirrors && { mirrors: archive.mirrors }),

@@ -3,7 +3,7 @@ import {
   configuredNpmRegistry,
   npmRegistryEnvironment,
   npmTarballUrl,
-  rankNpmRegistries,
+  probeNpmRegistries,
 } from "./npm-registry.js";
 
 afterEach(() => vi.unstubAllEnvs());
@@ -19,7 +19,7 @@ const slow = (bytes: number) =>
 
 it("puts the registry that delivers more of the probe first", async () => {
   const requested: string[] = [];
-  const order = await rankNpmRegistries(
+  const order = await probeNpmRegistries(
     new AbortController().signal,
     async (url, init) => {
       requested.push((url as URL | string).toString());
@@ -31,8 +31,8 @@ it("puts the registry that delivers more of the probe first", async () => {
     50,
   );
   expect(order).toEqual([
-    "https://registry.npmmirror.com/",
-    "https://registry.npmjs.org/",
+    { registry: "https://registry.npmmirror.com/", bytes: 4096 },
+    { registry: "https://registry.npmjs.org/", bytes: 16 },
   ]);
   expect(requested.sort()).toEqual([
     "https://cdn.npmmirror.com/packages/pnpm/11.7.0/pnpm-11.7.0.tgz",
@@ -40,16 +40,19 @@ it("puts the registry that delivers more of the probe first", async () => {
   ]);
 });
 
-it("keeps the public registry first when nothing answers", async () => {
+it("measures nothing when neither registry answers", async () => {
   expect(
-    await rankNpmRegistries(
+    await probeNpmRegistries(
       new AbortController().signal,
       async () => {
         throw new TypeError("fetch failed");
       },
       50,
     ),
-  ).toEqual(["https://registry.npmjs.org/", "https://registry.npmmirror.com/"]);
+  ).toEqual([
+    { registry: "https://registry.npmjs.org/", bytes: 0 },
+    { registry: "https://registry.npmmirror.com/", bytes: 0 },
+  ]);
 });
 
 it("respects a configured registry and points native downloads at the mirror", () => {
