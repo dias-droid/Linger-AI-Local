@@ -6,7 +6,8 @@ tests and release tools stay in their own repository, and the pipeline rewrites
 only its scripts and its marked section below. After updating `stack.sh` and
 `stack.ps1`, run `node scripts/sync-install-stack-pin.mjs --write` so
 `scripts/install/install.sh` and `scripts/install/install.ps1` keep matching
-release pins.
+release pins for standalone use outside a repository checkout (Desktop GitHub
+Releases do not attach those scripts).
 
 ## Your own API keys: `user.env`
 

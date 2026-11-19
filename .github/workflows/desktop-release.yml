@@ -318,7 +318,6 @@ jobs:
             export DESKTOP_UPDATE_KEY="$key"
           fi
           scripts/ci/desktop-release.sh manifest release "${{ needs.prepare.outputs.version }}"
-      - run: scripts/ci/desktop-release.sh install-scripts release "${{ needs.prepare.outputs.version }}"
       - run: scripts/ci/desktop-release.sh checksums release "${{ needs.prepare.outputs.version }}"
       # GITHUB_TOKEN can write only this repository; a release in another one
       # takes LINGER_RELEASE_TOKEN, which prepare checked.
