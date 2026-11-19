@@ -236,6 +236,11 @@ export type ModelCallErrorKind =
   | "yielded"
   | "failed";
 
+export type ModelCallRuntimeOutcome =
+  | "runtime_unavailable"
+  | "auth_required"
+  | "runtime_incompatible";
+
 /** Shared by every offline ModelCallError, so a failure that only survives as
  * a message can still be recognized. */
 export const COMPUTER_OFFLINE_MESSAGE = "The owner's Local Computer is offline";
@@ -245,14 +250,20 @@ export class ModelCallError extends Error {
   /** The model's text when it did not match the schema, for a correction,
    * or what it streamed before it timed out or passed its output cap. */
   readonly output?: string;
+  /** The Daemon's structured outcome when kind is runtime_unavailable. */
+  readonly runtimeOutcome?: ModelCallRuntimeOutcome;
 
   constructor(
     readonly kind: ModelCallErrorKind,
     message: string,
-    options?: ErrorOptions & { readonly output?: string },
+    options?: ErrorOptions & {
+      readonly output?: string;
+      readonly runtimeOutcome?: ModelCallRuntimeOutcome;
+    },
   ) {
     super(message, options);
     this.output = options?.output;
+    this.runtimeOutcome = options?.runtimeOutcome;
   }
 }
 
@@ -1234,6 +1245,7 @@ function outcomeFailure(
       return new ModelCallError(
         "runtime_unavailable",
         `The Local Computer Runtime cannot run model calls (${outcome.outcome})${reason}`,
+        { runtimeOutcome: outcome.outcome },
       );
     case "timed_out":
       return new ModelCallError(

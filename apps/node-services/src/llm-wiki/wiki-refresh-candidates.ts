@@ -57,6 +57,9 @@ export class WikiRefreshCandidateError extends Error {
   constructor(
     readonly code:
       | "WIKI_COMPUTER_OFFLINE"
+      | "WIKI_RUNTIME_INCOMPATIBLE"
+      | "WIKI_RUNTIME_AUTH_REQUIRED"
+      | "WIKI_RUNTIME_UNAVAILABLE"
       | "WIKI_SERVICE_STOPPING"
       | "WIKI_REFRESH_CANDIDATE_REQUEST_INVALID"
       | "WIKI_REFRESH_GENERATION_INVALID"
@@ -217,6 +220,42 @@ export class WikiRefreshCandidateService {
             "terminal",
             500,
             "Wiki refresh candidate output is invalid",
+            { cause: error },
+          );
+        }
+        if (
+          error instanceof ActorAssetError &&
+          error.code === "WIKI_RUNTIME_INCOMPATIBLE"
+        ) {
+          throw new WikiRefreshCandidateError(
+            "WIKI_RUNTIME_INCOMPATIBLE",
+            "terminal",
+            500,
+            "The Wiki owner's Local Computer Runtime is incompatible",
+            { cause: error },
+          );
+        }
+        if (
+          error instanceof ActorAssetError &&
+          error.code === "WIKI_RUNTIME_AUTH_REQUIRED"
+        ) {
+          throw new WikiRefreshCandidateError(
+            "WIKI_RUNTIME_AUTH_REQUIRED",
+            "terminal",
+            500,
+            "The Wiki owner's Local Computer Runtime requires sign-in",
+            { cause: error },
+          );
+        }
+        if (
+          error instanceof ActorAssetError &&
+          error.code === "WIKI_RUNTIME_UNAVAILABLE"
+        ) {
+          throw new WikiRefreshCandidateError(
+            "WIKI_RUNTIME_UNAVAILABLE",
+            "retryable",
+            503,
+            "The Wiki owner's Local Computer Runtime is unavailable",
             { cause: error },
           );
         }

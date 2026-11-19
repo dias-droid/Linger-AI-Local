@@ -3062,6 +3062,30 @@ func (e PersonalProfileSourceSelectionKind) Valid() bool {
 	}
 }
 
+// Defines values for PersonalWikiFailureReason.
+const (
+	ComputerOffline     PersonalWikiFailureReason = "computer_offline"
+	RuntimeAuthRequired PersonalWikiFailureReason = "runtime_auth_required"
+	RuntimeIncompatible PersonalWikiFailureReason = "runtime_incompatible"
+	RuntimeUnavailable  PersonalWikiFailureReason = "runtime_unavailable"
+)
+
+// Valid indicates whether the value is a known member of the PersonalWikiFailureReason enum.
+func (e PersonalWikiFailureReason) Valid() bool {
+	switch e {
+	case ComputerOffline:
+		return true
+	case RuntimeAuthRequired:
+		return true
+	case RuntimeIncompatible:
+		return true
+	case RuntimeUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PersonalWikiState.
 const (
 	PersonalWikiStateFailed     PersonalWikiState = "failed"
@@ -7619,6 +7643,9 @@ type PersonalWiki struct {
 	// CurrentRevisionId Opaque, case-sensitive identifier. Clients must not infer type or time from it.
 	CurrentRevisionId *Id `json:"current_revision_id,omitempty"`
 
+	// FailureReason Actionable cause of the latest failed refresh when known: computer_offline, runtime_incompatible, runtime_auth_required, or runtime_unavailable.
+	FailureReason *PersonalWikiFailureReason `json:"failure_reason,omitempty"`
+
 	// Id Opaque, case-sensitive identifier. Clients must not infer type or time from it.
 	Id *Id `json:"id,omitempty"`
 
@@ -7643,6 +7670,9 @@ type PersonalWiki struct {
 	// UpdatedAt UTC timestamp in RFC 3339 format with an explicit offset.
 	UpdatedAt *Timestamp `json:"updated_at,omitempty"`
 }
+
+// PersonalWikiFailureReason Actionable cause of the latest failed refresh when known: computer_offline, runtime_incompatible, runtime_auth_required, or runtime_unavailable.
+type PersonalWikiFailureReason string
 
 // PersonalWikiState refreshing while a refresh runs or its follow-up is queued; failed when the latest refresh failed or conflicted.
 type PersonalWikiState string

@@ -199,6 +199,10 @@ func personalWikiModel(wiki document.PersonalWiki) httpapi.PersonalWiki {
 	if wiki.LatestRefreshID != "" {
 		model.LatestRefreshId = &wiki.LatestRefreshID
 	}
+	if wiki.FailureReason != "" {
+		reason := httpapi.PersonalWikiFailureReason(wiki.FailureReason)
+		model.FailureReason = &reason
+	}
 	if wiki.CurrentRevisionID != "" {
 		model.CurrentRevisionId = &wiki.CurrentRevisionID
 	}

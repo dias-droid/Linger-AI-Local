@@ -40,10 +40,12 @@
   files, traversal, normalization collisions, symlinks, and special files. Check
   OKF frontmatter, registered node types, and evidence references before
   returning a candidate.
-- An invalid candidate or a request too large for one invocation is terminal;
-  an offline Computer, an unready Runtime, a timeout, or a normalization or
-  infrastructure failure is retryable, and a generation stopped by this
-  process's own shutdown answers `WIKI_SERVICE_STOPPING`.
+- An invalid candidate, a request too large for one invocation, an incompatible
+  Runtime (`WIKI_RUNTIME_INCOMPATIBLE`), or an unauthenticated Runtime
+  (`WIKI_RUNTIME_AUTH_REQUIRED`) is terminal; an offline Computer, an unready or
+  unavailable Runtime (`WIKI_RUNTIME_UNAVAILABLE`), a timeout, or a
+  normalization or infrastructure failure is retryable, and a generation stopped
+  by this process's own shutdown answers `WIKI_SERVICE_STOPPING`.
 - A model task that stalls twice, stays too large after its halvings, or does
   not start before the generation deadline is skipped with an ERROR log, never
   fails the refresh. Report the sources a failed task left unwritten, and

@@ -6800,6 +6800,15 @@ export interface components {
      * @enum {string}
      */
     PersonalWikiState: "idle" | "refreshing" | "failed";
+    /**
+     * @description Actionable cause of the latest failed refresh when known: computer_offline, runtime_incompatible, runtime_auth_required, or runtime_unavailable.
+     * @enum {string}
+     */
+    PersonalWikiFailureReason:
+      | "computer_offline"
+      | "runtime_incompatible"
+      | "runtime_auth_required"
+      | "runtime_unavailable";
     PersonalWiki: {
       /** @description Absent until a write (binding or uploading a source, a refresh request from Memory) creates the Wiki root. */
       id?: components["schemas"]["Id"];
@@ -6811,6 +6820,8 @@ export interface components {
        */
       published_generation: number;
       state: components["schemas"]["PersonalWikiState"];
+      /** @description Present when state is failed and the refresh failed for an actionable Computer or Runtime cause. */
+      failure_reason?: components["schemas"]["PersonalWikiFailureReason"];
       /**
        * Format: int64
        * @description Advances when the active refresh has a new three-minute preview.

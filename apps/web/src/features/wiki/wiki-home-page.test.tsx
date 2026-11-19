@@ -113,3 +113,40 @@ it("shows the pages a refresh has written as ordinary cards that open as pages",
   );
   expect(screen.queryByText("No topics yet.")).toBeNull();
 });
+
+it("shows the actionable failure reason when the latest Wiki refresh failed", async () => {
+  const runtime = createTestTeamHubRuntime();
+  serveWikiDocuments(runtime).mockResolvedValue({
+    items: [],
+    page: { has_more: false },
+  });
+  serveWikiStatus(runtime).mockResolvedValue({
+    created_at: "2026-08-23T00:00:00.000Z",
+    failure_reason: "runtime_incompatible",
+    id: "wiki-tenant-northstar",
+    latest_refresh_id: "refresh-2",
+    owner_actor_id: "actor-human",
+    published_generation: 0,
+    state: "failed",
+    tenant_id: "tenant-northstar",
+    updated_at: "2026-08-23T00:00:00.000Z",
+  });
+  const router = createMemoryRouter(
+    [{ path: "/t/:tenantId/library/wiki", element: <WikiHomePage /> }],
+    { initialEntries: ["/t/tenant-northstar/library/wiki?tab=wiki"] },
+  );
+  render(
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
+      <TeamHubRuntimeProvider runtime={runtime}>
+        <RouterProvider router={router} />
+      </TeamHubRuntimeProvider>
+    </QueryClientProvider>,
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Wiki update failed — Runtime incompatible. Update your local CLI or Linger.",
+  );
+});

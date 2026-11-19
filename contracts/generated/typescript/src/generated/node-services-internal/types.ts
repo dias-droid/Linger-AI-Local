@@ -2096,7 +2096,7 @@ export interface components {
         "application/json": components["schemas"]["WikiRefreshCandidateErrorResponse"];
       };
     };
-    /** @description Candidate generation encountered a retryable infrastructure or provider failure. The code WIKI_COMPUTER_OFFLINE means the Wiki owner's Computer is offline; TeamHub waits for it without spending a refresh attempt. The code WIKI_SERVICE_STOPPING means LLM Wiki stopped the generation because its process is restarting; TeamHub runs it again shortly, also without spending an attempt. */
+    /** @description Candidate generation encountered a retryable infrastructure or provider failure. The code WIKI_COMPUTER_OFFLINE means the Wiki owner's Computer is offline; TeamHub waits for it without spending a refresh attempt. The code WIKI_SERVICE_STOPPING means LLM Wiki stopped the generation because its process is restarting; TeamHub runs it again shortly, also without spending an attempt. The code WIKI_RUNTIME_UNAVAILABLE means the owner's Local Computer Runtime is not ready for model calls. */
     WikiOperationRetryable: {
       headers: {
         [name: string]: unknown;
@@ -3241,7 +3241,7 @@ export interface operations {
         };
       };
       413: components["responses"]["WikiRefreshBadRequest"];
-      /** @description The generated candidate is invalid; do not retry the same refresh. */
+      /** @description The refresh cannot be completed without user action or new inputs; do not retry the same refresh. Codes WIKI_RUNTIME_INCOMPATIBLE and WIKI_RUNTIME_AUTH_REQUIRED indicate that the owner's Local Computer Runtime must be updated or signed in before a later refresh runs. */
       500: {
         headers: {
           [name: string]: unknown;
