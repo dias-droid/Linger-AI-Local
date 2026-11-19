@@ -73,6 +73,7 @@ describe("local-model-agents", () => {
       codexOnLab.actor.id,
     ]);
     expect(result[0]!).toMatchObject({
+      agentManagementId: delegate!.agent_management_id,
       busy: false,
       grantId: "grant-rw",
       isAnotherMe: true,
@@ -172,6 +173,29 @@ describe("local-model-agents", () => {
     expect(
       usedByAgentNames(sameNameEntry, [sameNameAgent], "computer-lab"),
     ).toEqual(["Helper", "Helper"]);
+
+    const alreadyInSnapshot = {
+      ...entry,
+      used_by: [
+        {
+          agent_id: delegate.agent_management_id,
+          name: delegate.actor.display_name,
+        },
+      ],
+    };
+    expect(
+      usedByAgentNames(alreadyInSnapshot, [agent!], "computer-lab"),
+    ).toEqual(["Jenny's Delegate"]);
+    expect(
+      isAgentUsingModel(
+        {
+          ...alreadyInSnapshot,
+          model: { ...alreadyInSnapshot.model, pi_model: undefined },
+        },
+        agent!,
+        "computer-lab",
+      ),
+    ).toBe(true);
   });
 
   it("omits incompatible Claude reasoning efforts when Pi has not listed the model yet, and preserves valid Pi efforts when listed", () => {
@@ -183,6 +207,7 @@ describe("local-model-agents", () => {
     };
     const baseAgent = {
       actorId: "actor-delegate",
+      agentManagementId: "anotherme-jenny",
       busy: false,
       configurationRevision: 3,
       currentComputerId: "computer-lab",

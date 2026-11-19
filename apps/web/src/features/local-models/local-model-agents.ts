@@ -12,6 +12,7 @@ import type { ModelEntry } from "./local-models-rules";
 /** A Sponsor-owned Agent eligible to run against a loaded Local Model on one Computer. */
 export interface AssignableLocalModelAgent {
   actorId: string;
+  agentManagementId: string;
   busy: boolean;
   configurationRevision: number;
   currentComputerId?: string;
@@ -77,6 +78,7 @@ export function assignableLocalModelAgents(
     if (!grantId) continue;
     result.push({
       actorId: agent.actor.id,
+      agentManagementId: agent.agent_management_id,
       busy: busyByActorId.get(agent.actor.id) ?? false,
       configurationRevision: agent.configuration_revision,
       currentComputerId: placement?.computer_id,
@@ -106,7 +108,7 @@ export function isAgentUsingModel(
   agent: AssignableLocalModelAgent,
   computerId: string,
 ): boolean {
-  if (entry.used_by.some((user) => user.agent_id === agent.actorId)) {
+  if (entry.used_by.some((user) => user.agent_id === agent.agentManagementId)) {
     return true;
   }
   return (
@@ -127,7 +129,7 @@ export function usedByAgentNames(
   for (const agent of assignableAgents) {
     if (
       isAgentUsingModel(entry, agent, computerId) &&
-      !entry.used_by.some((user) => user.agent_id === agent.actorId)
+      !entry.used_by.some((user) => user.agent_id === agent.agentManagementId)
     ) {
       names.push(agent.name);
     }
