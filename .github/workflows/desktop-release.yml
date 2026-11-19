@@ -49,7 +49,7 @@ jobs:
       prerelease: ${{ steps.version.outputs.prerelease }}
       publish: ${{ steps.version.outputs.publish }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: version
         shell: bash
         env:
@@ -102,37 +102,39 @@ jobs:
         run: >-
           sudo bash -c
           'rm -rf /usr/share/dotnet & rm -rf /usr/local/lib/android & rm -rf /opt/ghc & rm -rf /opt/hostedtoolcache/CodeQL & wait'
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: versions
         shell: bash
         run: |
           echo "node=$(tr -d '[:space:]' <.node-version)" >>"$GITHUB_OUTPUT"
-          echo "go=$(sed -n 's/^go //p' apps/teamhub/go.mod)" >>"$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+          go_ver=$(sed -n 's/^toolchain go//p' apps/teamhub/go.mod | head -n 1)
+          [ -n "$go_ver" ] || go_ver=$(sed -n 's/^go //p' apps/teamhub/go.mod | head -n 1)
+          echo "go=$go_ver" >>"$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
         with:
           path: ${{ runner.tool_cache }}/node/${{ steps.versions.outputs.node }}
           key: toolcache-node-${{ runner.os }}-${{ runner.arch }}-${{ steps.versions.outputs.node }}
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ${{ runner.tool_cache }}/go/${{ steps.versions.outputs.go }}
           key: toolcache-go-${{ runner.os }}-${{ runner.arch }}-${{ steps.versions.outputs.go }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
       # Cache GOMODCACHE once across targets and GOCACHE per target so cross-
       # compiled stdlib and TeamHub packages stay warm for darwin-arm64 and win32-x64.
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: apps/teamhub/go.mod
           cache: false
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/go/pkg/mod
           key: desktop-gomod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/teamhub/go.sum', 'apps/computer/local-daemon/go.sum', 'contracts/generated/go/go.sum') }}
           restore-keys: desktop-gomod-${{ runner.os }}-${{ runner.arch }}-
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.cache/go-build
           key: desktop-gobuild-${{ matrix.target }}-${{ steps.versions.outputs.go }}-${{ hashFiles('apps/teamhub/go.sum', 'apps/computer/local-daemon/go.sum', 'contracts/generated/go/go.sum') }}
@@ -140,7 +142,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # Pinned binary downloads reused across releases: Electron, Cua driver,
       # native PostgreSQL + voice tools, and the pinned Node.js distribution.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.cache/linger-desktop
@@ -151,7 +153,7 @@ jobs:
           restore-keys: desktop-downloads-${{ matrix.target }}-
       - id: docker-cache
         if: matrix.docker_image != ''
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/linger-docker/${{ matrix.docker_image }}.tar
           key: desktop-docker-${{ matrix.docker_image }}-${{ hashFiles(matrix.docker_file) }}
@@ -230,7 +232,7 @@ jobs:
       - name: Remove signing files
         if: always()
         run: rm -rf "$RUNNER_TEMP/signing"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: matrix.target != 'win32-x64'
         with:
           name: desktop-${{ matrix.target }}
@@ -238,7 +240,7 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: matrix.target == 'win32-x64'
         with:
           name: desktop-win32-x64
@@ -248,7 +250,7 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: matrix.target == 'win32-x64'
         with:
           name: desktop-win32-x64-portable
@@ -270,10 +272,10 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: desktop-win32-x64
           path: candidate
@@ -293,8 +295,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: desktop-*
           path: release

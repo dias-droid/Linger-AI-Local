@@ -77,6 +77,10 @@ test("duplicate starts return current job and task survives subscriber disconnec
     return { state: "ready", code: 0, message: "Complete" };
   });
   const first = await jobs.start(input);
+  cleanup.push(async () => {
+    release?.();
+    await jobs.wait(first.id);
+  });
   const second = await jobs.start(input);
   expect(second.id).toBe(first.id);
   await new Promise((resolve) => setTimeout(resolve, 20));
