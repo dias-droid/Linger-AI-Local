@@ -20,7 +20,7 @@ const claudeFakeKey = "CLAUDE_FAKE_MODE"
 
 // claudeFakeSlowOutput is how long a resident "slow" or "late" turn holds its
 // output; timing assertions compare against it rather than a wall-clock guess.
-const claudeFakeSlowOutput = 500 * time.Millisecond
+const claudeFakeSlowOutput = 300 * time.Millisecond
 
 func init() {
 	if mode := os.Getenv(claudeFakeKey); mode != "" {
@@ -251,7 +251,7 @@ func (f *claudeFake) resident() int {
 		signal.Notify(terms, syscall.SIGTERM)
 		go func() {
 			<-terms
-			time.Sleep(500 * time.Millisecond)
+			time.Sleep(200 * time.Millisecond)
 			f.record("exits", fmt.Sprintf("%d %d", os.Getpid(), time.Now().UnixNano()))
 			os.Exit(0)
 		}()
@@ -384,7 +384,8 @@ func (f *claudeFake) resident() int {
 			}}})
 		}
 		if strings.Contains(prompt, "pause") {
-			time.Sleep(time.Second)
+			// Long enough for a test to act 300ms into the turn.
+			time.Sleep(600 * time.Millisecond)
 		}
 		reason := "completed"
 		if strings.Contains(prompt, "reason") {

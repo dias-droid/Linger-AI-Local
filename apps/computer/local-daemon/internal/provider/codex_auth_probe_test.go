@@ -15,11 +15,55 @@ import (
 	"github.com/simplexai-labs/linger/apps/computer/local-daemon/internal/provider/native"
 )
 
+// Scaled probe budgets keep the Linux budget regressions fast: a cold start
+// takes coldStart, more than a third of the scaled cap, and still finishes
+// about twice under it; three sequential cold starts exceed one stage budget.
+const (
+	scaledAuthProbeCap         = 1500 * time.Millisecond
+	scaledDiscoveryStageBudget = 2 * time.Second
+	scaledColdStart            = 800 * time.Millisecond
+)
+
+// scaleProbeBudgets lowers the package-level probe budgets for one test. Its
+// callers must not run in parallel with any test that probes a Runtime.
+func scaleProbeBudgets(t *testing.T) {
+	t.Helper()
+	previousCap, previousBudget := authProbeCap, discoveryStageBudget
+	authProbeCap, discoveryStageBudget = scaledAuthProbeCap, scaledDiscoveryStageBudget
+	t.Cleanup(func() { authProbeCap, discoveryStageBudget = previousCap, previousBudget })
+}
+
+func TestProbeBudgetDefaults(t *testing.T) {
+	if got := authProbeCap; got != 15*time.Second {
+		t.Fatalf("authentication probe cap = %v, want 15s", got)
+	}
+	for _, scenario := range []struct {
+		goos string
+		want time.Duration
+	}{{"linux", 30 * time.Second}, {"windows", 30 * time.Second}, {"darwin", 15 * time.Second}} {
+		if got := defaultDiscoveryStageBudget(scenario.goos); got != scenario.want {
+			t.Fatalf("%s discovery stage budget = %v, want %v", scenario.goos, got, scenario.want)
+		}
+	}
+	if got := discoveryStageBudget; got != defaultDiscoveryStageBudget(runtime.GOOS) {
+		t.Fatalf("discovery stage budget = %v, want the %s default", got, runtime.GOOS)
+	}
+	for _, scenario := range []struct{ timeout, want time.Duration }{
+		{0, 15 * time.Second}, {-time.Second, 15 * time.Second}, {30 * time.Second, 15 * time.Second},
+		{15 * time.Second, 15 * time.Second}, {200 * time.Millisecond, 200 * time.Millisecond},
+	} {
+		if got := boundedAuthTimeout(scenario.timeout); got != scenario.want {
+			t.Fatalf("boundedAuthTimeout(%v) = %v, want %v", scenario.timeout, got, scenario.want)
+		}
+	}
+}
+
 func TestCodexAuthenticationColdStartWithinLinuxBudget(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Linux authentication budget regression")
 	}
-	executable, environment := codexAuthProbeFixture(t, `/bin/sleep 6
+	scaleProbeBudgets(t)
+	executable, environment := codexAuthProbeFixture(t, `/bin/sleep 0.8
 echo '{"id":2,"result":{"account":null,"requiresOpenaiAuth":false}}'`)
 	current := DiscoveryResult{Diagnostics: []RuntimeDiagnostic{{Type: "codex", Status: "ready", ExecutablePath: executable}}}
 	started := time.Now()
@@ -28,8 +72,8 @@ echo '{"id":2,"result":{"account":null,"requiresOpenaiAuth":false}}'`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if elapsed <= 5*time.Second || elapsed >= 15*time.Second {
-		t.Fatalf("probe duration = %v, want between 5s and 15s", elapsed)
+	if elapsed < scaledColdStart || elapsed >= scaledAuthProbeCap {
+		t.Fatalf("probe duration = %v, want between %v and %v", elapsed, scaledColdStart, scaledAuthProbeCap)
 	}
 	if diagnostic := result.Diagnostics[0]; diagnostic.Status != "ready" || diagnostic.Error != nil {
 		t.Fatalf("delayed authentication = %+v", diagnostic)
@@ -43,6 +87,7 @@ func TestDiscoverCodexColdInitializeWithinLinuxBudget(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Linux discovery budget regression with POSIX fixtures")
 	}
+	scaleProbeBudgets(t)
 	for _, scenario := range []struct {
 		name              string
 		timeout, deadline time.Duration
@@ -61,7 +106,7 @@ func TestDiscoverCodexColdInitializeWithinLinuxBudget(t *testing.T) {
 if [ "$1" = "--version" ]; then echo 'codex-cli 0.144.1'; exit 0; fi
 read initialize
 echo initialize >> "$LAUNCH_TRACE"
-/bin/sleep 8
+/bin/sleep 0.8
 echo '{"id":1,"result":{"userAgent":"test"}}'
 if read initialized && read account; then
   case "$account" in
@@ -92,6 +137,9 @@ fi
 				if diagnostic.Error != nil || result.Installations["codex"].Status != "ready" {
 					t.Fatalf("slow initialize did not produce a ready installation: %+v", result)
 				}
+				if elapsed := time.Since(started); elapsed <= scaledDiscoveryStageBudget {
+					t.Fatalf("discovery took %v, want three cold starts to exceed one stage budget %v", elapsed, scaledDiscoveryStageBudget)
+				}
 			} else if diagnostic.Error == nil || diagnostic.Error.Code != "RUNTIME_DIAGNOSTIC_FAILED" || !strings.Contains(diagnostic.Error.Message, "deadline") || time.Since(started) > 5*time.Second {
 				t.Fatalf("short discovery deadline not preserved: %+v, elapsed = %v", diagnostic, time.Since(started))
 			}
@@ -107,6 +155,7 @@ func TestCodexAuthenticationFailureDiagnostics(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("Linux authentication budget regression with POSIX fixtures")
 	}
+	scaleProbeBudgets(t)
 	const (
 		timeoutMessage = "Codex authentication probe timed out or was canceled"
 		processMessage = "Codex authentication probe process or RPC failed"
@@ -117,7 +166,7 @@ func TestCodexAuthenticationFailureDiagnostics(t *testing.T) {
 		timeout, deadline     time.Duration
 		minimum               time.Duration
 	}{
-		{"timeout at Linux cap", `/bin/sleep 30`, timeoutMessage, 30 * time.Second, 0, 15 * time.Second},
+		{"timeout at Linux cap", `/bin/sleep 30`, timeoutMessage, 30 * time.Second, 0, scaledAuthProbeCap},
 		{"short caller timeout", `/bin/sleep 30`, timeoutMessage, 200 * time.Millisecond, 0, 200 * time.Millisecond},
 		{"short parent deadline", `/bin/sleep 30`, timeoutMessage, 15 * time.Second, 200 * time.Millisecond, 200 * time.Millisecond},
 		{"process exit", `exit 7`, processMessage, time.Second, 0, 0},

@@ -188,7 +188,8 @@ func TestClaudeSteerCancelledWhileWaiting(t *testing.T) {
 	results := make(chan result, 1)
 	run := claudeStart(t, home.profile, "slow", RunSpec{ExposeTurnStarted: true})
 	_, outcome, _ := claudeTimed(t, run, func(started Event) {
-		ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+		// Expires well inside claudeFakeSlowOutput, so the turn is still waiting.
+		ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 		defer cancel()
 		begin := time.Now()
 		_, err := run.Steer(ctx, SteerRequest{ExpectedTurnID: started.TurnID, Input: "go"})

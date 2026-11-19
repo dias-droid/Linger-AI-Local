@@ -74,7 +74,8 @@ func (c *claudeLogCapture) await(t *testing.T, prefix string, n int) []claudeLog
 func claudeEnableResidency(t *testing.T, cap int) {
 	t.Helper()
 	previousGrace := claudeTerminationGrace
-	claudeTerminationGrace = time.Second
+	// Three times the slow-term fake's exit delay, so it still exits by itself.
+	claudeTerminationGrace = 600 * time.Millisecond
 	withResidentCap(t, claudeResidents, cap)
 	t.Cleanup(func() {
 		_, _ = StopAllParkedResidents()

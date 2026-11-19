@@ -626,8 +626,8 @@ func TestCodexUsagePerTurnOnReusedProcess(t *testing.T) {
 func TestCodexSteering(t *testing.T) {
 	fake := newCodexFake(t, []codexFakeTurn{{Stall: true}}, nil)
 	spec := fake.spec()
-	spec.SilenceBudget = time.Second
-	spec.FirstProgressBudget = time.Second
+	spec.SilenceBudget = 400 * time.Millisecond
+	spec.FirstProgressBudget = 400 * time.Millisecond
 	run, err := fake.runtime(nil).Start(context.Background(), "go", spec)
 	if err != nil {
 		t.Fatal(err)
@@ -951,7 +951,7 @@ func TestCodexSteerNeedsConsumptionEvidence(t *testing.T) {
 			fake := newCodexFake(t, []codexFakeTurn{{Stall: true}}, map[string]string{"FAKE_MODES": tc.mode})
 			fake.version = "0.166.0"
 			spec := fake.spec()
-			spec.SilenceBudget = time.Second
+			spec.SilenceBudget = 400 * time.Millisecond
 			spec.ExposeTurnStarted = true
 			run, err := fake.runtime(nil).Start(context.Background(), "go", spec)
 			if err != nil {
