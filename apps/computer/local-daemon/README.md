@@ -151,11 +151,17 @@ model.
   Daemon rereads the status, which carries what the phase reserved or freed
   (pool use, placement, models unloaded first), and applies the job's line on
   top; later lines of the phase update that snapshot without another read.
-- Pi. When the loaded models change, the Daemon asks the Runtime monitor for a
-  full discovery, so TeamHub sees Pi's new model list. Each model's
-  `pi_model` (`<provider>/<id>`, as an Agent's `runtime_model` stores it) is
-  passed through as `localmodels` reports it; the endpoint keeps only the
-  loaded engine's `base_url`.
+- Pi. The Daemon sets `PI_CODING_AGENT_DIR` on `localmodels` tool calls to match
+  `OverlayEnvironment` (in local mode) and `workspace.PiSourceEnvironment`
+  (`~/.pi/agent` when unset) so loaded models land in the profile Pi probes
+  and runs. When a model is loaded on a Computer without Pi,
+  `internal/localmodels` installs the pinned Pi runtime asynchronously in the
+  background under the shared harness root (passing the bundled Node binary via
+  `--node` when available and backing off on failure) before asking the Runtime
+  monitor for a full discovery, so TeamHub sees Pi become ready with the loaded
+  model. Each model's `pi_model` (`<provider>/<id>`, as an Agent's
+  `runtime_model` stores it) is passed through as `localmodels` reports it; the
+  endpoint keeps only the loaded engine's `base_url`.
 
 ## Model source
 

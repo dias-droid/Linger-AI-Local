@@ -262,3 +262,18 @@ func TestByokRuntimeCatalogsShowTheEnteredModel(t *testing.T) {
 		}
 	}
 }
+
+func TestWithManagedPiPathRespectsConfiguredPiAndClonesSafely(t *testing.T) {
+	if got := withManagedPiPath(nil, ""); got != nil {
+		t.Fatalf("empty managed path returned %v", got)
+	}
+	configured := map[string]string{"codex": "/bin/codex", "pi": "/custom/pi"}
+	if got := withManagedPiPath(configured, "/managed/pi"); got["pi"] != "/custom/pi" {
+		t.Fatalf("managed Pi overwrote configured path: %v", got)
+	}
+	original := map[string]string{"codex": "/bin/codex"}
+	merged := withManagedPiPath(original, "/managed/pi")
+	if merged["pi"] != "/managed/pi" || original["pi"] != "" {
+		t.Fatalf("merged=%v original=%v", merged, original)
+	}
+}

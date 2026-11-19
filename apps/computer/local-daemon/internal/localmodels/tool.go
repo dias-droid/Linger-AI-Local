@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/simplexai-labs/linger/apps/computer/local-daemon/internal/workspace"
 )
 
 // Tool is where the installer put the localmodels tool and its state, as
@@ -58,19 +60,46 @@ func (t Tool) arguments(action Action) []string {
 	}
 }
 
-// command builds one tool invocation the way the installer runs it: the
-// sealed kit on PYTHONPATH and as the working directory, no user site
-// packages, no bytecode writes into the sealed kit.
+// command builds one library invocation for the tool.
 func (t Tool) command(environment map[string]string, action Action) *exec.Cmd {
-	cmd := exec.Command(t.Python, t.arguments(action)...)
+	return t.commandArgs(environment, t.arguments(action))
+}
+
+// commandArgs builds one tool invocation the way the installer runs it: the
+// sealed kit on PYTHONPATH and as the working directory, no user site
+// packages, no bytecode writes into the sealed kit, and PI_CODING_AGENT_DIR
+// aligned with OverlayEnvironment (local mode) and workspace.PiSourceEnvironment
+// so models written by localmodels reach the same Pi agent profile that the
+// Daemon probes and runs.
+func (t Tool) commandArgs(environment map[string]string, args []string) *exec.Cmd {
+	cmd := exec.Command(t.Python, args...)
 	cmd.Dir = t.ModuleDirectory
-	values := make(map[string]string, len(environment)+4)
+	values := make(map[string]string, len(environment)+5)
+	var explicitPiDir string
 	for key, value := range environment {
-		switch strings.ToUpper(key) {
+		upper := strings.ToUpper(key)
+		switch upper {
 		case "PYTHONHOME", "PYTHONSTARTUP", "PYTHONINSPECT", "PYTHONPATH", "LOCALMODELS_STATE":
+			continue
+		case "PI_CODING_AGENT_DIR":
+			if trimmed := strings.TrimSpace(value); trimmed != "" {
+				explicitPiDir = trimmed
+			}
 			continue
 		}
 		values[key] = value
+	}
+	if explicitPiDir != "" {
+		values["PI_CODING_AGENT_DIR"] = explicitPiDir
+	} else if overlay := ReadOverlay(t.StateDirectory); overlay != nil && overlay.Mode == "local" {
+		if overlaid := OverlayEnvironment(values, t.StateDirectory); overlaid["PI_CODING_AGENT_DIR"] != "" {
+			values["PI_CODING_AGENT_DIR"] = overlaid["PI_CODING_AGENT_DIR"]
+		}
+	}
+	if values["PI_CODING_AGENT_DIR"] == "" {
+		if piEnv, err := workspace.PiSourceEnvironment(values); err == nil && piEnv["PI_CODING_AGENT_DIR"] != "" {
+			values["PI_CODING_AGENT_DIR"] = piEnv["PI_CODING_AGENT_DIR"]
+		}
 	}
 	values["PYTHONPATH"] = t.ModuleDirectory
 	values["LOCALMODELS_STATE"] = t.StateDirectory

@@ -46,13 +46,16 @@ func runFakeTool(args []string) int {
 	if len(args) >= 6 && strings.Join(args[:5], " ") == "-P -s -m localmodels source" {
 		return runFakeSourceTool(state, args[5:])
 	}
+	if len(args) >= 6 && strings.Join(args[:5], " ") == "-P -s -m localmodels harness" {
+		return runFakeHarness(state, args[5:])
+	}
 	if len(args) < 6 || strings.Join(args[:5], " ") != "-P -s -m localmodels library" {
 		fmt.Fprintln(os.Stderr, "unexpected invocation", args)
 		return 3
 	}
 	verb := args[5]
 	log, _ := os.OpenFile(filepath.Join(state, "calls.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	_, _ = fmt.Fprintf(log, "%s|PYTHONPATH=%s|cwd=%s\n", strings.Join(args[5:], " "), os.Getenv("PYTHONPATH"), workingDirectory())
+	_, _ = fmt.Fprintf(log, "%s|PYTHONPATH=%s|cwd=%s|PI_CODING_AGENT_DIR=%s\n", strings.Join(args[5:], " "), os.Getenv("PYTHONPATH"), workingDirectory(), os.Getenv("PI_CODING_AGENT_DIR"))
 	_ = log.Close()
 	if verb == "status" {
 		if code, err := os.ReadFile(filepath.Join(state, "status-exit")); err == nil {
@@ -96,6 +99,76 @@ func runFakeTool(args []string) int {
 func workingDirectory() string {
 	directory, _ := os.Getwd()
 	return directory
+}
+
+func runFakeHarness(state string, args []string) int {
+	if len(args) < 1 {
+		return 3
+	}
+	verb := args[0]
+	log, _ := os.OpenFile(filepath.Join(state, "calls.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	_, _ = fmt.Fprintf(log, "harness %s|PI_CODING_AGENT_DIR=%s\n", strings.Join(args, " "), os.Getenv("PI_CODING_AGENT_DIR"))
+	_ = log.Close()
+	argValue := func(flag string) string {
+		for index := 0; index+1 < len(args); index++ {
+			if args[index] == flag {
+				return args[index+1]
+			}
+		}
+		return ""
+	}
+	root := argValue("--root")
+	installedPath := filepath.Join(root, "tools", "pi", "1.3.0", "pi")
+	statusJSON := func(installed bool) string {
+		if installed {
+			return fmt.Sprintf(`{"schema":"localmodels.harness-status/v1","runtimes":[{"runtime":"pi","installed":true,"executable":%q,"argvPrefix":[]}]}`, installedPath)
+		}
+		return `{"schema":"localmodels.harness-status/v1","runtimes":[{"runtime":"pi","installed":false,"executable":null,"argvPrefix":[]}]}`
+	}
+	switch verb {
+	case "status":
+		if _, err := os.Stat(filepath.Join(state, "harness-status-fail")); err == nil {
+			return 1
+		}
+		_, err := os.Stat(filepath.Join(state, "harness-pi-installed"))
+		fmt.Println(statusJSON(err == nil))
+		return 0
+	case "plan":
+		waitGate := filepath.Join(state, "harness-plan-wait")
+		if _, err := os.Stat(waitGate); err == nil {
+			_ = os.WriteFile(filepath.Join(state, "harness-plan-entered"), []byte("1"), 0o600)
+			deadline := time.Now().Add(10 * time.Second)
+			for time.Now().Before(deadline) {
+				if _, statErr := os.Stat(waitGate); statErr != nil {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
+		}
+		if _, err := os.Stat(filepath.Join(state, "harness-plan-fail")); err == nil {
+			return 1
+		}
+		outPath := argValue("--out")
+		plan := fmt.Sprintf(`{"schema":"localmodels.harness-plan/v1","id":%q,"runtime":"pi","root":%q}`, strings.Repeat("a", 64), root)
+		if outPath != "" {
+			_ = os.WriteFile(outPath, []byte(plan), 0o600)
+		}
+		fmt.Println(plan)
+		return 0
+	case "apply":
+		if _, err := os.Stat(filepath.Join(state, "harness-apply-fail")); err == nil {
+			return 1
+		}
+		if argValue("--approve") != strings.Repeat("a", 64) {
+			return 2
+		}
+		_ = os.WriteFile(filepath.Join(state, "harness-pi-installed"), []byte(installedPath), 0o600)
+		fmt.Println(`{"kind":"stage","stage":"install","state":"running"}`)
+		fmt.Println(statusJSON(true))
+		return 0
+	default:
+		return 3
+	}
 }
 
 // fakeTool lays out a Tool that runs the fake.

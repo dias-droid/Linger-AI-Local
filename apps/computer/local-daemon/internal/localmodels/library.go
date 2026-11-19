@@ -23,9 +23,12 @@ import (
 
 // Defaults for Options left zero.
 const (
-	defaultProgressInterval = 2 * time.Second
-	defaultStatusTimeout    = 2 * time.Minute
-	defaultActionTimeout    = 15 * time.Minute
+	defaultProgressInterval      = 2 * time.Second
+	defaultStatusTimeout         = 2 * time.Minute
+	defaultActionTimeout         = 15 * time.Minute
+	defaultEnsurePiTimeout       = 5 * time.Minute
+	defaultEnsurePiRetryInterval = 30 * time.Second
+	maxEnsurePiRetryInterval     = 5 * time.Minute
 	// maxRereadInterval bounds the backoff of status reads after failures.
 	maxRereadInterval = time.Minute
 	tailPollInterval  = 100 * time.Millisecond
@@ -40,6 +43,13 @@ type Options struct {
 	Environment map[string]string
 	// JobDirectory holds the output file of each running download or load.
 	JobDirectory string
+	// HarnessDirectory holds the on-demand Pi runtime provisioned when a
+	// local model is loaded on a Computer without Pi.
+	HarnessDirectory string
+	// InitialPiExecutable seeds a Pi executable already found in HarnessDirectory.
+	InitialPiExecutable string
+	// NodePath is an optional local Node executable passed via --node to harness plan.
+	NodePath string
 	// Publish receives every new snapshot, in order. It is called only from
 	// Act and Refresh and the jobs they start.
 	Publish func(wire.LocalModelsSnapshot)
@@ -47,9 +57,11 @@ type Options struct {
 	// changes the model list Pi reports.
 	RuntimeChanged func()
 	// ProgressInterval bounds how often job progress is published.
-	ProgressInterval time.Duration
-	StatusTimeout    time.Duration
-	ActionTimeout    time.Duration
+	ProgressInterval      time.Duration
+	StatusTimeout         time.Duration
+	ActionTimeout         time.Duration
+	EnsurePiTimeout       time.Duration
+	EnsurePiRetryInterval time.Duration
 }
 
 // Library runs the localmodels tool for one Computer.
@@ -71,28 +83,38 @@ type Options struct {
 // reads the job records localmodels keeps on disk, and polls it while a job
 // it did not start is running.
 type Library struct {
-	tool             *Tool
-	environment      map[string]string
-	jobDirectory     string
-	publish          func(wire.LocalModelsSnapshot)
-	runtimeChanged   func()
-	progressInterval time.Duration
-	statusTimeout    time.Duration
-	actionTimeout    time.Duration
-	now              func() time.Time
-	ctx              context.Context
-	stop             context.CancelFunc
+	tool                  *Tool
+	environment           map[string]string
+	jobDirectory          string
+	harnessDirectory      string
+	nodePath              string
+	publish               func(wire.LocalModelsSnapshot)
+	runtimeChanged        func()
+	progressInterval      time.Duration
+	statusTimeout         time.Duration
+	actionTimeout         time.Duration
+	ensurePiTimeout       time.Duration
+	ensurePiRetryInterval time.Duration
+	now                   func() time.Time
+	ctx                   context.Context
+	stop                  context.CancelFunc
 
 	// refreshMu serializes status reads so an older read never replaces a
 	// newer one.
 	refreshMu sync.Mutex
 	// publishMu orders updates of current with their Publish calls.
 	publishMu sync.Mutex
+	piWg      sync.WaitGroup
 	mu        sync.Mutex
+	closed    bool
 	current   *wire.LocalModelsSnapshot
 	// loaded identifies the loaded models of the last status read; nil
 	// before the first one.
 	loaded        *string
+	piExecutable  string
+	piEnsuring    bool
+	piFailures    int
+	piRetryAt     time.Time
 	jobs          map[string]*job
 	lastProgress  time.Time
 	progressTimer *time.Timer
@@ -111,8 +133,11 @@ func New(options Options) *Library {
 	ctx, stop := context.WithCancel(context.Background())
 	library := &Library{
 		tool: options.Tool, environment: options.Environment, jobDirectory: options.JobDirectory,
-		publish: options.Publish, runtimeChanged: options.RuntimeChanged,
+		harnessDirectory: options.HarnessDirectory, piExecutable: options.InitialPiExecutable,
+		nodePath: options.NodePath,
+		publish:  options.Publish, runtimeChanged: options.RuntimeChanged,
 		progressInterval: options.ProgressInterval, statusTimeout: options.StatusTimeout, actionTimeout: options.ActionTimeout,
+		ensurePiTimeout: options.EnsurePiTimeout, ensurePiRetryInterval: options.EnsurePiRetryInterval,
 		now: time.Now, ctx: ctx, stop: stop, jobs: make(map[string]*job),
 	}
 	if library.progressInterval <= 0 {
@@ -123,6 +148,12 @@ func New(options Options) *Library {
 	}
 	if library.actionTimeout <= 0 {
 		library.actionTimeout = defaultActionTimeout
+	}
+	if library.ensurePiTimeout <= 0 {
+		library.ensurePiTimeout = defaultEnsurePiTimeout
+	}
+	if library.ensurePiRetryInterval <= 0 {
+		library.ensurePiRetryInterval = defaultEnsurePiRetryInterval
 	}
 	if library.publish == nil {
 		library.publish = func(wire.LocalModelsSnapshot) {}
@@ -141,25 +172,88 @@ func New(options Options) *Library {
 func (l *Library) Close() {
 	l.stop()
 	l.mu.Lock()
+	l.closed = true
 	if l.progressTimer != nil {
 		l.progressTimer.Stop()
 	}
 	l.mu.Unlock()
+	l.piWg.Wait()
+}
+
+// PiExecutable returns the managed Pi executable provisioned for local
+// models, or an empty string when none has been resolved.
+func (l *Library) PiExecutable() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.piExecutable
+}
+
+func (l *Library) scheduleEnsurePi() {
+	if l.harnessDirectory == "" || l.tool == nil || !l.tool.installed() {
+		return
+	}
+	l.mu.Lock()
+	now := l.now()
+	if l.closed || l.ctx.Err() != nil || l.piExecutable != "" || l.piEnsuring || (!l.piRetryAt.IsZero() && now.Before(l.piRetryAt)) {
+		l.mu.Unlock()
+		return
+	}
+	l.piEnsuring = true
+	l.piWg.Add(1)
+	l.mu.Unlock()
+
+	go func() {
+		defer l.piWg.Done()
+		ctx, cancel := context.WithTimeout(l.ctx, l.ensurePiTimeout)
+		executable, err := l.tool.EnsurePi(ctx, l.environment, l.harnessDirectory, l.nodePath)
+		cancel()
+
+		l.mu.Lock()
+		l.piEnsuring = false
+		if l.closed || l.ctx.Err() != nil {
+			l.mu.Unlock()
+			return
+		}
+		if err == nil && executable != "" {
+			l.piExecutable = executable
+			l.piFailures = 0
+			l.piRetryAt = time.Time{}
+			l.mu.Unlock()
+			slog.Info("local_models.pi_ready", "executable", executable)
+			l.runtimeChanged()
+			return
+		}
+		l.piFailures++
+		backoff := min(l.ensurePiRetryInterval, maxEnsurePiRetryInterval)
+		for range l.piFailures - 1 {
+			if backoff >= maxEnsurePiRetryInterval {
+				break
+			}
+			backoff = min(backoff*2, maxEnsurePiRetryInterval)
+		}
+		l.piRetryAt = l.now().Add(backoff)
+		l.mu.Unlock()
+		if err != nil {
+			slog.Warn("local_models.pi_install_failed", "error", err, "retry_in", backoff)
+		}
+	}()
 }
 
 // Refresh reads the library now, publishes the snapshot and returns it.
 func (l *Library) Refresh(ctx context.Context) wire.LocalModelsSnapshot {
 	l.refreshMu.Lock()
-	defer l.refreshMu.Unlock()
 	snapshot := l.read(ctx)
 	if ctx.Err() != nil {
 		// A read cut short by its caller says nothing about the library.
+		l.refreshMu.Unlock()
 		return snapshot
 	}
 	changed := false
+	hasLoaded := false
 	l.mu.Lock()
 	if snapshot.Available {
 		key := loadedKey(snapshot)
+		hasLoaded = key != ""
 		changed = l.loaded != nil && *l.loaded != key
 		l.loaded = &key
 	}
@@ -171,6 +265,10 @@ func (l *Library) Refresh(ctx context.Context) wire.LocalModelsSnapshot {
 		l.runtimeChanged()
 	}
 	l.reconcile(snapshot)
+	l.refreshMu.Unlock()
+	if hasLoaded {
+		l.scheduleEnsurePi()
+	}
 	return cloneSnapshot(snapshot)
 }
 
