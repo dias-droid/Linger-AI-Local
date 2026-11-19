@@ -1402,6 +1402,81 @@ for (const keys of [{}, { SONIOX_API_KEY: "soniox-1" }] as Record<
     expect(events).not.toContain("soniox-1");
   });
 
+test("LiveKit holds its port before the model controller chooses one", async () => {
+  const f = await fixture();
+  const livekit = net.createServer();
+  const modelController = net.createServer();
+  const listen = (server: net.Server, port: number) =>
+    new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen({ host: "127.0.0.1", port, exclusive: true }, () => {
+        server.off("error", reject);
+        resolve();
+      });
+    });
+  const close = (server: net.Server) =>
+    new Promise<void>((resolve) => {
+      if (server.listening) server.close(() => resolve());
+      else resolve();
+    });
+  const actual = await vi.importActual<typeof import("./native-livekit.js")>(
+    "./native-livekit.js",
+  );
+  vi.mocked(readLiveKitSettings).mockImplementation(actual.readLiveKitSettings);
+  vi.mocked(prepareNativeVoiceTools).mockResolvedValue({
+    bin: path.join(f.home, "voice"),
+    livekit: path.join(f.home, "voice", "livekit-server"),
+  });
+  vi.mocked(startNativeLiveKit).mockImplementation(async ({ settings }) => {
+    if (!livekit.listening) await listen(livekit, settings.httpPort);
+    f.running.add("livekit");
+  });
+  vi.mocked(prepareFoundationServices).mockImplementation(async (instance) => {
+    if (modelController.listening) return;
+    const settings = (await actual.readLiveKitSettings(instance.root))!;
+    // Force the allocation observed on a cold setup: the controller gets
+    // LiveKit's assigned port whenever LiveKit has not bound it yet.
+    try {
+      await listen(modelController, settings.httpPort);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;
+      await listen(modelController, 0);
+    }
+  });
+  const stop = vi.mocked(stopNativeProcess).getMockImplementation()!;
+  vi.mocked(stopNativeProcess).mockImplementation(async (root, name) => {
+    if (name === "livekit") await close(livekit);
+    await stop(root, name);
+  });
+  try {
+    const installed = await runFlow(f);
+    expect(installed.code, installed.message).toBe(0);
+    const livekitAddress = livekit.address();
+    const controllerAddress = modelController.address();
+    expect(livekitAddress).not.toBeNull();
+    expect(controllerAddress).not.toBeNull();
+    expect(controllerAddress).not.toEqual(livekitAddress);
+
+    // On a retry after a later startup failure, roll back only the LiveKit
+    // this run started; keep the controller and reuse the original port.
+    const instanceRoot = path.join(f.home, "instances", "native-flow");
+    await stopNativeProcess(instanceRoot, "livekit");
+    vi.mocked(prepareModelGateway).mockRejectedValueOnce(
+      new Error("test gateway startup failure"),
+    );
+    expect(await runFlow(f)).toMatchObject({
+      code: 1,
+      message: expect.stringContaining("test gateway startup failure"),
+    });
+    expect(livekit.listening).toBe(false);
+    expect(modelController.address()).toEqual(controllerAddress);
+    expect(await runFlow(f)).toMatchObject({ code: 0 });
+    expect(livekit.address()).toEqual(livekitAddress);
+  } finally {
+    await Promise.all([close(livekit), close(modelController)]);
+  }
+});
+
 for (const tools of ["absent", "failed"] as const)
   test(`voice stays off and the install continues when voice tools are ${tools}`, async () => {
     const { events, services, env } = await installVoice(tools, {

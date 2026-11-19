@@ -860,6 +860,24 @@ async function runNativeSource(
         await runtime;
         signal.throwIfAborted();
         await command("migrate");
+        step("services", "Starting native collaboration services…");
+        const ends = await logEnds(current);
+        // Bind LiveKit's saved port before the model controller asks the OS
+        // for its own port; an unbound port can be assigned to either service.
+        const liveKit = voice && (await readLiveKitSettings(current.root));
+        if (voice && liveKit) {
+          if (!(await inspectNativeProcess(current.root, "livekit")).running)
+            started.push("livekit");
+          await startNativeLiveKit({
+            root: current.root,
+            executable: voice.livekit,
+            settings: liveKit,
+            signal,
+          });
+        } else if (
+          (await inspectNativeProcess(current.root, "livekit")).running
+        )
+          await stopNativeProcess(current.root, "livekit");
         await prepareFoundationServices(current, choice, {
           home,
           signal,
@@ -879,22 +897,6 @@ async function runNativeSource(
             onEvent: emit,
           },
         );
-        step("services", "Starting native collaboration services…");
-        const ends = await logEnds(current);
-        const liveKit = voice && (await readLiveKitSettings(current.root));
-        if (voice && liveKit) {
-          if (!(await inspectNativeProcess(current.root, "livekit")).running)
-            started.push("livekit");
-          await startNativeLiveKit({
-            root: current.root,
-            executable: voice.livekit,
-            settings: liveKit,
-            signal,
-          });
-        } else if (
-          (await inspectNativeProcess(current.root, "livekit")).running
-        )
-          await stopNativeProcess(current.root, "livekit");
         const serviceOptions = (name: "teamhub" | "node-services" | "web") => ({
           root: current.root,
           name,
