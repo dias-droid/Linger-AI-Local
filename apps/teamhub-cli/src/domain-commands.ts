@@ -22,6 +22,7 @@ import { businessCommandDefinitions } from "./business-commands.js";
 import { mailCommandDefinitions } from "./connector-mail.js";
 import { gmailCanvasCommandDefinitions } from "./connector-gmail-canvas.js";
 import { calendarCommandDefinitions } from "./connector-calendar.js";
+import { outlookCalendarCommandDefinitions } from "./connector-outlook-calendar.js";
 import { webCommandDefinitions } from "./web-commands.js";
 import { publicBusinessSchemas } from "./business-schemas.js";
 import { CliError } from "./errors.js";
@@ -40,6 +41,7 @@ export const commandDefinitions: readonly CommandDefinition[] = [
   ...notionCommandDefinitions,
   ...slackCommandDefinitions,
   ...calendarCommandDefinitions,
+  ...outlookCalendarCommandDefinitions,
   ...webCommandDefinitions,
 ];
 export interface DomainCommand {
@@ -113,6 +115,7 @@ export function domainHelp(prefix: readonly string[] = []): string {
     [
       "gmail",
       "outlook",
+      "outlook-calendar",
       "slack",
       "gcal",
       "notion",

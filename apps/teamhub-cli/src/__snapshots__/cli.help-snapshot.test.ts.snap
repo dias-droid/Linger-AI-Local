@@ -2471,6 +2471,268 @@ LEARN MORE
 {"command":["outlook","send"],"description":"Send a new message or an existing draft.","read_only":false,"input_schema":{"type":"object","additionalProperties":false,"properties":{"content":{"type":"string","minLength":1,"maxLength":1048576},"bodyFormat":{"enum":["text","markdown","html"]},"attachments":{"type":"array","items":{"type":"string","minLength":1},"minItems":1,"maxItems":20},"to":{"type":"array","items":{"type":"string","format":"email"},"minItems":1,"maxItems":100},"cc":{"type":"array","items":{"type":"string","format":"email"},"minItems":1,"maxItems":100},"bcc":{"type":"array","items":{"type":"string","format":"email"},"minItems":1,"maxItems":100},"subject":{"type":"string","minLength":1},"draftId":{"type":"string","minLength":1},"account":{"type":"string","minLength":1,"maxLength":240}}},"output_schema":{"anyOf":[{"type":"object","additionalProperties":false,"properties":{"account":{"type":"object","additionalProperties":false,"properties":{"connectionId":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"displayName":{"type":"string"},"identityLabel":{"type":"string"}},"required":["connectionId","name","displayName","identityLabel"]},"result":{"type":"object","additionalProperties":false,"properties":{"action":{"enum":["sent","drafted","draft_updated","archived"]},"acknowledged":{"const":true},"messageId":{"type":"string","minLength":1},"threadId":{"type":"string","minLength":1},"draftId":{"type":"string","minLength":1},"url":{"type":"string","minLength":1}},"required":["action","acknowledged"]}},"required":["account","result"]},{"type":"object","additionalProperties":false,"properties":{"account":{"type":"object","additionalProperties":false,"properties":{"connectionId":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"displayName":{"type":"string"},"identityLabel":{"type":"string"}},"required":["connectionId","name","displayName","identityLabel"]},"result":{"type":"object","additionalProperties":false,"properties":{"action":{"const":"confirmation_requested"},"confirmation":{"type":"object","additionalProperties":false,"properties":{"status":{"const":"pending"},"interactionId":{"type":"string","minLength":1},"messageId":{"type":"string","minLength":1},"roomId":{"type":"string","minLength":1}},"required":["status","interactionId","messageId","roomId"]}},"required":["action","confirmation"]}},"required":["account","result"]}]},"cli":{"usage":["teamhub outlook send --to <email> --subject <text> (--content <text> | --file <path|->) [--markdown | --html] [--attach <path>] [flags]","teamhub outlook send --draft <draft-id> [flags]"],"arguments":[],"options":{"--attach":{"description":"Attach a local regular file; repeatable; stdin is rejected.","repeatable":true},"--content":{"description":"Body text; exclusive with --file."},"--file":{"description":"UTF-8 body file; - reads stdin, not an attachment."},"--markdown":{"description":"TeamHub converts Markdown to HTML on the backend.","boolean":true},"--html":{"description":"Use HTML body text as-is.","boolean":true},"--to":{"description":"One bare email address; repeatable.","repeatable":true},"--cc":{"description":"One Cc email address; repeatable.","repeatable":true},"--bcc":{"description":"One Bcc email address; repeatable.","repeatable":true},"--subject":{"description":"Subject with no line breaks."},"--draft":{"description":"Send a saved draft; exclusive with body, recipients, and format flags."},"--account":{"description":"Select a connection ID or complete account label; when authorization is missing, an authorization card is shown in the chat."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true},"--operation-id":{"description":"Stable operation identity for recovery."}},"notes":["The external write waits for the sponsor to approve a confirmation card in the chat; TeamHub then runs it and sends you the result, or the denial and its reason.","Help and schema are available offline; TeamHub checks current access at execution time."]}}
 ",
   },
+  "outlook-calendar calendars": {
+    "help": "exit 0
+List available Outlook calendars.
+
+USAGE
+  teamhub outlook-calendar calendars [flags]
+  teamhub outlook-calendar calendars --schema [--json]
+
+FLAGS
+  --limit <value>               1–100 items per page; default 20.
+  --cursor <value>              Cursor from the previous page; keep the same account and filters.
+  --account <value>             Select a connection ID or complete account label; when authorization is missing, an authorization card is shown in the chat.
+  --json                        Print complete JSON instead of the default readable text.
+  --schema                      Show offline input and output schemas without business arguments.
+
+INHERITED FLAGS
+  -h, --help                   Show help.
+
+OUTPUT
+  Shows the actual account, plus Calendar IDs, names, time zones, access roles, and next-page cursor.
+
+Help and schema are available offline; TeamHub checks current access at execution time.
+
+EXAMPLES
+  teamhub outlook-calendar calendars
+
+LEARN MORE
+  teamhub outlook-calendar --help
+  teamhub outlook-calendar calendars --schema --json
+",
+    "schema": "exit 0
+{"command":["outlook-calendar","calendars"],"description":"List available Outlook calendars.","read_only":true,"input_schema":{"type":"object","additionalProperties":false,"properties":{"limit":{"type":"integer","minimum":1,"maximum":100,"default":20},"cursor":{"type":"string","minLength":1},"account":{"type":"string","minLength":1,"maxLength":240}}},"output_schema":{"type":"object","additionalProperties":false,"properties":{"account":{"type":"object","additionalProperties":false,"properties":{"connectionId":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"displayName":{"type":"string"},"identityLabel":{"type":"string"}},"required":["connectionId","name","displayName","identityLabel"]},"calendars":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"calendarId":{"type":"string","minLength":1},"name":{"type":"string"},"timeZone":{"type":"string"},"accessRole":{"type":"string"},"primary":{"type":"boolean"}},"required":["calendarId"]}},"hasMore":{"type":"boolean"},"nextCursor":{"type":"string","minLength":1}},"required":["account","calendars","hasMore"]},"cli":{"usage":["teamhub outlook-calendar calendars [flags]"],"arguments":[],"options":{"--limit":{"description":"1–100 items per page; default 20."},"--cursor":{"description":"Cursor from the previous page; keep the same account and filters."},"--account":{"description":"Select a connection ID or complete account label; when authorization is missing, an authorization card is shown in the chat."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true}},"notes":["Help and schema are available offline; TeamHub checks current access at execution time."]}}
+",
+  },
+  "outlook-calendar cancel": {
+    "help": "exit 0
+Cancel an Outlook meeting as the organizer and notify attendees.
+
+USAGE
+  teamhub outlook-calendar cancel <event-id> [flags]
+  teamhub outlook-calendar cancel --schema [--json]
+
+FLAGS
+  --calendar <value>            Calendar ID; default primary.
+  --account <value>             Select a connection ID or complete account label; when authorization is missing, an authorization card is shown in the chat.
+  --json                        Print complete JSON instead of the default readable text.
+  --schema                      Show offline input and output schemas without business arguments.
+  --operation-id <value>        Stable identity for this operation; keep it when the outcome is unknown and do not blindly resend.
+
+INHERITED FLAGS
+  -h, --help                   Show help.
+
+OUTPUT
+  Shows the actual account, plus The actual event ID and cancel receipt.
+
+Help and schema are available offline; TeamHub checks current access at execution time.
+
+EXAMPLES
+  teamhub outlook-calendar cancel event_example
+
+LEARN MORE
+  teamhub outlook-calendar --help
+  teamhub outlook-calendar cancel --schema --json
+",
+    "schema": "exit 0
+{"command":["outlook-calendar","cancel"],"description":"Cancel an Outlook meeting as the organizer and notify attendees.","read_only":false,"input_schema":{"type":"object","additionalProperties":false,"properties":{"calendarId":{"type":"string","minLength":1,"default":"primary"},"eventId":{"type":"string","minLength":1},"account":{"type":"string","minLength":1,"maxLength":240}}},"output_schema":{"anyOf":[{"type":"object","additionalProperties":false,"properties":{"account":{"type":"object","additionalProperties":false,"properties":{"connectionId":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"displayName":{"type":"string"},"identityLabel":{"type":"string"}},"required":["connectionId","name","displayName","identityLabel"]},"result":{"type":"object","additionalProperties":false,"properties":{"action":{"enum":["created","updated","canceled"]},"acknowledged":{"const":true},"event":{"type":"object","additionalProperties":false,"properties":{"eventId":{"type":"string","minLength":1},"calendarId":{"type":"string","minLength":1},"title":{"type":"string"},"description":{"type":"string"},"location":{"type":"string"},"status":{"type":"string"},"organizerEmail":{"type":"string"},"url":{"type":"string"},"meetingUrl":{"type":"string"},"recurringEventId":{"type":"string"},"start":{"oneOf":[{"type":"object","additionalProperties":false,"properties":{"date":{"type":"string","format":"date"}},"required":["date"]},{"type":"object","additionalProperties":false,"properties":{"dateTime":{"type":"string","format":"date-time"},"timeZone":{"type":"string","minLength":1}},"required":["dateTime"]}]},"end":{"oneOf":[{"type":"object","additionalProperties":false,"properties":{"date":{"type":"string","format":"date"}},"required":["date"]},{"type":"object","additionalProperties":false,"properties":{"dateTime":{"type":"string","format":"date-time"},"timeZone":{"type":"string","minLength":1}},"required":["dateTime"]}]},"attendees":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"email":{"type":"string","minLength":1},"responseStatus":{"type":"string"}},"required":["email"]}}},"required":["eventId"]},"eventId":{"type":"string","minLength":1}},"required":["action","acknowledged"]}},"required":["account","result"]},{"type":"object","additionalProperties":false,"properties":{"account":{"type":"object","additionalProperties":false,"properties":{"connectionId":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"displayName":{"type":"string"},"identityLabel":{"type":"string"}},"required":["connectionId","name","displayName","identityLabel"]},"result":{"type":"object","additionalProperties":false,"properties":{"action":{"const":"confirmation_requested"},"confirmation":{"type":"object","additionalProperties":false,"properties":{"status":{"const":"pending"},"interactionId":{"type":"string","minLength":1},"messageId":{"type":"string","minLength":1},"roomId":{"type":"string","minLength":1}},"required":["status","interactionId","messageId","roomId"]}},"required":["action","confirmation"]}},"required":["account","result"]}]},"cli":{"usage":["teamhub outlook-calendar cancel <event-id> [flags]"],"arguments":[],"options":{"--calendar":{"description":"Calendar ID; default primary."},"--account":{"description":"Select a connection ID or complete account label; when authorization is missing, an authorization card is shown in the chat."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true},"--operation-id":{"description":"Stable operation identity for recovery."}},"notes":["Help and schema are available offline; TeamHub checks current access at execution time."]}}
+",
+  },
+  "outlook-calendar create": {
+    "help": "exit 0
+Create an Outlook meeting and notify attendees.
+
+USAGE
+  teamhub outlook-calendar create <title> --start <RFC3339> [--end <RFC3339> | --duration <minutes>] [flags]
+  teamhub outlook-calendar create --schema [--json]
+
+FLAGS
+  --calendar <value>            Calendar ID; default primary.
+  --content <value>             Event description; exclusive with --file.
+  --file <value>                UTF-8 description file; - reads stdin.
+  --start <value>               RFC3339 start time.
+  --end <value>                 RFC3339 end time; exclusive with --duration.
+  --duration <value>            Duration in minutes, 1–1440; default 30.
+  --attendee <value>            Attendee email; repeatable; at most 50.
+  --location <value>            Location; at most 1000 characters.
+  --teams                       Request a Microsoft Teams meeting link (requires Microsoft 365 Teams).
+  --account <value>             Select a connection ID or complete account label; when authorization is missing, an authorization card is shown in the chat.
+  --json                        Print complete JSON instead of the default readable text.
+  --schema                      Show offline input and output schemas without business arguments.
+  --operation-id <value>        Stable identity for this operation; keep it when the outcome is unknown and do not blindly resend.
+
+INHERITED FLAGS
+  -h, --help                   Show help.
+
+OUTPUT
+  Shows the actual account, plus The event after create, plus a meeting link when the provider returns one.
+
+Help and schema are available offline; TeamHub checks current access at execution time.
+
+EXAMPLES
+  teamhub outlook-calendar create 'Project sync' --start 2026-10-19T10:00:00-04:00 --duration 30 --attendee alice@example.invalid --teams
+
+LEARN MORE
+  teamhub outlook-calendar --help
+  teamhub outlook-calendar create --schema --json
+",
+    "schema": "exit 0
+{"command":["outlook-calendar","create"],"description":"Create an Outlook meeting and notify attendees.","read_only":false,"input_schema":{"type":"object","additionalProperties":false,"properties":{"calendarId":{"type":"string","minLength":1,"default":"primary"},"eventId":{"type":"string","minLength":1},"title":{"type":"string","minLength":1},"start":{"type":"string","format":"date-time"},"end":{"type":"string","format":"date-time"},"description":{"type":"string"},"location":{"type":"string","minLength":1},"attendees":{"type":"array","items":{"type":"string","format":"email"},"maxItems":50},"addAttendees":{"type":"array","items":{"type":"string","format":"email"},"maxItems":50},"removeAttendees":{"type":"array","items":{"type":"string","format":"email"},"maxItems":50},"teams":{"type":"boolean"},"account":{"type":"string","minLength":1,"maxLength":240}}},"output_schema":{"anyOf":[{"type":"object","additionalProperties":false,"properties":{"account":{"type":"object","additionalProperties":false,"properties":{"connectionId":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"displayName":{"type":"string"},"identityLabel":{"type":"string"}},"required":["connectionId","name","displayName","identityLabel"]},"result":{"type":"object","additionalProperties":false,"properties":{"action":{"enum":["created","updated","canceled"]},"acknowledged":{"const":true},"event":{"type":"object","additionalProperties":false,"properties":{"eventId":{"type":"string","minLength":1},"calendarId":{"type":"string","minLength":1},"title":{"type":"string"},"description":{"type":"string"},"location":{"type":"string"},"status":{"type":"string"},"organizerEmail":{"type":"string"},"url":{"type":"string"},"meetingUrl":{"type":"string"},"recurringEventId":{"type":"string"},"start":{"oneOf":[{"type":"object","additionalProperties":false,"properties":{"date":{"type":"string","format":"date"}},"required":["date"]},{"type":"object","additionalProperties":false,"properties":{"dateTime":{"type":"string","format":"date-time"},"timeZone":{"type":"string","minLength":1}},"required":["dateTime"]}]},"end":{"oneOf":[{"type":"object","additionalProperties":false,"properties":{"date":{"type":"string","format":"date"}},"required":["date"]},{"type":"object","additionalProperties":false,"properties":{"dateTime":{"type":"string","format":"date-time"},"timeZone":{"type":"string","minLength":1}},"required":["dateTime"]}]},"attendees":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"email":{"type":"string","minLength":1},"responseStatus":{"type":"string"}},"required":["email"]}}},"required":["eventId"]},"eventId":{"type":"string","minLength":1}},"required":["action","acknowledged"]}},"required":["account","result"]},{"type":"object","additionalProperties":false,"properties":{"account":{"type":"object","additionalProperties":false,"properties":{"connectionId":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"displayName":{"type":"string"},"identityLabel":{"type":"string"}},"required":["connectionId","name","displayName","identityLabel"]},"result":{"type":"object","additionalProperties":false,"properties":{"action":{"const":"confirmation_requested"},"confirmation":{"type":"object","additionalProperties":false,"properties":{"status":{"const":"pending"},"interactionId":{"type":"string","minLength":1},"messageId":{"type":"string","minLength":1},"roomId":{"type":"string","minLength":1}},"required":["status","interactionId","messageId","roomId"]}},"required":["action","confirmation"]}},"required":["account","result"]}]},"cli":{"usage":["teamhub outlook-calendar create <title> --start <RFC3339> [--end <RFC3339> | --duration <minutes>] [flags]"],"arguments":[],"options":{"--calendar":{"description":"Calendar ID; default primary."},"--content":{"description":"Event description; exclusive with --file."},"--file":{"description":"UTF-8 description file; - reads stdin."},"--start":{"description":"RFC3339 start time."},"--end":{"description":"RFC3339 end time; exclusive with --duration."},"--duration":{"description":"Duration in minutes, 1–1440; default 30."},"--attendee":{"description":"Attendee email; repeatable; at most 50.","repeatable":true},"--location":{"description":"Location; at most 1000 characters."},"--teams":{"description":"Request a Microsoft Teams meeting link (requires Microsoft 365 Teams).","boolean":true},"--account":{"description":"Select a connection ID or complete account label; when authorization is missing, an authorization card is shown in the chat."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true},"--operation-id":{"description":"Stable operation identity for recovery."}},"notes":["Help and schema are available offline; TeamHub checks current access at execution time."]}}
+",
+  },
+  "outlook-calendar free": {
+    "help": "exit 0
+Find shared free time across Outlook calendars; query only, does not book.
+
+USAGE
+  teamhub outlook-calendar free --from <RFC3339> --to <RFC3339> [--with <email>] [--calendar <id>] [flags]
+  teamhub outlook-calendar free --schema [--json]
+
+FLAGS
+  --from <value>                RFC3339 start of the time window.
+  --to <value>                  RFC3339 end of the time window; at most 31 days.
+  --with <value>                Email of another person or room to check availability; repeatable.
+  --calendar <value>            Calendar ID in this mailbox; repeatable; includes primary when omitted.
+  --duration <value>            Minimum consecutive free minutes, 1–1440; default 30.
+  --account <value>             Select a connection ID or complete account label; when authorization is missing, an authorization card is shown in the chat.
+  --json                        Print complete JSON instead of the default readable text.
+  --schema                      Show offline input and output schemas without business arguments.
+
+INHERITED FLAGS
+  -h, --help                   Show help.
+
+OUTPUT
+  Shows the actual account, plus Time ranges that are free on every selected calendar; does not create events.
+
+Help and schema are available offline; TeamHub checks current access at execution time.
+
+EXAMPLES
+  teamhub outlook-calendar free --from 2026-10-19T09:00:00-04:00 --to 2026-10-19T18:00:00-04:00 --with alice@example.invalid
+
+LEARN MORE
+  teamhub outlook-calendar --help
+  teamhub outlook-calendar free --schema --json
+",
+    "schema": "exit 0
+{"command":["outlook-calendar","free"],"description":"Find shared free time across Outlook calendars; query only, does not book.","read_only":true,"input_schema":{"type":"object","additionalProperties":false,"properties":{"from":{"type":"string","format":"date-time"},"to":{"type":"string","format":"date-time"},"calendarIds":{"type":"array","items":{"type":"string","minLength":1},"minItems":1,"maxItems":20},"withEmails":{"type":"array","items":{"type":"string","format":"email"},"maxItems":20},"durationMinutes":{"type":"integer","minimum":1,"maximum":1440,"default":30},"account":{"type":"string","minLength":1,"maxLength":240}}},"output_schema":{"type":"object","additionalProperties":false,"properties":{"account":{"type":"object","additionalProperties":false,"properties":{"connectionId":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"displayName":{"type":"string"},"identityLabel":{"type":"string"}},"required":["connectionId","name","displayName","identityLabel"]},"calendarIds":{"type":"array","items":{"type":"string","minLength":1}},"window":{"type":"object","additionalProperties":false,"properties":{"from":{"type":"string","format":"date-time"},"to":{"type":"string","format":"date-time"}},"required":["from","to"]},"durationMinutes":{"type":"integer"},"slots":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"start":{"type":"string","format":"date-time"},"end":{"type":"string","format":"date-time"},"durationMinutes":{"type":"integer"}},"required":["start","end","durationMinutes"]}}},"required":["account","calendarIds","window","durationMinutes","slots"]},"cli":{"usage":["teamhub outlook-calendar free --from <RFC3339> --to <RFC3339> [--with <email>] [--calendar <id>] [flags]"],"arguments":[],"options":{"--from":{"description":"RFC3339 start of the time window."},"--to":{"description":"RFC3339 end of the time window; at most 31 days."},"--with":{"description":"Email of another person or room to check availability; repeatable.","repeatable":true},"--calendar":{"description":"Calendar ID in this mailbox; repeatable; includes primary when omitted.","repeatable":true},"--duration":{"description":"Minimum consecutive free minutes, 1–1440; default 30."},"--account":{"description":"Select a connection ID or complete account label; when authorization is missing, an authorization card is shown in the chat."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true}},"notes":["Help and schema are available offline; TeamHub checks current access at execution time."]}}
+",
+  },
+  "outlook-calendar list": {
+    "help": "exit 0
+List Outlook events for a day or a time window.
+
+USAGE
+  teamhub outlook-calendar list [flags]
+  teamhub outlook-calendar list --schema [--json]
+
+FLAGS
+  --calendar <value>            Calendar ID; default primary.
+  --limit <value>               1–100 items per page; default 20.
+  --cursor <value>              Cursor from the previous page; keep the same account and filters.
+  --date <value>                today / tomorrow / YYYY-MM-DD; default today.
+  --from <value>                RFC3339 start time; use together with --to.
+  --to <value>                  RFC3339 end time, exclusive of this instant.
+  --timezone <value>            IANA time zone for date mode; default mailbox time zone.
+  --query <value>               Event subject keyword; at most 1000 characters.
+  --account <value>             Select a connection ID or complete account label; when authorization is missing, an authorization card is shown in the chat.
+  --json                        Print complete JSON instead of the default readable text.
+  --schema                      Show offline input and output schemas without business arguments.
+
+INHERITED FLAGS
+  -h, --help                   Show help.
+
+OUTPUT
+  Shows the actual account, plus Event IDs, titles, start/end times, and next-page cursor.
+
+Help and schema are available offline; TeamHub checks current access at execution time.
+
+EXAMPLES
+  teamhub outlook-calendar list --date tomorrow --timezone America/New_York
+
+LEARN MORE
+  teamhub outlook-calendar --help
+  teamhub outlook-calendar list --schema --json
+",
+    "schema": "exit 0
+{"command":["outlook-calendar","list"],"description":"List Outlook events for a day or a time window.","read_only":true,"input_schema":{"type":"object","additionalProperties":false,"properties":{"calendarId":{"type":"string","minLength":1,"default":"primary"},"limit":{"type":"integer","minimum":1,"maximum":100,"default":20},"cursor":{"type":"string","minLength":1},"date":{"type":"string","minLength":1},"timeZone":{"type":"string","minLength":1},"from":{"type":"string","format":"date-time"},"to":{"type":"string","format":"date-time"},"query":{"type":"string","minLength":1},"account":{"type":"string","minLength":1,"maxLength":240}}},"output_schema":{"type":"object","additionalProperties":false,"properties":{"account":{"type":"object","additionalProperties":false,"properties":{"connectionId":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"displayName":{"type":"string"},"identityLabel":{"type":"string"}},"required":["connectionId","name","displayName","identityLabel"]},"events":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"eventId":{"type":"string","minLength":1},"calendarId":{"type":"string","minLength":1},"title":{"type":"string"},"description":{"type":"string"},"location":{"type":"string"},"status":{"type":"string"},"organizerEmail":{"type":"string"},"url":{"type":"string"},"meetingUrl":{"type":"string"},"recurringEventId":{"type":"string"},"start":{"oneOf":[{"type":"object","additionalProperties":false,"properties":{"date":{"type":"string","format":"date"}},"required":["date"]},{"type":"object","additionalProperties":false,"properties":{"dateTime":{"type":"string","format":"date-time"},"timeZone":{"type":"string","minLength":1}},"required":["dateTime"]}]},"end":{"oneOf":[{"type":"object","additionalProperties":false,"properties":{"date":{"type":"string","format":"date"}},"required":["date"]},{"type":"object","additionalProperties":false,"properties":{"dateTime":{"type":"string","format":"date-time"},"timeZone":{"type":"string","minLength":1}},"required":["dateTime"]}]},"attendees":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"email":{"type":"string","minLength":1},"responseStatus":{"type":"string"}},"required":["email"]}}},"required":["eventId"]}},"hasMore":{"type":"boolean"},"nextCursor":{"type":"string","minLength":1}},"required":["account","events","hasMore"]},"cli":{"usage":["teamhub outlook-calendar list [flags]"],"arguments":[],"options":{"--calendar":{"description":"Calendar ID; default primary."},"--limit":{"description":"1–100 items per page; default 20."},"--cursor":{"description":"Cursor from the previous page; keep the same account and filters."},"--date":{"description":"today / tomorrow / YYYY-MM-DD; default today."},"--from":{"description":"RFC3339 start time; use together with --to."},"--to":{"description":"RFC3339 end time, exclusive of this instant."},"--timezone":{"description":"IANA time zone for date mode; default mailbox time zone."},"--query":{"description":"Event subject keyword; at most 1000 characters."},"--account":{"description":"Select a connection ID or complete account label; when authorization is missing, an authorization card is shown in the chat."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true}},"notes":["Help and schema are available offline; TeamHub checks current access at execution time."]}}
+",
+  },
+  "outlook-calendar read": {
+    "help": "exit 0
+Read Outlook event details and attendees.
+
+USAGE
+  teamhub outlook-calendar read <event-id> [flags]
+  teamhub outlook-calendar read --schema [--json]
+
+FLAGS
+  --calendar <value>            Calendar ID; default primary.
+  --account <value>             Select a connection ID or complete account label; when authorization is missing, an authorization card is shown in the chat.
+  --json                        Print complete JSON instead of the default readable text.
+  --schema                      Show offline input and output schemas without business arguments.
+
+INHERITED FLAGS
+  -h, --help                   Show help.
+
+OUTPUT
+  Shows the actual account, plus Event details, organizer, attendees, and any available meeting link.
+
+Help and schema are available offline; TeamHub checks current access at execution time.
+
+EXAMPLES
+  teamhub outlook-calendar read event_example
+
+LEARN MORE
+  teamhub outlook-calendar --help
+  teamhub outlook-calendar read --schema --json
+",
+    "schema": "exit 0
+{"command":["outlook-calendar","read"],"description":"Read Outlook event details and attendees.","read_only":true,"input_schema":{"type":"object","additionalProperties":false,"properties":{"calendarId":{"type":"string","minLength":1,"default":"primary"},"eventId":{"type":"string","minLength":1},"account":{"type":"string","minLength":1,"maxLength":240}}},"output_schema":{"type":"object","additionalProperties":false,"properties":{"account":{"type":"object","additionalProperties":false,"properties":{"connectionId":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"displayName":{"type":"string"},"identityLabel":{"type":"string"}},"required":["connectionId","name","displayName","identityLabel"]},"event":{"type":"object","additionalProperties":false,"properties":{"eventId":{"type":"string","minLength":1},"calendarId":{"type":"string","minLength":1},"title":{"type":"string"},"description":{"type":"string"},"location":{"type":"string"},"status":{"type":"string"},"organizerEmail":{"type":"string"},"url":{"type":"string"},"meetingUrl":{"type":"string"},"recurringEventId":{"type":"string"},"start":{"oneOf":[{"type":"object","additionalProperties":false,"properties":{"date":{"type":"string","format":"date"}},"required":["date"]},{"type":"object","additionalProperties":false,"properties":{"dateTime":{"type":"string","format":"date-time"},"timeZone":{"type":"string","minLength":1}},"required":["dateTime"]}]},"end":{"oneOf":[{"type":"object","additionalProperties":false,"properties":{"date":{"type":"string","format":"date"}},"required":["date"]},{"type":"object","additionalProperties":false,"properties":{"dateTime":{"type":"string","format":"date-time"},"timeZone":{"type":"string","minLength":1}},"required":["dateTime"]}]},"attendees":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"email":{"type":"string","minLength":1},"responseStatus":{"type":"string"}},"required":["email"]}}},"required":["eventId"]}},"required":["account","event"]},"cli":{"usage":["teamhub outlook-calendar read <event-id> [flags]"],"arguments":[],"options":{"--calendar":{"description":"Calendar ID; default primary."},"--account":{"description":"Select a connection ID or complete account label; when authorization is missing, an authorization card is shown in the chat."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true}},"notes":["Help and schema are available offline; TeamHub checks current access at execution time."]}}
+",
+  },
+  "outlook-calendar update": {
+    "help": "exit 0
+Update a single Outlook meeting and notify attendees.
+
+USAGE
+  teamhub outlook-calendar update <event-id> [flags]
+  teamhub outlook-calendar update --schema [--json]
+
+FLAGS
+  --calendar <value>            Calendar ID; default primary.
+  --content <value>             Event description; exclusive with --file.
+  --file <value>                UTF-8 description file; - reads stdin.
+  --title <value>               New title; at most 500 characters.
+  --start <value>               New start time; must be used with --end.
+  --end <value>                 New end time; must be used with --start.
+  --add-attendee <value>        Add one email; repeatable.
+  --remove-attendee <value>     Remove one email; repeatable; cannot remove the organizer.
+  --location <value>            New location.
+  --account <value>             Select a connection ID or complete account label; when authorization is missing, an authorization card is shown in the chat.
+  --json                        Print complete JSON instead of the default readable text.
+  --schema                      Show offline input and output schemas without business arguments.
+  --operation-id <value>        Stable identity for this operation; keep it when the outcome is unknown and do not blindly resend.
+
+INHERITED FLAGS
+  -h, --help                   Show help.
+
+OUTPUT
+  Shows the actual account, plus The event and attendees after update.
+
+Help and schema are available offline; TeamHub checks current access at execution time.
+
+EXAMPLES
+  teamhub outlook-calendar update event_example --title 'Project sync (rescheduled)' --add-attendee bob@example.invalid
+
+LEARN MORE
+  teamhub outlook-calendar --help
+  teamhub outlook-calendar update --schema --json
+",
+    "schema": "exit 0
+{"command":["outlook-calendar","update"],"description":"Update a single Outlook meeting and notify attendees.","read_only":false,"input_schema":{"type":"object","additionalProperties":false,"properties":{"calendarId":{"type":"string","minLength":1,"default":"primary"},"eventId":{"type":"string","minLength":1},"title":{"type":"string","minLength":1},"start":{"type":"string","format":"date-time"},"end":{"type":"string","format":"date-time"},"description":{"type":"string"},"location":{"type":"string","minLength":1},"attendees":{"type":"array","items":{"type":"string","format":"email"},"maxItems":50},"addAttendees":{"type":"array","items":{"type":"string","format":"email"},"maxItems":50},"removeAttendees":{"type":"array","items":{"type":"string","format":"email"},"maxItems":50},"teams":{"type":"boolean"},"account":{"type":"string","minLength":1,"maxLength":240}}},"output_schema":{"anyOf":[{"type":"object","additionalProperties":false,"properties":{"account":{"type":"object","additionalProperties":false,"properties":{"connectionId":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"displayName":{"type":"string"},"identityLabel":{"type":"string"}},"required":["connectionId","name","displayName","identityLabel"]},"result":{"type":"object","additionalProperties":false,"properties":{"action":{"enum":["created","updated","canceled"]},"acknowledged":{"const":true},"event":{"type":"object","additionalProperties":false,"properties":{"eventId":{"type":"string","minLength":1},"calendarId":{"type":"string","minLength":1},"title":{"type":"string"},"description":{"type":"string"},"location":{"type":"string"},"status":{"type":"string"},"organizerEmail":{"type":"string"},"url":{"type":"string"},"meetingUrl":{"type":"string"},"recurringEventId":{"type":"string"},"start":{"oneOf":[{"type":"object","additionalProperties":false,"properties":{"date":{"type":"string","format":"date"}},"required":["date"]},{"type":"object","additionalProperties":false,"properties":{"dateTime":{"type":"string","format":"date-time"},"timeZone":{"type":"string","minLength":1}},"required":["dateTime"]}]},"end":{"oneOf":[{"type":"object","additionalProperties":false,"properties":{"date":{"type":"string","format":"date"}},"required":["date"]},{"type":"object","additionalProperties":false,"properties":{"dateTime":{"type":"string","format":"date-time"},"timeZone":{"type":"string","minLength":1}},"required":["dateTime"]}]},"attendees":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"email":{"type":"string","minLength":1},"responseStatus":{"type":"string"}},"required":["email"]}}},"required":["eventId"]},"eventId":{"type":"string","minLength":1}},"required":["action","acknowledged"]}},"required":["account","result"]},{"type":"object","additionalProperties":false,"properties":{"account":{"type":"object","additionalProperties":false,"properties":{"connectionId":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"displayName":{"type":"string"},"identityLabel":{"type":"string"}},"required":["connectionId","name","displayName","identityLabel"]},"result":{"type":"object","additionalProperties":false,"properties":{"action":{"const":"confirmation_requested"},"confirmation":{"type":"object","additionalProperties":false,"properties":{"status":{"const":"pending"},"interactionId":{"type":"string","minLength":1},"messageId":{"type":"string","minLength":1},"roomId":{"type":"string","minLength":1}},"required":["status","interactionId","messageId","roomId"]}},"required":["action","confirmation"]}},"required":["account","result"]}]},"cli":{"usage":["teamhub outlook-calendar update <event-id> [flags]"],"arguments":[],"options":{"--calendar":{"description":"Calendar ID; default primary."},"--content":{"description":"Event description; exclusive with --file."},"--file":{"description":"UTF-8 description file; - reads stdin."},"--title":{"description":"New title; at most 500 characters."},"--start":{"description":"New start time; must be used with --end."},"--end":{"description":"New end time; must be used with --start."},"--add-attendee":{"description":"Add one email; repeatable.","repeatable":true},"--remove-attendee":{"description":"Remove one email; repeatable; cannot remove the organizer.","repeatable":true},"--location":{"description":"New location."},"--account":{"description":"Select a connection ID or complete account label; when authorization is missing, an authorization card is shown in the chat."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true},"--operation-id":{"description":"Stable operation identity for recovery."}},"notes":["Help and schema are available offline; TeamHub checks current access at execution time."]}}
+",
+  },
   "personal-profile show": {
     "help": "exit 0
 teamhub personal-profile show [flags]
@@ -3318,6 +3580,7 @@ Commands:
   message
   notion
   outlook
+  outlook-calendar
   personal-profile
   profile
   room
@@ -4090,6 +4353,27 @@ INHERITED FLAGS
 
 EXAMPLES
   teamhub outlook list --help
+",
+  "outlook-calendar": "exit 0
+outlook-calendar common operations.
+
+USAGE
+  teamhub outlook-calendar <command> [flags]
+
+COMMANDS
+  calendars          List available Outlook calendars.
+  list               List Outlook events for a day or a time window.
+  read               Read Outlook event details and attendees.
+  free               Find shared free time across Outlook calendars; query only, does not book.
+  create             Create an Outlook meeting and notify attendees.
+  update             Update a single Outlook meeting and notify attendees.
+  cancel             Cancel an Outlook meeting as the organizer and notify attendees.
+
+INHERITED FLAGS
+  -h, --help          Show help
+
+EXAMPLES
+  teamhub outlook-calendar calendars --help
 ",
   "personal-profile": "exit 0
 teamhub personal-profile show [flags]

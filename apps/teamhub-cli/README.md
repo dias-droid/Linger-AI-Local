@@ -64,7 +64,7 @@ Connected application commands may have their own file options. For those option
 
 ## Connected applications
 
-Eight applications have dedicated commands: Gmail, Outlook, Slack, Google Calendar, Notion, Google Drive, Figma and GitHub, with 50 Connector leaf commands. `teamhub gmail --help` and `teamhub gdrive --help` discover them offline, and each command keeps its own help, examples and Composio support boundary.
+Eight applications have dedicated commands: Gmail, Outlook (mail via `teamhub outlook` and calendar via `teamhub outlook-calendar`), Slack, Google Calendar, Notion, Google Drive, Figma and GitHub, with 57 Connector leaf commands. `teamhub gmail --help` and `teamhub outlook-calendar --help` discover them offline, and each command keeps its own help, examples and Composio support boundary.
 Choose an account with `--account <connection ID|full label>`; labels match case-insensitively, connection IDs exactly. A connection ID that no longer matches a delegated account returns `account_ambiguous` with the delegated candidates instead of switching accounts. Without a delegation, the command posts an authorization card in an allowed chat that names the requested label and exits with `authorization_required`; the Agent ends its turn, and the card's result wakes it to run the original command again.
 Mail `--markdown` is converted to HTML by TeamHub; only `--attach` adds attachments.
 
