@@ -1749,8 +1749,8 @@ export function createExternalSourceSeed() {
 }
 
 /**
- * The web search backends TeamHub lists before any key is saved: keyless
- * You.com is the default, and direct opens pages.
+ * The web search backends TeamHub lists before any key is saved: DuckDuckGo
+ * is the default, You.com also works without a key, and direct opens pages.
  */
 export function createWebSearchSeed(): TeamHubWebSearchBackendList {
   const keyed: Omit<TeamHubWebSearchBackend, "id" | "name"> = {
@@ -1777,7 +1777,7 @@ export function createWebSearchSeed(): TeamHubWebSearchBackendList {
         name: "You.com",
         quota: { from: "unavailable", reason: "not_reported" },
         status: "ready",
-        tier: "free_trial",
+        tier: "free",
         tier_text: "Limited and lower quality results",
       },
       {
@@ -1805,6 +1805,20 @@ export function createWebSearchSeed(): TeamHubWebSearchBackendList {
       },
       {
         ...keyed,
+        commands: ["search"],
+        id: "duckduckgo",
+        keyless: true,
+        max_limit: 10,
+        max_sites: 1,
+        name: "DuckDuckGo",
+        official_key_check: false,
+        quota: { from: "unavailable", reason: "not_reported" },
+        status: "ready",
+        tier: "free",
+        tier_text: "Free, no key: blocks searches that come too often",
+      },
+      {
+        ...keyed,
         commands: ["open"],
         filters: [],
         id: "direct",
@@ -1820,6 +1834,6 @@ export function createWebSearchSeed(): TeamHubWebSearchBackendList {
     ],
     can_save_keys: true,
     default_open: "direct",
-    default_search: "you",
+    default_search: "duckduckgo",
   };
 }

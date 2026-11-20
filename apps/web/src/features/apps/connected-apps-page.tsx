@@ -34,7 +34,8 @@ import {
 } from "./connected-apps-queries";
 import { ConnectAppStatus, useConnectAppFlow } from "./connect-app-flow";
 import {
-  savedWebSearchBackends,
+  connectedWebSearchBackends,
+  shownWebSearchBackends,
   WEB_SEARCH_FILTER,
   WebSearchSection,
 } from "./web-search-connectors";
@@ -85,13 +86,11 @@ export function ConnectedAppsPage() {
     : groupApps;
   const allSearchBackends = webSearch.data?.backends ?? [];
   const searchBackends = connectedOnly
-    ? savedWebSearchBackends(allSearchBackends)
-    : allSearchBackends;
+    ? connectedWebSearchBackends(allSearchBackends)
+    : shownWebSearchBackends(allSearchBackends);
   const searchFilter = filter === WEB_SEARCH_FILTER.id;
-  // With Connected only, a section without a saved key is left out.
-  const showSearch =
-    (filter === "all" || searchFilter) &&
-    (!connectedOnly || !webSearch.isSuccess || searchBackends.length > 0);
+  // DuckDuckGo needs no key, so Connected only always keeps the section.
+  const showSearch = filter === "all" || searchFilter;
   const showApps =
     !searchFilter && (!showSearch || !filteredApps || filteredApps.length > 0);
 
@@ -221,8 +220,6 @@ export function ConnectedAppsPage() {
                 heading={!searchFilter}
                 list={webSearch}
               />
-            ) : searchFilter ? (
-              <PageMessage>No web search keys yet.</PageMessage>
             ) : null}
           </>
         )}

@@ -15,8 +15,8 @@ import (
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/websearch"
 )
 
-// fakeSearchProviders serves You.com's keyless MCP server (its trial used
-// up), Brave's search API and Tavily's usage endpoint.
+// fakeSearchProviders serves You.com's keyless MCP server (its free searches
+// used up), Brave's search API and Tavily's usage endpoint.
 func fakeSearchProviders(t *testing.T) *httptest.Server {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +84,8 @@ func TestWebSearchAsksForAKeyAndReplaysTheSearchWithIt(t *testing.T) {
 		cfg.ExternalApps.SecretEncryptionKey = base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{5}, 32))
 	}), withDeps(func(deps *app.Deps) {
 		deps.WebSearch = websearch.Endpoints{
-			Tavily: providers.URL + "/tavily", Brave: providers.URL + "/brave", YouMCP: providers.URL + "/mcp/free", Client: providers.Client(),
+			Tavily: providers.URL + "/tavily", Brave: providers.URL + "/brave", YouMCP: providers.URL + "/mcp/free",
+			DuckDuckGo: providers.URL + "/ddg", Client: providers.Client(),
 		}
 	}))
 	search := func(body map[string]any) (int, []byte) {
@@ -92,13 +93,13 @@ func TestWebSearchAsksForAKeyAndReplaysTheSearchWithIt(t *testing.T) {
 		return postAgentInRoom(t, env, issued.AccessToken, roomID, "/api/agent/v1/web/search", body)
 	}
 
-	status, body := search(map[string]any{"query": "rust news"})
+	status, body := search(map[string]any{"query": "rust news", "backend": "you"})
 	var failure agentSearchFailure
 	decode(t, body, &failure)
 	details := failure.Error.Details
-	if status != http.StatusConflict || failure.Error.Code != "search_key_requested" || details.Backend != "tavily" ||
-		details.Origin != "suggested" || details.Reason != "free_limit" || details.InteractionID == "" {
-		t.Fatalf("search after the free trial: %d %s", status, body)
+	if status != http.StatusConflict || failure.Error.Code != "search_key_requested" || details.Backend != "you" ||
+		details.Origin != "requested" || details.Reason != "free_limit" || details.InteractionID == "" {
+		t.Fatalf("search after the free searches: %d %s", status, body)
 	}
 	cardID, cardMessage := details.InteractionID, details.MessageID
 
@@ -118,12 +119,12 @@ func TestWebSearchAsksForAKeyAndReplaysTheSearchWithIt(t *testing.T) {
 	code, _, listed := env.request(alice, http.MethodGet, "/v0/web-search/backends", nil, "")
 	var list websearch.List
 	decode(t, listed, &list)
-	if code != http.StatusOK || list.DefaultSearch != websearch.You || !list.CanSaveKeys || len(list.Backends) != 5 ||
-		list.Backends[3].ID != websearch.You || list.Backends[3].Tier != websearch.TierFreeTrial {
+	if code != http.StatusOK || list.DefaultSearch != websearch.DuckDuckGo || !list.CanSaveKeys || len(list.Backends) != 6 ||
+		list.Backends[3].ID != websearch.You || list.Backends[3].Tier != websearch.TierFree {
 		t.Fatalf("backends: %d %s", code, listed)
 	}
 	code, _, listed = env.request(alice, http.MethodGet, "/v0/web-search/backends?include_quota=false", nil, "")
-	if code != http.StatusOK || strings.Contains(string(listed), `"quota"`) || !strings.Contains(string(listed), `"free_trial"`) {
+	if code != http.StatusOK || strings.Contains(string(listed), `"quota"`) || !strings.Contains(string(listed), `"tier":"free"`) {
 		t.Fatalf("backends without quota: %d %s", code, listed)
 	}
 

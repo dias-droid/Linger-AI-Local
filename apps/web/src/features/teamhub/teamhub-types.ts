@@ -99,6 +99,8 @@ export type TeamHubExternalApp = components["schemas"]["ExternalApp"];
 export type TeamHubWebSearchBackend = components["schemas"]["WebSearchBackend"];
 export type TeamHubWebSearchKeyBackend =
   components["schemas"]["WebSearchKeyBackend"];
+export type TeamHubWebSearchSearchBackend =
+  components["schemas"]["WebSearchSearchBackend"];
 export type TeamHubWebSearchBackendList =
   components["schemas"]["WebSearchBackendList"];
 export type TeamHubExternalAppKey = components["schemas"]["ExternalAppKey"];

@@ -507,7 +507,8 @@ Web tools depend on where the Runtime's model is served. On a subscription,
 Claude Code keeps `WebSearch` and `WebFetch`, deferred behind `ToolSearch`, so
 its developer instructions name them and how to load them; Codex keeps its own
 `web_search`. Both are also told that `teamhub web search` and `teamhub web open`
-search and read through the search providers the user set up. A Runtime whose
+search and read through the search providers the user set up, or DuckDuckGo
+without a key. A Runtime whose
 profile is a localmodels-managed gateway profile (local models or BYOK, see
 `localmodels.GatewayRuntime`) cannot run provider-hosted search: Codex launches
 with `web_search="disabled"` after every user override, Claude's `--tools` leaves

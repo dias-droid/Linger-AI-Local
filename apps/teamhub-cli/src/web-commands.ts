@@ -10,6 +10,7 @@ import { teamHubData } from "./http-client.js";
 
 type Json = Record<string, unknown>;
 const keyBackends = ["tavily", "brave", "firecrawl", "you"] as const;
+const searchBackends = [...keyBackends, "duckduckgo"] as const;
 const openBackends = ["tavily", "firecrawl", "you", "direct"] as const;
 const recencies = ["day", "week", "month", "year"] as const;
 const names: Record<string, string> = {
@@ -17,6 +18,7 @@ const names: Record<string, string> = {
   brave: "Brave Search",
   firecrawl: "Firecrawl",
   you: "You.com",
+  duckduckgo: "DuckDuckGo",
   direct: "Direct",
 };
 const nameOf = (backend: unknown) =>
@@ -67,7 +69,7 @@ function webFailure(error: unknown): never {
     case "search_key_requested":
       throw authored(
         details.reason === "free_limit"
-          ? `The free web search trial is used up. Waiting for the user to add a web search API key; ${wait}`
+          ? `${name}'s free searches without a key are used up. Waiting for the user to add a ${name} API key; ${wait}`
           : details.reason === "rejected"
             ? `Waiting for the user to replace the ${name} API key, which ${name} no longer accepts; ${wait}`
             : `Waiting for the user to add a ${name} API key; ${wait}`,
@@ -154,14 +156,16 @@ const webSearch: CommandDefinition = {
     "Search the web through a provider with the deployment's saved API key.",
   readOnly: true,
   usage: [
-    "teamhub web search <query> [--backend tavily|brave|firecrawl|you] [--limit 1-20] [--recency day|week|month|year] [--site <domain>]...",
+    "teamhub web search <query> [--backend tavily|brave|firecrawl|you|duckduckgo] [--limit 1-20] [--recency day|week|month|year] [--site <domain>]...",
   ],
   arguments: ["<query>  What to search for; 1-400 characters."],
   options: {
     "--backend": flag(
-      "tavily, brave, firecrawl or you. Without it the user's default runs, else the first ready backend.",
+      "tavily, brave, firecrawl, you or duckduckgo. Without it the user's default runs, else the first backend with a key, else duckduckgo, which needs none.",
     ),
-    "--limit": flag("Results to return; 1-20, default 5."),
+    "--limit": flag(
+      "Results to return; 1-20 up to the backend's max_limit, default 10.",
+    ),
     "--recency": flag("Only results from the past day, week, month or year."),
     "--site": flag(
       "Only results from this domain; repeat up to the backend's max_sites (teamhub web list).",
@@ -179,7 +183,7 @@ const webSearch: CommandDefinition = {
     type: "object",
     properties: {
       query: { type: "string", minLength: 1, maxLength: 400 },
-      backend: backendSchema(keyBackends),
+      backend: backendSchema(searchBackends),
       limit: { type: "integer", minimum: 1, maximum: 20 },
       recency: { enum: [...recencies] },
       sites: {
@@ -200,7 +204,11 @@ const webSearch: CommandDefinition = {
     const query = args.positionals.join(" ").trim();
     if (!query || [...query].length > 400)
       usage("Provide a search query of 1-400 characters.");
-    const backend = choice(option(args, "--backend"), keyBackends, "--backend");
+    const backend = choice(
+      option(args, "--backend"),
+      searchBackends,
+      "--backend",
+    );
     const recency = choice(option(args, "--recency"), recencies, "--recency");
     const limitText = option(args, "--limit");
     const limit = limitText === undefined ? undefined : Number(limitText);
@@ -385,13 +393,13 @@ const webList: CommandDefinition = {
   usage: ["teamhub web list [--backend <backend>]"],
   options: {
     "--backend": flag(
-      "Show only this backend: tavily, brave, firecrawl, you or direct.",
+      "Show only this backend: tavily, brave, firecrawl, you, duckduckgo or direct.",
     ),
   },
   inputSchema: {
     type: "object",
     properties: {
-      backend: backendSchema([...keyBackends, "direct"]),
+      backend: backendSchema([...searchBackends, "direct"]),
     },
     additionalProperties: false,
   },
@@ -410,7 +418,7 @@ const webList: CommandDefinition = {
     assertPositionals(args, 0);
     const backend = choice(
       option(args, "--backend"),
-      [...keyBackends, "direct"],
+      [...searchBackends, "direct"],
       "--backend",
     );
     return { input: backend ? { backend } : {} };
@@ -432,7 +440,7 @@ const webList: CommandDefinition = {
         Array.isArray(item.filters) && item.filters.length
           ? `filters: ${item.filters.map(line).join(", ")}${typeof item.max_sites === "number" && item.max_sites ? ` (up to ${item.max_sites} sites)` : ""}`
           : "",
-        item.tier === "free_trial" ? `free trial: ${line(item.tier_text)}` : "",
+        item.tier === "free" ? `free: ${line(item.tier_text)}` : "",
         quotaText(item.quota as Json | undefined),
         status !== "ready" && item.free_tier
           ? `free tier: ${line(item.free_tier)}`

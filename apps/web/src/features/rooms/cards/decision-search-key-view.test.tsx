@@ -130,7 +130,8 @@ describe("Web search key card", () => {
         .map((item) => within(item).getByRole("button", { name: "Save key" })),
     ).toHaveLength(3);
     const you = within(others).getByText("You.com").closest("li")!;
-    expect(you).toHaveTextContent("Working without a key");
+    expect(you).toHaveTextContent("Free, limited");
+    expect(within(others).queryByText("DuckDuckGo")).toBeNull();
     expect(within(others).queryByText("Tavily")).toBeNull();
 
     const brave = within(others).getByText("Brave Search").closest("li")!;

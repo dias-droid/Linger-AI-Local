@@ -18,7 +18,7 @@ const maxReplayResultBytes = 24000
 
 // registerWebSearch builds web search over the keys saved in the product,
 // sealed with TEAMHUB_SECRET_ENCRYPTION_KEY. Without that key nothing can be
-// saved and only You.com's keyless trial and direct work.
+// saved and only DuckDuckGo, You.com without a key and direct work.
 func (a *App) registerWebSearch(cfg config.Config, deps Deps) error {
 	box, err := secretBox(cfg.ExternalApps.SecretEncryptionKey)
 	if err != nil {
@@ -154,7 +154,7 @@ func (a *App) deleteWebSearchKey(c *gin.Context) {
 
 func (a *App) setWebSearchDefault(c *gin.Context) {
 	var request httpapi.SetWebSearchDefaultRequest
-	if decodeJSON(c, &request) != nil || !websearch.KeyBackend(websearch.Backend(request.Backend)) {
+	if decodeJSON(c, &request) != nil || !websearch.SearchBackend(websearch.Backend(request.Backend)) {
 		a.writeError(c, http.StatusBadRequest, "INVALID_REQUEST", "Web search default request is invalid")
 		return
 	}

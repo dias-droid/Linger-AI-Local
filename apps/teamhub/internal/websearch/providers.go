@@ -25,6 +25,7 @@ const (
 	DefaultYouAPIURL    = "https://api.you.com"
 	DefaultYouIndexURL  = "https://ydc-index.io"
 	DefaultYouMCPURL    = "https://api.you.com/mcp/free"
+	DefaultDuckDuckGo   = "https://html.duckduckgo.com"
 )
 
 // Call budgets. A page read waits longer because the provider fetches and
@@ -40,8 +41,8 @@ const (
 // API. Client replaces the default client, which never follows a redirect so
 // a key never reaches another host.
 type Endpoints struct {
-	Tavily, Brave, Firecrawl, YouAPI, YouIndex, YouMCP string
-	Client                                             *http.Client
+	Tavily, Brave, Firecrawl, YouAPI, YouIndex, YouMCP, DuckDuckGo string
+	Client                                                         *http.Client
 }
 
 type providers struct {
@@ -57,6 +58,7 @@ func newProviders(endpoints Endpoints) *providers {
 		{&endpoints.Tavily, DefaultTavilyURL}, {&endpoints.Brave, DefaultBraveURL},
 		{&endpoints.Firecrawl, DefaultFirecrawlURL}, {&endpoints.YouAPI, DefaultYouAPIURL},
 		{&endpoints.YouIndex, DefaultYouIndexURL}, {&endpoints.YouMCP, DefaultYouMCPURL},
+		{&endpoints.DuckDuckGo, DefaultDuckDuckGo},
 	} {
 		if *field.value == "" {
 			*field.value = field.fallback

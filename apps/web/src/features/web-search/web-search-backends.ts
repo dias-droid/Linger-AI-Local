@@ -56,14 +56,29 @@ export function webSearchBackendName(id: TeamHubWebSearchKeyBackend): string {
   return names[id];
 }
 
-/** What the backend does and its free allowance, as one line. */
+/** Whether the backend takes an API key saved in the product. */
+export function isWebSearchKeyBackend<T extends { id: string }>(
+  backend: T,
+): backend is T & { id: TeamHubWebSearchKeyBackend } {
+  return backend.id in names;
+}
+
+/**
+ * What the backend does and, after it, its free allowance; a backend that
+ * never takes a key says none is needed.
+ */
 export function webSearchBackendSummary(
   backend: TeamHubWebSearchBackend,
 ): string {
   const commands = backend.commands.map((command) =>
     command === "search" ? "Search" : "Read pages",
   );
-  return [...commands, backend.free_tier].filter(Boolean).join(" · ");
+  const allowance = isWebSearchKeyBackend(backend)
+    ? backend.free_tier
+    : backend.tier === "free"
+      ? "No key needed"
+      : undefined;
+  return [...commands, allowance].filter(Boolean).join(" · ");
 }
 
 /** The key page as a short label: host and path without `www.`. */

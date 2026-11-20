@@ -3,7 +3,8 @@
 // secret box. A key serves the whole deployment and is read from the
 // database at each call, so a save applies on every replica at once. TeamHub
 // calls only the providers' fixed API hosts: it never requests a page URL
-// itself, and the direct backend is fetched by the Agent CLI.
+// itself, and the direct backend is fetched by the Agent CLI. DuckDuckGo's
+// HTML results page needs no key.
 package websearch
 
 import (
@@ -29,19 +30,26 @@ type Backend string
 // The backends. Direct opens pages on the Agent's computer and never reaches
 // TeamHub's calls.
 const (
-	Tavily    Backend = "tavily"
-	Brave     Backend = "brave"
-	Firecrawl Backend = "firecrawl"
-	You       Backend = "you"
-	Direct    Backend = "direct"
+	Tavily     Backend = "tavily"
+	Brave      Backend = "brave"
+	Firecrawl  Backend = "firecrawl"
+	You        Backend = "you"
+	DuckDuckGo Backend = "duckduckgo"
+	Direct     Backend = "direct"
 )
 
 // keyOrder is TeamHub's default order: a search without a backend uses the
-// first one with a usable key, then You.com's keyless trial.
+// first one with a usable key, then DuckDuckGo.
 var keyOrder = []Backend{Tavily, Brave, Firecrawl, You}
+
+// searchOrder is every backend that searches, in the order lists show them.
+var searchOrder = append(slices.Clone(keyOrder), DuckDuckGo)
 
 // KeyBackend reports whether b takes an API key saved in the product.
 func KeyBackend(b Backend) bool { return slices.Contains(keyOrder, b) }
+
+// SearchBackend reports whether b runs searches.
+func SearchBackend(b Backend) bool { return slices.Contains(searchOrder, b) }
 
 // DisplayName is the provider's name as people know it.
 func DisplayName(b Backend) string { return definitions[b].name }
@@ -56,9 +64,9 @@ const (
 
 // The tiers a backend runs at now.
 const (
-	TierKey       = "key"
-	TierFreeTrial = "free_trial"
-	TierNone      = "none"
+	TierKey  = "key"
+	TierFree = "free"
+	TierNone = "none"
 )
 
 // Bounds of the commands; the contract states the same.
@@ -103,12 +111,18 @@ var definitions = map[Backend]definition{
 		freeTier: "1,000 free credits every month.", keyURL: "https://www.firecrawl.dev/app/api-keys"},
 	You: {name: "You.com", commands: []string{CommandSearch, CommandOpen}, filters: []string{FilterRecency},
 		maxLimit: 20, keyless: true, officialCheck: true,
-		freeTier: "Works without a key as a limited free trial; a key gives full quality and higher limits.", keyURL: "https://you.com/platform"},
+		freeTier: "Works without a key, limited; a key gives full quality and higher limits.", keyURL: "https://you.com/platform"},
+	// DuckDuckGo's results page holds about ten results and takes one site.
+	DuckDuckGo: {name: "DuckDuckGo", commands: []string{CommandSearch}, filters: []string{FilterRecency, FilterSite},
+		maxLimit: 10, maxSites: 1, keyless: true},
 	Direct: {name: "Direct", commands: []string{CommandOpen}, keyless: true},
 }
 
-// freeTrialText describes You.com without a key, where TeamHub counts nothing.
-const freeTrialText = "Free trial without a key: limited searches with lower quality results."
+// The free tier lines; TeamHub counts nothing for either.
+const (
+	youFreeText        = "Free without a key: limited searches with lower quality results."
+	duckDuckGoFreeText = "Free, no key: DuckDuckGo blocks searches for a while when they come too often."
+)
 
 // Save and settings refusals; the handlers map each to an error code.
 var (
@@ -299,7 +313,7 @@ func (k keyring) usable(b Backend) bool {
 func (k keyring) status(b Backend) string {
 	saved, ok := k[b]
 	switch {
-	case b == Direct, k.usable(b):
+	case b == Direct, b == DuckDuckGo, k.usable(b):
 		return "ready"
 	case ok && !saved.unusable && saved.state == "rejected":
 		return "key_rejected"
@@ -361,7 +375,7 @@ func (s *Service) chosenDefault(ctx context.Context) (Backend, error) {
 // defaultSearch is the backend a search without one uses now: the chosen
 // default even when its key stopped working, so its failure asks for that
 // key instead of silently moving on; else the first backend with a usable
-// key, else You.com's keyless trial.
+// key, else DuckDuckGo. You.com runs without a key only when named or chosen.
 func defaultSearch(ring keyring, chosen Backend) Backend {
 	if chosen != "" {
 		return chosen
@@ -371,7 +385,7 @@ func defaultSearch(ring keyring, chosen Backend) Backend {
 			return b
 		}
 	}
-	return You
+	return DuckDuckGo
 }
 
 // List returns every backend, with its live quota when withQuota is set;
@@ -385,7 +399,7 @@ func (s *Service) List(ctx context.Context, withQuota bool) (List, error) {
 	if err != nil {
 		return List{}, err
 	}
-	order := append(slices.Clone(keyOrder), Direct)
+	order := append(slices.Clone(searchOrder), Direct)
 	views := make([]BackendView, len(order))
 	var wg sync.WaitGroup
 	quotaCtx, cancel := context.WithTimeout(ctx, quotaTimeout)
@@ -431,8 +445,10 @@ func (s *Service) view(ring keyring, b Backend) BackendView {
 	switch {
 	case b == Direct:
 		view.Tier, view.Quota.Reason = TierNone, "not_reported"
+	case b == DuckDuckGo:
+		view.Tier, view.TierText, view.Quota.Reason = TierFree, duckDuckGoFreeText, "not_reported"
 	case b == You && !ring.usable(You) && view.Status == "ready":
-		view.Tier, view.TierText, view.Quota.Reason = TierFreeTrial, freeTrialText, "not_reported"
+		view.Tier, view.TierText, view.Quota.Reason = TierFree, youFreeText, "not_reported"
 	case view.KeyState == "rejected":
 		view.Quota.Reason = "key_rejected"
 	case b == Brave && ring.usable(Brave):
@@ -593,7 +609,7 @@ func (s *Service) RemoveKey(ctx context.Context, b Backend) error {
 
 // SetDefault makes b the backend a search without one uses; b must be ready.
 func (s *Service) SetDefault(ctx context.Context, b Backend) (Default, error) {
-	if !KeyBackend(b) {
+	if !SearchBackend(b) {
 		return Default{}, ErrInvalid
 	}
 	ring, err := s.keys(ctx)
@@ -630,7 +646,7 @@ func Normalize(request Request) (Request, error) {
 	switch request.Command {
 	case CommandSearch:
 		if request.Query == "" || len([]rune(request.Query)) > MaxQueryRunes || request.URL != "" ||
-			request.Backend != "" && !KeyBackend(request.Backend) || request.Limit < 0 || request.Limit > MaxLimit ||
+			request.Backend != "" && !SearchBackend(request.Backend) || request.Limit < 0 || request.Limit > MaxLimit ||
 			len(request.Sites) > 10 {
 			return Request{}, ErrInvalid
 		}
@@ -694,7 +710,7 @@ func (s *Service) Run(ctx context.Context, request Request) (Outcome, error) {
 	if !supports(b, request) {
 		return Outcome{}, &Failure{Code: CodeUnsupported, Backend: b}
 	}
-	keyless := b == You && !ring.usable(You) && (suggested || ring.status(You) == "ready")
+	keyless := b == DuckDuckGo || b == You && !ring.usable(You) && ring.status(You) == "ready"
 	if !keyless && !ring.usable(b) {
 		code := CodeKeyRequired
 		if ring.status(b) == "key_rejected" {
@@ -704,9 +720,12 @@ func (s *Service) Run(ctx context.Context, request Request) (Outcome, error) {
 	}
 	var outcome Outcome
 	var observed *Quota
-	if keyless {
+	switch {
+	case b == DuckDuckGo:
+		outcome, err = s.providers.duckDuckGoSearch(ctx, request)
+	case keyless:
 		outcome, err = s.providers.runKeyless(ctx, request)
-	} else {
+	default:
 		outcome, observed, err = s.providers.run(ctx, b, ring[b].key, request)
 	}
 	var failure *Failure
@@ -726,11 +745,6 @@ func (s *Service) Run(ctx context.Context, request Request) (Outcome, error) {
 		}); markErr != nil {
 			return Outcome{}, markErr
 		}
-	case failure.Code == CodeFreeLimit && suggested:
-		// The command named no backend: the card suggests the first
-		// backend in TeamHub's order that still needs a key.
-		failure.Backend, failure.Suggested = firstNeedingKey(ring), true
-		return Outcome{}, failure
 	case failure.Code == CodeQuotaExhausted || failure.Code == CodeRateLimited:
 		if !keyless {
 			s.recordAnswer(ctx, ring[b], b, observed)
@@ -741,20 +755,11 @@ func (s *Service) Run(ctx context.Context, request Request) (Outcome, error) {
 	return Outcome{}, failure
 }
 
-func firstNeedingKey(ring keyring) Backend {
-	for _, b := range keyOrder {
-		if !ring.usable(b) {
-			return b
-		}
-	}
-	return Tavily
-}
-
 // readyOthers lists the backends other than failed that could run command
 // now, in TeamHub's order.
 func readyOthers(ring keyring, failed Backend, command string) []Backend {
 	ready := []Backend{}
-	for _, b := range keyOrder {
+	for _, b := range searchOrder {
 		if b != failed && ring.status(b) == "ready" && slices.Contains(definitions[b].commands, command) {
 			ready = append(ready, b)
 		}

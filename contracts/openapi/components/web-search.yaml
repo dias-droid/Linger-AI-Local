@@ -3,15 +3,17 @@ components:
     WebSearchBackendId:
       type: string
       description: >-
-        A web search backend. direct opens pages only and is fetched by the
-        Agent CLI on the Agent's computer; TeamHub never fetches a page itself.
-      enum: [tavily, brave, firecrawl, you, direct]
+        A web search backend. duckduckgo searches without a key. direct opens
+        pages only and is fetched by the Agent CLI on the Agent's computer;
+        TeamHub never fetches a page itself.
+      enum: [tavily, brave, firecrawl, you, duckduckgo, direct]
       x-enum-varnames:
         [
           WebSearchBackendIdTavily,
           WebSearchBackendIdBrave,
           WebSearchBackendIdFirecrawl,
           WebSearchBackendIdYou,
+          WebSearchBackendIdDuckduckgo,
           WebSearchBackendIdDirect,
         ]
     WebSearchKeyBackend:
@@ -24,6 +26,18 @@ components:
           WebSearchKeyBackendBrave,
           WebSearchKeyBackendFirecrawl,
           WebSearchKeyBackendYou,
+        ]
+    WebSearchSearchBackend:
+      type: string
+      description: A backend that runs searches.
+      enum: [tavily, brave, firecrawl, you, duckduckgo]
+      x-enum-varnames:
+        [
+          WebSearchSearchBackendTavily,
+          WebSearchSearchBackendBrave,
+          WebSearchSearchBackendFirecrawl,
+          WebSearchSearchBackendYou,
+          WebSearchSearchBackendDuckduckgo,
         ]
     WebSearchCommand:
       type: string
@@ -114,8 +128,9 @@ components:
       additionalProperties: false
       description: >-
         One backend with the static text a client shows for it and its live
-        state. status is ready when a call would run now: direct always, You.com
-        also without a key, the others with a key that is not rejected.
+        state. status is ready when a call would run now: DuckDuckGo and direct
+        always, You.com also without a key, the others with a key that is not
+        rejected.
       required:
         [
           id,
@@ -139,22 +154,22 @@ components:
           maxLength: 80
         tier:
           type: string
-          enum: [key, free_trial, none]
+          enum: [key, free, none]
           x-enum-varnames:
             [
               WebSearchBackendTierKey,
-              WebSearchBackendTierFreeTrial,
+              WebSearchBackendTierFree,
               WebSearchBackendTierNone,
             ]
           description: >-
             How a call to the backend runs now. key: with an API key saved in
-            the product (or one it still needs); free_trial: You.com without a
-            key, a limited trial with lower quality results that TeamHub does
-            not count; none: direct, which needs no account.
+            the product (or one it still needs); free: without a key, on a free
+            service with limits that TeamHub does not count (DuckDuckGo, and
+            You.com without a key); none: direct, which needs no account.
         tier_text:
           type: string
           maxLength: 300
-          description: A short display line for the tier, set for free_trial.
+          description: A short display line for the tier, set for free.
         commands:
           type: array
           minItems: 1
@@ -225,13 +240,13 @@ components:
         Every backend in TeamHub's default order. default_search is the
         backend a search without one uses now: the default a Human saved
         (chosen_default_search) even when its key stopped working, else the
-        first ready backend in that order.
+        first backend with a usable key in that order, else duckduckgo.
       required: [default_search, default_open, can_save_keys, backends]
       properties:
         default_search:
-          $ref: "#/components/schemas/WebSearchKeyBackend"
+          $ref: "#/components/schemas/WebSearchSearchBackend"
         chosen_default_search:
-          $ref: "#/components/schemas/WebSearchKeyBackend"
+          $ref: "#/components/schemas/WebSearchSearchBackend"
         default_open:
           type: string
           const: direct
@@ -267,16 +282,16 @@ components:
       required: [backend]
       properties:
         backend:
-          $ref: "#/components/schemas/WebSearchKeyBackend"
+          $ref: "#/components/schemas/WebSearchSearchBackend"
     WebSearchDefault:
       type: object
       additionalProperties: false
       required: [default_search]
       properties:
         default_search:
-          $ref: "#/components/schemas/WebSearchKeyBackend"
+          $ref: "#/components/schemas/WebSearchSearchBackend"
         chosen_default_search:
-          $ref: "#/components/schemas/WebSearchKeyBackend"
+          $ref: "#/components/schemas/WebSearchSearchBackend"
     WebSearchRequest:
       type: object
       additionalProperties: false
@@ -287,7 +302,7 @@ components:
           minLength: 1
           maxLength: 400
         backend:
-          $ref: "#/components/schemas/WebSearchKeyBackend"
+          $ref: "#/components/schemas/WebSearchSearchBackend"
         limit:
           type: integer
           minimum: 1

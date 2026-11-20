@@ -20,23 +20,28 @@ describe("Web search connectors", () => {
     renderPage(runtime);
 
     const section = await screen.findByRole("region", { name: "Web search" });
+    // Direct only opens pages and has nothing to set up.
     expect(cardNames(section)).toEqual([
       "You.com",
       "Tavily",
       "Brave Search",
       "Firecrawl",
-      "Direct",
+      "DuckDuckGo",
     ]);
-    expect(card(section, "You.com")).toHaveTextContent("Default");
-    expect(card(section, "You.com")).toHaveTextContent(
-      "Limited and lower quality results",
+    expect(card(section, "DuckDuckGo")).toHaveTextContent("Default");
+    expect(card(section, "DuckDuckGo")).toHaveTextContent(
+      "Search · No key needed",
     );
-    expect(card(section, "You.com")).toHaveTextContent("Free trial");
+    expect(card(section, "DuckDuckGo")).toHaveTextContent("Free, limited");
+    // You.com works without a key and still takes one.
+    expect(card(section, "You.com")).toHaveTextContent("Free, limited");
+    expect(card(section, "You.com")).toHaveTextContent(
+      "Search · 100 searches a day without a key",
+    );
     expect(card(section, "Tavily")).toHaveTextContent("Not set");
     expect(card(section, "Tavily")).toHaveTextContent(
       "Search · Read pages · 1,000 credits a month",
     );
-    expect(card(section, "Direct")).toHaveTextContent("Built in");
 
     fireEvent.click(
       within(
@@ -223,7 +228,7 @@ describe("Web search connectors", () => {
     expect(card(section, "Tavily")).toHaveTextContent("Not set");
   });
 
-  it("keeps only backends with a saved key under Connected only", async () => {
+  it("keeps backends with a saved key or a free tier under Connected only", async () => {
     const runtime = createTestTeamHubRuntime();
     setBackends(runtime, {
       firecrawl: saved({ key_state: "rejected", status: "key_rejected" }),
@@ -240,22 +245,7 @@ describe("Web search connectors", () => {
     ).toEqual(["Gmail"]);
     expect(
       cardNames(screen.getByRole("region", { name: "Web search" })),
-    ).toEqual(["Tavily", "Firecrawl"]);
-  });
-
-  it("says when no backend has a key under Connected only", async () => {
-    const runtime = createTestTeamHubRuntime();
-    renderPage(runtime);
-
-    await screen.findByRole("region", { name: "Web search" });
-    fireEvent.click(screen.getByRole("button", { name: "Connected only" }));
-    expect(screen.queryByRole("region", { name: "Web search" })).toBeNull();
-    fireEvent.click(
-      within(
-        screen.getByRole("tablist", { name: "Connector categories" }),
-      ).getByRole("tab", { name: "Web search" }),
-    );
-    expect(screen.getByText("No web search keys yet.")).toBeVisible();
+    ).toEqual(["You.com", "Tavily", "Firecrawl", "DuckDuckGo"]);
   });
 
   it("explains a server that cannot store keys instead of showing a field", async () => {

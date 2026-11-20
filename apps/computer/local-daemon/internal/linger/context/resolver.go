@@ -54,7 +54,7 @@ type RegistrationBinding struct {
 const claudeWebToolGuide = `Web tools: WebSearch searches the web and WebFetch reads one page. They are loaded on demand: before the first call, load them with ToolSearch (query "select:WebSearch,WebFetch").`
 
 // teamHubWebSupplement follows a subscription Runtime's own web tools.
-const teamHubWebSupplement = "`teamhub web search <query>` and `teamhub web open <url>` also search the web and read pages, through the search providers the user set up."
+const teamHubWebSupplement = "`teamhub web search <query>` and `teamhub web open <url>` also search the web and read pages, through the search providers the user set up, or DuckDuckGo without a key."
 
 // teamHubWebToolGuide is the only web access of Pi and of a Runtime on local
 // models or BYOK.

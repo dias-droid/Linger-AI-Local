@@ -860,7 +860,7 @@ export interface paths {
     put?: never;
     /**
      * Search the web through one backend with the deployment's saved key.
-     * @description Without backend, TeamHub uses the default a Human chose exactly as if the request named it, even when its key stopped working; without a chosen default it uses the first ready backend in the order tavily, brave, firecrawl, you (with a key), then You.com's keyless free tier, and details.origin is suggested. A filter the backend cannot honor is refused before any call. There is no automatic fallback to another backend. When the backend needs a key the deployment lacks, or the provider refused the saved one, or the keyless You.com searches are used up, TeamHub posts (or reuses) a search_key card in the chat and answers 409 search_key_requested; details names the card and the backend it shows. Saving any web search key answers the card and wakes the Agent with the backend to use.
+     * @description Without backend, TeamHub uses the default a Human chose exactly as if the request named it, even when its key stopped working; without a chosen default it uses the first ready backend in the order tavily, brave, firecrawl, you (with a key), then DuckDuckGo, which needs no key, and details.origin is suggested. You.com without a key runs only when named or chosen. A filter the backend cannot honor is refused before any call. There is no automatic fallback to another backend. When the backend needs a key the deployment lacks, or the provider refused the saved one, or the keyless You.com searches are used up, TeamHub posts (or reuses) a search_key card in the chat and answers 409 search_key_requested; details names the card and the backend it shows. Saving any web search key answers the card and wakes the Agent with the backend to use.
      */
     post: operations["searchAgentWeb"];
     delete?: never;
@@ -2697,15 +2697,20 @@ export interface components {
       message_id: components["schemas"]["Id"];
     };
     /**
-     * @description A backend that takes an API key saved in the product.
+     * @description A backend that runs searches.
      * @enum {string}
      */
-    WebSearchKeyBackend: "tavily" | "brave" | "firecrawl" | "you";
+    WebSearchSearchBackend:
+      | "tavily"
+      | "brave"
+      | "firecrawl"
+      | "you"
+      | "duckduckgo";
     /** @enum {string} */
     WebSearchRecency: "day" | "week" | "month" | "year";
     WebSearchRequest: {
       query: string;
-      backend?: components["schemas"]["WebSearchKeyBackend"];
+      backend?: components["schemas"]["WebSearchSearchBackend"];
       /** @description Defaults to 10. */
       limit?: number;
       recency?: components["schemas"]["WebSearchRecency"];
@@ -2744,10 +2749,16 @@ export interface components {
       truncated: boolean;
     };
     /**
-     * @description A web search backend. direct opens pages only and is fetched by the Agent CLI on the Agent's computer; TeamHub never fetches a page itself.
+     * @description A web search backend. duckduckgo searches without a key. direct opens pages only and is fetched by the Agent CLI on the Agent's computer; TeamHub never fetches a page itself.
      * @enum {string}
      */
-    WebSearchBackendId: "tavily" | "brave" | "firecrawl" | "you" | "direct";
+    WebSearchBackendId:
+      | "tavily"
+      | "brave"
+      | "firecrawl"
+      | "you"
+      | "duckduckgo"
+      | "direct";
     WebBackendsQuery: {
       backend?: components["schemas"]["WebSearchBackendId"];
     };
@@ -2778,16 +2789,16 @@ export interface components {
         | "key_rejected"
         | "provider_unavailable";
     };
-    /** @description One backend with the static text a client shows for it and its live state. status is ready when a call would run now: direct always, You.com also without a key, the others with a key that is not rejected. */
+    /** @description One backend with the static text a client shows for it and its live state. status is ready when a call would run now: DuckDuckGo and direct always, You.com also without a key, the others with a key that is not rejected. */
     WebSearchBackend: {
       id: components["schemas"]["WebSearchBackendId"];
       name: string;
       /**
-       * @description How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free_trial: You.com without a key, a limited trial with lower quality results that TeamHub does not count; none: direct, which needs no account.
+       * @description How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free: without a key, on a free service with limits that TeamHub does not count (DuckDuckGo, and You.com without a key); none: direct, which needs no account.
        * @enum {string}
        */
-      tier: "key" | "free_trial" | "none";
-      /** @description A short display line for the tier, set for free_trial. */
+      tier: "key" | "free" | "none";
+      /** @description A short display line for the tier, set for free. */
       tier_text?: string;
       commands: components["schemas"]["WebSearchCommand"][];
       /** @description The search filters the backend honors; any other is refused before a call. */
@@ -2814,16 +2825,21 @@ export interface components {
       /** @description Left out when the caller asked for the list without quota. */
       quota?: components["schemas"]["WebSearchQuota"];
     };
-    /** @description Every backend in TeamHub's default order. default_search is the backend a search without one uses now: the default a Human saved (chosen_default_search) even when its key stopped working, else the first ready backend in that order. */
+    /** @description Every backend in TeamHub's default order. default_search is the backend a search without one uses now: the default a Human saved (chosen_default_search) even when its key stopped working, else the first backend with a usable key in that order, else duckduckgo. */
     WebSearchBackendList: {
-      default_search: components["schemas"]["WebSearchKeyBackend"];
-      chosen_default_search?: components["schemas"]["WebSearchKeyBackend"];
+      default_search: components["schemas"]["WebSearchSearchBackend"];
+      chosen_default_search?: components["schemas"]["WebSearchSearchBackend"];
       /** @constant */
       default_open: "direct";
       /** @description False when the deployment has no TEAMHUB_SECRET_ENCRYPTION_KEY to seal keys with. */
       can_save_keys: boolean;
       backends: components["schemas"]["WebSearchBackend"][];
     };
+    /**
+     * @description A backend that takes an API key saved in the product.
+     * @enum {string}
+     */
+    WebSearchKeyBackend: "tavily" | "brave" | "firecrawl" | "you";
     WebConnectRequest: {
       backend: components["schemas"]["WebSearchKeyBackend"];
     };

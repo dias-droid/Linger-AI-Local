@@ -1270,15 +1270,15 @@ func (e WebSearchBackendStatus) Valid() bool {
 
 // Defines values for WebSearchBackendTier.
 const (
-	WebSearchBackendTierFreeTrial WebSearchBackendTier = "free_trial"
-	WebSearchBackendTierKey       WebSearchBackendTier = "key"
-	WebSearchBackendTierNone      WebSearchBackendTier = "none"
+	WebSearchBackendTierFree WebSearchBackendTier = "free"
+	WebSearchBackendTierKey  WebSearchBackendTier = "key"
+	WebSearchBackendTierNone WebSearchBackendTier = "none"
 )
 
 // Valid indicates whether the value is a known member of the WebSearchBackendTier enum.
 func (e WebSearchBackendTier) Valid() bool {
 	switch e {
-	case WebSearchBackendTierFreeTrial:
+	case WebSearchBackendTierFree:
 		return true
 	case WebSearchBackendTierKey:
 		return true
@@ -1291,11 +1291,12 @@ func (e WebSearchBackendTier) Valid() bool {
 
 // Defines values for WebSearchBackendId.
 const (
-	WebSearchBackendIdBrave     WebSearchBackendId = "brave"
-	WebSearchBackendIdDirect    WebSearchBackendId = "direct"
-	WebSearchBackendIdFirecrawl WebSearchBackendId = "firecrawl"
-	WebSearchBackendIdTavily    WebSearchBackendId = "tavily"
-	WebSearchBackendIdYou       WebSearchBackendId = "you"
+	WebSearchBackendIdBrave      WebSearchBackendId = "brave"
+	WebSearchBackendIdDirect     WebSearchBackendId = "direct"
+	WebSearchBackendIdDuckduckgo WebSearchBackendId = "duckduckgo"
+	WebSearchBackendIdFirecrawl  WebSearchBackendId = "firecrawl"
+	WebSearchBackendIdTavily     WebSearchBackendId = "tavily"
+	WebSearchBackendIdYou        WebSearchBackendId = "you"
 )
 
 // Valid indicates whether the value is a known member of the WebSearchBackendId enum.
@@ -1304,6 +1305,8 @@ func (e WebSearchBackendId) Valid() bool {
 	case WebSearchBackendIdBrave:
 		return true
 	case WebSearchBackendIdDirect:
+		return true
+	case WebSearchBackendIdDuckduckgo:
 		return true
 	case WebSearchBackendIdFirecrawl:
 		return true
@@ -1463,6 +1466,33 @@ func (e WebSearchRecency) Valid() bool {
 	case WebSearchRecencyWeek:
 		return true
 	case WebSearchRecencyYear:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebSearchSearchBackend.
+const (
+	WebSearchSearchBackendBrave      WebSearchSearchBackend = "brave"
+	WebSearchSearchBackendDuckduckgo WebSearchSearchBackend = "duckduckgo"
+	WebSearchSearchBackendFirecrawl  WebSearchSearchBackend = "firecrawl"
+	WebSearchSearchBackendTavily     WebSearchSearchBackend = "tavily"
+	WebSearchSearchBackendYou        WebSearchSearchBackend = "you"
+)
+
+// Valid indicates whether the value is a known member of the WebSearchSearchBackend enum.
+func (e WebSearchSearchBackend) Valid() bool {
+	switch e {
+	case WebSearchSearchBackendBrave:
+		return true
+	case WebSearchSearchBackendDuckduckgo:
+		return true
+	case WebSearchSearchBackendFirecrawl:
+		return true
+	case WebSearchSearchBackendTavily:
+		return true
+	case WebSearchSearchBackendYou:
 		return true
 	default:
 		return false
@@ -3408,7 +3438,7 @@ type TrackingItemVersion struct {
 
 // WebBackendsQuery defines model for WebBackendsQuery.
 type WebBackendsQuery struct {
-	// Backend A web search backend. direct opens pages only and is fetched by the Agent CLI on the Agent's computer; TeamHub never fetches a page itself.
+	// Backend A web search backend. duckduckgo searches without a key. direct opens pages only and is fetched by the Agent CLI on the Agent's computer; TeamHub never fetches a page itself.
 	Backend *WebSearchBackendId `json:"backend,omitempty"`
 }
 
@@ -3420,7 +3450,7 @@ type WebConnectRequest struct {
 
 // WebConnectResponse defines model for WebConnectResponse.
 type WebConnectResponse struct {
-	// Backend One backend with the static text a client shows for it and its live state. status is ready when a call would run now: direct always, You.com also without a key, the others with a key that is not rejected.
+	// Backend One backend with the static text a client shows for it and its live state. status is ready when a call would run now: DuckDuckGo and direct always, You.com also without a key, the others with a key that is not rejected.
 	Backend       *WebSearchBackend        `json:"backend,omitempty"`
 	InteractionId *string                  `json:"interaction_id,omitempty"`
 	MessageId     *string                  `json:"message_id,omitempty"`
@@ -3453,7 +3483,7 @@ type WebOpenResponse struct {
 	Url string `json:"url"`
 }
 
-// WebSearchBackend One backend with the static text a client shows for it and its live state. status is ready when a call would run now: direct always, You.com also without a key, the others with a key that is not rejected.
+// WebSearchBackend One backend with the static text a client shows for it and its live state. status is ready when a call would run now: DuckDuckGo and direct always, You.com also without a key, the others with a key that is not rejected.
 type WebSearchBackend struct {
 	Commands []WebSearchCommand `json:"commands"`
 
@@ -3463,7 +3493,7 @@ type WebSearchBackend struct {
 	// FreeTier The provider's free allowance, for display.
 	FreeTier *string `json:"free_tier,omitempty"`
 
-	// Id A web search backend. direct opens pages only and is fetched by the Agent CLI on the Agent's computer; TeamHub never fetches a page itself.
+	// Id A web search backend. duckduckgo searches without a key. direct opens pages only and is fetched by the Agent CLI on the Agent's computer; TeamHub never fetches a page itself.
 	Id       WebSearchBackendId       `json:"id"`
 	KeyState WebSearchBackendKeyState `json:"key_state"`
 
@@ -3487,10 +3517,10 @@ type WebSearchBackend struct {
 	Quota  *WebSearchQuota        `json:"quota,omitempty"`
 	Status WebSearchBackendStatus `json:"status"`
 
-	// Tier How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free_trial: You.com without a key, a limited trial with lower quality results that TeamHub does not count; none: direct, which needs no account.
+	// Tier How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free: without a key, on a free service with limits that TeamHub does not count (DuckDuckGo, and You.com without a key); none: direct, which needs no account.
 	Tier WebSearchBackendTier `json:"tier"`
 
-	// TierText A short display line for the tier, set for free_trial.
+	// TierText A short display line for the tier, set for free.
 	TierText *string `json:"tier_text,omitempty"`
 }
 
@@ -3500,25 +3530,25 @@ type WebSearchBackendKeyState string
 // WebSearchBackendStatus defines model for WebSearchBackend.Status.
 type WebSearchBackendStatus string
 
-// WebSearchBackendTier How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free_trial: You.com without a key, a limited trial with lower quality results that TeamHub does not count; none: direct, which needs no account.
+// WebSearchBackendTier How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free: without a key, on a free service with limits that TeamHub does not count (DuckDuckGo, and You.com without a key); none: direct, which needs no account.
 type WebSearchBackendTier string
 
-// WebSearchBackendId A web search backend. direct opens pages only and is fetched by the Agent CLI on the Agent's computer; TeamHub never fetches a page itself.
+// WebSearchBackendId A web search backend. duckduckgo searches without a key. direct opens pages only and is fetched by the Agent CLI on the Agent's computer; TeamHub never fetches a page itself.
 type WebSearchBackendId string
 
-// WebSearchBackendList Every backend in TeamHub's default order. default_search is the backend a search without one uses now: the default a Human saved (chosen_default_search) even when its key stopped working, else the first ready backend in that order.
+// WebSearchBackendList Every backend in TeamHub's default order. default_search is the backend a search without one uses now: the default a Human saved (chosen_default_search) even when its key stopped working, else the first backend with a usable key in that order, else duckduckgo.
 type WebSearchBackendList struct {
 	Backends []WebSearchBackend `json:"backends"`
 
 	// CanSaveKeys False when the deployment has no TEAMHUB_SECRET_ENCRYPTION_KEY to seal keys with.
 	CanSaveKeys bool `json:"can_save_keys"`
 
-	// ChosenDefaultSearch A backend that takes an API key saved in the product.
-	ChosenDefaultSearch *WebSearchKeyBackend `json:"chosen_default_search,omitempty"`
-	DefaultOpen         string               `json:"default_open"`
+	// ChosenDefaultSearch A backend that runs searches.
+	ChosenDefaultSearch *WebSearchSearchBackend `json:"chosen_default_search,omitempty"`
+	DefaultOpen         string                  `json:"default_open"`
 
-	// DefaultSearch A backend that takes an API key saved in the product.
-	DefaultSearch WebSearchKeyBackend `json:"default_search"`
+	// DefaultSearch A backend that runs searches.
+	DefaultSearch WebSearchSearchBackend `json:"default_search"`
 }
 
 // WebSearchCommand defines model for WebSearchCommand.
@@ -3564,8 +3594,8 @@ type WebSearchRecency string
 
 // WebSearchRequest defines model for WebSearchRequest.
 type WebSearchRequest struct {
-	// Backend A backend that takes an API key saved in the product.
-	Backend *WebSearchKeyBackend `json:"backend,omitempty"`
+	// Backend A backend that runs searches.
+	Backend *WebSearchSearchBackend `json:"backend,omitempty"`
 
 	// Limit Defaults to 10.
 	Limit   *int              `json:"limit,omitempty"`
@@ -3589,6 +3619,9 @@ type WebSearchResult struct {
 	Title       string  `json:"title"`
 	Url         string  `json:"url"`
 }
+
+// WebSearchSearchBackend A backend that runs searches.
+type WebSearchSearchBackend string
 
 // CLIFileDocumentId defines model for CLIFileDocumentId.
 type CLIFileDocumentId = string

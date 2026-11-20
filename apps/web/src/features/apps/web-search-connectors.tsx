@@ -16,8 +16,10 @@ import type {
   TeamHubWebSearchBackend,
   TeamHubWebSearchBackendList,
   TeamHubWebSearchKeyBackend,
+  TeamHubWebSearchSearchBackend,
 } from "@/features/teamhub/teamhub-types";
 import {
+  isWebSearchKeyBackend,
   webSearchBackendSummary,
   webSearchQueryKey,
 } from "@/features/web-search/web-search-backends";
@@ -32,12 +34,33 @@ import { AppLogo } from "./app-logo";
 /** The Connectors tab for web search, beside the Composio app groups. */
 export const WEB_SEARCH_FILTER = { id: "web-search", label: "Web search" };
 
-/** Backends with a saved key, which Connected only keeps. */
-export function savedWebSearchBackends(
+/**
+ * The backends Connectors shows: the ones that search. Direct only opens
+ * pages and has nothing to set up.
+ */
+export function shownWebSearchBackends(
   backends: readonly TeamHubWebSearchBackend[],
 ) {
-  return backends.filter((backend) => backend.key_state !== "none");
+  return backends.filter(
+    (backend): backend is SearchBackend => backend.id !== "direct",
+  );
 }
+
+/**
+ * The backends Connected only keeps: a saved key, or a free tier that works
+ * without one.
+ */
+export function connectedWebSearchBackends(
+  backends: readonly TeamHubWebSearchBackend[],
+) {
+  return shownWebSearchBackends(backends).filter(
+    (backend) => backend.key_state !== "none" || backend.tier === "free",
+  );
+}
+
+type SearchBackend = TeamHubWebSearchBackend & {
+  id: TeamHubWebSearchSearchBackend;
+};
 
 /**
  * The web search backends as Connectors cards. They need no Composio key:
@@ -51,13 +74,13 @@ export function WebSearchSection({
   list,
 }: {
   /** The backends to show, narrowed by Connected only. */
-  backends: readonly TeamHubWebSearchBackend[];
+  backends: readonly SearchBackend[];
   className?: string;
   heading: boolean;
   list: UseQueryResult<TeamHubWebSearchBackendList>;
 }) {
   const [openID, setOpenID] = useState<string | null>(null);
-  const opened = list.data?.backends.find((backend) => backend.id === openID);
+  const opened = backends.find((backend) => backend.id === openID);
   const headingId = "connector-group-web-search";
   return (
     <section
@@ -112,7 +135,7 @@ function WebSearchBackendCard({
   isDefault,
   onOpen,
 }: {
-  backend: TeamHubWebSearchBackend;
+  backend: SearchBackend;
   isDefault: boolean;
   onOpen: () => void;
 }) {
@@ -156,7 +179,7 @@ function WebSearchBackendDialog({
   list,
   onClose,
 }: {
-  backend: TeamHubWebSearchBackend;
+  backend: SearchBackend;
   list: TeamHubWebSearchBackendList;
   onClose: () => void;
 }) {
@@ -176,31 +199,24 @@ function WebSearchBackendDialog({
             <Fact label="Free tier">{backend.free_tier}</Fact>
           ) : null}
           {backend.tier_text ? (
-            <Fact label="Without a key">{backend.tier_text}</Fact>
+            <Fact label="Free use">{backend.tier_text}</Fact>
           ) : null}
           {usage ? <Fact label="Usage">{usage}</Fact> : null}
         </dl>
-        {backend.id === "direct" ? null : (
-          <KeySection
-            backend={backend as KeyBackend}
-            canSave={list.can_save_keys}
-          />
-        )}
-        {backend.id === "direct" ? null : (
-          <DefaultSection backend={backend as KeyBackend} list={list} />
-        )}
+        {isWebSearchKeyBackend(backend) ? (
+          <KeySection backend={backend} canSave={list.can_save_keys} />
+        ) : null}
+        <DefaultSection backend={backend} list={list} />
       </div>
     </ModalDialog>
   );
 }
 
-type KeyBackend = TeamHubWebSearchBackend & { id: TeamHubWebSearchKeyBackend };
-
 function KeySection({
   backend,
   canSave,
 }: {
-  backend: KeyBackend;
+  backend: TeamHubWebSearchBackend & { id: TeamHubWebSearchKeyBackend };
   canSave: boolean;
 }) {
   const { client } = useTeamHubRuntime();
@@ -251,7 +267,7 @@ function DefaultSection({
   backend,
   list,
 }: {
-  backend: KeyBackend;
+  backend: SearchBackend;
   list: TeamHubWebSearchBackendList;
 }) {
   const { client } = useTeamHubRuntime();
@@ -337,18 +353,15 @@ function backendStatus(backend: TeamHubWebSearchBackend): {
   label: string;
   tone: "danger" | "neutral" | "success";
 } {
-  if (backend.id === "direct") return { label: "Built in", tone: "neutral" };
   if (backend.key_state === "rejected" || backend.status === "key_rejected")
     return { label: "Key rejected", tone: "danger" };
   if (backend.key_state !== "none") return { label: "Active", tone: "success" };
-  if (backend.tier === "free_trial")
-    return { label: "Free trial", tone: "neutral" };
+  if (backend.tier === "free")
+    return { label: "Free, limited", tone: "success" };
   return { label: "Not set", tone: "neutral" };
 }
 
 function backendDescription(backend: TeamHubWebSearchBackend): string {
-  if (backend.id === "direct")
-    return "Reads pages from your Agent's computer. No account needed.";
   return backend.commands.includes("open")
     ? "Searches the web and reads pages for your Agents."
     : "Searches the web for your Agents.";
@@ -382,9 +395,7 @@ function usageLine(backend: TeamHubWebSearchBackend): string | null {
       case "provider_unavailable":
         return "Usage unavailable right now";
       default:
-        return backend.tier === "free_trial"
-          ? (backend.tier_text ?? null)
-          : null;
+        return null;
     }
   }
   if (quota.remaining === undefined) return null;

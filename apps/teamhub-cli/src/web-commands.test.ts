@@ -144,13 +144,15 @@ describe("teamhub web search", () => {
       },
     });
   });
-  it("names a rejected key and the used-up trial", async () => {
-    const reasons = ["rejected", "free_limit"];
+  it("names a rejected key and the used-up free searches", async () => {
+    const cases = [
+      { backend: "brave", reason: "rejected" },
+      { backend: "you", reason: "free_limit" },
+    ];
     const f = await fixture(() =>
       teamHubError(409, "SEARCH_KEY_REQUESTED", {
-        backend: "brave",
+        ...cases.shift(),
         origin: "requested",
-        reason: reasons.shift(),
         message_id: "message_card",
       }),
     );
@@ -161,7 +163,7 @@ describe("teamhub web search", () => {
       "Waiting for the user to replace the Brave Search API key, which Brave Search no longer accepts;",
     );
     expect(text).toContain(
-      "The free web search trial is used up. Waiting for the user to add a web search API key;",
+      "You.com's free searches without a key are used up. Waiting for the user to add a You.com API key;",
     );
     expect(text).not.toContain("Provider prose");
   });
@@ -300,8 +302,8 @@ describe("teamhub web list and connect", () => {
           {
             id: "you",
             name: "You.com",
-            tier: "free_trial",
-            tier_text: "Free trial - limited and lower quality.",
+            tier: "free",
+            tier_text: "Free without a key: limited, lower quality.",
             commands: ["search", "open"],
             filters: ["recency"],
             max_limit: 20,
@@ -339,9 +341,7 @@ describe("teamhub web list and connect", () => {
       "Default search: tavily (chosen by the user). Default open: direct.",
     );
     expect(text).toContain("900 of 1000 credits left");
-    expect(text).toContain(
-      "free trial: Free trial - limited and lower quality.",
-    );
+    expect(text).toContain("free: Free without a key: limited, lower quality.");
     expect(text).toContain("free tier: Free monthly credits.");
     expect(text).toContain("run teamhub web connect <backend>");
   });

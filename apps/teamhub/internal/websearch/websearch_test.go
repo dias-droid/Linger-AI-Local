@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -119,6 +121,7 @@ func testBox(t *testing.T) *secretbox.Box {
 type seen struct {
 	method, path, query, auth, apiKey, token string
 	body                                     map[string]any
+	form                                     url.Values
 }
 
 // fakeProviders serves every provider from one server; handle answers each
@@ -137,6 +140,9 @@ func newFakeProviders(t *testing.T, handle func(w http.ResponseWriter, r seen)) 
 		request := seen{method: r.Method, path: r.URL.Path, query: r.URL.RawQuery, auth: r.Header.Get("Authorization"),
 			apiKey: r.Header.Get("X-API-Key"), token: r.Header.Get("X-Subscription-Token")}
 		_ = json.Unmarshal(raw, &request.body)
+		if r.Header.Get("Content-Type") == "application/x-www-form-urlencoded" {
+			request.form, _ = url.ParseQuery(string(raw))
+		}
 		fake.mu.Lock()
 		fake.requests = append(fake.requests, request)
 		fake.mu.Unlock()
@@ -148,7 +154,8 @@ func newFakeProviders(t *testing.T, handle func(w http.ResponseWriter, r seen)) 
 
 func (f *fakeProviders) endpoints() Endpoints {
 	return Endpoints{Tavily: f.server.URL + "/tavily", Brave: f.server.URL + "/brave", Firecrawl: f.server.URL + "/firecrawl",
-		YouAPI: f.server.URL + "/youapi", YouIndex: f.server.URL + "/youindex", YouMCP: f.server.URL + "/mcp/free", Client: f.server.Client()}
+		YouAPI: f.server.URL + "/youapi", YouIndex: f.server.URL + "/youindex", YouMCP: f.server.URL + "/mcp/free",
+		DuckDuckGo: f.server.URL + "/ddg", Client: f.server.Client()}
 }
 
 func (f *fakeProviders) seen() []seen {
@@ -309,14 +316,14 @@ func TestRunClassifiesProviderRefusals(t *testing.T) {
 				t.Fatalf("state = %q", keys.rows[string(tc.backend)].State)
 			}
 			if tc.code == CodeQuotaExhausted || tc.code == CodeRateLimited {
-				wantReady := []Backend{Firecrawl, You}
+				wantReady := []Backend{Firecrawl, You, DuckDuckGo}
 				switch tc.backend {
 				case Firecrawl:
-					wantReady = []Backend{You}
+					wantReady = []Backend{You, DuckDuckGo}
 				case You:
-					wantReady = []Backend{Firecrawl}
+					wantReady = []Backend{Firecrawl, DuckDuckGo}
 				}
-				if len(failure.Ready) != len(wantReady) || failure.Ready[0] != wantReady[0] {
+				if !slices.Equal(failure.Ready, wantReady) {
 					t.Fatalf("ready = %v, want %v", failure.Ready, wantReady)
 				}
 			}
@@ -374,7 +381,7 @@ func keylessMCP(t *testing.T, call func(w http.ResponseWriter, r seen)) func(w h
 	}
 }
 
-func TestSearchWithoutKeysUsesTheKeylessTrial(t *testing.T) {
+func TestYouWithoutAKeyUsesTheFreeMCP(t *testing.T) {
 	fake := newFakeProviders(t, keylessMCP(t, func(w http.ResponseWriter, r seen) {
 		params := r.body["params"].(map[string]any)
 		if params["name"] != "you-search" || params["arguments"].(map[string]any)["query"] != "q" {
@@ -385,7 +392,9 @@ func TestSearchWithoutKeysUsesTheKeylessTrial(t *testing.T) {
 			"data: {\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"structuredContent\":{\"results\":{\"web\":[{\"title\":\"K\",\"url\":\"https://k.example\",\"description\":\"keyless\"}]}}}}\n\n"))
 	}))
 	s, _ := newTestService(t, fake)
-	outcome, err := s.Run(t.Context(), search("q"))
+	request := search("q")
+	request.Backend = You
+	outcome, err := s.Run(t.Context(), request)
 	if err != nil || outcome.Backend != You || len(outcome.Results) != 1 || outcome.Results[0].Snippet != "keyless" {
 		t.Fatalf("Run = %+v, %v", outcome, err)
 	}
@@ -398,16 +407,12 @@ func TestSearchWithoutKeysUsesTheKeylessTrial(t *testing.T) {
 func TestKeylessFreeLimitAsksForAKey(t *testing.T) {
 	fake := newFakeProviders(t, keylessMCP(t, func(w http.ResponseWriter, _ seen) { writeJSON(w, 429, `{}`) }))
 	s, _ := newTestService(t, fake)
-	_, err := s.Run(t.Context(), search("q"))
-	var failure *Failure
-	if !errors.As(err, &failure) || failure.Code != CodeFreeLimit || failure.Backend != Tavily || !failure.Suggested || !failure.KeyFailure() {
-		t.Fatalf("implicit Run = %#v", err)
-	}
 	request := search("q")
 	request.Backend = You
-	_, err = s.Run(t.Context(), request)
-	if !errors.As(err, &failure) || failure.Code != CodeFreeLimit || failure.Backend != You || failure.Suggested {
-		t.Fatalf("explicit Run = %#v", err)
+	_, err := s.Run(t.Context(), request)
+	var failure *Failure
+	if !errors.As(err, &failure) || failure.Code != CodeFreeLimit || failure.Backend != You || failure.Suggested || !failure.KeyFailure() {
+		t.Fatalf("Run = %#v", err)
 	}
 }
 
@@ -639,7 +644,7 @@ func TestListReportsTiersStatesAndLiveQuota(t *testing.T) {
 	saveRaw(t, s, keys, Tavily, "provider-secret", "rejected")
 	saveRaw(t, s, keys, Brave, "provider-secret", "unverified")
 	list, err := s.List(t.Context(), true)
-	if err != nil || list.DefaultSearch != Brave || list.DefaultOpen != Direct || !list.CanSaveKeys || len(list.Backends) != 5 {
+	if err != nil || list.DefaultSearch != Brave || list.DefaultOpen != Direct || !list.CanSaveKeys || len(list.Backends) != 6 {
 		t.Fatalf("List = %+v, %v", list, err)
 	}
 	byID := map[Backend]BackendView{}
@@ -653,8 +658,12 @@ func TestListReportsTiersStatesAndLiveQuota(t *testing.T) {
 		v.Quota.ResetsAt == nil || len(v.Filters) != 1 || v.MaxSites != 0 {
 		t.Fatalf("firecrawl = %+v", v)
 	}
-	if v := byID[You]; v.Status != "ready" || v.Tier != TierFreeTrial || v.TierText == "" || v.Quota.From != "unavailable" || v.Quota.Reason != "not_reported" {
+	if v := byID[You]; v.Status != "ready" || v.Tier != TierFree || v.TierText == "" || v.Quota.From != "unavailable" || v.Quota.Reason != "not_reported" {
 		t.Fatalf("you = %+v", v)
+	}
+	if v := byID[DuckDuckGo]; v.Status != "ready" || v.Tier != TierFree || v.TierText == "" || v.KeyState != "none" ||
+		v.MaxLimit != 10 || v.MaxSites != 1 || len(v.Commands) != 1 || v.Commands[0] != CommandSearch {
+		t.Fatalf("duckduckgo = %+v", v)
 	}
 	if v := byID[Direct]; v.Tier != TierNone || v.Status != "ready" || len(v.Commands) != 1 || v.Commands[0] != CommandOpen {
 		t.Fatalf("direct = %+v", v)
@@ -681,7 +690,7 @@ func TestListWithoutQuotaCallsNoProvider(t *testing.T) {
 	saveRaw(t, s, keys, You, "provider-secret", "verified")
 	saveRaw(t, s, keys, Tavily, "provider-secret", "verified")
 	list, err := s.List(t.Context(), false)
-	if err != nil || len(list.Backends) != 5 || len(fake.seen()) != 0 {
+	if err != nil || len(list.Backends) != 6 || len(fake.seen()) != 0 {
 		t.Fatalf("List = %+v, %v, calls %d", list, err, len(fake.seen()))
 	}
 	for _, view := range list.Backends {

@@ -17,6 +17,7 @@ import type {
   TeamHubWebSearchKeyBackend,
 } from "@/features/teamhub/teamhub-types";
 import {
+  isWebSearchKeyBackend,
   webSearchBackendInfoQueryOptions,
   webSearchBackendName,
   webSearchBackendSummary,
@@ -71,9 +72,7 @@ export function SearchKeyDecision({
   if (!view) return null;
   const owner = currentActorId === card.decision_owner.id;
   const pending = card.status === "pending";
-  const keyBackends = (list.data?.backends ?? []).filter(
-    (backend): backend is KeyBackend => backend.id !== "direct",
-  );
+  const keyBackends = (list.data?.backends ?? []).filter(isWebSearchKeyBackend);
   const shownID =
     !pending && card.answer?.backend ? card.answer.backend : view.backend;
   const shown = keyBackends.find((backend) => backend.id === shownID);
@@ -222,10 +221,8 @@ function OtherProviders({
                 <div className="min-w-0 flex-1">
                   <p className="flex min-w-0 items-center gap-1.5 text-sm text-app-ink">
                     <span className="truncate">{backend.name}</span>
-                    {backend.tier === "free_trial" ? (
-                      <StatusPill tone="success">
-                        Working without a key
-                      </StatusPill>
+                    {backend.tier === "free" ? (
+                      <StatusPill tone="success">Free, limited</StatusPill>
                     ) : null}
                   </p>
                   <p className="truncate text-xs text-app-muted">
