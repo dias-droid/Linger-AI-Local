@@ -135,6 +135,8 @@ elsewhere.
 | Publish (a template)          | 发布                       |                                                   |
 | Marketplace                   | 模板市场                   | Where published Agent templates are listed.       |
 | Official template             | 官方模板                   |                                                   |
+| Docs                          | 文档                       | The short form of Documents in search.            |
+| Search scope                  | 搜索范围                   | Messages, Members, Docs or Rooms.                 |
 
 ## Style
 
