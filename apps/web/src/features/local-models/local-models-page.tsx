@@ -77,9 +77,9 @@ import {
   type ModelEntry,
   type ModelStatus,
 } from "./local-models-rules";
+import { ByokPanel } from "./byok-panel";
 import {
   activeSourceLabel,
-  ByokPanel,
   ModelSourceTabs,
   SwitchToLocalNotice,
   useModelSourceSwitch,

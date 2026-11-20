@@ -30,8 +30,12 @@ build:assets` to check the initial JS budget.
   Local model; the page never holds a saved API key (reusing a saved key only
   for the saved endpoint's origin, clearing entered keys after saving, offering
   manual model ID entry even when endpoints list models, and disabling BYOK
-  edits while offline), and a switch refused with `AGENT_HAS_ACTIVE_RUNS`
-  retries with `force_terminate` only after the owner confirms. The Local model
+  edits while offline). BYOK addresses requests as base URL + path + endpoint
+  and sends the format the address's ending names (else the Runtime's own);
+  it lists models only on request and shows a Test result as a floating
+  message, with the Computer's own message for endpoint refusals. A switch
+  refused with `AGENT_HAS_ACTIVE_RUNS` retries with `force_terminate` only
+  after the owner confirms. The Local model
   tab is one Computer's model library as TeamHub last stored it. The Computer
   decides fit, availability, placement, the recommendation and memory; the page
   only orders and labels them, picks the Make room default (including

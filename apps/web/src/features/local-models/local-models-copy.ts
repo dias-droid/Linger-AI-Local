@@ -240,7 +240,8 @@ const modelSourceRefusals: Record<Schemas["ModelSourceErrorCode"], string> = {
   BYOK_AUTH_FAILED: "The endpoint rejected the API key.",
   BYOK_INVALID_CONFIG:
     "The computer can't use this endpoint. An HTTPS endpoint needs an API key; plain HTTP works only on this computer or your local network.",
-  BYOK_MODEL_NOT_FOUND: "The endpoint doesn't serve this model ID.",
+  BYOK_NOT_FOUND:
+    "Nothing answered at the endpoint's address, or it doesn't serve this model ID.",
   BYOK_UNREACHABLE: "The computer couldn't reach the endpoint.",
   BYOK_UPSTREAM_REJECTED: "The endpoint rejected the test request.",
   LOCAL_COMPUTER_OFFLINE:
@@ -265,6 +266,22 @@ export function modelSourceErrorCopy(code: string | undefined) {
   return code && Object.hasOwn(modelSourceRefusals, code)
     ? modelSourceRefusals[code as keyof typeof modelSourceRefusals]
     : "Something went wrong. Try again.";
+}
+
+// For these the Computer's own message names the address it sent to and the
+// endpoint's HTTP status, so it is shown as it is.
+const byokEndpointRefusals = new Set([
+  "BYOK_AUTH_FAILED",
+  "BYOK_NOT_FOUND",
+  "BYOK_UNREACHABLE",
+  "BYOK_UPSTREAM_REJECTED",
+]);
+
+/** Why a request to a BYOK endpoint (a test or a model listing) failed. */
+export function byokFailureCopy(code: string | undefined, message: string) {
+  return code && byokEndpointRefusals.has(code) && message
+    ? message
+    : modelSourceErrorCopy(code);
 }
 
 /** Why reading a Computer's model source failed. */

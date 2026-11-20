@@ -1,16 +1,8 @@
-import { RefreshIcon } from "@hugeicons/core-free-icons";
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
-import { type FormEvent, useId, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Field, fieldControlClassName } from "@/components/ui/field";
 import { FormFeedback } from "@/components/ui/form-feedback";
-import { Icon } from "@/components/ui/icon";
 import { ModalDialog } from "@/components/ui/modal-dialog";
 import { Select, SelectItem } from "@/components/ui/select";
 import { Hint } from "@/features/local-computer/computer-hint";
@@ -24,7 +16,6 @@ import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
 import { cn } from "@/lib/cn";
 
 import {
-  byokProtocolLabels,
   modelSourceErrorCopy,
   modelSourceModeLabels,
   modelSourceRuntimeLabels,
@@ -33,27 +24,20 @@ import {
   type LocalModel,
   tenantLocalModelsQueryKey,
 } from "./local-models-queries";
-import { contextLabel, formatGigabytes } from "./local-models-rules";
+import { formatGigabytes } from "./local-models-rules";
 import {
-  type ByokInput,
-  type ByokModel,
-  type ByokTestRequest,
-  byokModelsQueryOptions,
   type ModelSourceMode,
-  type ModelSourceRuntime,
   type ModelSourceStatus,
   type ModelSourceSwitchRequest,
   type ModelSourceView,
   modelSourceQueryKey,
   switchModelSource,
-  testByokEndpoint,
 } from "./model-source-queries";
 
 // Subscription is not offered: switching to it moves every Agent on the
 // Computer to one Runtime without checking that Runtime is signed in, and
 // unloads local models.
 const modes: readonly ModelSourceMode[] = ["local", "byok"];
-const byokRuntimes: readonly ModelSourceRuntime[] = ["claude", "codex", "pi"];
 
 const byokExplanation =
   "Bring your own key: use your own OpenAI-compatible or Anthropic API endpoint. A gateway on this computer serves it to your Agents.";
@@ -67,7 +51,7 @@ export function activeSourceLabel(status: ModelSourceStatus) {
   return "Local model";
 }
 
-interface ModelSourceSwitcher {
+export interface ModelSourceSwitcher {
   clearFeedback: () => void;
   failure: string | undefined;
   pending: ModelSourceSwitchRequest | undefined;
@@ -338,334 +322,5 @@ export function SwitchToLocalNotice({
         </Button>
       </div>
     </div>
-  );
-}
-
-/** A listed model: its ID, then its name and context window when known. */
-function ByokModelOption({ model }: { model: ByokModel }) {
-  const details = [
-    model.name,
-    model.context_window ? contextLabel(model.context_window) : undefined,
-  ].filter(Boolean);
-  return (
-    <>
-      {details.length ? `${model.id} ` : model.id}
-      {details.length ? (
-        <span className="ml-1 text-xs text-muted-foreground">
-          {details.join(" · ")}
-        </span>
-      ) : null}
-    </>
-  );
-}
-
-function sameEndpointOrigin(savedUrl: string | undefined, nextUrl: string) {
-  const trimmedSaved = savedUrl?.trim();
-  const trimmedNext = nextUrl.trim();
-  if (!trimmedSaved || !trimmedNext) return false;
-  if (trimmedSaved === trimmedNext) return true;
-  try {
-    return new URL(trimmedSaved).origin === new URL(trimmedNext).origin;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * The person's own endpoint. The API key goes to the Computer, which keeps
- * it private; Linger never shows it again.
- */
-export function ByokPanel({
-  computerId,
-  disabled,
-  status,
-  switcher,
-  tenantId,
-}: {
-  computerId: string;
-  disabled: boolean;
-  status: ModelSourceStatus;
-  switcher: ModelSourceSwitcher;
-  tenantId: string;
-}) {
-  const { client } = useTeamHubRuntime();
-  const saved = status.byok;
-  const [runtime, setRuntime] = useState<ModelSourceRuntime>(
-    status.mode === "byok" ? status.runtime : "claude",
-  );
-  const [baseUrl, setBaseUrl] = useState(saved.base_url ?? "");
-  const [apiKey, setApiKey] = useState("");
-  // Starts empty until a model is saved, then shows the saved one.
-  const [modelId, setModelId] = useState(saved.model_id ?? "");
-  const [manualModelEntry, setManualModelEntry] = useState(false);
-  // Models are listed for the address and key as they stand when a field is
-  // left, not on every keystroke.
-  const [listed, setListed] = useState({
-    baseUrl: saved.base_url ?? "",
-    keyRevision: 0,
-  });
-  const [keyEdited, setKeyEdited] = useState(false);
-  const trimmedBaseUrl = baseUrl.trim();
-  // Never reuse a saved key when the owner points BYOK at a different host.
-  const canReuseSavedKey =
-    saved.key_saved &&
-    (!saved.base_url || sameEndpointOrigin(saved.base_url, trimmedBaseUrl));
-  const credentials = apiKey
-    ? { api_key: apiKey }
-    : canReuseSavedKey
-      ? { reuse_saved_key: true }
-      : {};
-  const listedCanReuseSavedKey =
-    saved.key_saved &&
-    (!saved.base_url || sameEndpointOrigin(saved.base_url, listed.baseUrl));
-  const listedCredentials = apiKey
-    ? { api_key: apiKey }
-    : listedCanReuseSavedKey
-      ? { reuse_saved_key: true }
-      : {};
-  const input: ByokInput = {
-    base_url: trimmedBaseUrl,
-    model_id: modelId.trim(),
-    ...credentials,
-  };
-  const models = useQuery({
-    ...byokModelsQueryOptions(
-      client,
-      tenantId,
-      computerId,
-      { base_url: listed.baseUrl, ...listedCredentials },
-      listed.keyRevision,
-    ),
-    // A refresh keeps the current choices on screen until the new list lands,
-    // but clearing the address clears stale options.
-    placeholderData: listed.baseUrl ? keepPreviousData : undefined,
-  });
-  const listedModels = listed.baseUrl ? (models.data?.models ?? []) : [];
-  // A saved or typed ID the endpoint does not list stays choosable.
-  const modelOptions =
-    input.model_id === "" ||
-    listedModels.some((model) => model.id === input.model_id)
-      ? listedModels
-      : [{ id: input.model_id }, ...listedModels];
-  const modelControlId = useId();
-  const modelHintId = `${modelControlId}-hint`;
-  const modelHint = models.isFetching
-    ? "Listing the endpoint's models…"
-    : models.isError
-      ? "The endpoint didn't list its models. Type the model ID."
-      : listedModels.length
-        ? `${listedModels.length} ${listedModels.length === 1 ? "model" : "models"} listed.`
-        : undefined;
-  const showModelSelect = listedModels.length > 0 && !manualModelEntry;
-  // The Computer decides whether the endpoint needs a key: one on this
-  // computer or the local network may have none.
-  const complete = input.base_url !== "" && input.model_id !== "";
-  const test = useMutation({
-    mutationFn: (body: ByokTestRequest) =>
-      testByokEndpoint(client, tenantId, computerId, body),
-  });
-  const active = status.mode === "byok";
-
-  function save(event: FormEvent) {
-    event.preventDefault();
-    switcher.request({ byok: input, mode: "byok", runtime });
-  }
-
-  function listModels() {
-    setKeyEdited(false);
-    setListed((current) => ({
-      baseUrl: input.base_url,
-      keyRevision: current.keyRevision + 1,
-    }));
-  }
-
-  return (
-    <form
-      aria-label="BYOK"
-      className="mt-6 overflow-hidden rounded-xl border border-border"
-      onSubmit={save}
-    >
-      <div className="grid grid-cols-1 gap-4 px-4 py-4">
-        {active && saved.protocol ? (
-          <p className="text-xs text-muted-foreground">
-            In use, through {byokProtocolLabels[saved.protocol]}.
-          </p>
-        ) : null}
-        <div>
-          <p className="mb-1.5 text-sm font-medium text-foreground">
-            AI runtime
-          </p>
-          <Select
-            aria-label="AI runtime"
-            className="w-full"
-            disabled={disabled}
-            onValueChange={(value) => {
-              setRuntime(value as ModelSourceRuntime);
-              // The runtime decides which API format is tried first.
-              test.reset();
-            }}
-            value={runtime}
-          >
-            {byokRuntimes.map((item) => (
-              <SelectItem key={item} value={item}>
-                {modelSourceRuntimeLabels[item]}
-              </SelectItem>
-            ))}
-          </Select>
-        </div>
-        <Field
-          autoComplete="off"
-          disabled={disabled}
-          label="Base URL"
-          onBlur={() =>
-            setListed((current) =>
-              current.baseUrl === input.base_url
-                ? current
-                : { ...current, baseUrl: input.base_url },
-            )
-          }
-          onChange={(event) => {
-            setBaseUrl(event.target.value);
-            test.reset();
-          }}
-          placeholder="https://api.example.com/v1"
-          spellCheck={false}
-          value={baseUrl}
-        />
-        <Field
-          autoComplete="new-password"
-          disabled={disabled}
-          hint={
-            canReuseSavedKey
-              ? "A key is saved on this computer. Leave blank to keep it."
-              : "Optional for an endpoint on this computer or your local network."
-          }
-          label="API key"
-          onBlur={() => {
-            if (!keyEdited) return;
-            setKeyEdited(false);
-            setListed((current) => ({
-              ...current,
-              keyRevision: current.keyRevision + 1,
-            }));
-          }}
-          onChange={(event) => {
-            setApiKey(event.target.value);
-            setKeyEdited(true);
-            test.reset();
-          }}
-          type="password"
-          value={apiKey}
-        />
-        <div>
-          <label
-            className="mb-1.5 block text-sm font-medium text-foreground"
-            htmlFor={modelControlId}
-          >
-            Model
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <div className="min-w-48 flex-1">
-              {showModelSelect ? (
-                <Select
-                  aria-describedby={modelHint ? modelHintId : undefined}
-                  aria-label="Model"
-                  className="w-full"
-                  disabled={disabled}
-                  id={modelControlId}
-                  onValueChange={(value) => {
-                    setModelId(value);
-                    test.reset();
-                  }}
-                  placeholder="Choose a model"
-                  value={input.model_id}
-                >
-                  {modelOptions.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      <ByokModelOption model={model} />
-                    </SelectItem>
-                  ))}
-                </Select>
-              ) : (
-                <input
-                  aria-describedby={modelHint ? modelHintId : undefined}
-                  autoComplete="off"
-                  className={fieldControlClassName}
-                  disabled={disabled}
-                  id={modelControlId}
-                  onChange={(event) => {
-                    setModelId(event.target.value);
-                    test.reset();
-                  }}
-                  placeholder="provider/model-name"
-                  spellCheck={false}
-                  value={modelId}
-                />
-              )}
-            </div>
-            <Button
-              disabled={disabled || input.base_url === ""}
-              loading={models.isFetching}
-              onClick={listModels}
-              onMouseDown={(event) => event.preventDefault()}
-              size="large"
-            >
-              {models.isFetching ? null : <Icon icon={RefreshIcon} size={16} />}
-              List models
-            </Button>
-          </div>
-          {modelHint || listedModels.length > 0 ? (
-            <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-              <p id={modelHintId}>{modelHint}</p>
-              {listedModels.length > 0 ? (
-                <button
-                  className="text-foreground underline underline-offset-2 disabled:opacity-50"
-                  disabled={disabled}
-                  onClick={() => setManualModelEntry((current) => !current)}
-                  type="button"
-                >
-                  {manualModelEntry
-                    ? "Choose from list"
-                    : "Enter model ID manually"}
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-        {test.isSuccess ? (
-          <FormFeedback tone="success">
-            Connected to {test.data.base_url} through{" "}
-            {byokProtocolLabels[test.data.protocol]}. {test.data.model_id} has{" "}
-            {contextLabel(test.data.context_window)} of context.
-          </FormFeedback>
-        ) : null}
-        {test.isError ? (
-          <FormFeedback tone="danger">
-            {modelSourceErrorCopy(
-              test.error instanceof TeamHubError ? test.error.code : undefined,
-            )}
-          </FormFeedback>
-        ) : null}
-      </div>
-      <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-border bg-muted/40 px-4 py-3">
-        <Button
-          disabled={disabled || !complete}
-          loading={test.isPending}
-          onClick={() => test.mutate({ byok: input, runtime })}
-          size="large"
-        >
-          Test connection
-        </Button>
-        <Button
-          disabled={disabled || !complete}
-          loading={switcher.pending?.mode === "byok"}
-          size="large"
-          tone="primary"
-          type="submit"
-        >
-          {active ? "Save" : "Save & Switch to BYOK"}
-        </Button>
-      </footer>
-    </form>
   );
 }
