@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   checkByokEndpoint,
   isAllowedByokUrl,
+  listByokModels,
   prepareByokNativeRuntime,
   prepareByokRuntime,
   applyNativeSource,
@@ -39,10 +40,35 @@ describe("isAllowedByokUrl", () => {
     expect(isAllowedByokUrl("http://100.88.1.5:11434/v1")).toBe(true);
     expect(
       validateByokConfiguration({
-        baseUrl: "https://api.openai.com/v1/",
+        baseUrl: "https://api.openai.com/",
+        path: "/v1",
+        endpoint: "/responses",
+        protocol: "openai-responses",
         modelId: "gpt-5.4",
       }).baseUrl,
-    ).toBe("https://api.openai.com/v1");
+    ).toBe("https://api.openai.com");
+  });
+
+  it("accepts an empty path or endpoint and refuses one that could leave the base URL", () => {
+    const base = {
+      baseUrl: "https://gw.example.com/full",
+      path: "",
+      endpoint: "",
+      protocol: "anthropic",
+      modelId: "m",
+    };
+    expect(validateByokConfiguration(base)).toMatchObject({
+      path: "",
+      endpoint: "",
+    });
+    for (const bad of [
+      { path: "v1" },
+      { path: "/v1/" },
+      { endpoint: "//evil.example.com/x" },
+      { endpoint: "/chat?key=1" },
+      { protocol: "gemini" },
+    ])
+      expect(() => validateByokConfiguration({ ...base, ...bad })).toThrow();
   });
 
   it("blocks link-local metadata, public HTTP, and URL credentials", () => {
@@ -71,7 +97,7 @@ describe("BYOK localmodels integration", () => {
           stdout: JSON.stringify({
             ok: true,
             protocol: "openai-responses",
-            base_url: "https://api.example.com/v1",
+            url: "https://api.example.com/v1/responses",
             model_id: "gpt-5.4",
             context_window: 200_000,
           }),
@@ -82,7 +108,10 @@ describe("BYOK localmodels integration", () => {
     const report = await checkByokEndpoint(
       home,
       {
-        baseUrl: "https://api.example.com/v1",
+        baseUrl: "https://api.example.com",
+        path: "/v1",
+        endpoint: "/responses",
+        protocol: "openai-responses",
         apiKey: "sk-private-secret",
         modelId: "gpt-5.4",
         runtime: "codex",
@@ -93,18 +122,96 @@ describe("BYOK localmodels integration", () => {
     expect(report).toEqual({
       ok: true,
       protocol: "openai-responses",
-      baseUrl: "https://api.example.com/v1",
+      url: "https://api.example.com/v1/responses",
       modelId: "gpt-5.4",
       contextWindow: 200_000,
     });
     expect(calls).toHaveLength(1);
     expect(calls[0]!.args.join(" ")).not.toContain("sk-private-secret");
     expect(calls[0]!.args).toContain("--config-stdin");
-    expect(calls[0]!.args.join(" ")).toContain("--runtime codex");
-    expect(JSON.parse(calls[0]!.input!)).toMatchObject({
+    expect(calls[0]!.args).not.toContain("--runtime");
+    expect(JSON.parse(calls[0]!.input!)).toEqual({
+      baseUrl: "https://api.example.com",
+      path: "/v1",
+      endpoint: "/responses",
+      protocol: "openai-responses",
       apiKey: "sk-private-secret",
       modelId: "gpt-5.4",
     });
+  });
+
+  it("lists models at the endpoint's model address with the key on stdin", async () => {
+    const calls: { args: string[]; input?: string }[] = [];
+    const listing = await listByokModels(
+      await makeHome(),
+      {
+        baseUrl: "https://open.bigmodel.cn",
+        path: "/api/paas/v4",
+        endpoint: "/chat/completions",
+        protocol: "openai-chat",
+        apiKey: "sk-list-secret",
+      },
+      new AbortController().signal,
+      {
+        localmodels: async (_home, args, options = {}) => {
+          calls.push({ args, input: options.input });
+          return {
+            code: 0,
+            stdout: JSON.stringify({
+              ok: true,
+              url: "https://open.bigmodel.cn/api/paas/v4/models",
+              models: [
+                { id: "glm-4.6", name: "GLM 4.6", context_window: 131_072 },
+                { id: "glm-4.5", name: null, context_window: null },
+              ],
+            }),
+            stderr: "",
+          };
+        },
+      },
+    );
+    expect(listing).toEqual({
+      url: "https://open.bigmodel.cn/api/paas/v4/models",
+      models: [
+        { id: "glm-4.6", name: "GLM 4.6", contextWindow: 131_072 },
+        { id: "glm-4.5" },
+      ],
+    });
+    expect(calls[0]!.args).toEqual([
+      "source",
+      "models",
+      "--config-stdin",
+      "--json",
+    ]);
+    expect(JSON.parse(calls[0]!.input!)).toMatchObject({
+      path: "/api/paas/v4",
+      apiKey: "sk-list-secret",
+    });
+
+    await expect(
+      listByokModels(
+        await makeHome(),
+        {
+          baseUrl: "https://open.bigmodel.cn",
+          path: "/api/paas/v4",
+          endpoint: "/chat/completions",
+          protocol: "openai-chat",
+        },
+        new AbortController().signal,
+        {
+          localmodels: async () => ({
+            code: 1,
+            stdout: JSON.stringify({
+              ok: false,
+              code: "BYOK_NOT_FOUND",
+              message:
+                "https://open.bigmodel.cn/api/paas/v4/models returned HTTP 404.",
+            }),
+            stderr: "",
+          }),
+        },
+      ),
+    ).rejects.toMatchObject({ code: "BYOK_NOT_FOUND" });
   });
 
   it("mounts BYOK on Bifrost even when native runtime lacks vendor OAuth", async () => {
@@ -112,6 +219,9 @@ describe("BYOK localmodels integration", () => {
     const outcome = await prepareByokRuntime(
       {
         baseUrl: "https://api.anthropic.com",
+        path: "/v1",
+        endpoint: "/messages",
+        protocol: "anthropic",
         apiKey: "sk-ant-test",
         modelId: "claude-sonnet-4-6",
         runtime: "claude",
@@ -229,7 +339,10 @@ describe("BYOK localmodels integration", () => {
     let rejectApply!: (error: Error) => void;
     const promise = prepareByokRuntime(
       {
-        baseUrl: "https://api.example.com/v1",
+        baseUrl: "https://api.example.com",
+        path: "/v1",
+        endpoint: "/responses",
+        protocol: "openai-responses",
         modelId: "gpt-4o",
         runtime: "codex",
       },
@@ -599,7 +712,10 @@ describe("source apply timeouts and progress", () => {
     }));
     await prepareByokRuntime(
       {
-        baseUrl: "https://api.example.com/v1",
+        baseUrl: "https://api.example.com",
+        path: "/v1",
+        endpoint: "/messages",
+        protocol: "anthropic",
         apiKey: "sk-test",
         modelId: "m",
         runtime: "claude",

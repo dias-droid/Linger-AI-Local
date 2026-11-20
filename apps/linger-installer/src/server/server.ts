@@ -18,7 +18,11 @@ import {
   validateLocalModelsAuthority,
 } from "./validation.js";
 import { checkModel, openLocalTarget } from "./platform.js";
-import { checkByokEndpoint } from "@linger/local-installation/byok-source";
+import {
+  checkByokEndpoint,
+  listByokModels,
+  validateByokEndpoint,
+} from "@linger/local-installation/byok-source";
 import { checkRuntimeModel } from "@linger/local-installation/managed-codex";
 export interface ServerOptions {
   home: string;
@@ -412,14 +416,52 @@ export async function startInstallerServer(options: ServerOptions) {
           }
           return;
         }
-        if (url.pathname === "/api/byok/check" && method === "POST") {
-          const byok = validateByok(await body(req));
-          const checked = await checkByokEndpoint(
-            options.home,
-            byok,
-            AbortSignal.timeout(45_000),
-          );
-          json(res, 200, checked);
+        if (
+          (url.pathname === "/api/byok/check" ||
+            url.pathname === "/api/byok/models") &&
+          method === "POST"
+        ) {
+          const input = await body(req);
+          const check = url.pathname === "/api/byok/check";
+          // Validate before the try, so a malformed body stays a plain 400.
+          const run = check
+            ? (() => {
+                const byok = validateByok(input);
+                return () =>
+                  checkByokEndpoint(
+                    options.home,
+                    byok,
+                    AbortSignal.timeout(45_000),
+                  );
+              })()
+            : (() => {
+                const endpoint = validateByokEndpoint(input);
+                return () =>
+                  listByokModels(
+                    options.home,
+                    endpoint,
+                    AbortSignal.timeout(30_000),
+                  );
+              })();
+          try {
+            json(res, 200, await run());
+          } catch (failure) {
+            // localmodels names the address it tried and its HTTP status.
+            const code =
+              failure instanceof Error &&
+              "code" in failure &&
+              typeof failure.code === "string"
+                ? failure.code
+                : "BYOK_CHECK_FAILED";
+            error(
+              res,
+              400,
+              code,
+              failure instanceof Error
+                ? failure.message
+                : "Could not reach the BYOK endpoint.",
+            );
+          }
           return;
         }
         if (url.pathname === "/api/runtime-login" && method === "DELETE") {

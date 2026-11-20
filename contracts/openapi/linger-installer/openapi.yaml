@@ -736,6 +736,10 @@ components:
           type: integer
           minimum: 1
           maximum: 2147483647
+        runtime:
+          description: The Runtime BYOK is mounted for when the job applies it.
+          type: string
+          enum: [claude, codex, pi]
     ByokModelReport:
       type: object
       additionalProperties: false

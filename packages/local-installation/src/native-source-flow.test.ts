@@ -1334,7 +1334,10 @@ test.each(["returned", "thrown"])(
       ...f,
       name: "native-flow",
       byok: {
-        baseUrl: "https://example.test/v1",
+        baseUrl: "https://example.test",
+        path: "/v1",
+        endpoint: "/chat/completions",
+        protocol: "openai-chat",
         modelId: "test",
         apiKey: "test-key",
         runtime: "pi",

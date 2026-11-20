@@ -14,9 +14,19 @@ import type { InstallOutcome, InstallerEvent } from "./events.js";
 
 export type ByokProtocol = "openai-chat" | "openai-responses" | "anthropic";
 
-export interface ByokConfiguration {
+/**
+ * Requests go to baseUrl + path + endpoint in protocol, and models are listed
+ * at baseUrl + path + /models.
+ */
+export interface ByokEndpoint {
   baseUrl: string;
+  path: string;
+  endpoint: string;
+  protocol: ByokProtocol;
   apiKey?: string;
+}
+
+export interface ByokConfiguration extends ByokEndpoint {
   modelId: string;
   contextWindow?: number;
   runtime?: NativeRuntime;
@@ -25,9 +35,14 @@ export interface ByokConfiguration {
 export interface ByokCheckOutcome {
   ok: true;
   protocol: ByokProtocol;
-  baseUrl: string;
+  url: string;
   modelId: string;
   contextWindow: number;
+}
+
+export interface ByokModelListing {
+  url: string;
+  models: { id: string; name?: string; contextWindow?: number }[];
 }
 
 interface StoredModelSource {
@@ -77,17 +92,31 @@ export function isAllowedByokUrl(raw: string): boolean {
   }
 }
 
-export function validateByokConfiguration(value: unknown): ByokConfiguration {
+// Empty, or whole segments each led by one slash, so a path or endpoint can
+// only extend the base URL's path.
+const BYOK_URL_PATH = /^(?:\/[^/?#\s\\]+)*$/u;
+
+function isByokProtocol(value: unknown): value is ByokProtocol {
+  return (
+    value === "openai-chat" ||
+    value === "openai-responses" ||
+    value === "anthropic"
+  );
+}
+
+function byokRecord(
+  value: unknown,
+  keys: readonly string[],
+): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error("Invalid BYOK configuration.");
   const record = value as Record<string, unknown>;
   for (const key of Object.keys(record))
-    if (
-      !["baseUrl", "apiKey", "modelId", "contextWindow", "runtime"].includes(
-        key,
-      )
-    )
-      throw new Error("Invalid BYOK configuration.");
+    if (!keys.includes(key)) throw new Error("Invalid BYOK configuration.");
+  return record;
+}
+
+function byokEndpointFields(record: Record<string, unknown>): ByokEndpoint {
   if (
     typeof record.baseUrl !== "string" ||
     record.baseUrl.length > 2048 ||
@@ -96,11 +125,18 @@ export function validateByokConfiguration(value: unknown): ByokConfiguration {
     throw new Error(
       "Endpoint URL must use HTTPS, or HTTP on localhost / a private network.",
     );
-  if (
-    typeof record.modelId !== "string" ||
-    !/^[-a-zA-Z0-9_./:@]{1,256}$/.test(record.modelId.trim())
-  )
-    throw new Error("Model ID is invalid.");
+  for (const [label, value] of [
+    ["Path", record.path],
+    ["Endpoint", record.endpoint],
+  ] as const)
+    if (
+      typeof value !== "string" ||
+      value.length > 256 ||
+      !BYOK_URL_PATH.test(value)
+    )
+      throw new Error(`${label} must be empty or a path such as /v1.`);
+  if (!isByokProtocol(record.protocol))
+    throw new Error("Invalid BYOK wire format.");
   const apiKey = record.apiKey;
   if (
     apiKey !== undefined &&
@@ -109,6 +145,40 @@ export function validateByokConfiguration(value: unknown): ByokConfiguration {
       [...apiKey].some((c) => c.charCodeAt(0) <= 32 || c.charCodeAt(0) === 127))
   )
     throw new Error("API key format is invalid.");
+  return {
+    baseUrl: record.baseUrl.trim().replace(/\/+$/, ""),
+    path: record.path as string,
+    endpoint: record.endpoint as string,
+    protocol: record.protocol,
+    ...(apiKey !== undefined ? { apiKey } : {}),
+  };
+}
+
+const BYOK_ENDPOINT_KEYS = [
+  "baseUrl",
+  "path",
+  "endpoint",
+  "protocol",
+  "apiKey",
+] as const;
+
+export function validateByokEndpoint(value: unknown): ByokEndpoint {
+  return byokEndpointFields(byokRecord(value, BYOK_ENDPOINT_KEYS));
+}
+
+export function validateByokConfiguration(value: unknown): ByokConfiguration {
+  const record = byokRecord(value, [
+    ...BYOK_ENDPOINT_KEYS,
+    "modelId",
+    "contextWindow",
+    "runtime",
+  ]);
+  const endpoint = byokEndpointFields(record);
+  if (
+    typeof record.modelId !== "string" ||
+    !/^[-a-zA-Z0-9_./:@]{1,256}$/.test(record.modelId.trim())
+  )
+    throw new Error("Model ID is invalid.");
   const contextWindow = record.contextWindow;
   if (
     contextWindow !== undefined &&
@@ -126,8 +196,7 @@ export function validateByokConfiguration(value: unknown): ByokConfiguration {
   )
     throw new Error("Invalid BYOK runtime selection.");
   return {
-    baseUrl: record.baseUrl.trim().replace(/\/+$/, ""),
-    ...(apiKey !== undefined ? { apiKey } : {}),
+    ...endpoint,
     modelId: record.modelId.trim(),
     ...(contextWindow !== undefined
       ? { contextWindow: Number(contextWindow) }
@@ -136,30 +205,45 @@ export function validateByokConfiguration(value: unknown): ByokConfiguration {
   };
 }
 
-// The API key travels on stdin, never in argv.
-function byokStdin(config: ByokConfiguration): string {
+// The API key travels on stdin, never in argv. An empty path or endpoint is
+// sent too: it appends nothing, which localmodels tells apart from a missing
+// field.
+function byokStdin(config: ByokEndpoint & Partial<ByokConfiguration>): string {
   return JSON.stringify({
     baseUrl: config.baseUrl,
+    path: config.path,
+    endpoint: config.endpoint,
+    protocol: config.protocol,
     ...(config.apiKey !== undefined ? { apiKey: config.apiKey } : {}),
-    modelId: config.modelId,
+    ...(config.modelId !== undefined ? { modelId: config.modelId } : {}),
     ...(config.contextWindow !== undefined
       ? { contextWindow: config.contextWindow }
       : {}),
   });
 }
 
-function isByokProtocol(value: unknown): value is ByokProtocol {
-  return (
-    value === "openai-chat" ||
-    value === "openai-responses" ||
-    value === "anthropic"
-  );
+function endpointFailure(
+  parsed: Record<string, unknown> | undefined,
+  fallback: string,
+  fallbackCode: string,
+): Error {
+  const message =
+    typeof parsed?.message === "string" && parsed.message
+      ? parsed.message
+      : fallback;
+  const code = typeof parsed?.code === "string" ? parsed.code : fallbackCode;
+  return Object.assign(new Error(message), { code });
 }
 
-/**
- * Verifies the endpoint from this computer and finds the wire format it
- * answers, trying the runtime's own format first.
- */
+function parseToolJson(stdout: string): Record<string, unknown> | undefined {
+  try {
+    return JSON.parse(stdout) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Sends one request to the endpoint's address from this computer. */
 export async function checkByokEndpoint(
   home: string,
   config: ByokConfiguration,
@@ -170,40 +254,25 @@ export async function checkByokEndpoint(
   signal.throwIfAborted();
   const result = await (dependencies.localmodels ?? runLocalmodels)(
     home,
-    [
-      "source",
-      "check",
-      "--config-stdin",
-      "--runtime",
-      validated.runtime ?? "claude",
-      "--json",
-    ],
+    ["source", "check", "--config-stdin", "--json"],
     { signal, timeoutMs: 45_000, input: byokStdin(validated) },
   );
-  let parsed: Record<string, unknown> | undefined;
-  try {
-    parsed = JSON.parse(result.stdout) as Record<string, unknown>;
-  } catch {
-    parsed = undefined;
-  }
+  const parsed = parseToolJson(result.stdout);
   if (
     result.code !== 0 ||
     parsed?.ok !== true ||
-    !isByokProtocol(parsed.protocol)
-  ) {
-    const message =
-      typeof parsed?.message === "string" && parsed.message
-        ? parsed.message
-        : "Could not verify the BYOK endpoint. Check the URL, API key, model ID and network.";
-    const code =
-      typeof parsed?.code === "string" ? parsed.code : "BYOK_CHECK_FAILED";
-    throw Object.assign(new Error(message), { code });
-  }
+    !isByokProtocol(parsed.protocol) ||
+    typeof parsed.url !== "string"
+  )
+    throw endpointFailure(
+      parsed,
+      "Could not verify the BYOK endpoint. Check the URL, API key, model ID and network.",
+      "BYOK_CHECK_FAILED",
+    );
   return {
     ok: true,
     protocol: parsed.protocol,
-    baseUrl:
-      typeof parsed.base_url === "string" ? parsed.base_url : validated.baseUrl,
+    url: parsed.url,
     modelId:
       typeof parsed.model_id === "string" ? parsed.model_id : validated.modelId,
     contextWindow:
@@ -211,6 +280,48 @@ export async function checkByokEndpoint(
         ? parsed.context_window
         : (validated.contextWindow ?? 131_072),
   };
+}
+
+/** Lists the models the endpoint serves at baseUrl + path + /models. */
+export async function listByokModels(
+  home: string,
+  endpoint: ByokEndpoint,
+  signal: AbortSignal,
+  dependencies: { localmodels?: typeof runLocalmodels } = {},
+): Promise<ByokModelListing> {
+  const validated = validateByokEndpoint(endpoint);
+  signal.throwIfAborted();
+  const result = await (dependencies.localmodels ?? runLocalmodels)(
+    home,
+    ["source", "models", "--config-stdin", "--json"],
+    { signal, timeoutMs: 30_000, input: byokStdin(validated) },
+  );
+  const parsed = parseToolJson(result.stdout);
+  if (
+    result.code !== 0 ||
+    parsed?.ok !== true ||
+    typeof parsed.url !== "string" ||
+    !Array.isArray(parsed.models)
+  )
+    throw endpointFailure(
+      parsed,
+      "Could not list the endpoint's models. Check the URL, API key and network.",
+      "BYOK_MODELS_FAILED",
+    );
+  const models: ByokModelListing["models"] = [];
+  for (const row of parsed.models as unknown[]) {
+    if (!row || typeof row !== "object") continue;
+    const { id, name, context_window } = row as Record<string, unknown>;
+    if (typeof id !== "string" || !id) continue;
+    models.push({
+      id,
+      ...(typeof name === "string" && name ? { name } : {}),
+      ...(typeof context_window === "number" && context_window > 0
+        ? { contextWindow: context_window }
+        : {}),
+    });
+  }
+  return { url: parsed.url, models };
 }
 
 // The kit's longest silent span is a BYOK apply with Bifrost already

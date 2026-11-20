@@ -452,6 +452,11 @@ export interface components {
       apiKey?: string;
       modelId: string;
       contextWindow?: number;
+      /**
+       * @description The Runtime BYOK is mounted for when the job applies it.
+       * @enum {string}
+       */
+      runtime?: "claude" | "codex" | "pi";
     };
     ByokModelReport: {
       url: string;
