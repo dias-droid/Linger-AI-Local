@@ -180,6 +180,9 @@ elsewhere.
 | Session (a sign-in)           | 登录 / 浏览器会话          | `会话` only for the browser session.              |
 | Panel, Panel view             | 面板、面板视图             | A view in the Room's side panel.                  |
 | Collaboration                 | 协作                       | The panel on how a Room's Agents work together.   |
+| Coordinator                   | 协调者                     | The Agent that leads a collaboration.             |
+| Handoff / Report              | 交接 / 汇报                | How Agents pass work on in team.md.               |
+| Revision (of team.md)         | 第 N 版                    | `team.md` itself stays as it is.                  |
 | Sponsor (of an Agent)         | 创建者                     | The Human who created the Agent.                  |
 | Avatar                        | 头像                       |                                                   |
 | Runs on                       | 运行位置                   | Where an Agent runs: Computer and Runtime.        |

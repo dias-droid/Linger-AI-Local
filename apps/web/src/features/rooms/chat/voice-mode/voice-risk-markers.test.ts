@@ -37,6 +37,8 @@ const notActions: Record<string, string> = {
     "shows or hides the password in place; it closes nothing",
   "/src/features/rooms/chat/room-notice-row.tsx: chat.hideChanges":
     "folds the change list in place; it closes nothing",
+  "/src/features/rooms/task-sidebar/collaboration-panel.tsx: collaboration.hideSource":
+    "folds the source in place; it closes nothing",
   "/src/features/rooms/room-secondary-navigation.tsx: roomList.deletedChat":
     "says the Agent of a direct chat was deleted; the link only opens the chat",
   "/src/features/rooms/room-secondary-navigation.tsx: roomList.deleted":
