@@ -65,6 +65,10 @@ elsewhere.
 | Run (an Agent's work)         | 运行                       | Noun: `运行已停止`.                               |
 | Activity                      | 活动                       | What an Agent is doing or did.                    |
 | Scheduled task                | 定时任务                   |                                                   |
+| Undo                          | 撤销                       | Takes back the change just made.                  |
+| Pause / Enable (a Routine)    | 暂停 / 启用                |                                                   |
+| Wake (an Agent)               | 唤醒                       | A Routine starting an Agent.                      |
+| Watch (an app)                | 监听                       | A Routine waiting for an app event.               |
 | Follow-up                     | 后续消息                   | A Message sent while the Agent is working.        |
 | Instructions                  | 指令                       | An Agent's instructions.                          |
 | Template                      | 模板                       |                                                   |

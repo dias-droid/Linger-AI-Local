@@ -100,7 +100,7 @@ export function TemplateContents({
         name: routine.name,
         instruction: routine.instruction,
         detail: t(routine.enabled ? m.routineEnabled : m.routinePaused, {
-          cadence: cadenceLabel(routine.cadence),
+          cadence: cadenceLabel(routine.cadence, t),
           timezone: routine.cadence.timezone,
         }),
       })),
