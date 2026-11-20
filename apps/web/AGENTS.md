@@ -263,6 +263,15 @@ build:assets` to check the initial JS budget.
     `lib/date-format.ts` stays on `APP_LOCALE` for surfaces that are still
     English, so one screen does not mix an English sentence with a Chinese
     date.
+  - A translated control tells Voice Mode what clicking it does with a
+    marker, never with words in its label: `data-voice-risk="never"` for
+    deleting, removing, sending, leaving, signing out, paying, archiving or
+    discarding (spoken commands never click it, the live model asks first),
+    `data-voice-risk="confirm"` for other decisions such as approve, deny or
+    revoke (the live model asks first), and `data-voice-close` on the button
+    that closes its panel or dialog. An `ActionMenu` item takes `voiceRisk`.
+    `voice-risk-markers.test.ts` fails when a control named by such a message
+    lacks its marker.
   - Names and text that come from TeamHub or from people (Agent names, message
     previews, server error messages) are data and are shown as they are.
   - Add a language: add it to `LANGUAGES` and `catalogLoaders` in

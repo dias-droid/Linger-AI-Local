@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { settingsMessages } from "@/features/settings/settings.messages";
+import { commonMessages } from "@/i18n/common.messages";
+import { resetLanguageForTest, setLanguage, translate } from "@/i18n/language";
 import { defineGlobalProperty } from "@/test/global-properties";
 
 import {
@@ -24,6 +27,7 @@ import {
 } from "./voice-ui-bridge";
 
 afterEach(() => {
+  resetLanguageForTest();
   resetVoiceUiForTest();
   document.body.innerHTML = "";
   window.history.replaceState(null, "", "/");
@@ -390,6 +394,47 @@ describe("Voice Mode screen actions", () => {
     expect(clicked).toHaveBeenCalledOnce();
     link.remove();
     expect(voiceClick(file.id)).toBeUndefined();
+  });
+
+  it("keeps destructive and close buttons apart by their markers in either language", async () => {
+    for (const language of ["en", "zh-CN"] as const) {
+      await setLanguage(language);
+      const settings = translate(settingsMessages.title);
+      const retry = translate(commonMessages.tryAgain);
+      const close = translate(commonMessages.close);
+      // Marked controls are kept out whatever their names say; an unmarked
+      // one is still judged by its English name.
+      const names = [settings, retry, "Tidy up", "Delete room"];
+      document.body.innerHTML = `<main>
+          <button>${settings}</button>
+          <button data-voice-risk="never">${retry}</button>
+          <button data-voice-risk="never">Tidy up</button>
+          <button>Delete room</button>
+        </main>
+        <aside aria-label="Daily report" style="position: fixed">
+          <button aria-label="Pin"></button>
+          <button aria-label="${close}" data-voice-close></button>
+        </aside>`;
+      const box = { top: 100, left: 500, bottom: 120, right: 560 };
+      for (const element of document.querySelectorAll<HTMLElement>(
+        "button, aside",
+      ))
+        element.getBoundingClientRect = () =>
+          ({ ...box, width: 60, height: 20 }) as DOMRect;
+
+      const offered = (options?: { riskyTargets: boolean }) =>
+        collectVoiceElements(120, options)
+          .map(({ name }) => name)
+          .filter((name) => names.includes(name));
+      expect(offered(), language).toEqual([settings]);
+      expect(offered({ riskyTargets: true }), language).toEqual(names);
+      expect(voiceCanClose(), language).toBe(true);
+      // Without its marker the close button is found by its English name only.
+      document
+        .querySelector("[data-voice-close]")!
+        .removeAttribute("data-voice-close");
+      expect(voiceCanClose(), language).toBe(language === "en");
+    }
   });
 
   it("lists named text fields and fills one as typing would, never a password", () => {

@@ -138,6 +138,7 @@ export function ModalDialog({
               ) : null}
             </div>
             <button
+              data-voice-close
               aria-label={t(commonMessages.close)}
               className="app-dialog-close"
               ref={closeButtonRef}

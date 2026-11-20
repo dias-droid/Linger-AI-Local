@@ -158,12 +158,58 @@ export interface VoiceElement {
 const clickable =
   'a[href], button, summary, [role="button"], [role="link"], [role="tab"], [role="option"], [role="menuitem"], [role="treeitem"], input[type="checkbox"], input[type="radio"], [role="switch"], [role="checkbox"], [role="radio"], [role="menuitemcheckbox"], [role="menuitemradio"]';
 /**
- * Never clicked by the voice command pipeline: the Human does these
- * themselves. The live model may still list them, behind its spoken
- * confirmation (see collectVoiceElements' riskyTargets).
+ * What clicking a control risks, said by the control itself so it holds in
+ * every language: `data-voice-risk="confirm"` is clicked by the live model
+ * only after the Human agreed to that click; `data-voice-risk="never"` is
+ * that too, and the voice command pipeline never clicks it (deleting,
+ * removing, sending, leaving, signing out, paying, archiving, discarding).
+ * A control without the marker is judged by its English name, as before the
+ * interface had languages; a translated control always carries the marker.
  */
-const destructive =
+export type VoiceRisk = "confirm" | "never";
+
+/** Never clicked by the voice command pipeline: the Human does these themselves. */
+const destructiveName =
   /delete|remove|send|log ?out|sign ?out|leave|pay|archive|discard/i;
+/** Clicked by the live model only after the Human said yes to this click. */
+const riskyName =
+  /approve|deny|reject|decline|authori[sz]e|grant|accept|delete|remove|send|submit|leave|exit|quit|pay|purchase|buy|transfer|kick|ban|block|archive|reset|sign ?out|log ?out|discard|revoke|uninstall|destroy/iu;
+/** Leaving Voice Mode itself is never confirmed. */
+const leavesVoiceMode = /^(?:exit|leave|end|close) voice(?: mode)?$/iu;
+
+function markedRisk(element: HTMLElement | undefined): VoiceRisk | undefined {
+  const risk = element?.dataset.voiceRisk;
+  return risk === "confirm" || risk === "never" ? risk : undefined;
+}
+
+/**
+ * Whether clicking this control needs the Human's yes first. `name` is the
+ * name the control was offered under; it decides only when the control has
+ * no marker or is no longer on screen.
+ */
+export function voiceRiskyTarget(
+  element: HTMLElement | undefined,
+  name: string,
+) {
+  if (markedRisk(element)) return true;
+  return !leavesVoiceMode.test(name.trim()) && riskyName.test(name);
+}
+
+/**
+ * The marker a control named `name` in English needs, so that it is treated
+ * in every language as its English name is treated without one.
+ */
+export function voiceRiskOfEnglishName(name: string): VoiceRisk | undefined {
+  if (destructiveName.test(name)) return "never";
+  if (!leavesVoiceMode.test(name.trim()) && riskyName.test(name))
+    return "confirm";
+  return undefined;
+}
+
+function destructive(element: HTMLElement, name: string) {
+  const risk = markedRisk(element);
+  return risk ? risk === "never" : destructiveName.test(name);
+}
 const areaOrder: VoiceElementArea[] = [
   "dialog",
   "navigation",
@@ -339,7 +385,8 @@ export function collectVoiceElements(
     )
       continue;
     const name = elementName(element);
-    if (!name || (!options.riskyTargets && destructive.test(name))) continue;
+    if (!name || (!options.riskyTargets && destructive(element, name)))
+      continue;
     found.push({
       area: elementArea(element, rect),
       element,
@@ -775,12 +822,21 @@ export function voiceScroll(
 
 /** Floating panels and dialogs that can be closed, offered with the turn, by id. */
 let offeredOverlays = new Map<string, HTMLElement>();
+/** An unmarked close button is told by its English name. */
 const closeName = /^(close|dismiss|hide)\b|^×$/i;
+export function voiceClosesByEnglishName(name: string) {
+  return closeName.test(name);
+}
 
+/** The button marked `data-voice-close`, or else one named like a close button. */
 function closeButton(overlay: HTMLElement) {
-  return Array.from(
+  const buttons = Array.from(
     overlay.querySelectorAll<HTMLElement>('button, [role="button"]'),
-  ).find((button) => closeName.test(elementName(button)));
+  );
+  return (
+    buttons.find((button) => button.hasAttribute("data-voice-close")) ??
+    buttons.find((button) => closeName.test(elementName(button)))
+  );
 }
 
 function openOverlays() {
