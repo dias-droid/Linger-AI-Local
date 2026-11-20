@@ -96,6 +96,11 @@ export type TeamHubMemoryEntry = components["schemas"]["MemoryEntry"];
 export type TeamHubExternalConnection =
   components["schemas"]["ExternalConnection"];
 export type TeamHubExternalApp = components["schemas"]["ExternalApp"];
+export type TeamHubWebSearchBackend = components["schemas"]["WebSearchBackend"];
+export type TeamHubWebSearchKeyBackend =
+  components["schemas"]["WebSearchKeyBackend"];
+export type TeamHubWebSearchBackendList =
+  components["schemas"]["WebSearchBackendList"];
 export type TeamHubExternalAppKey = components["schemas"]["ExternalAppKey"];
 export type TeamHubExternalAppList = components["schemas"]["ExternalAppList"];
 export type TeamHubExternalProviderKeyStatus =

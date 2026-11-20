@@ -23,6 +23,11 @@ build:assets` to check the initial JS budget.
 - `src/app`: routes, providers, route error boundaries, and global CSS.
 - `src/features/teamhub`: Human API, Session, error, and realtime adapters.
 - `src/features/rooms`: Room routes, Chat, Timeline, the right sidebar (Agent Info, Activity, Thread, Document) and membership UI.
+- `src/features/web-search`: web search backend queries, bundled provider
+  logos and the key field. The chat's search key card reads the backend list
+  with `include_quota=false`, so it never makes TeamHub call a provider; the
+  Connectors Web search group reads it with live quota. Saving a key or the
+  default from either refreshes both.
 - `src/features/local-models`: Settings › Models (`settings/models?computer=<id>`).
   Its tabs read and switch the Computer's model source (Local model, BYOK)
   through TeamHub's `model-source` API, which asks the Computer live; the page

@@ -14,6 +14,7 @@ import type {
   TeamHubExternalAppKey,
   TeamHubExternalConnection,
 } from "@/features/teamhub/teamhub-types";
+import { webSearchBackendsQueryOptions } from "@/features/web-search/web-search-backends";
 
 import { AppLogo } from "./app-logo";
 import { appSummary, groupCatalogApps } from "./app-groups";
@@ -32,6 +33,11 @@ import {
   externalConnectionsQueryOptions,
 } from "./connected-apps-queries";
 import { ConnectAppStatus, useConnectAppFlow } from "./connect-app-flow";
+import {
+  savedWebSearchBackends,
+  WEB_SEARCH_FILTER,
+  WebSearchSection,
+} from "./web-search-connectors";
 
 const APP_GRID_CLASS = "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3";
 
@@ -45,6 +51,7 @@ export function ConnectedAppsPage() {
   const requestedApp = searchParams.get("app");
   const apps = useQuery(externalAppsQueryOptions(client));
   const connections = useQuery(externalConnectionsQueryOptions(client));
+  const webSearch = useQuery(webSearchBackendsQueryOptions(client));
   // "all" shows every group; otherwise one group's id.
   const [filter, setFilter] = useState("all");
   const [connectedOnly, setConnectedOnly] = useState(false);
@@ -69,12 +76,24 @@ export function ConnectedAppsPage() {
   const filters = [
     { id: "all", label: "All" },
     ...groups.map(({ group }) => ({ id: group.id, label: group.title })),
+    WEB_SEARCH_FILTER,
   ];
   const groupApps = groups.find((entry) => entry.group.id === filter)?.apps;
   // Connected only narrows whichever view is open; with All it is one grid.
   const filteredApps = connectedOnly
     ? (groupApps ?? connectedApps).filter((app) => connectedApps.includes(app))
     : groupApps;
+  const allSearchBackends = webSearch.data?.backends ?? [];
+  const searchBackends = connectedOnly
+    ? savedWebSearchBackends(allSearchBackends)
+    : allSearchBackends;
+  const searchFilter = filter === WEB_SEARCH_FILTER.id;
+  // With Connected only, a section without a saved key is left out.
+  const showSearch =
+    (filter === "all" || searchFilter) &&
+    (!connectedOnly || !webSearch.isSuccess || searchBackends.length > 0);
+  const showApps =
+    !searchFilter && (!showSearch || !filteredApps || filteredApps.length > 0);
 
   function renderApp(app: TeamHubExternalApp) {
     return (
@@ -163,7 +182,7 @@ export function ConnectedAppsPage() {
                 Connected only
               </Button>
             </div>
-            {filteredApps ? (
+            {!showApps ? null : filteredApps ? (
               filteredApps.length ? (
                 <section
                   aria-label="Application connections"
@@ -195,6 +214,16 @@ export function ConnectedAppsPage() {
                 ))}
               </div>
             )}
+            {showSearch ? (
+              <WebSearchSection
+                backends={searchBackends}
+                className={showApps ? "mt-7" : undefined}
+                heading={!searchFilter}
+                list={webSearch}
+              />
+            ) : searchFilter ? (
+              <PageMessage>No web search keys yet.</PageMessage>
+            ) : null}
           </>
         )}
       </div>

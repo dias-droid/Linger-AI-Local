@@ -1,0 +1,74 @@
+import { queryOptions } from "@tanstack/react-query";
+
+import { teamHubData } from "@/features/teamhub/teamhub-api";
+import type { TeamHubClient } from "@/features/teamhub/teamhub-client";
+import type {
+  TeamHubWebSearchBackend,
+  TeamHubWebSearchKeyBackend,
+} from "@/features/teamhub/teamhub-types";
+
+/** Every web search query; a saved key or default refreshes all of them. */
+export const webSearchQueryKey = ["teamhub", "web-search"] as const;
+
+/**
+ * The backend list with each provider's live quota, for Connectors. Every
+ * read asks the providers, so it is kept briefly.
+ */
+export function webSearchBackendsQueryOptions(client: TeamHubClient) {
+  return queryOptions({
+    queryKey: [...webSearchQueryKey, "backends", "quota"],
+    queryFn: () => teamHubData(client.api.GET("/v0/web-search/backends")),
+    retry: false,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * The same list without quota, which TeamHub answers without calling any
+ * provider. The search key card shows only this static text.
+ */
+export function webSearchBackendInfoQueryOptions(client: TeamHubClient) {
+  return queryOptions({
+    queryKey: [...webSearchQueryKey, "backends", "info"],
+    queryFn: () =>
+      teamHubData(
+        client.api.GET("/v0/web-search/backends", {
+          params: { query: { include_quota: false } },
+        }),
+      ),
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+}
+
+const names: Record<TeamHubWebSearchKeyBackend, string> = {
+  brave: "Brave Search",
+  firecrawl: "Firecrawl",
+  tavily: "Tavily",
+  you: "You.com",
+};
+
+/**
+ * A key backend's display name, for text written before the backend list
+ * is read (a card's settled line, its notice). Rows use the list's `name`.
+ */
+export function webSearchBackendName(id: TeamHubWebSearchKeyBackend): string {
+  return names[id];
+}
+
+/** What the backend does and its free allowance, as one line. */
+export function webSearchBackendSummary(
+  backend: TeamHubWebSearchBackend,
+): string {
+  const commands = backend.commands.map((command) =>
+    command === "search" ? "Search" : "Read pages",
+  );
+  return [...commands, backend.free_tier].filter(Boolean).join(" · ");
+}
+
+/** The key page as a short label: host and path without `www.`. */
+export function webSearchKeySite(keyURL: string): string {
+  const url = new URL(keyURL);
+  const path = url.pathname.replace(/\/$/, "");
+  return `${url.host.replace(/^www\./, "")}${path}`;
+}

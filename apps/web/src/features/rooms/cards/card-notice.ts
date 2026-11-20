@@ -1,4 +1,5 @@
 import type { TeamHubMessageCard } from "@/features/teamhub/teamhub-types";
+import { webSearchBackendName } from "@/features/web-search/web-search-backends";
 
 import { connectedAppDisplayName } from "./connected-app-names";
 
@@ -80,6 +81,18 @@ export function settledCardNotice(
       return { text: `${who} connected Chrome` };
     case "provider_key":
       return { text: `${who} added the Composio API key` };
+    case "search_key": {
+      const shown = card.search_key?.backend;
+      const saved = card.answer?.backend ?? shown;
+      if (!saved) break;
+      const added = `${who} added a ${webSearchBackendName(saved)} key`;
+      return {
+        text:
+          shown && saved !== shown
+            ? `${added} instead of ${webSearchBackendName(shown)}`
+            : added,
+      };
+    }
     case "connection_auth": {
       const app = connectedAppDisplayName(card.connection_auth?.app_key);
       return card.status === "succeeded"

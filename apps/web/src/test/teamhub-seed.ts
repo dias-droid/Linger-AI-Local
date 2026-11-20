@@ -27,6 +27,8 @@ import type {
   TeamHubTenantAgent,
   TeamHubTenantAgentAvailabilitySnapshot,
   TeamHubTeamMdDocument,
+  TeamHubWebSearchBackend,
+  TeamHubWebSearchBackendList,
   TeamHubWorkItem,
 } from "@/features/teamhub/teamhub-types";
 
@@ -46,6 +48,7 @@ export interface TeamHubTestSeed {
   documentVersions: Map<string, TeamHubDocumentVersion>;
   eventsByRoom: Map<string, TeamHubRoomEvent[]>;
   externalSources: ReturnType<typeof createExternalSourceSeed>;
+  webSearch: TeamHubWebSearchBackendList;
   identity: TeamHubCurrentIdentity;
   localComputers: TeamHubLocalComputerPage["items"];
   membersByRoom: Map<string, TeamHubRoomMember[]>;
@@ -665,6 +668,7 @@ export function createTeamHubTestSeed(): TeamHubTestSeed {
     documentVersions: seededDocuments.versions,
     eventsByRoom,
     externalSources: createExternalSourceSeed(),
+    webSearch: createWebSearchSeed(),
     identity,
     localComputers,
     membersByRoom,
@@ -1741,5 +1745,81 @@ export function createExternalSourceSeed() {
     githubRepositories,
     googleCalendars,
     notionResources,
+  };
+}
+
+/**
+ * The web search backends TeamHub lists before any key is saved: keyless
+ * You.com is the default, and direct opens pages.
+ */
+export function createWebSearchSeed(): TeamHubWebSearchBackendList {
+  const keyed: Omit<TeamHubWebSearchBackend, "id" | "name"> = {
+    commands: ["search", "open"],
+    filters: ["recency", "site"],
+    keyless: false,
+    key_state: "none",
+    max_limit: 20,
+    max_sites: 10,
+    official_key_check: true,
+    quota: { from: "unavailable", reason: "no_key" },
+    status: "key_required",
+    tier: "key",
+  };
+  return {
+    backends: [
+      {
+        ...keyed,
+        commands: ["search"],
+        free_tier: "100 searches a day without a key",
+        id: "you",
+        key_url: "https://you.com/platform",
+        keyless: true,
+        name: "You.com",
+        quota: { from: "unavailable", reason: "not_reported" },
+        status: "ready",
+        tier: "free_trial",
+        tier_text: "Limited and lower quality results",
+      },
+      {
+        ...keyed,
+        free_tier: "1,000 credits a month",
+        id: "tavily",
+        key_url: "https://app.tavily.com/home",
+        name: "Tavily",
+      },
+      {
+        ...keyed,
+        commands: ["search"],
+        free_tier: "$5 credit a month",
+        id: "brave",
+        key_url: "https://api-dashboard.search.brave.com",
+        name: "Brave Search",
+        official_key_check: false,
+      },
+      {
+        ...keyed,
+        free_tier: "1,000 credits a month",
+        id: "firecrawl",
+        key_url: "https://www.firecrawl.dev/app/api-keys",
+        name: "Firecrawl",
+      },
+      {
+        ...keyed,
+        commands: ["open"],
+        filters: [],
+        id: "direct",
+        keyless: true,
+        max_limit: 0,
+        max_sites: 0,
+        name: "Direct",
+        official_key_check: false,
+        quota: { from: "unavailable", reason: "not_reported" },
+        status: "ready",
+        tier: "none",
+      },
+    ],
+    can_save_keys: true,
+    default_open: "direct",
+    default_search: "you",
   };
 }

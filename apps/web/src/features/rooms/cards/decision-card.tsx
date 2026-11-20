@@ -59,6 +59,10 @@ const ProviderKeyDecision = lazy(async () => {
   const module = await import("./decision-provider-key-view");
   return { default: module.ProviderKeyDecision };
 });
+const SearchKeyDecision = lazy(async () => {
+  const module = await import("./decision-search-key-view");
+  return { default: module.SearchKeyDecision };
+});
 const BrowserConnectionDecision = lazy(async () => {
   const module = await import("./decision-browser-connection-view");
   return { default: module.BrowserConnectionDecision };
@@ -99,9 +103,10 @@ interface DecisionCardProps {
 /**
  * Every card that waits on one Human's decision. A question, the AnotherMe
  * setup cards, a connection authorization (its OAuth connection), a
- * Composio key request, a browser connection and a computer permission take
- * their answer in their own slot; every other kind shows its request and the view
- * its kind adds, Approve or Deny with a reason, and how it ended.
+ * Composio or web search key request, a browser connection and a computer
+ * permission take their answer in their own slot; every other kind shows its
+ * request and the view its kind adds, Approve or Deny with a reason, and how
+ * it ended.
  */
 export function DecisionCard(props: DecisionCardProps) {
   const { card } = props;
@@ -129,6 +134,12 @@ export function DecisionCard(props: DecisionCardProps) {
       return (
         <Suspense fallback={null}>
           <ProviderKeyDecision {...props} />
+        </Suspense>
+      );
+    case "search_key":
+      return (
+        <Suspense fallback={null}>
+          <SearchKeyDecision {...props} />
         </Suspense>
       );
     case "browser_connection":

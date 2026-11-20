@@ -182,7 +182,13 @@ describe("Connected apps", () => {
     expect(screen.queryByRole("searchbox")).toBeNull();
     expect(
       screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent),
-    ).toEqual(["Mail & Calendar", "Meetings", "Productivity", "Messaging"]);
+    ).toEqual([
+      "Mail & Calendar",
+      "Meetings",
+      "Productivity",
+      "Messaging",
+      "Web search",
+    ]);
     const sectionApps = (name: string) =>
       within(screen.getByRole("region", { name }))
         .getAllByRole("article")
