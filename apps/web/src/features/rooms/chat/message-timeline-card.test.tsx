@@ -16,6 +16,7 @@ import type {
   TeamHubRunStatus,
   TeamHubRuntimePresentationEventRecord,
 } from "@/features/teamhub/teamhub-types";
+import { translate } from "@/i18n/language";
 
 import {
   AgentStreamingStatusDock,
@@ -3222,6 +3223,7 @@ describe("Runtime timeline projection reuse", () => {
         "run-status-1": firstEvents,
         "run-status-2": secondEvents,
       },
+      t: translate,
     });
 
     const next = buildRuntimeTimelineViews({
@@ -3234,6 +3236,7 @@ describe("Runtime timeline projection reuse", () => {
           runtimeStatusRecord("2", "working", "Writing"),
         ],
       },
+      t: translate,
     });
     expect(next).toHaveLength(2);
     expect(next[0]).toBe(firstView);
@@ -3243,6 +3246,7 @@ describe("Runtime timeline projection reuse", () => {
       cache,
       runStatuses: [{ ...first, revision: 2 }],
       runtimePresentationEventsByRunStatusId: { "run-status-1": firstEvents },
+      t: translate,
     });
     expect(revised[0]).not.toBe(firstView);
     // A Run that leaves the list leaves the cache too.

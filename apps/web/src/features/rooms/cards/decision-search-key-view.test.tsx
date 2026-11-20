@@ -9,10 +9,11 @@ import {
 import { describe, expect, it, vi } from "vitest";
 
 import { TeamHubRuntimeProvider } from "@/features/teamhub/teamhub-runtime";
+import { getTranslation } from "@/i18n/language";
 import { createTestTeamHubRuntime } from "@/test/teamhub-test-runtime";
 import { teamHubErrorResponse } from "@/test/teamhub-test-server";
 
-import { settledCardNotice } from "./card-notice";
+import { cardNoticeLines, settledCardNotice } from "./card-notice";
 import { DecisionCard, type DecisionMessageCard } from "./decision-card";
 
 const card: DecisionMessageCard = {
@@ -246,18 +247,26 @@ describe("Web search key notice", () => {
     status: "answered" as const,
   });
 
+  /** The system line a settled card becomes, as the reader sees it. */
+  function noticeText(next: DecisionMessageCard, viewerId: string) {
+    const notice = settledCardNotice(next, viewerId);
+    return (
+      notice &&
+      cardNoticeLines(notice, getTranslation())
+        .map((line) => line.parts.map((part) => part.text).join(""))
+        .join("\n")
+    );
+  }
+
   it("names the backend whose key was saved", () => {
     expect(
-      settledCardNotice(
+      noticeText(
         settled({ backend: "tavily", decision: "configured" }),
         "alice",
-      )?.text,
+      ),
     ).toBe("You added a Tavily key");
     expect(
-      settledCardNotice(
-        settled({ backend: "brave", decision: "configured" }),
-        "bob",
-      )?.text,
+      noticeText(settled({ backend: "brave", decision: "configured" }), "bob"),
     ).toBe("Alice added a Brave Search key instead of Tavily");
   });
 

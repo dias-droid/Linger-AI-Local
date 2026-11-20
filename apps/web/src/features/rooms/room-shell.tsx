@@ -47,6 +47,7 @@ import {
 import { registerVoiceShell } from "./chat/voice-mode/voice-ui-bridge";
 import { RoomNavigation } from "./room-navigation";
 import { navigationMessages } from "./room-navigation.messages";
+import { roomSurfaceMessages } from "./room-surface.messages";
 import {
   AuthenticatedRouteLoading,
   RoomNavigationLoading,
@@ -392,11 +393,14 @@ function RoomShellContent({
               >
                 <span>{LOGOUT_ERROR_MESSAGE}</span>
                 <Button
+                  data-voice-risk="never"
                   loading={logout.isPending}
                   onClick={logout.mutate}
                   tone="ghost"
                 >
-                  {logout.isPending ? "Logging out" : "Retry logout"}
+                  {logout.isPending
+                    ? t(roomSurfaceMessages.loggingOut)
+                    : t(roomSurfaceMessages.retryLogout)}
                 </Button>
               </div>
             ) : null}

@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
 
+import type { Translate } from "@/i18n/language";
+import type { Message } from "@/i18n/messages";
+
+import { chatMessages } from "../chat.messages";
+
 interface EmojiMartData {
   categories: readonly { id: string; emojis: readonly string[] }[];
   emojis: Readonly<
@@ -31,7 +36,6 @@ export interface ReactionCatalogEntry {
 
 export interface ReactionCatalogCategory {
   readonly id: string;
-  readonly label: string;
   readonly entries: readonly ReactionCatalogEntry[];
 }
 
@@ -54,16 +58,22 @@ export const RECOMMENDED_REACTION_IDS = [
   "joy",
 ] as const;
 
-const CATEGORY_LABELS: Readonly<Record<string, string>> = {
-  people: "Smileys & People",
-  nature: "Animals & Nature",
-  foods: "Food & Drink",
-  activity: "Activity",
-  places: "Travel & Places",
-  objects: "Objects",
-  symbols: "Symbols",
-  flags: "Flags",
+const CATEGORY_LABELS: Readonly<Record<string, Message<string>>> = {
+  people: chatMessages.emojiPeople,
+  nature: chatMessages.emojiNature,
+  foods: chatMessages.emojiFoods,
+  activity: chatMessages.emojiActivity,
+  places: chatMessages.emojiPlaces,
+  objects: chatMessages.emojiObjects,
+  symbols: chatMessages.emojiSymbols,
+  flags: chatMessages.emojiFlags,
 };
+
+/** A category's name; one this client does not know shows its id. */
+export function reactionCategoryLabel(categoryId: string, t: Translate) {
+  const label = CATEGORY_LABELS[categoryId];
+  return label ? t(label) : categoryId;
+}
 
 // The emoji-mart dataset is English-only; CLDR Chinese annotations let
 // Chinese-speaking users search Reactions too. The path stays a literal so the
@@ -94,7 +104,6 @@ export function buildReactionCatalog(
   const byId = new Map<string, ReactionCatalogEntry>();
   const categories = data.categories.map((category) => ({
     id: category.id,
-    label: CATEGORY_LABELS[category.id] ?? category.id,
     entries: category.emojis.flatMap((id) => {
       const emoji = data.emojis[id];
       const skin = emoji?.skins[0];

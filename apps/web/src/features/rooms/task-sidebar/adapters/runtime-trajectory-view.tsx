@@ -4,8 +4,8 @@ import { useMemo } from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
 import {
+  toolAppearance,
   toolNameLabel,
-  toolPresentation,
 } from "@/features/rooms/runtime-status/runtime-tool-presentation";
 import type { TeamHubMessageActivityRecord } from "@/features/teamhub/teamhub-types";
 
@@ -88,7 +88,7 @@ export function RuntimeTrajectoryView({
 }
 
 function TrajectoryCallRow({ call }: { call: TrajectoryCall }) {
-  const { glyph } = toolPresentation(call.kind);
+  const { glyph } = toolAppearance(call.kind);
   const output = call.diff ?? call.output;
   const label = (
     <span

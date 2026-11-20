@@ -15,6 +15,7 @@ import {
   type TaskCommand,
 } from "@/features/rooms/runtime-status/task-command";
 import type { TeamHubMessageActivityRecord } from "@/features/teamhub/teamhub-types";
+import { useT } from "@/i18n/use-translation";
 
 import {
   activityMessageText,
@@ -169,6 +170,7 @@ function activityTimelineItems(
 }
 
 function RuntimeToolCallsActivity({ calls }: { calls: ActivityToolCall[] }) {
+  const t = useT();
   const presentedCalls = calls.map(({ pair, record }) => {
     const name = record.tool_name ?? pair?.call?.tool_name ?? "Tool call";
     const invocation = asObject(nativePayload(record)?.invocation);
@@ -177,11 +179,13 @@ function RuntimeToolCallsActivity({ calls }: { calls: ActivityToolCall[] }) {
     return {
       record,
       name: shownName,
-      ...toolPresentation("tool", shownName),
+      ...toolPresentation(t, "tool", shownName),
     };
   });
-  const { icon: GroupIcon, label: groupLabel } =
-    toolGroupPresentation(presentedCalls);
+  const { icon: GroupIcon, label: groupLabel } = toolGroupPresentation(
+    t,
+    presentedCalls,
+  );
   return (
     <li>
       <details className="group">

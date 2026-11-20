@@ -15,6 +15,7 @@ import {
 import type { ComponentProps, ReactNode } from "react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
+import { translate } from "@/i18n/language";
 import { defineGlobalProperty } from "@/test/global-properties";
 
 import {
@@ -41,6 +42,7 @@ import emojiData from "@emoji-mart/data/sets/15/native.json";
 
 import {
   buildReactionCatalog,
+  reactionCategoryLabel,
   searchReactionCatalog,
 } from "./reaction-catalog";
 import {
@@ -145,7 +147,11 @@ describe("Reaction state", () => {
       { hexcode: "1F44C", label: "d’accord", tags: ["parfait"] },
     ]);
     expect(catalog.byId.size).toBe(1870);
-    expect(catalog.categories.map((category) => category.label)).toEqual([
+    expect(
+      catalog.categories.map((category) =>
+        reactionCategoryLabel(category.id, translate),
+      ),
+    ).toEqual([
       "Smileys & People",
       "Animals & Nature",
       "Food & Drink",
