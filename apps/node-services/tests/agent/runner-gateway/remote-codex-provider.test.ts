@@ -761,6 +761,49 @@ describe("RemoteCodexProvider", () => {
     },
   );
 
+  it("succeeds with an empty reply when the final answer follows streamed commentary", async () => {
+    const provider = createProvider({
+      async startOperation() {
+        return {
+          operationId: "run",
+          events: iterate([
+            {
+              type: "run.started",
+              turn_id: "turn-1",
+              session: { threadId: "thread-1" },
+            },
+            {
+              type: "message.delta",
+              message_id: "commentary",
+              delta: "Draft saved.",
+            },
+            { type: "message.delta", message_id: "final", delta: "" },
+            { type: "run.completed" },
+          ]),
+          result: Promise.resolve({
+            type: "run",
+            status: "succeeded",
+            final_response: "",
+            session: { threadId: "thread-1" },
+          }),
+          input: async () => ({ turnId: "turn-1" }),
+          cancel: async () => {},
+        };
+      },
+    });
+    const session = await provider.createSession(sessionOptions());
+    const run = await provider.startRun(
+      session,
+      { type: "text", text: "Reply to Anna" },
+      runSpec,
+    );
+    for await (const _event of run.events) {
+      // Drain the stream so the Run can settle.
+    }
+    await expect(run.wait()).resolves.toEqual({ finalResponse: "" });
+    await provider.close();
+  });
+
   it("defers a missing existing session to its Run and never silently creates a replacement", async () => {
     const requests: string[] = [];
     const failure = new RuntimeExecutionError({

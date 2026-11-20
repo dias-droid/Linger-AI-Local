@@ -663,8 +663,13 @@ func (e Executor) Start(ctx context.Context, spec OperationSpec, emit EmitFunc) 
 			finish(Result{Status: "failed", Error: executionFailure, CleanupUnconfirmed: providerResult.ExitUnconfirmed})
 			return
 		}
+		// The Agent Service takes the stream's last text message as the reply and
+		// requires it to equal the result's. When only one side has text, either a
+		// Runtime that streams nothing or an empty final answer after streamed
+		// commentary, a closing message carries the result's reply.
+		resultHasText := providerResult.Output != ""
 		if spec.OperationKind == "run.start" && providerResult.Status == "completed" &&
-			!emittedResponseText && providerResult.Output != "" {
+			emittedResponseText != resultHasText {
 			for _, projected := range projection.project(native.Event{Kind: native.EventText, ID: stableEventID("message", spec.TaskID+"\x00final"), Body: providerResult.Output}) {
 				payload, marshalErr := json.Marshal(projected)
 				if marshalErr != nil {
