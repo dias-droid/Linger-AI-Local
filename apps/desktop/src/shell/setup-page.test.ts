@@ -391,6 +391,51 @@ describe("setup page Quick Install recommendation", () => {
         "Linger couldn't read this computer's memory, disk or GPU.",
       ],
       [
+        {
+          ...small,
+          reasons: [
+            reason({
+              code: "cuda-driver-update-required",
+              detectedCudaVersion: "12.1",
+              requiredCudaVersion: "12.4",
+              driverVersion: "535.98",
+            }),
+          ],
+        },
+        "Your NVIDIA driver supports CUDA 12.1, but local models require CUDA 12.4 or newer. Update your NVIDIA driver, then choose Check again.",
+      ],
+      [
+        {
+          ...small,
+          reasons: [
+            reason({
+              code: "cuda-driver-update-required",
+              requiredCudaVersion: "12.4",
+            }),
+          ],
+        },
+        "Your NVIDIA driver is too old for local models (requires CUDA 12.4 or newer). Update your NVIDIA driver, then choose Check again.",
+      ],
+      [
+        {
+          ...small,
+          reasons: [
+            reason({
+              code: "cuda-driver-version-unknown",
+              requiredCudaVersion: "12.4",
+            }),
+          ],
+        },
+        "Linger couldn't read the CUDA version from your NVIDIA driver (requires CUDA 12.4 or newer). Update or reinstall your NVIDIA driver, then choose Check again.",
+      ],
+      [
+        {
+          ...small,
+          reasons: [reason({ code: "cuda-driver-version-unknown" })],
+        },
+        "Linger couldn't read the CUDA version from your NVIDIA driver. Update or reinstall your NVIDIA driver, then choose Check again.",
+      ],
+      [
         { ...small, reasons: [reason({ code: "unsupported-platform" })] },
         "Local models don't run on this system.",
       ],
@@ -431,6 +476,45 @@ describe("setup page Quick Install recommendation", () => {
       "Linger couldn't tell which programs are using the GPU, so it can't share it. Close programs that use the GPU.",
     );
     expect(($("local-install") as HTMLButtonElement).disabled).toBe(true);
+    expect(document.body.textContent).not.toContain(TOOL_WORDS);
+  });
+
+  it("explains an outdated NVIDIA driver and lets the user check again", async () => {
+    const { run } = await openPage(
+      welcome({
+        ...small,
+        reasons: [
+          reason({
+            code: "cuda-driver-update-required",
+            detectedCudaVersion: "12.1",
+            requiredCudaVersion: "12.4",
+            driverVersion: "535.98",
+          }),
+        ],
+      }),
+      "welcome",
+    );
+    expect($("plan-why").textContent).toBe(
+      "Your NVIDIA driver supports CUDA 12.1, but local models require CUDA 12.4 or newer. Update your NVIDIA driver, then choose Check again.",
+    );
+    expect($("local-recheck").hidden).toBe(false);
+    $("local-customize").click();
+    document
+      .querySelector<HTMLButtonElement>(
+        '[data-plan="source"] [data-value="local"]',
+      )!
+      .click();
+    expect($("local-model-name").textContent).toBe(
+      "Not available on this computer",
+    );
+    expect($("local-model-needs").textContent).toBe(
+      "Your NVIDIA driver supports CUDA 12.1, but local models require CUDA 12.4 or newer. Update your NVIDIA driver, then choose Check again.",
+    );
+    expect(($("local-install") as HTMLButtonElement).disabled).toBe(true);
+    $("local-recheck").click();
+    await vi.waitFor(() =>
+      expect(run).toHaveBeenCalledWith({ op: "local.recheck" }),
+    );
     expect(document.body.textContent).not.toContain(TOOL_WORDS);
   });
 

@@ -980,14 +980,27 @@ export class LocalServerModule implements Module {
         )
       : [];
     // The page words each reason by its code and counts, never the tool's.
+    const version = (value: unknown) =>
+      typeof value === "string" && /^\d+(?:\.\d+){0,2}$/.test(value)
+        ? value
+        : null;
     const reasons = listed.map((reason): SetupReason => {
       const counted = (key: "gpuIndex" | "freeBytes" | "requiredBytes") =>
         bytes(reason[key]) !== null ? { [key]: reason[key] as number } : {};
+      const versioned = (
+        key: "detectedCudaVersion" | "requiredCudaVersion" | "driverVersion",
+      ) => {
+        const value = version(reason[key]);
+        return value !== null ? { [key]: value } : {};
+      };
       return {
         code: reason.code as string,
         ...counted("gpuIndex"),
         ...counted("freeBytes"),
         ...counted("requiredBytes"),
+        ...versioned("detectedCudaVersion"),
+        ...versioned("requiredCudaVersion"),
+        ...versioned("driverVersion"),
       };
     });
     const reasonLog = listed.map(({ code, message }) =>

@@ -164,6 +164,10 @@ export interface SetupReason {
   // or RAM on free-memory-required.
   readonly freeBytes?: number;
   readonly requiredBytes?: number;
+  // On cuda-driver-update-required / cuda-driver-version-unknown: numeric versions.
+  readonly detectedCudaVersion?: string;
+  readonly requiredCudaVersion?: string;
+  readonly driverVersion?: string;
 }
 
 export type SetupLocalModelsCheck =

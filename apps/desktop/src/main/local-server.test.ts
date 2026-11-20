@@ -145,19 +145,38 @@ if (args.includes("--inspect")) {
   }
   process.stderr.write("Checked this computer in 1.5s.\n");
   const lowMemory = eligible && fs.existsSync(path.join(target, "low-memory"));
-  const reasons = eligible
+  const oldDriver = fs.existsSync(path.join(target, "old-driver"));
+  const reasons = oldDriver
+    ? [
+        {
+          code: "cuda-driver-update-required",
+          message: "Driver 535.98 supports CUDA 12.1; requires CUDA >= 12.4.",
+          detectedCudaVersion: "12.1",
+          requiredCudaVersion: "12.4",
+          driverVersion: "535.98",
+        },
+        {
+          code: "cuda-driver-version-unknown",
+          message: "Could not read driver CUDA version.",
+          detectedCudaVersion: "invalid prose",
+          requiredCudaVersion: "12.4",
+          driverVersion: "[N/A]",
+        },
+      ]
+    : eligible
     ? lowMemory
       ? [{ code: "free-memory-required", message: "Close other programs before installing.", freeBytes: 2899102924, requiredBytes: 13689304433 }]
       : []
     : [{ code: "facts-unavailable", message: "nvidia-smi was not found" }];
   // With the plan priced on capacity, the installer recommends a runtime.
-  const recommendation = eligible && !lowMemory ? "local-models" : "codex";
+  const recommendation = eligible && !lowMemory && !oldDriver ? "local-models" : "codex";
   const local = {
-    eligible: eligible && !lowMemory,
-    state: lowMemory ? "blocked-now" : eligible ? "ready" : "unavailable",
-    ...(lowMemory ? { basis: "capacity", memory: { ramAvailableBytes: 2899102924, ramRequiredBytes: 13689304433 } } : {}),
+    eligible: eligible && !lowMemory && !oldDriver,
+    state: oldDriver || lowMemory ? "blocked-now" : eligible ? "ready" : "unavailable",
+    ...(lowMemory && !oldDriver ? { basis: "capacity", memory: { ramAvailableBytes: 2899102924, ramRequiredBytes: 13689304433 } } : {}),
   };
-  process.stdout.write(JSON.stringify({ hardware, localModels: { ...local, reasons, estimate }, recommendation }) + "\n");
+  const finalEstimate = oldDriver ? { model: "", downloadBytes: null, diskBytes: null, memoryBytes: null } : estimate;
+  process.stdout.write(JSON.stringify({ hardware, localModels: { ...local, reasons, estimate: finalEstimate }, recommendation }) + "\n");
   process.exit(0);
 }
 fs.mkdirSync(path.join(home, "installer"), { recursive: true });
@@ -1708,6 +1727,49 @@ describe("LocalServerModule", () => {
       expect.objectContaining({
         eligible: false,
         reasons: ["facts-unavailable: nvidia-smi was not found"],
+      }),
+    );
+    info.mockRestore();
+  });
+
+  it("forwards validated CUDA driver versions without leaking tool prose", async () => {
+    const info = vi.spyOn(silentLog, "info");
+    const f = fixture({ checkout: "/src" }, {}, (home) => {
+      mkdirSync(home, { recursive: true });
+      writeFileSync(path.join(home, "old-driver"), "");
+    });
+    await f.host.start();
+    f.module.inspect();
+    await waitForInstaller(() =>
+      expect(f.module.status().localModels).toMatchObject({
+        state: "checked",
+        eligible: false,
+        reasons: [
+          {
+            code: "cuda-driver-update-required",
+            detectedCudaVersion: "12.1",
+            requiredCudaVersion: "12.4",
+            driverVersion: "535.98",
+          },
+          {
+            code: "cuda-driver-version-unknown",
+            requiredCudaVersion: "12.4",
+          },
+        ],
+        recommendation: "codex",
+      }),
+    );
+    const serialized = JSON.stringify(f.module.status());
+    expect(serialized).not.toContain("invalid prose");
+    expect(serialized).not.toContain("Driver 535.98 supports CUDA 12.1");
+    expect(info).toHaveBeenCalledWith(
+      "local_server.inspected",
+      expect.objectContaining({
+        eligible: false,
+        reasons: [
+          "cuda-driver-update-required: Driver 535.98 supports CUDA 12.1; requires CUDA >= 12.4.",
+          "cuda-driver-version-unknown: Could not read driver CUDA version.",
+        ],
       }),
     );
     info.mockRestore();

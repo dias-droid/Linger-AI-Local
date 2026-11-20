@@ -3433,6 +3433,31 @@
             return "Linger couldn't tell which programs are using the GPU, so it can't share it. Close programs that use the GPU.";
           case "facts-unavailable":
             return "Linger couldn't read this computer's memory, disk or GPU.";
+          case "cuda-driver-update-required": {
+            const has = reason.detectedCudaVersion;
+            const needs = reason.requiredCudaVersion;
+            if (has && needs)
+              return (
+                "Your NVIDIA driver supports CUDA " +
+                has +
+                ", but local models require CUDA " +
+                needs +
+                " or newer. Update your NVIDIA driver, then choose Check again."
+              );
+            if (needs)
+              return (
+                "Your NVIDIA driver is too old for local models (requires CUDA " +
+                needs +
+                " or newer). Update your NVIDIA driver, then choose Check again."
+              );
+            return "Your NVIDIA driver is too old for local models. Update your NVIDIA driver, then choose Check again.";
+          }
+          case "cuda-driver-version-unknown":
+            return reason.requiredCudaVersion
+              ? "Linger couldn't read the CUDA version from your NVIDIA driver (requires CUDA " +
+                  reason.requiredCudaVersion +
+                  " or newer). Update or reinstall your NVIDIA driver, then choose Check again."
+              : "Linger couldn't read the CUDA version from your NVIDIA driver. Update or reinstall your NVIDIA driver, then choose Check again.";
           case "unsupported-platform":
             return "Local models don't run on this system.";
           // Blocked now, it names another inference app holding a Mac's
@@ -3455,6 +3480,10 @@
             ),
           ),
         ].join(" ");
+      const RECHECKABLE_REASONS = new Set([
+        "cuda-driver-update-required",
+        "cuda-driver-version-unknown",
+      ]);
       // The held card's short line: what is free against what is needed.
       const heldLine = (models) => {
         const gpu = models.reasons?.find(
@@ -3630,8 +3659,15 @@
         // none, disabled.
         const settled =
           models.state === "checked" || models.state === "unavailable";
+        const canRecheck =
+          held ||
+          (models.state === "checked" &&
+            !models.eligible &&
+            !!models.reasons?.some((reason) =>
+              RECHECKABLE_REASONS.has(reason.code),
+            ));
         $("local-model").hidden = !shown && !settled;
-        $("local-recheck").hidden = !held || !local.available;
+        $("local-recheck").hidden = !canRecheck || !local.available;
         $("local-recheck").disabled = busy;
         if (shown) {
           $("local-sub").textContent = held

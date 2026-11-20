@@ -700,7 +700,7 @@ export interface components {
       localModels: {
         eligible: boolean;
         /**
-         * @description Upstream stack.state. blocked-now means the hardware can run the plan, but installing now would stop until other programs free memory; a tool without stack.state reports that case as basis capacity or reason free-memory-required.
+         * @description Upstream stack.state. blocked-now means the hardware can run the plan, but installing now would stop until a local blocker clears (such as freeing memory or updating the NVIDIA driver); a tool without stack.state reports memory blocks as basis capacity or reason free-memory-required.
          * @enum {string}
          */
         state: "ready" | "blocked-now" | "unavailable";
@@ -723,6 +723,12 @@ export interface components {
           freeBytes?: number;
           /** @description The memory the install needs free, for the same resource as freeBytes. */
           requiredBytes?: number;
+          /** @description On cuda-driver-update-required, the CUDA version the installed NVIDIA driver reports. */
+          detectedCudaVersion?: string;
+          /** @description On cuda-driver-update-required and cuda-driver-version-unknown, the minimum CUDA version the pinned engine requires. */
+          requiredCudaVersion?: string;
+          /** @description On CUDA driver reasons, the installed NVIDIA driver version when known. */
+          driverVersion?: string;
         }[];
         /**
          * @description Present when the upstream plan fits this computer's hardware only once other programs release the memory they hold now (reason free-memory-required); installing plans again against the memory free then.

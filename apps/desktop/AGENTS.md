@@ -158,11 +158,16 @@ Gateway and runs Agents. The daemon exits with the app.
   In the report, `local-models` is the planned model served by Pi, shown with the model,
   GPU, memory and download (the card's memory is the whole stack's, so
   "with its services"); otherwise the named runtime, with why there is no
-  local model. The page words each reason by its code and the counts it
-  carries (`gpuIndex`, `freeBytes`, `requiredBytes`); the tool's message
-  goes only to the main process log (`local_server.inspected`), never to
-  the page. Under Customize the Local model card stays visible once the
-  check ends: disabled, "Not available on this computer", with that reason.
+  local model. The page words each reason by its code and the structured
+  counts or numeric versions it carries (`gpuIndex`, `freeBytes`,
+  `requiredBytes`, `detectedCudaVersion`, `requiredCudaVersion`,
+  `driverVersion`); the tool's message goes only to the main process log
+  (`local_server.inspected`), never to the page. Under Customize the Local
+  model card stays visible once the check ends: disabled, "Not available on
+  this computer", with that reason. For `cuda-driver-update-required` and
+  `cuda-driver-version-unknown`, the page explains the NVIDIA driver
+  requirement and shows Check again (`local.recheck`) so the user can
+  re-check after updating the driver.
   Off macOS the page names the system tray, not the menu bar.
   Under Customize the local model runs only behind Pi: with another runtime
   it is greyed (`aria-disabled`, still focusable), does not toggle, and says
