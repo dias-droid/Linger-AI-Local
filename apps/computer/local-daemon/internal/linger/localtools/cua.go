@@ -552,7 +552,7 @@ func (c *cuaSession) call(ctx context.Context, name string, args json.RawMessage
 		}
 	}
 	driverMs = time.Since(driverStarted).Milliseconds()
-	if err == nil && runtime.GOOS == "windows" {
+	if err == nil && runtime.GOOS == "windows" && inputTools[name] {
 		result = windowsRefusedResult(name, result)
 	}
 	if err == nil {

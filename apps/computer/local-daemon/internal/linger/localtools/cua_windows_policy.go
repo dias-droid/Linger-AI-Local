@@ -89,18 +89,23 @@ func windowsSchema(input map[string]any) {
 // foreground and desktop delivery.
 const windowsScrollDescription = "Scroll a window in the background by amount steps in direction. A classic window with its own scroll bar scrolls with pid and window_id; a list or pane in a modern app scrolls by its own element_token from the latest get_window_state read. Chrome, Edge and Electron apps do not scroll in the background: read the content you need with get_window_state query instead."
 
-// chromiumTarget reports whether an input's window is a Chromium frame. An
-// input named only by its element_token takes the pid and window of the read
-// that token comes from.
+// chromiumTarget reports whether an input's window is a Chromium frame.
 func (c *cuaSession) chromiumTarget(arguments map[string]any) bool {
-	pid, _ := arguments["pid"].(float64)
-	window, _ := arguments["window_id"].(float64)
-	if token, ok := arguments["element_token"].(string); ok && pid == 0 && c.op != nil {
-		if key, _, found := c.op.reads.row(token); found {
-			pid, window = float64(key.pid), float64(key.window)
+	return chromiumWindow(c.targetWindow(arguments))
+}
+
+// targetWindow returns the pid and window an input names. An input named
+// only by its element_token takes them from the read that token comes from,
+// as the inputs of ui.window(...).observe() are.
+func (c *cuaSession) targetWindow(arguments map[string]any) (pid, window int64) {
+	p, _ := arguments["pid"].(float64)
+	w, _ := arguments["window_id"].(float64)
+	if token, ok := arguments["element_token"].(string); ok && (p == 0 || w == 0) && c.op != nil {
+		if key, _, found := c.op.reads.row(token); found && (p == 0 || int64(p) == key.pid) {
+			return key.pid, key.window
 		}
 	}
-	return chromiumWindow(int64(pid), int64(window))
+	return int64(p), int64(w)
 }
 
 // WindowsToolGuide describes Windows targeting and the background-only rule

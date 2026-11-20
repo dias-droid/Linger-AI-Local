@@ -87,3 +87,25 @@ func TestWindowsSchemaHidesForegroundFields(t *testing.T) {
 		t.Fatal("pid dropped")
 	}
 }
+
+func TestWindowsTargetWindowFromElementToken(t *testing.T) {
+	c := &cuaSession{op: &operation{}}
+	c.op.reads.observe(cuaRead(t, "window_id=9 pid=42 snapshot_id=s1\n- [3] AXButton \"Send\"", map[string]string{"snapshot_id": "s1"}))
+	cases := []struct {
+		name        string
+		arguments   map[string]any
+		pid, window int64
+	}{
+		{"token only", map[string]any{"element_token": "s1:3"}, 42, 9},
+		{"token and pid", map[string]any{"pid": 42.0, "element_token": "s1:3"}, 42, 9},
+		{"named window", map[string]any{"pid": 42.0, "window_id": 7.0, "element_token": "s1:3"}, 42, 7},
+		{"token of another app", map[string]any{"pid": 5.0, "element_token": "s1:3"}, 5, 0},
+		{"unknown token", map[string]any{"element_token": "s9:1"}, 0, 0},
+	}
+	for _, tc := range cases {
+		pid, window := c.targetWindow(tc.arguments)
+		if pid != tc.pid || window != tc.window {
+			t.Fatalf("%s: got pid %d window %d, want %d %d", tc.name, pid, window, tc.pid, tc.window)
+		}
+	}
+}
