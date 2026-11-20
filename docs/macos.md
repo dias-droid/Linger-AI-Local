@@ -52,3 +52,27 @@ Check the download against `SHA256SUMS.txt` from the same release.
 
 See [Install the desktop app](https://docs.heylinger.com/install/desktop-app)
 for help when setup fails.
+
+## Keep Computer permissions after an update
+
+Each desktop update replaces the app binary. macOS records Screen Recording and
+Accessibility grants against that binary's code signature, and an unsigned build
+has no signature that carries them to the next version. After an update,
+**System Settings › Privacy & Security** can still show **Linger** turned on
+while a Room's permission card reports **Computer use (CuaDriver) · Screen
+Recording — Not allowed**, and computer actions fail.
+
+Record the grants again:
+
+1. In **System Settings › Privacy & Security › Screen Recording**, switch
+   **Linger** off and back on, and approve the prompt.
+2. Do the same under **Accessibility**.
+3. Quit Linger and open it again.
+
+From a terminal, `tccutil reset ScreenCapture com.simplexai.linger.desktop.preview`
+and `tccutil reset Accessibility com.simplexai.linger.desktop.preview` clear the
+stale record instead, then grant again from the card.
+
+Signed builds will carry the grants across updates; until then, repeat these
+steps after each update while the card reports **Not allowed** and System
+Settings shows Linger enabled.
