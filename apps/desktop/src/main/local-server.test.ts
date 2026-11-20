@@ -422,6 +422,8 @@ const fixture = (
         showStarting,
         showStartFailed,
         loadServer,
+        prewarmAssets: vi.fn(async () => {}),
+        preloadAuthenticated: vi.fn(),
       } as never,
       {
         ...stubModule("Enrollment"),
@@ -676,6 +678,7 @@ describe("LocalServerModule", () => {
     expect(f.setServer).toHaveBeenCalledWith(
       "http://localhost:3000",
       undefined,
+      { reason: "local_ready" },
     );
     expect(f.enroll).toHaveBeenCalled();
     expect(f.module.status()).toMatchObject({
@@ -2105,6 +2108,7 @@ describe("LocalServerModule", () => {
     expect(f.setServer).toHaveBeenCalledWith(
       "http://localhost:3000",
       "http://localhost:2999",
+      { reason: "local_ready" },
     );
     expect(f.unenroll).not.toHaveBeenCalled();
     await f.host.stop("quit");
@@ -2348,6 +2352,7 @@ describe("LocalServerModule after a restart", () => {
     expect(f.setServer).toHaveBeenCalledWith(
       "http://localhost:3000",
       "http://localhost:3000",
+      { reason: "resume_ready" },
     );
     // The services were down, so the window waited on the starting page.
     expect(f.showStarting).toHaveBeenCalledOnce();
@@ -2375,6 +2380,7 @@ describe("LocalServerModule after a restart", () => {
     expect(f.setServer).toHaveBeenCalledWith(
       "http://localhost:3001",
       "http://localhost:3000",
+      { reason: "resume_ready" },
     );
     expect(f.unenroll).not.toHaveBeenCalled();
     expect(
@@ -2585,6 +2591,7 @@ describe("LocalServerModule after a restart", () => {
     expect(f.setServer).toHaveBeenCalledWith(
       "http://localhost:3000",
       "http://localhost:3000",
+      { reason: "resume_ready" },
     );
     expect(
       JSON.parse(
@@ -2833,6 +2840,7 @@ describe("LocalServerModule after a restart", () => {
     expect(f.setServer).toHaveBeenCalledWith(
       "http://localhost:3000",
       "http://localhost:3000",
+      { reason: "resume_ready" },
     );
     await f.host.stop("quit");
   });
@@ -3305,6 +3313,12 @@ describe("LocalServerModule after a restart", () => {
           showStarting: vi.fn(),
           showStartFailed: vi.fn(),
           loadServer: vi.fn(),
+          prewarmAssets: vi.fn(async () => {}),
+          preloadAuthenticated: vi.fn(),
+        } as never,
+        {
+          ...stubModule("WorkspaceGrants", ["Config"]),
+          ensureDefault: vi.fn(async () => {}),
         } as never,
         enrollment,
         module,

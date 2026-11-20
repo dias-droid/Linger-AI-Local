@@ -37,6 +37,82 @@ export function serverSwitch(
   };
 }
 
+export type WindowLoadReason =
+  | "boot"
+  | "local_ready"
+  | "resume_ready"
+  | "server_changed"
+  | "port_moved"
+  | "retry"
+  | "prewarm";
+
+export interface WindowLoadState {
+  readonly currentUrl?: string;
+  readonly pendingTargetOrigin?: string;
+  readonly showingShellPage: "none" | "starting" | "offline" | "start-failed";
+  readonly loadFailed: boolean;
+}
+
+export interface WindowLoadDecision {
+  readonly action: "load" | "noop";
+  readonly targetUrl?: string;
+  readonly reason: WindowLoadReason;
+}
+
+// Decides whether the main window should load `nextOrigin` or treat it as a
+// no-op, avoiding duplicate reloads on hot start while recovering from shell
+// pages or failed loads.
+export function windowLoadDecision(
+  state: WindowLoadState,
+  currentServerUrl: string | undefined,
+  nextOrigin: string,
+  options?: { movedFrom?: string; reason?: WindowLoadReason },
+): WindowLoadDecision {
+  const targetOrigin = parseServerUrl(nextOrigin);
+  const sw = targetOrigin
+    ? serverSwitch(currentServerUrl, targetOrigin, options?.movedFrom)
+    : undefined;
+  const reason: WindowLoadReason =
+    options?.reason ??
+    (sw?.moved &&
+    currentServerUrl !== undefined &&
+    options?.movedFrom !== undefined &&
+    sameOrigin(currentServerUrl, options.movedFrom)
+      ? "port_moved"
+      : "server_changed");
+  if (!targetOrigin) return { action: "noop", reason };
+
+  // Keep the current server when a non-explicit load targets another server,
+  // such as a background local resume while the user is on a remote server.
+  if (
+    currentServerUrl !== undefined &&
+    !sameOrigin(currentServerUrl, targetOrigin) &&
+    reason !== "server_changed" &&
+    reason !== "local_ready" &&
+    !(
+      sw?.moved &&
+      options?.movedFrom !== undefined &&
+      sameOrigin(currentServerUrl, options.movedFrom)
+    )
+  ) {
+    return { action: "noop", reason };
+  }
+
+  if (
+    reason !== "retry" &&
+    !state.loadFailed &&
+    state.showingShellPage === "none" &&
+    ((state.currentUrl !== undefined &&
+      sameOrigin(state.currentUrl, targetOrigin)) ||
+      (state.pendingTargetOrigin !== undefined &&
+        sameOrigin(state.pendingTargetOrigin, targetOrigin)))
+  ) {
+    return { action: "noop", reason };
+  }
+
+  return { action: "load", targetUrl: targetOrigin, reason };
+}
+
 export type NavigationDecision = "allow" | "external" | "deny";
 
 // App pages are reachable only from app pages: the server's pages must not

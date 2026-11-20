@@ -284,6 +284,25 @@ Gateway and runs Agents. The daemon exits with the app.
   Dock, the tray) shows setup until the computer is enrolled
   (`app-window.ts`), the main window after. The main window's server form
   without a server says Back to Setup instead of Cancel.
+  Main window loading policy (`windowLoadDecision` in `src/main/navigation.ts`):
+  all server loads (`boot`, `local_ready`, `resume_ready`, `server_changed`,
+  `port_moved`, `retry`, `prewarm`) pass through one decision helper so
+  duplicate `loadURL` calls on hot start are skipped when the target origin is
+  already loaded or pending without a shell page or load failure. `BaseWindow`
+  is created with `show: false` and revealed on the first `did-finish-load` or
+  `did-fail-load` after `show()`, with a short 1500 ms timeout fallback so a
+  stalled load still reveals the window; `preloadAuthenticated` loads the
+  enrolled server in the hidden window without showing it, and `prewarmAssets`
+  warms `/` and `/assets/*` in `session.defaultSession`'s HTTP cache. On
+  launch the window loads `serverUrl` without a blocking HTTP probe; if
+  `did-fail-load` fires and `localServer.resumable(serverUrl)` sees an active
+  resume or a valid matching `local-server.json`, it shows the
+  Starting page instead of `offline.html`. `window.did_finish_load` logs
+  `{ reason, duration_ms, target }` with origin + pathname only (never query or
+  hash), and `LocalServer` resume emits `local_server.resume_started`,
+  `local_server.resume_stage` (`stage`, `ms`), `local_server.resume_succeeded`
+  (`total_ms`), and `local_server.resume_failed` (`stage`, `total_ms`,
+  redacted `error` bounded to 500 chars with query/hash stripped).
 - `src/shell/*.html`: app-owned pages (title bar, offline/setup page). They
   have no network access and talk to the main process via `src/preload/shell.ts`.
 - `src/preload/index.ts`: the only SPA API, `window.lingerDesktop`. Its

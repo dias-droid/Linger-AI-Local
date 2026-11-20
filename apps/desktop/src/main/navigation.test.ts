@@ -6,6 +6,7 @@ import {
   parseServerUrl,
   permissionAllowed,
   serverSwitch,
+  windowLoadDecision,
 } from "./navigation.js";
 
 const server = "https://linger.example.com";
@@ -132,5 +133,140 @@ describe("framableHeaders", () => {
       "Content-Security-Policy": ["default-src 'self'; img-src *"],
       "Content-Type": ["text/html"],
     });
+  });
+});
+
+describe("windowLoadDecision", () => {
+  const local = "http://localhost:3000";
+  const moved = "http://localhost:3001";
+
+  it("loads on initial boot and skips duplicate hot-start loads", () => {
+    expect(
+      windowLoadDecision(
+        { showingShellPage: "none", loadFailed: false },
+        local,
+        local,
+        { reason: "boot" },
+      ),
+    ).toEqual({ action: "load", targetUrl: local, reason: "boot" });
+
+    expect(
+      windowLoadDecision(
+        {
+          pendingTargetOrigin: local,
+          showingShellPage: "none",
+          loadFailed: false,
+        },
+        local,
+        local,
+        { reason: "local_ready" },
+      ),
+    ).toEqual({ action: "noop", reason: "local_ready" });
+
+    expect(
+      windowLoadDecision(
+        {
+          currentUrl: `${local}/rooms/1`,
+          showingShellPage: "none",
+          loadFailed: false,
+        },
+        local,
+        local,
+        { reason: "resume_ready" },
+      ),
+    ).toEqual({ action: "noop", reason: "resume_ready" });
+  });
+
+  it("reloads when recovering from a shell page, failure, or explicit retry", () => {
+    expect(
+      windowLoadDecision(
+        {
+          currentUrl: "app://offline/?starting=1",
+          showingShellPage: "starting",
+          loadFailed: false,
+        },
+        local,
+        local,
+        { reason: "resume_ready" },
+      ),
+    ).toEqual({ action: "load", targetUrl: local, reason: "resume_ready" });
+
+    expect(
+      windowLoadDecision(
+        {
+          currentUrl: `${local}/`,
+          showingShellPage: "none",
+          loadFailed: true,
+        },
+        local,
+        local,
+        { reason: "resume_ready" },
+      ),
+    ).toEqual({ action: "load", targetUrl: local, reason: "resume_ready" });
+
+    expect(
+      windowLoadDecision(
+        {
+          currentUrl: `${local}/`,
+          showingShellPage: "none",
+          loadFailed: false,
+        },
+        local,
+        local,
+        { reason: "retry" },
+      ),
+    ).toEqual({ action: "load", targetUrl: local, reason: "retry" });
+  });
+
+  it("reloads on port move and keeps a user-selected remote server", () => {
+    expect(
+      windowLoadDecision(
+        {
+          currentUrl: `${local}/`,
+          showingShellPage: "none",
+          loadFailed: false,
+        },
+        local,
+        moved,
+        { movedFrom: local },
+      ),
+    ).toEqual({ action: "load", targetUrl: moved, reason: "port_moved" });
+
+    expect(
+      windowLoadDecision(
+        {
+          currentUrl: `${server}/`,
+          showingShellPage: "none",
+          loadFailed: false,
+        },
+        server,
+        moved,
+        { movedFrom: local, reason: "resume_ready" },
+      ),
+    ).toEqual({ action: "noop", reason: "resume_ready" });
+
+    expect(
+      windowLoadDecision(
+        {
+          currentUrl: `${local}/`,
+          showingShellPage: "none",
+          loadFailed: false,
+        },
+        local,
+        server,
+        { reason: "server_changed" },
+      ),
+    ).toEqual({ action: "load", targetUrl: server, reason: "server_changed" });
+  });
+
+  it("rejects invalid origins as noop", () => {
+    expect(
+      windowLoadDecision(
+        { showingShellPage: "none", loadFailed: false },
+        local,
+        "javascript:alert(1)",
+        { reason: "server_changed" },
+      ),
+    ).toEqual({ action: "noop", reason: "server_changed" });
   });
 });

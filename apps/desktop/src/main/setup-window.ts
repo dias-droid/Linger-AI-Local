@@ -349,6 +349,7 @@ export class SetupWindowModule implements Module {
       }
       case "finish":
         this.#window?.close();
+        windows.markOpenFromSetup();
         windows.show();
         return;
     }

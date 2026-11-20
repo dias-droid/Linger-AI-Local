@@ -139,12 +139,47 @@ async function main(): Promise<void> {
     log,
   );
 
+  // The default LINGER_HOME of the installer.
+  const home = lingerHome();
+  // The cookie header of the window's session for a server.
+  const webSessionCookie = async (
+    serverUrl: string,
+  ): Promise<string | undefined> => {
+    const cookies = await session.defaultSession.cookies.get({
+      url: serverUrl,
+    });
+    return cookies.length > 0
+      ? cookies.map((c) => `${c.name}=${c.value}`).join("; ")
+      : undefined;
+  };
+  const localServer = new LocalServerModule({
+    home,
+    version: VERSION,
+    macosVersion: () => process.getSystemVersion(),
+    installerDirectory: path.join(here, "../installer"),
+    ...(__SOURCE_ARCHIVE__ ? { sourceArchive: __SOURCE_ARCHIVE__ } : {}),
+    ...(__SOURCE_DEPENDENCIES__
+      ? { sourceDependencies: __SOURCE_DEPENDENCIES__ }
+      : {}),
+    // Developers install their own linger checkout instead.
+    ...(process.env.LINGER_CHECKOUT
+      ? { checkout: process.env.LINGER_CHECKOUT }
+      : {}),
+    // The window's session is the default one, which enrollment reads too.
+    signIn: (server, email, password) =>
+      signInWithPassword(server, email, password, (cookie) =>
+        session.defaultSession.cookies.set({ url: server.origin, ...cookie }),
+      ),
+    sessionCookie: webSessionCookie,
+    openExternal: (url) => shell.openExternal(url),
+  });
   // Until this computer is connected, the setup window comes first.
   const needsSetup = !config.get().computerId;
   const windows = new WindowManagerModule({
     preload: path.join(here, "../preload/index.cjs"),
     shellPreload: path.join(here, "../preload/shell.cjs"),
     background: background || needsSetup,
+    localServerResumable: (url) => localServer.resumable(url),
   });
   const setup = new SetupWindowModule({
     preload: path.join(here, "../preload/setup.cjs"),
@@ -171,40 +206,6 @@ async function main(): Promise<void> {
       : {}),
   });
   const status = new StatusModule();
-  // The cookie header of the window's session for a server.
-  const webSessionCookie = async (
-    serverUrl: string,
-  ): Promise<string | undefined> => {
-    const cookies = await session.defaultSession.cookies.get({
-      url: serverUrl,
-    });
-    return cookies.length > 0
-      ? cookies.map((c) => `${c.name}=${c.value}`).join("; ")
-      : undefined;
-  };
-  // The default LINGER_HOME of the installer.
-  const home = lingerHome();
-  const localServer = new LocalServerModule({
-    home,
-    version: VERSION,
-    macosVersion: () => process.getSystemVersion(),
-    installerDirectory: path.join(here, "../installer"),
-    ...(__SOURCE_ARCHIVE__ ? { sourceArchive: __SOURCE_ARCHIVE__ } : {}),
-    ...(__SOURCE_DEPENDENCIES__
-      ? { sourceDependencies: __SOURCE_DEPENDENCIES__ }
-      : {}),
-    // Developers install their own linger checkout instead.
-    ...(process.env.LINGER_CHECKOUT
-      ? { checkout: process.env.LINGER_CHECKOUT }
-      : {}),
-    // The window's session is the default one, which enrollment reads too.
-    signIn: (server, email, password) =>
-      signInWithPassword(server, email, password, (cookie) =>
-        session.defaultSession.cookies.set({ url: server.origin, ...cookie }),
-      ),
-    sessionCookie: webSessionCookie,
-    openExternal: (url) => shell.openExternal(url),
-  });
   // Set once the bundle was swapped, so quitting relaunches the new version.
   let relaunch = false;
   // Set once the setup program of an update runs; it starts the new version.
