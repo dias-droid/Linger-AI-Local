@@ -525,6 +525,7 @@ async function respond(request: Request): Promise<Response> {
         {
           id: "you",
           name: "You.com",
+          description: "Web search API for AI agents and LLMs.",
           tier: "free",
           tier_text: "Free without a key: limited, lower quality.",
           commands: ["search", "open"],

@@ -4159,6 +4159,7 @@ const (
 	WebSearchBackendIdBrave      WebSearchBackendId = "brave"
 	WebSearchBackendIdDirect     WebSearchBackendId = "direct"
 	WebSearchBackendIdDuckduckgo WebSearchBackendId = "duckduckgo"
+	WebSearchBackendIdExa        WebSearchBackendId = "exa"
 	WebSearchBackendIdFirecrawl  WebSearchBackendId = "firecrawl"
 	WebSearchBackendIdTavily     WebSearchBackendId = "tavily"
 	WebSearchBackendIdYou        WebSearchBackendId = "you"
@@ -4172,6 +4173,8 @@ func (e WebSearchBackendId) Valid() bool {
 	case WebSearchBackendIdDirect:
 		return true
 	case WebSearchBackendIdDuckduckgo:
+		return true
+	case WebSearchBackendIdExa:
 		return true
 	case WebSearchBackendIdFirecrawl:
 		return true
@@ -4223,6 +4226,7 @@ func (e WebSearchFilter) Valid() bool {
 // Defines values for WebSearchKeyBackend.
 const (
 	WebSearchKeyBackendBrave     WebSearchKeyBackend = "brave"
+	WebSearchKeyBackendExa       WebSearchKeyBackend = "exa"
 	WebSearchKeyBackendFirecrawl WebSearchKeyBackend = "firecrawl"
 	WebSearchKeyBackendTavily    WebSearchKeyBackend = "tavily"
 	WebSearchKeyBackendYou       WebSearchKeyBackend = "you"
@@ -4232,6 +4236,8 @@ const (
 func (e WebSearchKeyBackend) Valid() bool {
 	switch e {
 	case WebSearchKeyBackendBrave:
+		return true
+	case WebSearchKeyBackendExa:
 		return true
 	case WebSearchKeyBackendFirecrawl:
 		return true
@@ -4317,6 +4323,7 @@ func (e WebSearchQuotaUnit) Valid() bool {
 const (
 	WebSearchSearchBackendBrave      WebSearchSearchBackend = "brave"
 	WebSearchSearchBackendDuckduckgo WebSearchSearchBackend = "duckduckgo"
+	WebSearchSearchBackendExa        WebSearchSearchBackend = "exa"
 	WebSearchSearchBackendFirecrawl  WebSearchSearchBackend = "firecrawl"
 	WebSearchSearchBackendTavily     WebSearchSearchBackend = "tavily"
 	WebSearchSearchBackendYou        WebSearchSearchBackend = "you"
@@ -4328,6 +4335,8 @@ func (e WebSearchSearchBackend) Valid() bool {
 	case WebSearchSearchBackendBrave:
 		return true
 	case WebSearchSearchBackendDuckduckgo:
+		return true
+	case WebSearchSearchBackendExa:
 		return true
 	case WebSearchSearchBackendFirecrawl:
 		return true
@@ -9623,6 +9632,9 @@ type VoiceTranscriptEventPage struct {
 type WebSearchBackend struct {
 	Commands []WebSearchCommand `json:"commands"`
 
+	// Description The provider's own one-line description of its product.
+	Description string `json:"description"`
+
 	// Filters The search filters the backend honors; any other is refused before a call.
 	Filters []WebSearchFilter `json:"filters"`
 
@@ -9716,7 +9728,7 @@ type WebSearchQuota struct {
 	ObservedAt *Timestamp `json:"observed_at,omitempty"`
 	Plan       *string    `json:"plan,omitempty"`
 
-	// Reason no_key: no key is saved; not_reported: there is no usage endpoint to read (keyless You.com, direct); not_observed: Brave has answered no call yet; key_rejected: the provider refused the saved key; provider_unavailable: the usage endpoint did not answer in time.
+	// Reason no_key: no key is saved; not_reported: there is no usage endpoint to read (keyless You.com, DuckDuckGo, Exa, direct); not_observed: Brave has answered no call yet; key_rejected: the provider refused the saved key; provider_unavailable: the usage endpoint did not answer in time.
 	Reason    *WebSearchQuotaReason `json:"reason,omitempty"`
 	Remaining *float32              `json:"remaining,omitempty"`
 
@@ -9728,7 +9740,7 @@ type WebSearchQuota struct {
 // WebSearchQuotaFrom defines model for WebSearchQuota.From.
 type WebSearchQuotaFrom string
 
-// WebSearchQuotaReason no_key: no key is saved; not_reported: there is no usage endpoint to read (keyless You.com, direct); not_observed: Brave has answered no call yet; key_rejected: the provider refused the saved key; provider_unavailable: the usage endpoint did not answer in time.
+// WebSearchQuotaReason no_key: no key is saved; not_reported: there is no usage endpoint to read (keyless You.com, DuckDuckGo, Exa, direct); not_observed: Brave has answered no call yet; key_rejected: the provider refused the saved key; provider_unavailable: the usage endpoint did not answer in time.
 type WebSearchQuotaReason string
 
 // WebSearchQuotaUnit defines model for WebSearchQuota.Unit.

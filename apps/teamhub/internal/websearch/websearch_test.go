@@ -155,7 +155,7 @@ func newFakeProviders(t *testing.T, handle func(w http.ResponseWriter, r seen)) 
 func (f *fakeProviders) endpoints() Endpoints {
 	return Endpoints{Tavily: f.server.URL + "/tavily", Brave: f.server.URL + "/brave", Firecrawl: f.server.URL + "/firecrawl",
 		YouAPI: f.server.URL + "/youapi", YouIndex: f.server.URL + "/youindex", YouMCP: f.server.URL + "/mcp/free",
-		DuckDuckGo: f.server.URL + "/ddg", Client: f.server.Client()}
+		DuckDuckGo: f.server.URL + "/ddg", Exa: f.server.URL + "/exa", Client: f.server.Client()}
 }
 
 func (f *fakeProviders) seen() []seen {
@@ -644,7 +644,7 @@ func TestListReportsTiersStatesAndLiveQuota(t *testing.T) {
 	saveRaw(t, s, keys, Tavily, "provider-secret", "rejected")
 	saveRaw(t, s, keys, Brave, "provider-secret", "unverified")
 	list, err := s.List(t.Context(), true)
-	if err != nil || list.DefaultSearch != Brave || list.DefaultOpen != Direct || !list.CanSaveKeys || len(list.Backends) != 6 {
+	if err != nil || list.DefaultSearch != Brave || list.DefaultOpen != Direct || !list.CanSaveKeys || len(list.Backends) != 7 {
 		t.Fatalf("List = %+v, %v", list, err)
 	}
 	byID := map[Backend]BackendView{}
@@ -690,7 +690,7 @@ func TestListWithoutQuotaCallsNoProvider(t *testing.T) {
 	saveRaw(t, s, keys, You, "provider-secret", "verified")
 	saveRaw(t, s, keys, Tavily, "provider-secret", "verified")
 	list, err := s.List(t.Context(), false)
-	if err != nil || len(list.Backends) != 6 || len(fake.seen()) != 0 {
+	if err != nil || len(list.Backends) != 7 || len(fake.seen()) != 0 {
 		t.Fatalf("List = %+v, %v, calls %d", list, err, len(fake.seen()))
 	}
 	for _, view := range list.Backends {

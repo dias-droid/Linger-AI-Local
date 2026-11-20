@@ -26,21 +26,28 @@ describe("Web search connectors", () => {
       "Tavily",
       "Brave Search",
       "Firecrawl",
+      "Exa",
       "DuckDuckGo",
     ]);
-    expect(card(section, "DuckDuckGo")).toHaveTextContent("Default");
+    // Like an app card: the free tiers show a status line, a backend that
+    // needs a key shows the provider's description and Connect.
     expect(card(section, "DuckDuckGo")).toHaveTextContent(
-      "Search · No key needed",
+      "DuckDuckGoDefaultFree, limited",
     );
-    expect(card(section, "DuckDuckGo")).toHaveTextContent("Free, limited");
+    expect(
+      within(card(section, "DuckDuckGo")).queryByRole("button", {
+        name: "Connect DuckDuckGo",
+      }),
+    ).toBeNull();
     // You.com works without a key and still takes one.
     expect(card(section, "You.com")).toHaveTextContent("Free, limited");
-    expect(card(section, "You.com")).toHaveTextContent(
-      "Search · 100 searches a day without a key",
-    );
-    expect(card(section, "Tavily")).toHaveTextContent("Not set");
+    expect(
+      within(card(section, "You.com")).getByRole("button", {
+        name: "Connect You.com",
+      }),
+    ).toBeVisible();
     expect(card(section, "Tavily")).toHaveTextContent(
-      "Search · Read pages · 1,000 credits a month",
+      "The real-time search engine for AI agents.",
     );
 
     fireEvent.click(
@@ -52,9 +59,14 @@ describe("Web search connectors", () => {
       screen.queryByRole("region", { name: "Application connections" }),
     ).toBeNull();
     expect(screen.queryByRole("heading", { level: 2 })).toBeNull();
-    expect(
-      cardNames(screen.getByRole("region", { name: "Web search" })),
-    ).toHaveLength(5);
+    const searchOnly = screen.getByRole("region", { name: "Web search" });
+    expect(cardNames(searchOnly)).toHaveLength(6);
+    fireEvent.click(
+      within(card(searchOnly, "Exa")).getByRole("button", {
+        name: "Connect Exa",
+      }),
+    );
+    expect(await screen.findByRole("dialog", { name: "Exa" })).toBeVisible();
   });
 
   it("shows each provider's live quota on its card", async () => {
@@ -91,9 +103,8 @@ describe("Web search connectors", () => {
 
     const section = await screen.findByRole("region", { name: "Web search" });
     expect(card(section, "Tavily")).toHaveTextContent(
-      "812 / 1,000 credits left",
+      "Connected · 812 / 1,000 credits left",
     );
-    expect(card(section, "Tavily")).toHaveTextContent("Active");
     expect(card(section, "Brave Search")).toHaveTextContent(
       "986 / 1,000 requests left, as of the last search 2 hours ago",
     );
@@ -136,8 +147,9 @@ describe("Web search connectors", () => {
     fireEvent.click(within(section).getByRole("button", { name: "Tavily" }));
     const dialog = await screen.findByRole("dialog", { name: "Tavily" });
     expect(dialog).toHaveTextContent(
-      "Searches the web and reads pages for your Agents.",
+      "The real-time search engine for AI agents.",
     );
+    expect(dialog).toHaveTextContent("DoesSearches the web and reads pages");
     expect(
       within(dialog).getByRole("link", { name: /app\.tavily\.com\/home/ }),
     ).toHaveAttribute("href", "https://app.tavily.com/home");
@@ -160,9 +172,8 @@ describe("Web search connectors", () => {
       within(dialog).getByRole("button", { name: "Make default" }),
     ).toBeVisible();
     expect(card(section, "Tavily")).toHaveTextContent(
-      "1,000 / 1,000 credits left",
+      "Connected · 1,000 / 1,000 credits left",
     );
-    expect(card(section, "Tavily")).toHaveTextContent("Active");
     expect(composioKey).not.toHaveBeenCalled();
     expect(
       screen.queryByRole("dialog", { name: /Connect/ }),
@@ -225,7 +236,11 @@ describe("Web search connectors", () => {
       "clear default",
       "remove tavily",
     ]);
-    expect(card(section, "Tavily")).toHaveTextContent("Not set");
+    expect(
+      within(card(section, "Tavily")).getByRole("button", {
+        name: "Connect Tavily",
+      }),
+    ).toBeVisible();
   });
 
   it("keeps backends with a saved key or a free tier under Connected only", async () => {

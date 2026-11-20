@@ -5576,7 +5576,7 @@ export interface components {
      * @description A backend that takes an API key saved in the product.
      * @enum {string}
      */
-    WebSearchKeyBackend: "tavily" | "brave" | "firecrawl" | "you";
+    WebSearchKeyBackend: "tavily" | "brave" | "firecrawl" | "exa" | "you";
     /** @description A radio or checkbox answer names option ids. Any other value is the Human's own written answer, which every option question accepts, so a checkbox answer holds up to 20 options and one written answer. */
     DecisionAnswerValue: string | string[];
     /** @description Service-signed upload credential. It names the uploading Human, the Room, and the stored file, and it expires at the upload's expires_at; clients must not construct or parse it. */
@@ -7411,6 +7411,7 @@ export interface components {
       | "tavily"
       | "brave"
       | "firecrawl"
+      | "exa"
       | "you"
       | "duckduckgo";
     /**
@@ -7421,6 +7422,7 @@ export interface components {
       | "tavily"
       | "brave"
       | "firecrawl"
+      | "exa"
       | "you"
       | "duckduckgo"
       | "direct";
@@ -7441,7 +7443,7 @@ export interface components {
       resets_at?: components["schemas"]["Timestamp"];
       observed_at?: components["schemas"]["Timestamp"];
       /**
-       * @description no_key: no key is saved; not_reported: there is no usage endpoint to read (keyless You.com, direct); not_observed: Brave has answered no call yet; key_rejected: the provider refused the saved key; provider_unavailable: the usage endpoint did not answer in time.
+       * @description no_key: no key is saved; not_reported: there is no usage endpoint to read (keyless You.com, DuckDuckGo, Exa, direct); not_observed: Brave has answered no call yet; key_rejected: the provider refused the saved key; provider_unavailable: the usage endpoint did not answer in time.
        * @enum {string}
        */
       reason?:
@@ -7455,6 +7457,8 @@ export interface components {
     WebSearchBackend: {
       id: components["schemas"]["WebSearchBackendId"];
       name: string;
+      /** @description The provider's own one-line description of its product. */
+      description: string;
       /**
        * @description How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free: without a key, on a free service with limits that TeamHub does not count (DuckDuckGo, and You.com without a key); none: direct, which needs no account.
        * @enum {string}

@@ -2,10 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { teamHubData } from "@/features/teamhub/teamhub-api";
 import type { TeamHubClient } from "@/features/teamhub/teamhub-client";
-import type {
-  TeamHubWebSearchBackend,
-  TeamHubWebSearchKeyBackend,
-} from "@/features/teamhub/teamhub-types";
+import type { TeamHubWebSearchKeyBackend } from "@/features/teamhub/teamhub-types";
 
 /** Every web search query; a saved key or default refreshes all of them. */
 export const webSearchQueryKey = ["teamhub", "web-search"] as const;
@@ -43,6 +40,7 @@ export function webSearchBackendInfoQueryOptions(client: TeamHubClient) {
 
 const names: Record<TeamHubWebSearchKeyBackend, string> = {
   brave: "Brave Search",
+  exa: "Exa",
   firecrawl: "Firecrawl",
   tavily: "Tavily",
   you: "You.com",
@@ -61,24 +59,6 @@ export function isWebSearchKeyBackend<T extends { id: string }>(
   backend: T,
 ): backend is T & { id: TeamHubWebSearchKeyBackend } {
   return backend.id in names;
-}
-
-/**
- * What the backend does and, after it, its free allowance; a backend that
- * never takes a key says none is needed.
- */
-export function webSearchBackendSummary(
-  backend: TeamHubWebSearchBackend,
-): string {
-  const commands = backend.commands.map((command) =>
-    command === "search" ? "Search" : "Read pages",
-  );
-  const allowance = isWebSearchKeyBackend(backend)
-    ? backend.free_tier
-    : backend.tier === "free"
-      ? "No key needed"
-      : undefined;
-  return [...commands, allowance].filter(Boolean).join(" · ");
 }
 
 /** The key page as a short label: host and path without `www.`. */

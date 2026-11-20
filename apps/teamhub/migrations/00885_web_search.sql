@@ -4,12 +4,12 @@
 -- Human and Agent on the deployment, and TeamHub reads the row at each call,
 -- so a save applies on every replica at once. state is what the provider last
 -- said about the key: verified by its official check or a successful call,
--- unverified while a provider without an official check (Brave) has answered
+-- unverified while a provider without an official check (Brave, Exa) has answered
 -- no call yet, rejected once it refused the key. The quota columns keep the
 -- last rate-limit headers of a provider that reports quota only on its
 -- responses; a save clears them.
 CREATE TABLE web_search_keys (
-    backend text PRIMARY KEY CHECK (backend IN ('you', 'tavily', 'brave', 'firecrawl')),
+    backend text PRIMARY KEY CHECK (backend IN ('you', 'tavily', 'brave', 'firecrawl', 'exa')),
     api_key_ciphertext bytea NOT NULL,
     state text NOT NULL CHECK (state IN ('verified', 'unverified', 'rejected')),
     quota_remaining double precision,
@@ -23,7 +23,7 @@ CREATE TABLE web_search_keys (
 -- row or a value, a search uses the first usable backend in TeamHub's order.
 CREATE TABLE web_search_settings (
     singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
-    default_backend text CHECK (default_backend IN ('you', 'tavily', 'brave', 'firecrawl')),
+    default_backend text CHECK (default_backend IN ('you', 'tavily', 'brave', 'firecrawl', 'exa', 'duckduckgo')),
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 

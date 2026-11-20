@@ -119,8 +119,8 @@ func TestWebSearchAsksForAKeyAndReplaysTheSearchWithIt(t *testing.T) {
 	code, _, listed := env.request(alice, http.MethodGet, "/v0/web-search/backends", nil, "")
 	var list websearch.List
 	decode(t, listed, &list)
-	if code != http.StatusOK || list.DefaultSearch != websearch.DuckDuckGo || !list.CanSaveKeys || len(list.Backends) != 6 ||
-		list.Backends[3].ID != websearch.You || list.Backends[3].Tier != websearch.TierFree {
+	if code != http.StatusOK || list.DefaultSearch != websearch.DuckDuckGo || !list.CanSaveKeys || len(list.Backends) != 7 ||
+		list.Backends[4].ID != websearch.You || list.Backends[4].Tier != websearch.TierFree {
 		t.Fatalf("backends: %d %s", code, listed)
 	}
 	code, _, listed = env.request(alice, http.MethodGet, "/v0/web-search/backends?include_quota=false", nil, "")
@@ -150,7 +150,7 @@ func TestWebSearchAsksForAKeyAndReplaysTheSearchWithIt(t *testing.T) {
 		t.Fatalf("key from the card: %d %s", code, body)
 	}
 	assertBrowserCardHandoff(t, env, cardID, cardMessage, "answered", `"backend": "brave"`,
-		`The user added a Brave Search key. Results of your search for "rust releases" are in the payload below`)
+		`The user added a Brave Search API key. Results of your search for "rust releases" are in the payload below`)
 	assertBrowserCardHandoff(t, env, cardID, cardMessage, "answered", `"decision": "configured"`, `"url":"https://rust.example/news"`)
 
 	status, body = search(map[string]any{"query": "rust", "backend": "tavily"})
@@ -171,5 +171,15 @@ func TestWebSearchAsksForAKeyAndReplaysTheSearchWithIt(t *testing.T) {
 	}
 	if status, body = search(map[string]any{"query": "rust", "backend": "brave", "sites": []string{"a.example", "b.example"}}); status != http.StatusBadRequest {
 		t.Fatalf("two sites on Brave: %d %s", status, body)
+	}
+
+	// The keyless DuckDuckGo can be the chosen default, and an Exa key, which
+	// Exa has no endpoint to check, is saved unverified without a call.
+	code, _, chosen := env.request(alice, http.MethodPut, "/v0/web-search/default", map[string]any{"backend": "duckduckgo"}, "")
+	if code != http.StatusOK || !strings.Contains(string(chosen), `"chosen_default_search":"duckduckgo"`) {
+		t.Fatalf("DuckDuckGo as the default: %d %s", code, chosen)
+	}
+	if code, body := saveKey("exa", "exa-key", ""); code != http.StatusOK || !strings.Contains(string(body), `"key_state":"unverified"`) {
+		t.Fatalf("Exa key from Connectors: %d %s", code, body)
 	}
 }

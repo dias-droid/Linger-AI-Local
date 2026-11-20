@@ -20,7 +20,6 @@ import {
   isWebSearchKeyBackend,
   webSearchBackendInfoQueryOptions,
   webSearchBackendName,
-  webSearchBackendSummary,
 } from "@/features/web-search/web-search-backends";
 import {
   WebSearchKeyForm,
@@ -108,7 +107,7 @@ export function SearchKeyDecision({
   return (
     <CardBox heading={card.title} label={label}>
       <CardRow
-        detail={shown ? webSearchBackendSummary(shown) : undefined}
+        detail={shown?.description}
         icon={
           <AppLogoTile name={target.name} url={webSearchBackendLogo(shownID)} />
         }
@@ -226,7 +225,7 @@ function OtherProviders({
                     ) : null}
                   </p>
                   <p className="truncate text-xs text-app-muted">
-                    {webSearchBackendSummary(backend)}
+                    {backend.description}
                   </p>
                 </div>
               </div>

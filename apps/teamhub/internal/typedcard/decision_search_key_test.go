@@ -77,12 +77,14 @@ func TestSearchKeyNoticesCarryTheConfiguredBackend(t *testing.T) {
 			"Human interaction decision_1 resolved: The user added a Tavily API key. Run the command again.\n" +
 				`payload={"decision":"configured","backend":"tavily"}`},
 		{"other backend", "answered", view("tavily"), tavilySearch, `{"decision":"configured","backend":"brave"}`, "", pgtype.Text{},
-			"Human interaction decision_1 resolved: The user added a Brave Search key instead of Tavily. Run the command again with --backend brave.\n" +
+			"Human interaction decision_1 resolved: The user added a Brave Search API key instead of Tavily. Run the command again with --backend brave.\n" +
 				`payload={"decision":"configured","backend":"brave","requested_backend":"tavily"}`},
 		{"no backend named", "answered", view("tavily"), implicitSearch, `{"decision":"configured","backend":"tavily"}`, "", pgtype.Text{},
 			"The user added a Tavily API key. Run the command again with --backend tavily.\n" + `payload={"decision":"configured","backend":"tavily"}`},
 		{"connect", "answered", view("firecrawl"), []byte(`{}`), `{"decision":"configured","backend":"firecrawl"}`, "", pgtype.Text{},
 			"The user added a Firecrawl API key. Run the command again.\n"},
+		{"vowel name", "answered", view("exa"), []byte(`{}`), `{"decision":"configured","backend":"exa"}`, "", pgtype.Text{},
+			"The user added an Exa API key. Run the command again.\n"},
 		{"declined", "denied", view("tavily"), tavilySearch, `{"decision":"deny"}`, "", pgtype.Text{},
 			"Human interaction decision_1 resolved: The user declined to add a web search key. Don't retry; tell the user web search needs a key in Connectors.\n" +
 				`payload={"decision":"deny"}`},
@@ -90,7 +92,7 @@ func TestSearchKeyNoticesCarryTheConfiguredBackend(t *testing.T) {
 			"The Sponsor declined to add a web search key. Don't retry; say in your final reply"},
 		{"replayed search", "answered", view("tavily"), tavilySearch, `{"decision":"configured","backend":"brave"}`,
 			`{"outcome":"","data":{"results":[{"title":"T","url":"https://t.example","snippet":"s"}]}}`, pgtype.Text{},
-			`The user added a Brave Search key instead of Tavily. Results of your search for "rust 2026" are in the payload below; don't run it again.` + "\n" +
+			`The user added a Brave Search API key instead of Tavily. Results of your search for "rust 2026" are in the payload below; don't run it again.` + "\n" +
 				`payload={"decision":"configured","backend":"brave","requested_backend":"tavily","results":[{"title":"T","url":"https://t.example","snippet":"s"}]}`},
 		{"replayed open", "answered", view("tavily"), open, `{"decision":"configured","backend":"tavily"}`,
 			`{"outcome":"","data":{"page":{"url":"https://a.example/x","markdown":"# A","truncated":false}}}`, task,

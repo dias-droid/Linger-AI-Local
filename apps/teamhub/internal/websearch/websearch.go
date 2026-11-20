@@ -33,6 +33,7 @@ const (
 	Tavily     Backend = "tavily"
 	Brave      Backend = "brave"
 	Firecrawl  Backend = "firecrawl"
+	Exa        Backend = "exa"
 	You        Backend = "you"
 	DuckDuckGo Backend = "duckduckgo"
 	Direct     Backend = "direct"
@@ -40,7 +41,7 @@ const (
 
 // keyOrder is TeamHub's default order: a search without a backend uses the
 // first one with a usable key, then DuckDuckGo.
-var keyOrder = []Backend{Tavily, Brave, Firecrawl, You}
+var keyOrder = []Backend{Tavily, Brave, Firecrawl, Exa, You}
 
 // searchOrder is every backend that searches, in the order lists show them.
 var searchOrder = append(slices.Clone(keyOrder), DuckDuckGo)
@@ -86,7 +87,9 @@ const (
 )
 
 type definition struct {
-	name          string
+	name string
+	// description is the provider's own one-line pitch, for its card.
+	description   string
 	commands      []string
 	filters       []string
 	maxLimit      int
@@ -98,24 +101,35 @@ type definition struct {
 }
 
 // definitions is the static text and capability of each backend. Firecrawl
-// and You.com take no site filter because their APIs document none.
+// and You.com take no site filter because their APIs document none. Brave and
+// Exa have no endpoint that checks a key or reports what is left on it.
 var definitions = map[Backend]definition{
-	Tavily: {name: "Tavily", commands: []string{CommandSearch, CommandOpen}, filters: []string{FilterRecency, FilterSite},
+	Tavily: {name: "Tavily", description: "The real-time search engine for AI agents.",
+		commands: []string{CommandSearch, CommandOpen}, filters: []string{FilterRecency, FilterSite},
 		maxLimit: 20, maxSites: 10, officialCheck: true,
 		freeTier: "1,000 free API credits every month.", keyURL: "https://app.tavily.com/home"},
-	Brave: {name: "Brave Search", commands: []string{CommandSearch}, filters: []string{FilterRecency, FilterSite},
+	Brave: {name: "Brave Search", description: "Enterprise-grade web search API with an index of 40+ billion pages.",
+		commands: []string{CommandSearch}, filters: []string{FilterRecency, FilterSite},
 		maxLimit: 20, maxSites: 1,
 		freeTier: "$5 of free credit every month; sign-up needs a credit card.", keyURL: "https://api-dashboard.search.brave.com/app/keys"},
-	Firecrawl: {name: "Firecrawl", commands: []string{CommandSearch, CommandOpen}, filters: []string{FilterRecency},
+	Firecrawl: {name: "Firecrawl", description: "Web data API for AI agents.",
+		commands: []string{CommandSearch, CommandOpen}, filters: []string{FilterRecency},
 		maxLimit: 20, officialCheck: true,
 		freeTier: "1,000 free credits every month.", keyURL: "https://www.firecrawl.dev/app/api-keys"},
-	You: {name: "You.com", commands: []string{CommandSearch, CommandOpen}, filters: []string{FilterRecency},
+	Exa: {name: "Exa", description: "Search API for AI agents that need real-time web data.",
+		commands: []string{CommandSearch, CommandOpen}, filters: []string{FilterRecency, FilterSite},
+		maxLimit: 20, maxSites: 10,
+		freeTier: "$10 of free credit every month; no card needed.", keyURL: "https://dashboard.exa.ai/api-keys"},
+	You: {name: "You.com", description: "Web search API for AI agents and LLMs.",
+		commands: []string{CommandSearch, CommandOpen}, filters: []string{FilterRecency},
 		maxLimit: 20, keyless: true, officialCheck: true,
 		freeTier: "Works without a key, limited; a key gives full quality and higher limits.", keyURL: "https://you.com/platform"},
 	// DuckDuckGo's results page holds about ten results and takes one site.
-	DuckDuckGo: {name: "DuckDuckGo", commands: []string{CommandSearch}, filters: []string{FilterRecency, FilterSite},
+	DuckDuckGo: {name: "DuckDuckGo", description: "Private search from the Internet privacy company.",
+		commands: []string{CommandSearch}, filters: []string{FilterRecency, FilterSite},
 		maxLimit: 10, maxSites: 1, keyless: true},
-	Direct: {name: "Direct", commands: []string{CommandOpen}, keyless: true},
+	Direct: {name: "Direct", description: "Reads pages from the Agent's own computer.",
+		commands: []string{CommandOpen}, keyless: true},
 }
 
 // The free tier lines; TeamHub counts nothing for either.
@@ -227,6 +241,7 @@ type Quota struct {
 type BackendView struct {
 	ID               Backend  `json:"id"`
 	Name             string   `json:"name"`
+	Description      string   `json:"description"`
 	Tier             string   `json:"tier"`
 	TierText         string   `json:"tier_text,omitempty"`
 	Commands         []string `json:"commands"`
@@ -410,7 +425,7 @@ func (s *Service) List(ctx context.Context, withQuota bool) (List, error) {
 			views[i].Quota = Quota{}
 			continue
 		}
-		if !ring.usable(b) || b == Brave {
+		if !ring.usable(b) || !definitions[b].officialCheck {
 			continue
 		}
 		wg.Add(1)
@@ -431,7 +446,7 @@ func (s *Service) List(ctx context.Context, withQuota bool) (List, error) {
 func (s *Service) view(ring keyring, b Backend) BackendView {
 	def := definitions[b]
 	view := BackendView{
-		ID: b, Name: def.name, Tier: TierKey, Commands: def.commands, Filters: def.filters,
+		ID: b, Name: def.name, Description: def.description, Tier: TierKey, Commands: def.commands, Filters: def.filters,
 		MaxLimit: def.maxLimit, MaxSites: def.maxSites, Keyless: def.keyless, OfficialKeyCheck: def.officialCheck,
 		FreeTier: def.freeTier, KeyURL: def.keyURL, Status: ring.status(b), KeyState: "none",
 		Quota: Quota{From: "unavailable", Reason: "no_key"},
@@ -453,6 +468,8 @@ func (s *Service) view(ring keyring, b Backend) BackendView {
 		view.Quota.Reason = "key_rejected"
 	case b == Brave && ring.usable(Brave):
 		view.Quota = braveStoredQuota(ring[Brave].row)
+	case ring.usable(b) && !def.officialCheck:
+		view.Quota.Reason = "not_reported"
 	}
 	return view
 }

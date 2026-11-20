@@ -9,7 +9,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { ModalDialog } from "@/components/ui/modal-dialog";
-import { StatusPill } from "@/components/ui/status-pill";
 import { teamHubData, teamHubDone } from "@/features/teamhub/teamhub-api";
 import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
 import type {
@@ -20,7 +19,6 @@ import type {
 } from "@/features/teamhub/teamhub-types";
 import {
   isWebSearchKeyBackend,
-  webSearchBackendSummary,
   webSearchQueryKey,
 } from "@/features/web-search/web-search-backends";
 import { WebSearchKeyForm } from "@/features/web-search/web-search-key-form";
@@ -130,6 +128,11 @@ export function WebSearchSection({
   );
 }
 
+/**
+ * A backend card in the app cards' shape: the provider's own description
+ * until it is usable, then a status dot and line, and Connect while a key
+ * can still be added.
+ */
 function WebSearchBackendCard({
   backend,
   isDefault,
@@ -139,10 +142,13 @@ function WebSearchBackendCard({
   isDefault: boolean;
   onOpen: () => void;
 }) {
-  const status = backendStatus(backend);
-  const line = usageLine(backend) ?? webSearchBackendSummary(backend);
+  const state = connectionState(backend);
+  const line = state?.label ?? backend.description;
+  const canConnect =
+    isWebSearchKeyBackend(backend) &&
+    (backend.key_state === "none" || state?.tone === "danger");
   return (
-    <article className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors duration-150 hover:bg-accent/40 motion-reduce:transition-none">
+    <article className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border bg-card px-4 py-3 transition-colors duration-150 hover:bg-accent/40 motion-reduce:transition-none">
       <button
         aria-label={backend.name}
         className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -161,15 +167,35 @@ function WebSearchBackendCard({
               </span>
             ) : null}
           </span>
-          <span
-            className="mt-0.5 block truncate text-xs text-muted-foreground"
-            title={line}
-          >
-            {line}
+          <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            {state ? (
+              <span
+                aria-hidden
+                className={cn(
+                  "size-1.5 shrink-0 rounded-full",
+                  state.tone === "danger"
+                    ? "bg-[var(--app-status-danger-text)]"
+                    : "bg-[var(--app-status-success-text)]",
+                )}
+              />
+            ) : null}
+            <span className="truncate" title={line}>
+              {line}
+            </span>
           </span>
         </span>
       </button>
-      <StatusPill tone={status.tone}>{status.label}</StatusPill>
+      {canConnect ? (
+        <Button
+          aria-label={`Connect ${backend.name}`}
+          className="px-2.5"
+          onClick={onOpen}
+          size="compact"
+          tone="secondary"
+        >
+          Connect
+        </Button>
+      ) : null}
     </article>
   );
 }
@@ -188,13 +214,18 @@ function WebSearchBackendDialog({
     <ModalDialog
       className="app-key-dialog"
       closeOnBackdrop
-      description={backendDescription(backend)}
+      description={backend.description}
       onClose={onClose}
       size="md"
       title={backend.name}
     >
       <div className="space-y-5 px-5 py-5 text-sm text-app-body">
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+          <Fact label="Does">
+            {backend.commands.includes("open")
+              ? "Searches the web and reads pages"
+              : "Searches the web"}
+          </Fact>
           {backend.free_tier ? (
             <Fact label="Free tier">{backend.free_tier}</Fact>
           ) : null}
@@ -349,22 +380,25 @@ function BackendLogoTile({ backend }: { backend: TeamHubWebSearchBackend }) {
   );
 }
 
-function backendStatus(backend: TeamHubWebSearchBackend): {
-  label: string;
-  tone: "danger" | "neutral" | "success";
-} {
+/**
+ * The status line of a backend that has a key or a free tier; null for one
+ * that still needs a key, whose card shows its description.
+ */
+function connectionState(
+  backend: TeamHubWebSearchBackend,
+): { label: string; tone: "danger" | "success" } | null {
   if (backend.key_state === "rejected" || backend.status === "key_rejected")
     return { label: "Key rejected", tone: "danger" };
-  if (backend.key_state !== "none") return { label: "Active", tone: "success" };
+  if (backend.key_state !== "none") {
+    const usage = usageLine(backend);
+    return {
+      label: usage ? `Connected · ${usage}` : "Connected",
+      tone: "success",
+    };
+  }
   if (backend.tier === "free")
     return { label: "Free, limited", tone: "success" };
-  return { label: "Not set", tone: "neutral" };
-}
-
-function backendDescription(backend: TeamHubWebSearchBackend): string {
-  return backend.commands.includes("open")
-    ? "Searches the web and reads pages for your Agents."
-    : "Searches the web for your Agents.";
+  return null;
 }
 
 function savedKeyText(backend: TeamHubWebSearchBackend): string {

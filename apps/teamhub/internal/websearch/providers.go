@@ -26,6 +26,7 @@ const (
 	DefaultYouIndexURL  = "https://ydc-index.io"
 	DefaultYouMCPURL    = "https://api.you.com/mcp/free"
 	DefaultDuckDuckGo   = "https://html.duckduckgo.com"
+	DefaultExaURL       = "https://api.exa.ai"
 )
 
 // Call budgets. A page read waits longer because the provider fetches and
@@ -41,8 +42,8 @@ const (
 // API. Client replaces the default client, which never follows a redirect so
 // a key never reaches another host.
 type Endpoints struct {
-	Tavily, Brave, Firecrawl, YouAPI, YouIndex, YouMCP, DuckDuckGo string
-	Client                                                         *http.Client
+	Tavily, Brave, Firecrawl, Exa, YouAPI, YouIndex, YouMCP, DuckDuckGo string
+	Client                                                              *http.Client
 }
 
 type providers struct {
@@ -58,7 +59,7 @@ func newProviders(endpoints Endpoints) *providers {
 		{&endpoints.Tavily, DefaultTavilyURL}, {&endpoints.Brave, DefaultBraveURL},
 		{&endpoints.Firecrawl, DefaultFirecrawlURL}, {&endpoints.YouAPI, DefaultYouAPIURL},
 		{&endpoints.YouIndex, DefaultYouIndexURL}, {&endpoints.YouMCP, DefaultYouMCPURL},
-		{&endpoints.DuckDuckGo, DefaultDuckDuckGo},
+		{&endpoints.DuckDuckGo, DefaultDuckDuckGo}, {&endpoints.Exa, DefaultExaURL},
 	} {
 		if *field.value == "" {
 			*field.value = field.fallback
@@ -193,6 +194,10 @@ func (p *providers) run(ctx context.Context, b Backend, key string, request Requ
 		outcome, err = p.firecrawlSearch(ctx, key, request)
 	case b == Firecrawl:
 		outcome, err = p.firecrawlScrape(ctx, key, request.URL)
+	case b == Exa && request.Command == CommandSearch:
+		outcome, err = p.exaSearch(ctx, key, request)
+	case b == Exa:
+		outcome, err = p.exaContents(ctx, key, request.URL)
 	case b == You && request.Command == CommandSearch:
 		outcome, err = p.youSearch(ctx, key, request)
 	case b == You:

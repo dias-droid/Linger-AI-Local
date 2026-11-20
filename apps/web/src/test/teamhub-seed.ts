@@ -1753,7 +1753,7 @@ export function createExternalSourceSeed() {
  * is the default, You.com also works without a key, and direct opens pages.
  */
 export function createWebSearchSeed(): TeamHubWebSearchBackendList {
-  const keyed: Omit<TeamHubWebSearchBackend, "id" | "name"> = {
+  const keyed: Omit<TeamHubWebSearchBackend, "description" | "id" | "name"> = {
     commands: ["search", "open"],
     filters: ["recency", "site"],
     keyless: false,
@@ -1771,6 +1771,7 @@ export function createWebSearchSeed(): TeamHubWebSearchBackendList {
         ...keyed,
         commands: ["search"],
         free_tier: "100 searches a day without a key",
+        description: "Web search API for AI agents and LLMs.",
         id: "you",
         key_url: "https://you.com/platform",
         keyless: true,
@@ -1782,6 +1783,7 @@ export function createWebSearchSeed(): TeamHubWebSearchBackendList {
       },
       {
         ...keyed,
+        description: "The real-time search engine for AI agents.",
         free_tier: "1,000 credits a month",
         id: "tavily",
         key_url: "https://app.tavily.com/home",
@@ -1790,6 +1792,7 @@ export function createWebSearchSeed(): TeamHubWebSearchBackendList {
       {
         ...keyed,
         commands: ["search"],
+        description: "Web search API with an index of 40+ billion pages.",
         free_tier: "$5 credit a month",
         id: "brave",
         key_url: "https://api-dashboard.search.brave.com",
@@ -1798,6 +1801,7 @@ export function createWebSearchSeed(): TeamHubWebSearchBackendList {
       },
       {
         ...keyed,
+        description: "Web data API for AI agents.",
         free_tier: "1,000 credits a month",
         id: "firecrawl",
         key_url: "https://www.firecrawl.dev/app/api-keys",
@@ -1805,7 +1809,17 @@ export function createWebSearchSeed(): TeamHubWebSearchBackendList {
       },
       {
         ...keyed,
+        description: "Search API for AI agents that need real-time web data.",
+        free_tier: "$10 credit a month",
+        id: "exa",
+        key_url: "https://dashboard.exa.ai/api-keys",
+        name: "Exa",
+        official_key_check: false,
+      },
+      {
+        ...keyed,
         commands: ["search"],
+        description: "Private search from the Internet privacy company.",
         id: "duckduckgo",
         keyless: true,
         max_limit: 10,
@@ -1820,6 +1834,7 @@ export function createWebSearchSeed(): TeamHubWebSearchBackendList {
       {
         ...keyed,
         commands: ["open"],
+        description: "Reads pages from the Agent's own computer.",
         filters: [],
         id: "direct",
         keyless: true,

@@ -6,12 +6,13 @@ components:
         A web search backend. duckduckgo searches without a key. direct opens
         pages only and is fetched by the Agent CLI on the Agent's computer;
         TeamHub never fetches a page itself.
-      enum: [tavily, brave, firecrawl, you, duckduckgo, direct]
+      enum: [tavily, brave, firecrawl, exa, you, duckduckgo, direct]
       x-enum-varnames:
         [
           WebSearchBackendIdTavily,
           WebSearchBackendIdBrave,
           WebSearchBackendIdFirecrawl,
+          WebSearchBackendIdExa,
           WebSearchBackendIdYou,
           WebSearchBackendIdDuckduckgo,
           WebSearchBackendIdDirect,
@@ -19,23 +20,25 @@ components:
     WebSearchKeyBackend:
       type: string
       description: A backend that takes an API key saved in the product.
-      enum: [tavily, brave, firecrawl, you]
+      enum: [tavily, brave, firecrawl, exa, you]
       x-enum-varnames:
         [
           WebSearchKeyBackendTavily,
           WebSearchKeyBackendBrave,
           WebSearchKeyBackendFirecrawl,
+          WebSearchKeyBackendExa,
           WebSearchKeyBackendYou,
         ]
     WebSearchSearchBackend:
       type: string
       description: A backend that runs searches.
-      enum: [tavily, brave, firecrawl, you, duckduckgo]
+      enum: [tavily, brave, firecrawl, exa, you, duckduckgo]
       x-enum-varnames:
         [
           WebSearchSearchBackendTavily,
           WebSearchSearchBackendBrave,
           WebSearchSearchBackendFirecrawl,
+          WebSearchSearchBackendExa,
           WebSearchSearchBackendYou,
           WebSearchSearchBackendDuckduckgo,
         ]
@@ -120,7 +123,8 @@ components:
             ]
           description: >-
             no_key: no key is saved; not_reported: there is no usage
-            endpoint to read (keyless You.com, direct); not_observed: Brave has answered no call yet;
+            endpoint to read (keyless You.com, DuckDuckGo, Exa, direct);
+            not_observed: Brave has answered no call yet;
             key_rejected: the provider refused the saved key;
             provider_unavailable: the usage endpoint did not answer in time.
     WebSearchBackend:
@@ -135,6 +139,7 @@ components:
         [
           id,
           name,
+          description,
           tier,
           commands,
           filters,
@@ -152,6 +157,11 @@ components:
           type: string
           minLength: 1
           maxLength: 80
+        description:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: The provider's own one-line description of its product.
         tier:
           type: string
           enum: [key, free, none]
@@ -359,11 +369,12 @@ components:
           maxLength: 2048
         backend:
           type: string
-          enum: [tavily, firecrawl, you]
+          enum: [tavily, firecrawl, exa, you]
           x-enum-varnames:
             [
               WebOpenRequestBackendTavily,
               WebOpenRequestBackendFirecrawl,
+              WebOpenRequestBackendExa,
               WebOpenRequestBackendYou,
             ]
           description: A backend that opens pages; direct is fetched by the CLI.

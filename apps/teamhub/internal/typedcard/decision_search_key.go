@@ -7,14 +7,17 @@ import (
 	"errors"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/messagecreation"
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/store"
+	"github.com/simplexai-labs/linger/apps/teamhub/internal/websearch"
 )
 
-// searchKeyBackends are the web search backends a key card may show.
-var searchKeyBackends = []string{"tavily", "brave", "firecrawl", "you"}
+// searchKeyBackend reports whether a key card may show the backend: one that
+// takes an API key.
+func searchKeyBackend(backend string) bool { return websearch.KeyBackend(websearch.Backend(backend)) }
 
 // SearchKeyDecision asks a Human for a web search API key. Backend is the one
 // the card shows: the backend the Agent's command named, or, when it named
@@ -53,7 +56,7 @@ type searchKeyView struct {
 
 func (command SearchKeyDecision) draft() (decisionDraft, error) {
 	prompt, err := normalizeConnectionPrompt(command.Prompt)
-	if err != nil || !slices.Contains(searchKeyBackends, command.Backend) ||
+	if err != nil || !searchKeyBackend(command.Backend) ||
 		!slices.Contains([]string{"missing", "rejected", "free_limit"}, command.Reason) {
 		return decisionDraft{}, ErrInvalid
 	}
@@ -180,7 +183,7 @@ type SearchKeyReplay struct {
 // key was added from also records its replay. The key belongs to the
 // deployment, so it answers the cards of every tenant.
 func (s *Service) SettleSearchKeys(ctx context.Context, backend string, replay *SearchKeyReplay) error {
-	if !slices.Contains(searchKeyBackends, backend) {
+	if !searchKeyBackend(backend) {
 		return ErrInvalid
 	}
 	rows, err := s.pool.Query(ctx, `SELECT id FROM decisions WHERE kind='search_key' AND status='pending' ORDER BY id`)
@@ -222,11 +225,13 @@ type searchKeyPayload struct {
 	ErrorCode        string          `json:"error_code,omitempty"`
 }
 
-var searchKeyNames = map[string]struct{ name, key string }{
-	"tavily":    {"Tavily", "a Tavily API key"},
-	"brave":     {"Brave Search", "a Brave Search key"},
-	"firecrawl": {"Firecrawl", "a Firecrawl API key"},
-	"you":       {"You.com", "a You.com API key"},
+// searchKeyName is a backend's API key with its article, as the notice says it.
+func searchKeyName(backend string) string {
+	name := websearch.DisplayName(websearch.Backend(backend))
+	if strings.ContainsAny(name[:1], "AEIOU") {
+		return "an " + name + " API key"
+	}
+	return "a " + name + " API key"
 }
 
 // searchKeyNoticeText tells the waiting Agent how its key card ended. The
@@ -267,10 +272,10 @@ func searchKeyNoticeText(decisionID string, decision decisionRecord, answer deci
 		}
 		configured := answer.Backend
 		payload = searchKeyPayload{Decision: "configured", Backend: configured, Results: replay.Results, Page: replay.Page, ErrorCode: replay.ErrorCode}
-		text = who + " added " + searchKeyNames[configured].key
+		text = who + " added " + searchKeyName(configured)
 		if requested != "" && requested != configured {
 			payload.RequestedBackend = requested
-			text += " instead of " + searchKeyNames[requested].name
+			text += " instead of " + websearch.DisplayName(websearch.Backend(requested))
 		}
 		action := "search for " + strconv.Quote(request.Query)
 		if request.Command == "open" {
