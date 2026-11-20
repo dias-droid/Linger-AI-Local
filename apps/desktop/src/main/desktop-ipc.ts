@@ -195,7 +195,14 @@ export class DesktopIpcModule implements Module {
       }
     });
 
-    handle(IPC.voiceWindowShowMain, () => windows.show());
+    // The way back from the floating voice window, which stays up while the
+    // main window is minimized, hidden to the tray or behind another app.
+    // macOS brings a window forward only within the app, so the app comes
+    // forward too.
+    handle(IPC.voiceWindowShowMain, () => {
+      windows.show();
+      if (process.platform === "darwin") app.focus({ steal: true });
+    });
     handle(IPC.updateState, () => updateView(updater.state()));
     handle(IPC.updateInstall, () => updater.install());
     handle(IPC.updateCheck, () => updater.check());

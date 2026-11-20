@@ -6,7 +6,9 @@ import type { UpdateState } from "./updater.js";
 const handlers = vi.hoisted(
   () => new Map<string, (event: unknown, ...args: unknown[]) => unknown>(),
 );
+const focusApp = vi.hoisted(() => vi.fn());
 vi.mock("electron", () => ({
+  app: { focus: focusApp },
   ipcMain: {
     handle: (
       channel: string,
@@ -45,6 +47,7 @@ const fixture = async (
   const windows = {
     ...stubModule("WindowManager"),
     webContents: () => ({ send }),
+    show: vi.fn(),
   };
   const bus = new EventBus();
   const host = testHost(
@@ -68,7 +71,7 @@ const fixture = async (
     updateState = state;
     bus.emit("update.changed", state.kind);
   };
-  return { host, local, updater, send, setUpdate, invoke };
+  return { host, local, updater, send, setUpdate, invoke, windows };
 };
 
 afterEach(() => handlers.clear());
@@ -116,6 +119,23 @@ describe("DesktopIpcModule local account", () => {
         "The local account file must be private and owned by the current user (chmod 600).",
     });
     expect(JSON.stringify(result)).not.toContain(PASSWORD);
+    await f.host.stop("quit");
+  });
+});
+
+describe("DesktopIpcModule voice window", () => {
+  it("shows the main window for the server's page only", async () => {
+    const f = await fixture();
+    await f.invoke(IPC.voiceWindowShowMain);
+    expect(f.windows.show).toHaveBeenCalledOnce();
+    // macOS raises a window only inside the active app.
+    expect(focusApp).toHaveBeenCalledTimes(
+      process.platform === "darwin" ? 1 : 0,
+    );
+    expect(() =>
+      f.invoke(IPC.voiceWindowShowMain, "https://evil.example.com"),
+    ).toThrow("Not allowed");
+    expect(f.windows.show).toHaveBeenCalledOnce();
     await f.host.stop("quit");
   });
 });

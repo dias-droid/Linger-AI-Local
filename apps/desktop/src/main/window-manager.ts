@@ -5,6 +5,7 @@ import {
   nativeImage,
   net,
   protocol,
+  screen,
   session,
   shell,
   type BaseWindowConstructorOptions,
@@ -42,7 +43,11 @@ import {
   windowLoadDecision,
   voiceWindowRequest,
 } from "./navigation.js";
-import { acceptVoiceWindow } from "./voice-window.js";
+import {
+  VOICE_WINDOW_MIN,
+  acceptVoiceWindow,
+  voiceWindowPosition,
+} from "./voice-window.js";
 
 // Must run before app "ready".
 export const registerAppScheme = (): void => {
@@ -627,6 +632,8 @@ export class WindowManagerModule implements Module {
             title: "Linger",
             // The page asks for the size of its content, as in a browser.
             useContentSize: true,
+            minWidth: VOICE_WINDOW_MIN.width,
+            minHeight: VOICE_WINDOW_MIN.height,
             minimizable: false,
             maximizable: false,
             fullscreenable: false,
@@ -647,6 +654,12 @@ export class WindowManagerModule implements Module {
       );
       if (!close) return;
       this.#closeVoiceWindow = close;
+      const main = this.#window;
+      if (main && !main.isDestroyed()) {
+        const { workArea } = screen.getDisplayMatching(main.getBounds());
+        const { x, y } = voiceWindowPosition(child.getBounds(), workArea);
+        child.setPosition(x, y);
+      }
       child.on("closed", () => {
         if (this.#closeVoiceWindow === close)
           this.#closeVoiceWindow = undefined;
