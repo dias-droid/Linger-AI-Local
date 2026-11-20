@@ -55,24 +55,38 @@ for help when setup fails.
 
 ## Keep Computer permissions after an update
 
-Each desktop update replaces the app binary. macOS records Screen Recording and
-Accessibility grants against that binary's code signature, and an unsigned build
-has no signature that carries them to the next version. After an update,
-**System Settings › Privacy & Security** can still show **Linger** turned on
-while a Room's permission card reports **Computer use (CuaDriver) · Screen
-Recording — Not allowed**, and computer actions fail.
+Computer use involves two apps with their own grants: **CuaDriver**, which
+captures the screen and sends input, and **Linger**, which starts it. The
+permission card's **Computer use (CuaDriver)** rows read what CuaDriver reports
+about itself; macOS may also evaluate Linger, the app that starts CuaDriver, for
+the same capture. Each grant is recorded against one app's identity, and an
+update can leave a recorded entry no longer satisfying the check even though
+**System Settings › Privacy & Security** still shows the switch on. CuaDriver
+also caches its Screen Recording reading for the life of its process, so only a
+restart sees a grant made since.
+
+Symptoms: a Room's permission card reports **Computer use (CuaDriver) · Screen
+Recording — Not allowed** while System Settings shows the switches on, computer
+actions fail, and a message can later fail with `The Runtime process could not
+be confirmed stopped`.
 
 Record the grants again:
 
-1. In **System Settings › Privacy & Security › Screen Recording**, switch
-   **Linger** off and back on, and approve the prompt.
-2. Do the same under **Accessibility**.
-3. Quit Linger and open it again.
+1. In **System Settings › Privacy & Security › Screen Recording**, switch the
+   **CuaDriver** row off and back on. If the row is missing, add it with **+**:
+   `Linger.app/Contents/Resources/cli/computer-tools/cua/CuaDriver.app`. Do the
+   same for **Linger**.
+2. Repeat both rows under **Accessibility**.
+3. Quit Linger and open it again, so CuaDriver starts with the new records.
 
-From a terminal, `tccutil reset ScreenCapture com.simplexai.linger.desktop.preview`
-and `tccutil reset Accessibility com.simplexai.linger.desktop.preview` clear the
-stale record instead, then grant again from the card.
+From a terminal, clear both identities instead and grant again afterwards:
 
-Signed builds will carry the grants across updates; until then, repeat these
-steps after each update while the card reports **Not allowed** and System
-Settings shows Linger enabled.
+```bash
+tccutil reset ScreenCapture com.trycua.driver
+tccutil reset Accessibility com.trycua.driver
+tccutil reset ScreenCapture com.simplexai.linger.desktop.preview
+tccutil reset Accessibility com.simplexai.linger.desktop.preview
+```
+
+Signed desktop builds will carry the grants across updates; until then, repeat
+these steps after an update while the card reports **Not allowed**.
