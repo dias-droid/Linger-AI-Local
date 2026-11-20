@@ -1,6 +1,6 @@
 /* oxlint-disable react-doctor/only-export-components -- Route factories and route surfaces share one app-owned interface. */
 import type { QueryClient } from "@tanstack/react-query";
-import { lazy, Suspense, useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import {
   redirect,
   type RouteObject,
@@ -34,7 +34,11 @@ import {
 } from "@/features/rooms/room-queries";
 import { requireRoomRouteParam } from "@/features/rooms/room-route-params";
 import { RoomShell } from "@/features/rooms/room-shell";
-import { RoomSurface } from "@/features/rooms/room-surface";
+import {
+  LazyRoomChat,
+  preloadRoomChat,
+  RoomSurface,
+} from "@/features/rooms/room-surface";
 import { routeLayoutKey } from "@/features/rooms/route-layout-key";
 import { RoomChatLoading } from "@/features/rooms/route-loading-surface";
 import {
@@ -66,22 +70,46 @@ export function createAppRoutes(
       HydrateFallback: InitialAppLoading,
       loader: withAuthenticationDeadline(async ({ request }) => {
         try {
-          await queryClient.ensureQueryData(teamHubSessionQueryOptions(client));
-          const tenants = await queryClient.ensureQueryData(
-            teamHubTenantsQueryOptions(client),
-          );
-          const tenant = tenants.items[0];
+          const [sessionResult, tenantsResult] = await Promise.allSettled([
+            queryClient.fetchQuery(teamHubSessionQueryOptions(client)),
+            queryClient.fetchQuery(teamHubTenantsQueryOptions(client)),
+          ]);
 
-          if (!tenant) {
+          // Inspect session before tenants so a 401 always redirects to /login
+          // even when a parallel tenants request failed first with a 5xx/network error.
+          if (sessionResult.status === "rejected") throw sessionResult.reason;
+          if (tenantsResult.status === "rejected") throw tenantsResult.reason;
+
+          const session = sessionResult.value;
+          const tenants = tenantsResult.value;
+          const targetTenant = tenants.items[0];
+
+          if (!targetTenant) {
             throw new Error("This Account has no Space.");
           }
 
-          const roomId = await landingRoomId(queryClient, client, tenant.id);
+          if (!request.signal.aborted) {
+            queryClient.setQueryData(
+              teamHubIdentityQueryOptions(client).queryKey,
+              session.identity,
+            );
+            queryClient.setQueryData(
+              teamHubTenantQueryOptions(client, targetTenant.id).queryKey,
+              targetTenant,
+            );
+          }
+
+          void preloadRoomChat();
+          const roomId = await landingRoomId(
+            queryClient,
+            client,
+            targetTenant.id,
+          );
 
           throw redirect(
             roomId
-              ? `/t/${tenant.id}/rooms/${roomId}/chat`
-              : `/t/${tenant.id}/rooms`,
+              ? `/t/${targetTenant.id}/rooms/${roomId}/chat`
+              : `/t/${targetTenant.id}/rooms`,
           );
         } catch (error) {
           request.signal.throwIfAborted();
@@ -169,6 +197,7 @@ export function createAppRoutes(
           ErrorBoundary: PanelRouteErrorSurface,
           loader: withAuthenticationDeadline(async ({ params, request }) => {
             const tenantId = requireRoomRouteParam(params.tenantId, "Tenant");
+            void preloadRoomChat();
             const roomId = await landingRoomId(queryClient, client, tenantId);
 
             if (roomId) {
@@ -188,6 +217,7 @@ export function createAppRoutes(
           loader: ({ params }) => {
             const tenantId = requireRoomRouteParam(params.tenantId, "Tenant");
             const roomId = requireRoomRouteParam(params.roomId, "Room");
+            void preloadRoomChat();
             // Direct-room composers need this directory. Start it alongside
             // the authoritative Room requests without making it a route gate.
             void queryClient.prefetchQuery(
@@ -384,10 +414,6 @@ async function loadMeetingPage() {
   const { MeetingPage } = await import("@/features/memory/meeting-page");
   return { Component: MeetingPage };
 }
-
-const LazyRoomChat = lazy(async () => ({
-  default: (await import("@/features/rooms/chat/room-chat")).RoomChat,
-}));
 
 interface RoomBootstrapData {
   initialRoomSeq: number;

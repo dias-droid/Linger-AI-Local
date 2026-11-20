@@ -16,6 +16,7 @@ export const runtimeLabels: Record<TeamHubLocalRuntimeType, string> = {
   claude: "Claude Code",
   codex: "Codex",
   pi: "Pi",
+  antigravity: "Antigravity",
 };
 
 /** The full placement plus model an Agent moves to on another Local Computer. */

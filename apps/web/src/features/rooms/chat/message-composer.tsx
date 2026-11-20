@@ -634,6 +634,15 @@ function ComposerEditor({
   controller: MessageComposerController;
   peek: ReturnType<typeof useComposerPeek>;
 }) {
+  // The overlay keeps drawing mentions while an input method composes; it
+  // underlines the uncommitted text itself, as the hidden textarea would.
+  const [composition, setComposition] = useState<ComposerComposition | null>(
+    null,
+  );
+  // An input method may recompose text already in the draft, as Android
+  // keyboards do when the caret backs into a word, so the composed range is
+  // read from the caret after each input, never from where composition began.
+  const composedLength = useRef(0);
   return (
     <div className="message-composer-editor relative">
       <textarea
@@ -662,18 +671,32 @@ function ComposerEditor({
             event.target.selectionStart ?? event.target.value.length,
           );
         }}
-        onCompositionEnd={(event) => {
+        onCompositionEnd={() => {
           isComposing.current = false;
-          delete event.currentTarget.dataset.composing;
+          setComposition(null);
         }}
-        onCompositionStart={(event) => {
+        onCompositionStart={() => {
           isComposing.current = true;
-          event.currentTarget.dataset.composing = "true";
+          composedLength.current = 0;
+          setComposition(null);
         }}
         // Input-method candidates count as typing before they commit.
-        onCompositionUpdate={(event) =>
-          peek.typed(event.currentTarget.value.length)
-        }
+        onCompositionUpdate={(event) => {
+          peek.typed(event.currentTarget.value.length);
+          composedLength.current = event.data.length;
+        }}
+        // Every composition step fires input, even one that leaves the value
+        // as it was, which change skips.
+        onInput={(event) => {
+          if (!isComposing.current) return;
+          const end =
+            event.currentTarget.selectionStart ??
+            event.currentTarget.value.length;
+          setComposition({
+            start: Math.max(0, end - composedLength.current),
+            end,
+          });
+        }}
         onKeyDown={handleKeyDown}
         onPaste={(event) => {
           peek.pasted();
@@ -695,6 +718,7 @@ function ComposerEditor({
       />
       <ComposerHighlight
         body={visibleBody}
+        composition={composition}
         documentOptions={documentOptions}
         documentReferences={documentReferences}
         highlightContentRef={highlightContentRef}
@@ -879,8 +903,14 @@ type ComposerReferenceMatch =
       token: string;
     };
 
+interface ComposerComposition {
+  start: number;
+  end: number;
+}
+
 function ComposerHighlight({
   body,
+  composition,
   documentOptions,
   documentReferences,
   highlightContentRef,
@@ -891,6 +921,7 @@ function ComposerHighlight({
   skillReferences,
 }: {
   body: string;
+  composition: ComposerComposition | null;
   documentOptions: MessageDocumentOption[];
   documentReferences: RoomComposerDocumentReference[];
   highlightContentRef: RefObject<HTMLDivElement | null>;
@@ -910,15 +941,35 @@ function ComposerHighlight({
   );
   const content = [];
   let cursor = 0;
-
-  for (const reference of references) {
-    if (reference.start > cursor) {
+  const pushText = (start: number, end: number) => {
+    const marked =
+      composition && composition.end > composition.start
+        ? {
+            start: Math.max(start, composition.start),
+            end: Math.min(end, composition.end),
+          }
+        : null;
+    if (!marked || marked.start >= marked.end) {
       content.push(
-        <span aria-hidden="true" key={`text-${cursor}`}>
-          {body.slice(cursor, reference.start)}
+        <span aria-hidden="true" key={`text-${start}`}>
+          {body.slice(start, end)}
         </span>,
       );
+      return;
     }
+    content.push(
+      <span aria-hidden="true" key={`text-${start}`}>
+        {body.slice(start, marked.start)}
+        <span className="message-composer-composition">
+          {body.slice(marked.start, marked.end)}
+        </span>
+        {body.slice(marked.end, end)}
+      </span>,
+    );
+  };
+
+  for (const reference of references) {
+    if (reference.start > cursor) pushText(cursor, reference.start);
     if (reference.kind === "skill") {
       content.push(
         <SkillReferenceToken
@@ -995,13 +1046,7 @@ function ComposerHighlight({
     cursor = reference.end;
   }
 
-  if (cursor < body.length) {
-    content.push(
-      <span aria-hidden="true" key={`text-${cursor}`}>
-        {body.slice(cursor)}
-      </span>,
-    );
-  }
+  if (cursor < body.length) pushText(cursor, body.length);
 
   return (
     <div

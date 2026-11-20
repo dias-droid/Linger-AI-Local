@@ -21,6 +21,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 MACHO = b"\xcf\xfa\xed\xfe" + b"\0" * 28
 PLAYWRIGHT_ENTRY = "node_modules/@playwright/mcp/cli.js"
 PI_EXTENSION = "extensions/pi-mcp.mjs"
+# A native Windows checkout cannot set POSIX executable bits on fixtures.
+HOST_FIXTURE_TARGET = "win32-x64" if os.name == "nt" else "linux-x64"
 # The pins the shared validator holds the manifest to.
 FROZEN = json.loads(subprocess.check_output([
     "node", "--input-type=module", "-e",
@@ -81,8 +83,11 @@ class ComputerToolsTest(unittest.TestCase):
 
     def test_accepts_the_staged_tools_of_every_shipped_target(self):
         for target in ("darwin-arm64", "linux-x64", "win32-x64"):
-            resources, _ = self.resources(target)
-            computer_tools.verify(resources, target)
+            with self.subTest(target=target):
+                if os.name == "nt" and not target.startswith("win32-"):
+                    self.skipTest("Windows cannot make POSIX executable fixture files")
+                resources, _ = self.resources(target)
+                computer_tools.verify(resources, target)
 
     def test_rejects_resources_without_the_tools(self):
         resources = os.path.join(self.root, "resources")
@@ -117,13 +122,14 @@ class ComputerToolsTest(unittest.TestCase):
 
     def test_copy_places_the_staged_tools_next_to_the_daemon_folder(self):
         staged = os.path.join(self.root, "dist", "computer-tools")
-        stage(os.path.join(staged, "linux-x64"), "linux-x64")
+        target = HOST_FIXTURE_TARGET
+        stage(os.path.join(staged, target), target)
         resources = os.path.join(self.root, "app", "resources")
         os.makedirs(resources)
-        computer_tools.copy(resources, "linux-x64", staged=staged)
-        computer_tools.verify(resources, "linux-x64")
+        computer_tools.copy(resources, target, staged=staged)
+        computer_tools.verify(resources, target)
         with self.assertRaises(SystemExit):
-            computer_tools.copy(resources, "win32-x64", staged=staged)
+            computer_tools.copy(resources, "darwin-arm64", staged=staged)
 
     def test_refresh_records_only_resigned_macho_files(self):
         resources, tools = self.resources("darwin-arm64")
@@ -135,16 +141,17 @@ class ComputerToolsTest(unittest.TestCase):
         with self.assertRaisesRegex(computer_tools.Invalid, "do not match their manifest"):
             computer_tools.verify(resources, "darwin-arm64")
 
-        resources, tools = self.resources("linux-x64")
+        target = HOST_FIXTURE_TARGET
+        resources, tools = self.resources(target)
         with open(os.path.join(tools, "node_modules/native/prebuilt.node"), "ab") as out:
             out.write(b"signature")
         computer_tools.refresh_signed(resources)
-        computer_tools.verify(resources, "linux-x64")
+        computer_tools.verify(resources, target)
         with open(os.path.join(tools, PLAYWRIGHT_ENTRY), "ab") as out:
             out.write(b"//")
         computer_tools.refresh_signed(resources)
         with self.assertRaisesRegex(computer_tools.Invalid, "do not match their manifest"):
-            computer_tools.verify(resources, "linux-x64")
+            computer_tools.verify(resources, target)
 
     def test_finished_archives_must_hold_the_tools(self):
         resources, _ = self.resources("linux-x64")

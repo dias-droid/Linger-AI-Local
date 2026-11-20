@@ -1,5 +1,4 @@
 import { operationHeaders, teamHubData } from "./http-client.js";
-import path from "node:path";
 import type {
   CommandDefinition,
   NormalizedCommandInput,
@@ -400,7 +399,7 @@ export const documentCommandDefinitions: readonly CommandDefinition[] = [
       return {
         input: {
           name,
-          target_path: path.resolve(reader.cwd, filename),
+          target_path: reader.localPath(filename),
           ...(format === undefined ? {} : { format }),
           ...(option(args, "--raw") === undefined ? {} : { raw: true }),
         },
@@ -596,7 +595,7 @@ export const documentCommandDefinitions: readonly CommandDefinition[] = [
       )
         throw inputError("Provide a tracked local working-copy path.");
       return target(
-        { document_id, file_path: path.resolve(reader.cwd, filename) },
+        { document_id, file_path: reader.localPath(filename) },
         "document",
         "document_id",
       );

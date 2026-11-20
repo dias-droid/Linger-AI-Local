@@ -26,6 +26,12 @@ export function LocalRuntimeAuthenticationGuidance({
           auth.json.
         </p>
       )}
+      {runtimeType === "antigravity" && (
+        <p className="mt-1 text-muted-foreground">
+          Antigravity can also use a Gemini API key set as GEMINI_API_KEY for
+          Local Computer.
+        </p>
+      )}
     </>
   );
 }

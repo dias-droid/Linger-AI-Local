@@ -194,7 +194,8 @@ func ValidAgentRuntimeConfig(runtime httpapi.AgentRuntimeConfig) bool {
 func validLocalRuntimeType(runtimeType httpapi.LocalRuntimeType) bool {
 	return runtimeType == httpapi.LocalRuntimeTypeCodex ||
 		runtimeType == httpapi.LocalRuntimeTypeClaude ||
-		runtimeType == httpapi.LocalRuntimeTypePi
+		runtimeType == httpapi.LocalRuntimeTypePi ||
+		runtimeType == httpapi.LocalRuntimeTypeAntigravity
 }
 
 func agentRuntimeConfig(registration store.AgentRegistration) httpapi.AgentRuntimeConfig {

@@ -4,6 +4,7 @@ import { parseArguments } from "./command-input.js";
 import type { CommandInputReader } from "./command-definition.js";
 const reader: CommandInputReader = {
   cwd: "/work",
+  localPath: (source) => source,
   text: vi.fn(async () => "  Body é\n"),
   json: vi.fn(async () => ({ thread_id: "thread_one" })),
 };

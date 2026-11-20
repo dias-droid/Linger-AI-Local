@@ -35,7 +35,10 @@ take precedence.
   Agent Runtime (Codex, Claude or Pi, using its default model) through the
   Daemon's one-shot `model.invoke`, for tool-less service work such as Agent
   Memory, also used by Memory, by the LLM Wiki, and exposed
-  to TeamHub as `POST /v1/model-calls`.
+  to TeamHub as `POST /v1/model-calls`. Antigravity has no `model.invoke`, so
+  a call for an Antigravity owner runs on Claude on the same Computer, or on
+  Codex when only Codex is ready. Agent Memory skips Antigravity Agents,
+  because it reads native history that Antigravity does not expose.
   It is not a Runtime turn and never creates a Context, Local Run, or
   Operation. Callers name an owner (or an Agent placement) and a reasoning
   effort; never add a model name, gateway, or model environment variable. Pi

@@ -4,7 +4,7 @@ import {
   ArrowUpRight01Icon,
   RotateClockwiseIcon,
 } from "@hugeicons/core-free-icons";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { isDesktopShell } from "@/app/desktop-shell";
 import { Icon } from "@/components/ui/icon";
@@ -13,10 +13,30 @@ import { shouldOpenUrlExternally } from "../url-preview-policy";
 
 const previewSandbox = "allow-forms allow-scripts";
 
+// The desktop app keeps the framing rules of a frame named with this prefix
+// and reports a refusal through `window.lingerDesktop.preview`. It must match
+// the desktop's PREVIEW_FRAME_PREFIX.
+const PREVIEW_FRAME_PREFIX = "linger-url-preview:";
+
+interface DesktopPreview {
+  onFrameRefused(
+    callback: (frameName: string, url: string) => void,
+  ): () => void;
+}
+
+function desktopPreview() {
+  return (window as { lingerDesktop?: { preview?: DesktopPreview } })
+    .lingerDesktop?.preview;
+}
+
+interface RefusedFrame {
+  frameKey: string;
+  url: string;
+}
+
 // The development server proxies previews, so its frames share the app's
-// origin and get no storage. The desktop app lets sites be framed directly
-// (its window drops their frame refusals), even when it runs a development
-// server on this computer.
+// origin and get no storage. The desktop app frames sites directly, even when
+// it runs a development server on this computer.
 function previewProxied() {
   return import.meta.env.DEV && !isDesktopShell();
 }
@@ -83,10 +103,22 @@ function UrlPreviewSession({
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const frameName = PREVIEW_FRAME_PREFIX + useId();
+  const [refusedFrame, setRefusedFrame] = useState<RefusedFrame | null>(null);
   const currentUrl = history[index];
+  const frameKey = `${currentUrl}:${reloadKey}`;
+  const refused = refusedFrame?.frameKey === frameKey ? refusedFrame : null;
   const externalOnly = currentUrl
     ? shouldOpenUrlExternally(new URL(currentUrl))
     : false;
+
+  useEffect(
+    () =>
+      desktopPreview()?.onFrameRefused((name, url) => {
+        if (name === frameName) setRefusedFrame({ frameKey, url });
+      }),
+    [frameKey, frameName],
+  );
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
@@ -209,10 +241,29 @@ function UrlPreviewSession({
           <p className="p-4 text-sm text-muted-foreground">
             Open this address in a browser tab to view it.
           </p>
+        ) : refused ? (
+          <div className="flex flex-col items-start gap-2 p-4 text-sm">
+            <p className="font-medium text-foreground">
+              Open this site in a new tab
+            </p>
+            <p className="text-muted-foreground">
+              {new URL(refused.url).host} does not allow being shown in the app.
+            </p>
+            <a
+              className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+              href={refused.url}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              Open in new tab
+              <Icon icon={ArrowUpRight01Icon} size={14} />
+            </a>
+          </div>
         ) : (
           <iframe
             className="h-full w-full border-0 bg-white"
-            key={`${currentUrl}:${reloadKey}`}
+            key={frameKey}
+            name={frameName}
             ref={frameRef}
             sandbox={
               previewProxied()

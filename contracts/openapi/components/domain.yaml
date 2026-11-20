@@ -121,9 +121,14 @@ components:
       default: general
     LocalRuntimeType:
       type: string
-      enum: [codex, claude, pi]
+      enum: [codex, claude, pi, antigravity]
       x-enum-varnames:
-        [LocalRuntimeTypeCodex, LocalRuntimeTypeClaude, LocalRuntimeTypePi]
+        [
+          LocalRuntimeTypeCodex,
+          LocalRuntimeTypeClaude,
+          LocalRuntimeTypePi,
+          LocalRuntimeTypeAntigravity,
+        ]
     AgentRuntimePlacement:
       type: object
       additionalProperties: false

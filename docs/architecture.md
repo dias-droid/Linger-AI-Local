@@ -13,7 +13,7 @@ figure.
 | Runtime → teamhub CLI ↔ Rooms / Chat         | messages / files, tasks / routines / more actions | The CLI calls the server directly, and the server checks each call against the agent's current permissions                                                                                                                                                                    |
 | Runtime → Guardrail → Cua, Playwright, Shell | click, type · browse · commands, as you           | Rule-based checks, then an LLM review; Cua, Playwright and the Shell then act as the user                                                                                                                                                                                     |
 
-<sub>Pi runs without review.</sub>
+<sub>Pi runs without review. Antigravity is reviewed when it asks for a tool permission.</sub>
 
 ## Inside Rooms / Chat
 
@@ -73,6 +73,7 @@ and runs them.
 │  files from the          Codex app-server ·          computer and browser    │
 │  server, checked         Claude stream-json ·        MCP servers, one set    │
 │  by SHA-256              Pi RPC; 8 parked each       per run                 │
+│                          Antigravity ACP                                     │
 └───────┬───────────────────────────┬───────────────────────────┬──────────────┘
         ▼                           ▼                           ▼
  Agent workspace                 Runtime                Cua · Playwright

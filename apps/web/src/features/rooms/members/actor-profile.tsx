@@ -712,7 +712,12 @@ function PanelAgentRuntimeDetails({
   onEdit: (field?: AgentRuntimeField) => void;
 }) {
   const type = placement?.runtime_type ?? "codex";
-  const name = { codex: "Codex", claude: "Claude Code", pi: "Pi" }[type];
+  const name = {
+    codex: "Codex",
+    claude: "Claude Code",
+    pi: "Pi",
+    antigravity: "Antigravity",
+  }[type];
   const computer =
     localRuntime?.display_name || placement?.computer_id || "Local Computer";
   const status = localRuntime?.computer_status ?? "unknown";

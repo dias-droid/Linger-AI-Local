@@ -17,6 +17,9 @@ var MinimumVersions = map[string]string{
 	"codex":  "0.100.0",
 	"claude": "2.1.282",
 	"pi":     "1.2.0",
+	// The first release whose ACP server was verified to offer model and
+	// thinking-level options and the system prompt append.
+	"antigravity": "1.5.12",
 }
 
 const (

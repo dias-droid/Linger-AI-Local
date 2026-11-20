@@ -1,5 +1,5 @@
 // Package native adapts locally installed coding CLIs (Codex, Claude Code,
-// Pi) to the Computer Daemon's Operation model.
+// Pi, Antigravity) to the Computer Daemon's Operation model.
 package native
 
 import (
@@ -13,7 +13,7 @@ import (
 )
 
 // Kinds lists the Runtime kinds this package can open.
-var Kinds = []string{"claude", "codex", "pi"}
+var Kinds = []string{"claude", "codex", "pi", "antigravity"}
 
 func Supports(kind string) bool {
 	for _, known := range Kinds {
@@ -36,6 +36,8 @@ func Open(kind string, profile Profile) (Runtime, error) {
 		return newCodexRuntime(profile), nil
 	case "pi":
 		return newPiRuntime(profile), nil
+	case "antigravity":
+		return newAntigravityRuntime(profile), nil
 	}
 	return nil, fmt.Errorf("native runtime %q is unsupported", kind)
 }

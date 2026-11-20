@@ -651,7 +651,7 @@ func canonicalJSONArray(raw json.RawMessage) ([]byte, error) {
 
 // IsSupportedLocalRuntimeType excludes historical providers from active reads and admission.
 func IsSupportedLocalRuntimeType(runtimeType string) bool {
-	return slices.Contains([]string{"codex", "claude", "pi"}, runtimeType)
+	return slices.Contains([]string{"codex", "claude", "pi", "antigravity"}, runtimeType)
 }
 
 func localComputerEnrollmentFromRow(row store.LocalComputerEnrollment) (LocalComputerEnrollment, error) {

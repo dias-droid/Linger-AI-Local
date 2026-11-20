@@ -16,7 +16,10 @@ import {
   AgentAvatarStatusContext,
   type AgentAvatarStatus,
 } from "../members/agent-avatar-status-context";
-import { runtimeFailureMessage } from "../runtime-status/runtime-failure-message";
+import {
+  isRunInterruption,
+  runtimeFailureMessage,
+} from "../runtime-status/runtime-failure-message";
 import type { RuntimeExecutionFailure } from "../runtime-status/runtime-presentation-events";
 import { Fragment, type ReactNode, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -636,7 +639,9 @@ function resolveAgentRuntimeStatusSegment({
         : terminalOutcome === "canceled"
           ? "Canceled"
           : terminalOutcome === "failed"
-            ? "Failed"
+            ? isRunInterruption(failure)
+              ? "Stopped"
+              : "Failed"
             : activeActivity?.kind === "recovery"
               ? "Recovering"
               : activeActivity?.kind === "interaction"
@@ -670,25 +675,27 @@ function resolveAgentRuntimeStatusSegment({
               ? terminalSummary
               : `Run failed: ${terminalSummary}`,
         }
-      : state === "Needs attention"
-        ? { tone: "warn", text: "Follow-up delivery unconfirmed" }
-        : stateActivity
-          ? {
-              tone: "live",
-              text: activityStatusLine(stateActivity.kind).steps[0]!,
-              runningActivityId: stateActivity.activityId,
-            }
-          : status === "queued"
-            ? { tone: "wait" }
-            : outputs.length > 0 && lineRunning.length === 0
-              ? { tone: "live", text: "Working" }
-              : queue.length > 0
-                ? queue.at(-1)!.content
-                : status === "thinking"
-                  ? { tone: "live", text: title?.trim() || "Thinking" }
-                  : first && activities.length === 0
-                    ? { tone: "wait" }
-                    : { tone: "live", text: "Working" };
+      : state === "Stopped"
+        ? { tone: "warn", text: summary }
+        : state === "Needs attention"
+          ? { tone: "warn", text: "Follow-up delivery unconfirmed" }
+          : stateActivity
+            ? {
+                tone: "live",
+                text: activityStatusLine(stateActivity.kind).steps[0]!,
+                runningActivityId: stateActivity.activityId,
+              }
+            : status === "queued"
+              ? { tone: "wait" }
+              : outputs.length > 0 && lineRunning.length === 0
+                ? { tone: "live", text: "Working" }
+                : queue.length > 0
+                  ? queue.at(-1)!.content
+                  : status === "thinking"
+                    ? { tone: "live", text: title?.trim() || "Thinking" }
+                    : first && activities.length === 0
+                      ? { tone: "wait" }
+                      : { tone: "live", text: "Working" };
   const lineQueue =
     queue.length > 0 && line === queue.at(-1)!.content ? queue : undefined;
   return {

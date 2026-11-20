@@ -79,14 +79,25 @@ export class RuntimeLoginManager {
   async start(input: Input, code?: string): Promise<Snapshot> {
     if (code !== undefined) {
       const session = this.sessions.get(input.instance);
+      const stdin = session?.child.stdin;
       if (
         session?.runtime !== input.runtime ||
         !session.snapshot.acceptsCode ||
-        !session.child.stdin?.writable ||
+        !stdin?.writable ||
         !/^[A-Za-z0-9._~+/#=-]{1,4096}$/.test(code)
       )
         throw new Error("Invalid authorization code or inactive login");
-      session.child.stdin.write(code + "\n");
+      await new Promise<void>((resolve, reject) => {
+        stdin.write(code + "\n", (error) => {
+          if (error)
+            reject(
+              new Error(
+                "Native sign-in could not accept the authorization code. Retry or sign in later.",
+              ),
+            );
+          else resolve();
+        });
+      });
       return structuredClone(session.snapshot);
     }
     if (this.closed) return { state: "idle" };
@@ -158,6 +169,7 @@ export class RuntimeLoginManager {
     this.sessions.set(input.instance, session);
     let output = "";
     const receive = (chunk: Buffer) => {
+      if (session.snapshot.state === "failed") return;
       output = stripVTControlCharacters(output + chunk.toString()).slice(
         -16384,
       );
@@ -201,6 +213,7 @@ export class RuntimeLoginManager {
       };
     };
     child.once("error", failed);
+    child.stdin?.on("error", failed);
     child.once("close", () => {
       clearTimeout(session.timer);
       output = "";

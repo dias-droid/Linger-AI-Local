@@ -5,6 +5,9 @@ import { runProcess } from "./process.js";
 // contents, user-controlled PowerShell, or credentials appear in argv/output.
 export const WINDOWS_PRIVATE_SCRIPT = String.raw`
 $ErrorActionPreference = 'Stop'
+# This fixed Windows PowerShell script uses only its own built-in modules.
+# A caller's PowerShell 7 modules can prevent Get-Acl from loading.
+$env:PSModulePath = [IO.Path]::Combine($PSHOME, 'Modules')
 [Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
 try {
   $request = [Console]::In.ReadToEnd() | ConvertFrom-Json

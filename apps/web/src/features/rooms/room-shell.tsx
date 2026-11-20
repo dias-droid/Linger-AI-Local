@@ -142,6 +142,10 @@ function RoomShellReady({
   });
 
   useEffect(() => {
+    performance.mark("room.shell_visible");
+  }, []);
+
+  useEffect(() => {
     document.title = `${spaceOwnerName}'s space`;
   }, [spaceOwnerName]);
 

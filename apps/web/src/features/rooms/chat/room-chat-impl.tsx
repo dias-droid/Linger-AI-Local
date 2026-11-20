@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import { FileDropTarget } from "@/components/ui/file-drop-target";
 
 import { MessageForwardDialog } from "./message-forward-dialog";
@@ -18,6 +20,12 @@ export function RoomChatImpl() {
   const actions = useRoomChatTimelineActions(data, state);
   const { client, forwardMessage, roomId, setForwardMessage, tenantId } = data;
   const { currentActor, interactions, onboarding, timeline } = state;
+  const markedRoomIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (markedRoomIdRef.current === roomId) return;
+    markedRoomIdRef.current = roomId;
+    performance.mark("room.chat_ready");
+  }, [roomId]);
   return (
     <div className="room-chat-layout flex min-h-0 flex-1">
       {onboarding.introPlaying && onboarding.agent ? (

@@ -4262,7 +4262,7 @@ export interface components {
       | "max"
       | "ultra";
     /** @enum {string} */
-    LocalRuntimeType: "codex" | "claude" | "pi";
+    LocalRuntimeType: "codex" | "claude" | "pi" | "antigravity";
     /** @description Agents run on one of the Sponsor's Local Computers. Placement requires computer_id, runtime_type, and workspace_grant_id; TeamHub validates that invariant before persistence. */
     AgentRuntimePlacement: {
       /** @enum {string} */

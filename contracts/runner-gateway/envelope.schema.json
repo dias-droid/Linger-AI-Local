@@ -225,7 +225,7 @@
       "required": ["type", "status", "protocol", "checked_at", "models"],
       "properties": {
         "type": {
-          "enum": ["codex", "claude", "pi"]
+          "enum": ["codex", "claude", "pi", "antigravity"]
         },
         "status": {
           "enum": [
@@ -237,7 +237,7 @@
           ]
         },
         "protocol": {
-          "enum": ["app-server", "stream-json", "rpc"]
+          "enum": ["app-server", "stream-json", "rpc", "acp"]
         },
         "checked_at": {
           "$ref": "#/$defs/Timestamp"
@@ -332,7 +332,7 @@
     "RuntimeDiagnostics": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 3,
+      "maxItems": 4,
       "items": {
         "$ref": "#/$defs/RuntimeDiagnostic"
       }
@@ -442,7 +442,7 @@
           "$ref": "#/$defs/Id"
         },
         "provider_type": {
-          "enum": ["codex", "claude", "pi"]
+          "enum": ["codex", "claude", "pi", "antigravity"]
         },
         "status": {
           "enum": ["online", "offline", "unavailable"]
@@ -822,7 +822,7 @@
           "$ref": "#/$defs/Id"
         },
         "runtime_type": {
-          "enum": ["codex", "claude", "pi"]
+          "enum": ["codex", "claude", "pi", "antigravity"]
         },
         "kind": {
           "const": "run.start"
@@ -2952,7 +2952,7 @@
           "minItems": 0,
           "uniqueItems": true,
           "items": {
-            "enum": ["codex", "claude", "pi"]
+            "enum": ["codex", "claude", "pi", "antigravity"]
           }
         },
         "runtime_diagnostics": {
@@ -3256,7 +3256,7 @@
       "required": ["type"],
       "properties": {
         "type": {
-          "enum": ["codex", "claude", "pi"]
+          "enum": ["codex", "claude", "pi", "antigravity"]
         },
         "model": {
           "type": "string",
@@ -3976,7 +3976,7 @@
           "$ref": "#/$defs/Id"
         },
         "runtime_type": {
-          "enum": ["codex", "claude", "pi"]
+          "enum": ["codex", "claude", "pi", "antigravity"]
         },
         "host_access": {
           "const": "trusted"
@@ -4109,7 +4109,7 @@
           "$ref": "#/$defs/Id"
         },
         "runtime_type": {
-          "enum": ["codex", "claude", "pi"]
+          "enum": ["codex", "claude", "pi", "antigravity"]
         }
       }
     },
@@ -5495,7 +5495,7 @@
           ]
         },
         "runtime_type": {
-          "enum": ["codex", "claude", "pi"]
+          "enum": ["codex", "claude", "pi", "antigravity"]
         },
         "runtime_version": {
           "type": "string",

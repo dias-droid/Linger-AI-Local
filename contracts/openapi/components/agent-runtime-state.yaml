@@ -1417,7 +1417,7 @@ components:
           type: array
           items:
             type: string
-            enum: [codex, claude, pi]
+            enum: [codex, claude, pi, antigravity]
         runtime_diagnostics:
           type: array
           items:
@@ -1491,7 +1491,7 @@ components:
           type: array
           items:
             type: string
-            enum: [codex, claude, pi]
+            enum: [codex, claude, pi, antigravity]
         runtime_diagnostics:
           type: array
           items:
@@ -1577,7 +1577,7 @@ components:
           type: array
           items:
             type: string
-            enum: [codex, claude, pi]
+            enum: [codex, claude, pi, antigravity]
         runtime_diagnostics:
           type: array
           items:

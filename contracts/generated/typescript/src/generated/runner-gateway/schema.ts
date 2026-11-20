@@ -228,7 +228,7 @@ export const runnerGatewayEnvelopeSchema = {
       required: ["type", "status", "protocol", "checked_at", "models"],
       properties: {
         type: {
-          enum: ["codex", "claude", "pi"],
+          enum: ["codex", "claude", "pi", "antigravity"],
         },
         status: {
           enum: [
@@ -240,7 +240,7 @@ export const runnerGatewayEnvelopeSchema = {
           ],
         },
         protocol: {
-          enum: ["app-server", "stream-json", "rpc"],
+          enum: ["app-server", "stream-json", "rpc", "acp"],
         },
         checked_at: {
           $ref: "#/$defs/Timestamp",
@@ -339,7 +339,7 @@ export const runnerGatewayEnvelopeSchema = {
     RuntimeDiagnostics: {
       type: "array",
       minItems: 1,
-      maxItems: 3,
+      maxItems: 4,
       items: {
         $ref: "#/$defs/RuntimeDiagnostic",
       },
@@ -449,7 +449,7 @@ export const runnerGatewayEnvelopeSchema = {
           $ref: "#/$defs/Id",
         },
         provider_type: {
-          enum: ["codex", "claude", "pi"],
+          enum: ["codex", "claude", "pi", "antigravity"],
         },
         status: {
           enum: ["online", "offline", "unavailable"],
@@ -832,7 +832,7 @@ export const runnerGatewayEnvelopeSchema = {
           $ref: "#/$defs/Id",
         },
         runtime_type: {
-          enum: ["codex", "claude", "pi"],
+          enum: ["codex", "claude", "pi", "antigravity"],
         },
         kind: {
           const: "run.start",
@@ -2995,7 +2995,7 @@ export const runnerGatewayEnvelopeSchema = {
           minItems: 0,
           uniqueItems: true,
           items: {
-            enum: ["codex", "claude", "pi"],
+            enum: ["codex", "claude", "pi", "antigravity"],
           },
         },
         runtime_diagnostics: {
@@ -3301,7 +3301,7 @@ export const runnerGatewayEnvelopeSchema = {
       required: ["type"],
       properties: {
         type: {
-          enum: ["codex", "claude", "pi"],
+          enum: ["codex", "claude", "pi", "antigravity"],
         },
         model: {
           type: "string",
@@ -4025,7 +4025,7 @@ export const runnerGatewayEnvelopeSchema = {
           $ref: "#/$defs/Id",
         },
         runtime_type: {
-          enum: ["codex", "claude", "pi"],
+          enum: ["codex", "claude", "pi", "antigravity"],
         },
         host_access: {
           const: "trusted",
@@ -4158,7 +4158,7 @@ export const runnerGatewayEnvelopeSchema = {
           $ref: "#/$defs/Id",
         },
         runtime_type: {
-          enum: ["codex", "claude", "pi"],
+          enum: ["codex", "claude", "pi", "antigravity"],
         },
       },
     },
@@ -5554,7 +5554,7 @@ export const runnerGatewayEnvelopeSchema = {
           ],
         },
         runtime_type: {
-          enum: ["codex", "claude", "pi"],
+          enum: ["codex", "claude", "pi", "antigravity"],
         },
         runtime_version: {
           type: "string",

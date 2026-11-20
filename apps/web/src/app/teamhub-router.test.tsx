@@ -18,7 +18,10 @@ import {
 
 import { createAppRoutes } from "./router";
 
-const routeFixture = vi.hoisted(() => ({ chatError: null as Error | null }));
+const routeFixture = vi.hoisted(() => ({
+  chatError: null as Error | null,
+  preloadRoomChat: vi.fn(() => Promise.resolve()),
+}));
 
 vi.mock("@/features/auth/teamhub-login-page", () => ({
   TeamHubLoginPage: () => <h1>TeamHub sign in</h1>,
@@ -38,9 +41,16 @@ vi.mock("@/features/rooms/room-shell", () => ({
     </div>
   ),
 }));
-vi.mock("@/features/rooms/room-surface", () => ({
-  RoomSurface: () => <Outlet />,
-}));
+vi.mock("@/features/rooms/room-surface", async () => {
+  const { lazy } = await import("react");
+  return {
+    LazyRoomChat: lazy(async () => ({
+      default: (await import("@/features/rooms/chat/room-chat")).RoomChat,
+    })),
+    preloadRoomChat: routeFixture.preloadRoomChat,
+    RoomSurface: () => <Outlet />,
+  };
+});
 vi.mock("@/features/rooms/chat/room-chat", () => ({
   RoomChat: () => {
     if (routeFixture.chatError) throw routeFixture.chatError;
@@ -117,6 +127,7 @@ describe("TeamHub routes", () => {
 
   beforeEach(() => {
     routeFixture.chatError = null;
+    routeFixture.preloadRoomChat.mockClear();
   });
 
   it("keeps the Composio OAuth completion route public", async () => {
@@ -600,6 +611,30 @@ describe("TeamHub routes", () => {
       await screen.findByRole("heading", { name: "Page not found" }),
     ).toBeVisible();
     expect(screen.getByRole("button", { name: "Open Messages" })).toBeVisible();
+  });
+
+  it("preloads the Room chat chunk from /, /t/:tenantId/rooms, and /t/:tenantId/rooms/:roomId loaders", async () => {
+    const runtime = createTestTeamHubRuntime();
+    const queryClient = testQueryClient();
+    const router = createMemoryRouter(createAppRoutes(queryClient, runtime), {
+      initialEntries: ["/"],
+    });
+
+    renderApp(queryClient, runtime, router);
+    expect(
+      await screen.findByRole("heading", { name: "Fixture Room Chat" }),
+    ).toBeVisible();
+    // Both `/` and `/t/:tenantId/rooms/:roomId` loaders trigger preloadRoomChat.
+    expect(routeFixture.preloadRoomChat).toHaveBeenCalledTimes(2);
+
+    routeFixture.preloadRoomChat.mockClear();
+    await router.navigate(`/t/${runtime.seed.tenant.id}/rooms`);
+    await waitFor(() =>
+      expect(routeFixture.preloadRoomChat).toHaveBeenCalled(),
+    );
+
+    router.dispose();
+    queryClient.clear();
   });
 });
 

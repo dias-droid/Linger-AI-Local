@@ -621,12 +621,13 @@ export class RunnerOperationState {
   }
 
   get resumable(): boolean {
-    // Codex announces its thread before the first input is durably in its
-    // history. Any model output, thinking included, comes after Codex
-    // recorded that input.
+    // Codex and Antigravity announce their session before the first input
+    // is durably in its history; an Antigravity session with no prompt yet
+    // cannot be loaded at all. Any model output, thinking included, comes
+    // after the runtime recorded that input.
     return (
       Boolean(this.#yieldSessionId) &&
-      (this.start.runtime_type !== "codex" || this.#observedNativeWork)
+      (!namesOwnSession(this.start.runtime_type) || this.#observedNativeWork)
     );
   }
 
@@ -977,7 +978,7 @@ export class RunnerOperationState {
         const error =
           this.#yieldRequested && id && envelope.reason === "scheduler_yield"
             ? new ProviderRunYieldedError(
-                runtime === "codex"
+                namesOwnSession(runtime)
                   ? { threadId: id }
                   : {
                       provider: runtime,
@@ -1384,6 +1385,12 @@ const encodedBytes = (value: unknown): number => {
     );
   }
 };
+
+// Codex and Antigravity name their own sessions and keep them as a thread
+// id; Claude and Pi run a session id that Linger materialized.
+function namesOwnSession(runtime: string): boolean {
+  return runtime === "codex" || runtime === "antigravity";
+}
 
 const assertNever = (value: never): never => {
   throw new RunnerGatewayProtocolError(

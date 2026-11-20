@@ -228,6 +228,17 @@ func TestAccessListsKeepConfirmedWritesHeld(t *testing.T) {
 	}
 }
 
+func TestAccessRunsDiscordReadsAndHoldsDiscordSends(t *testing.T) {
+	for _, slug := range []string{"DISCORDBOT_GET_CONNECTED_GUILD", "DISCORDBOT_LIST_MESSAGES", "DISCORDBOT_LIST_PINNED_MESSAGES"} {
+		if accessOf(slug, nil) != accessRead {
+			t.Errorf("%s only reads the connected guild and must run at once", slug)
+		}
+	}
+	if accessOf("DISCORDBOT_CREATE_MESSAGE", nil) != accessConfirm {
+		t.Error("DISCORDBOT_CREATE_MESSAGE posts to Discord and must wait for confirmation")
+	}
+}
+
 func TestExecuteRefusesAnUnknownCallTooLargeForItsCard(t *testing.T) {
 	provider, held, err := executeForTest(t, "GITHUB_STAR_A_REPOSITORY_FOR_THE_AUTHENTICATED_USER", "github", map[string]any{"repo": strings.Repeat("x", maxCardInput)})
 	var domain *Error

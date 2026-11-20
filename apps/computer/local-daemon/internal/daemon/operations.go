@@ -308,7 +308,7 @@ func terminalPayload(spec provider.OperationSpec, result provider.Result) json.R
 	}
 	var session map[string]any
 	switch spec.Provider {
-	case "codex":
+	case "codex", "antigravity":
 		session = map[string]any{"threadId": sessionID}
 	case "claude", "pi":
 		session = map[string]any{"provider": spec.Provider, "sessionId": sessionID, "lingerMaterialized": true}

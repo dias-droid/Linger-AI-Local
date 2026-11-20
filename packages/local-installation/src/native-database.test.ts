@@ -38,20 +38,24 @@ import type { Instance } from "./instance.js";
 
 const run = vi.mocked(runProcess);
 const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
-const getuid = Object.getOwnPropertyDescriptor(process, "getuid")!;
+const getuid = Object.getOwnPropertyDescriptor(process, "getuid");
+const fakeUid = (value: typeof process.getuid) =>
+  Object.defineProperty(process, "getuid", { configurable: true, value });
 // The root guard refuses initdb, and CI containers often run as root.
 beforeEach(() => {
-  Object.defineProperty(process, "getuid", { ...getuid, value: () => 1000 });
+  Object.defineProperty(process, "platform", { ...platform, value: "linux" });
+  fakeUid(() => 1000);
 });
 afterEach(() => {
   Object.defineProperty(process, "platform", platform);
-  Object.defineProperty(process, "getuid", getuid);
+  if (getuid) Object.defineProperty(process, "getuid", getuid);
+  else Reflect.deleteProperty(process, "getuid");
   vi.clearAllMocks();
 });
 // Windows has no process.getuid.
 const asWindows = () => {
   Object.defineProperty(process, "platform", { ...platform, value: "win32" });
-  Object.defineProperty(process, "getuid", { ...getuid, value: undefined });
+  fakeUid(undefined);
 };
 const ok = (stdout = "") => ({ code: 0, stdout, stderr: "" });
 const instance = {

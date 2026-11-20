@@ -2572,14 +2572,17 @@ func (e LocalRuntimeDiagnosticStatus) Valid() bool {
 
 // Defines values for LocalRuntimeType.
 const (
-	LocalRuntimeTypeClaude LocalRuntimeType = "claude"
-	LocalRuntimeTypeCodex  LocalRuntimeType = "codex"
-	LocalRuntimeTypePi     LocalRuntimeType = "pi"
+	LocalRuntimeTypeAntigravity LocalRuntimeType = "antigravity"
+	LocalRuntimeTypeClaude      LocalRuntimeType = "claude"
+	LocalRuntimeTypeCodex       LocalRuntimeType = "codex"
+	LocalRuntimeTypePi          LocalRuntimeType = "pi"
 )
 
 // Valid indicates whether the value is a known member of the LocalRuntimeType enum.
 func (e LocalRuntimeType) Valid() bool {
 	switch e {
+	case LocalRuntimeTypeAntigravity:
+		return true
 	case LocalRuntimeTypeClaude:
 		return true
 	case LocalRuntimeTypeCodex:

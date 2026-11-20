@@ -1814,7 +1814,7 @@ export interface components {
       | "max"
       | "ultra";
     /** @enum {string} */
-    LocalRuntimeType: "codex" | "claude" | "pi";
+    LocalRuntimeType: "codex" | "claude" | "pi" | "antigravity";
     AgentRuntimeSettingsSnapshot: {
       /** @constant */
       type: "local";
@@ -2405,7 +2405,7 @@ export interface components {
       /** Format: date-time */
       last_seen_at?: string;
       capacity?: number;
-      runtimes: ("codex" | "claude" | "pi")[];
+      runtimes: ("codex" | "claude" | "pi" | "antigravity")[];
       runtime_diagnostics: {
         [key: string]: unknown;
       }[];
@@ -2436,7 +2436,7 @@ export interface components {
       /** @enum {string} */
       platform?: "darwin" | "linux" | "win32";
       capacity?: number;
-      runtimes: ("codex" | "claude" | "pi")[];
+      runtimes: ("codex" | "claude" | "pi" | "antigravity")[];
       runtime_diagnostics: {
         [key: string]: unknown;
       }[];
@@ -2472,7 +2472,7 @@ export interface components {
       status: "online" | "offline" | "upgrade_required";
       /** Format: date-time */
       seen_at: string;
-      runtimes?: ("codex" | "claude" | "pi")[];
+      runtimes?: ("codex" | "claude" | "pi" | "antigravity")[];
       runtime_diagnostics?: {
         [key: string]: unknown;
       }[];

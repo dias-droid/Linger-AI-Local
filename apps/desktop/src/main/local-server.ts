@@ -57,6 +57,7 @@ import {
   installTeamhubBinaries,
   TEAMHUB_BINARY_DIRECTORY,
 } from "@linger/local-installation/teamhub-binaries";
+import { redact } from "@linger/local-installation/redaction";
 import { adoptUserEnvironment } from "@linger/local-installation/user-environment";
 
 import {
@@ -66,7 +67,11 @@ import {
 } from "../../../../scripts/local-computer-node-distributions.mjs";
 import type { Logger } from "./log.js";
 import type { Module, ModuleContext, StopReason } from "./modules.js";
-import { parseServerUrl, sameOrigin } from "./navigation.js";
+import {
+  type WindowLoadReason,
+  parseServerUrl,
+  sameOrigin,
+} from "./navigation.js";
 import { humanTenant, type EnrollmentModule } from "./enrollment.js";
 import { compareVersions } from "./update-manifest.js";
 import type { WindowManagerModule } from "./window-manager.js";
@@ -419,8 +424,10 @@ export class LocalServerModule implements Module {
   // Counts installations started, so the setup page restarts its timers.
   #attempt = 0;
   #origin: string | undefined;
+  #resuming = false;
   #running: Promise<void> | undefined;
   #check: LocalModelsCheck = { state: "unchecked" };
+  #checkedAt: number | undefined;
   // Read once from the bundled installer's distribution.
   #nativePostgres: boolean | undefined;
   // Where an installation goes unless the setup page chose another folder:
@@ -577,6 +584,13 @@ export class LocalServerModule implements Module {
     }
   }
 
+  async resumable(serverUrl: string): Promise<boolean> {
+    if (this.#resuming && this.#origin && sameOrigin(this.#origin, serverUrl))
+      return true;
+    const record = await this.#readRecord();
+    return record !== undefined && sameOrigin(record.origin, serverUrl);
+  }
+
   status(): LocalServerStatus {
     // The services run natively, so the build must carry PostgreSQL for
     // this computer.
@@ -655,9 +669,11 @@ export class LocalServerModule implements Module {
     )
       return;
     this.#check = { state: "checking" };
+    this.#checkedAt = undefined;
     this.#ctx?.bus.emit("local-server.changed");
     const started = Date.now();
     const signal = this.#abort.signal;
+    if (!signal.aborted) void this.#ensureNode(signal).catch(() => undefined);
     void this.#inspect(signal, (download) => {
       if (this.#check.state !== "checking") return;
       this.#check = { state: "checking", download };
@@ -677,6 +693,7 @@ export class LocalServerModule implements Module {
             ...(reasonLog.length ? { reasons: reasonLog } : {}),
           });
           this.#check = check;
+          this.#checkedAt = Date.now();
         },
         (error: unknown) => {
           this.#ctx?.log.warn("local_server.inspect_failed", {
@@ -684,12 +701,11 @@ export class LocalServerModule implements Module {
             error: error instanceof Error ? error.message : String(error),
           });
           this.#check = { state: "unavailable" };
+          this.#checkedAt = undefined;
         },
       )
       .then(() => {
         this.#ctx?.bus.emit("local-server.changed");
-        if (!signal.aborted)
-          void this.#ensureNode(signal).catch(() => undefined);
       });
   }
 
@@ -1010,22 +1026,46 @@ export class LocalServerModule implements Module {
         this.#launchInstaller(node, home, repo, signal),
       );
       const runInstaller = (next: LocalServerPlan, fresh = false) =>
-        installer.run(
-          next,
-          signal,
-          (stage, share, text, transfer) =>
-            this.#advance(stage, share, text, transfer),
-          fresh,
+        this.#timed("installer_job", () =>
+          installer.run(
+            next,
+            signal,
+            (stage, share, text, transfer) =>
+              this.#advance(stage, share, text, transfer),
+            fresh,
+          ),
         );
+      // Reuse a fresh non-local recommendation from the setup window check
+      // instead of running a duplicate setup inspection.
+      const inspectedRuntime =
+        plan.runtime === "recommended" &&
+        !plan.byok &&
+        !this.#location &&
+        !keysChanged &&
+        this.#check.state === "checked" &&
+        this.#checkedAt !== undefined &&
+        Date.now() - this.#checkedAt < 60_000 &&
+        this.#check.recommendation &&
+        this.#check.recommendation !== "local-models"
+          ? this.#check.recommendation
+          : undefined;
+      const effectivePlan: LocalServerPlan = inspectedRuntime
+        ? { ...plan, runtime: inspectedRuntime }
+        : plan;
       // Changed keys reach the services only when the installation runs
       // again, even after one that finished.
-      let job = await runInstaller(plan, keysChanged || Boolean(plan.byok));
+      let job = await runInstaller(
+        effectivePlan,
+        keysChanged || Boolean(plan.byok),
+      );
       // The runtime is installed but has no sign-in here: the server would
       // never create the Another Me, so ask for it now. Another runtime
       // reruns the installation for it.
       for (;;) {
         const nextChoice = job.signInRequired
-          ? await this.#awaitSignIn(installer, signal)
+          ? await this.#timed("await_signin", () =>
+              this.#awaitSignIn(installer, signal),
+            )
           : undefined;
         if (!nextChoice) break;
         this.#endSignIn();
@@ -1048,9 +1088,16 @@ export class LocalServerModule implements Module {
                 true,
               );
       }
+      // Prewarm main-window assets in the background as soon as the server
+      // origin is known.
+      void this.#ctx
+        ?.get<WindowManagerModule>("WindowManager")
+        .prewarmAssets(job.origin);
       // The desktop's Computer runs the runtime this installer set up, with
       // its profile, rather than whatever its PATH finds.
-      const runtime = await installer.runtime();
+      const runtime = await this.#timed("installer_runtime", () =>
+        installer.runtime(signal),
+      );
       const preferredRuntime = setupRuntime(runtime.setupChoice);
       this.#ctx?.config.update({
         runtimeEnvironment: runtime.environment,
@@ -1079,7 +1126,9 @@ export class LocalServerModule implements Module {
       }
       this.#advance("connect", 0, "Connecting this computer…");
       const login = await installer.login();
-      await this.#signInAs(home, job.origin, login.email, login.password);
+      await this.#timed("sign_in_as", () =>
+        this.#signInAs(home, job.origin, login.email, login.password),
+      );
       // The installation this window used in the same location is the same
       // server, at another origin when the installer moved its web port.
       const previous = await this.#readRecord();
@@ -1097,9 +1146,16 @@ export class LocalServerModule implements Module {
         previous?.home === home ? previous.origin : undefined,
       );
       this.#daemonConnection = undefined;
-      await this.#ctx!.get<EnrollmentModule>("Enrollment").enroll();
+      await this.#timed("enroll", () =>
+        this.#ctx!.get<EnrollmentModule>("Enrollment").enroll(),
+      );
+      this.#ctx
+        ?.get<WindowManagerModule>("WindowManager")
+        .preloadAuthenticated(job.origin);
       this.#advance("agents", 0, "Preparing your agents…");
-      await this.#awaitAgents(job.origin, signal);
+      await this.#timed("await_agents", () =>
+        this.#awaitAgents(job.origin, signal),
+      );
       this.#set("ready", "Linger is running on this computer.");
     } catch (error) {
       this.#endSignIn();
@@ -1146,7 +1202,7 @@ export class LocalServerModule implements Module {
     signal: AbortSignal,
   ): Promise<LocalRuntime | { readonly byok: SetupByokConfig } | undefined> {
     const runtime =
-      setupRuntime((await installer.runtime()).setupChoice) ?? "pi";
+      setupRuntime((await installer.runtime(signal)).setupChoice) ?? "pi";
     this.#signInInstaller = installer;
     this.#switchTo = undefined;
     this.#switchByok = undefined;
@@ -2170,11 +2226,15 @@ export class LocalServerModule implements Module {
   }
 
   // `previous` is the origin this installation answered at before.
-  #ready(origin: string, previous?: string): void {
+  #ready(
+    origin: string,
+    previous?: string,
+    reason: WindowLoadReason = "local_ready",
+  ): void {
     this.#origin = origin;
     this.#ctx
       ?.get<WindowManagerModule>("WindowManager")
-      ?.setServer(origin, previous);
+      ?.setServer(origin, previous, { reason });
   }
 
   // The server sets up the Another Me once this computer offers a signed-in
@@ -2301,6 +2361,10 @@ export class LocalServerModule implements Module {
   // version, and the older services would serve the older interface.
   async #resume(record: LocalRecord, signal: AbortSignal): Promise<void> {
     this.#origin = record.origin;
+    this.#resuming = true;
+    const startedAt = Date.now();
+    let stage = "fast_ready_check";
+    this.#ctx?.log.info("local_server.resume_started");
     const windows = this.#ctx?.get<WindowManagerModule>("WindowManager");
     try {
       const update = this.#sourceUpdate(record);
@@ -2311,7 +2375,13 @@ export class LocalServerModule implements Module {
       } else {
         this.#set("preparing", "Starting Linger on this computer…");
         // The window would show the server as unreachable until it is back.
-        if (!(await this.#reachable(record.origin))) windows?.showStarting();
+        const checkStartedAt = Date.now();
+        const reachable = await this.#reachable(record.origin);
+        this.#ctx?.log.info("local_server.resume_stage", {
+          stage: "fast_ready_check",
+          ms: Date.now() - checkStartedAt,
+        });
+        if (!reachable) windows?.showStarting();
       }
       // A source folder the installer no longer runs is unpacked again from
       // this app's package: one removed since (by hand, or a cleanup that an
@@ -2326,7 +2396,9 @@ export class LocalServerModule implements Module {
           )))
           ? await this.#ensureSource(record.home, signal)
           : record.repo;
-      const serving = await this.#runResume(record, repo, signal);
+      const serving = await this.#runResume(record, repo, signal, (next) => {
+        stage = next;
+      });
       // The installer moves the web port off one another program took. The
       // record and the window follow the origin together (a launch resumes
       // only while they agree), and so does this computer's enrollment: it
@@ -2356,14 +2428,23 @@ export class LocalServerModule implements Module {
           source: path.basename(repo),
           from: record.version,
         });
-      this.#ready(origin, record.origin);
+      this.#ready(origin, record.origin, "resume_ready");
       this.#set("ready", "Linger is running on this computer.");
+      this.#ctx?.log.info("local_server.resume_succeeded", {
+        total_ms: Date.now() - startedAt,
+      });
     } catch (error) {
       if (signal.aborted) return;
       const message = error instanceof Error ? error.message : String(error);
-      this.#ctx?.log.warn("local_server.resume_failed", { error: message });
+      this.#ctx?.log.warn("local_server.resume_failed", {
+        stage,
+        total_ms: Date.now() - startedAt,
+        error: this.#formatResumeError(message),
+      });
       this.#set("failed", message);
       windows?.showStartFailed(message);
+    } finally {
+      this.#resuming = false;
     }
   }
 
@@ -2433,9 +2514,18 @@ export class LocalServerModule implements Module {
     record: LocalRecord,
     repo: string,
     signal: AbortSignal,
+    onStage?: (stage: string) => void,
   ): Promise<{ source?: string; origin?: string }> {
     await this.#adoptSourceKeys(record.home);
+    onStage?.("ensure_node");
+    const nodeStartedAt = Date.now();
     const node = await this.#ensureNode(signal);
+    this.#ctx?.log.info("local_server.resume_stage", {
+      stage: "ensure_node",
+      ms: Date.now() - nodeStartedAt,
+    });
+    onStage?.("installer_resume");
+    const resumeStartedAt = Date.now();
     const outcome = await new Promise<ResumeOutcome>((resolve, reject) => {
       const child = spawn(
         node,
@@ -2473,6 +2563,10 @@ export class LocalServerModule implements Module {
         }
       });
     });
+    this.#ctx?.log.info("local_server.resume_stage", {
+      stage: "installer_resume",
+      ms: Date.now() - resumeStartedAt,
+    });
     if (outcome.code !== 0) {
       const { code, reasons } = outcome.details ?? {};
       const action =
@@ -2496,6 +2590,22 @@ export class LocalServerModule implements Module {
           .join(" "),
       );
     }
+    // The services run without the BYOK gateway; the person switches or
+    // fixes the source on the Models page, so this only leaves a trace.
+    const byokGateway = outcome.details?.byokGateway as
+      | { code?: unknown; message?: unknown }
+      | null
+      | undefined;
+    if (
+      byokGateway &&
+      typeof byokGateway === "object" &&
+      typeof byokGateway.code === "string"
+    )
+      this.#ctx?.log.warn("local_server.byok_gateway_unavailable", {
+        code: byokGateway.code,
+        message:
+          typeof byokGateway.message === "string" ? byokGateway.message : "",
+      });
     this.#adoptRuntime(outcome.runtime);
     const { source, origin } = outcome.details ?? {};
     return {
@@ -2504,6 +2614,14 @@ export class LocalServerModule implements Module {
         ? { origin }
         : {}),
     };
+  }
+
+  #formatResumeError(message: string): string {
+    const stripped = message
+      .replace(/(https?:\/\/[^\s?#]+)\?[^\s#]*/g, "$1")
+      .replace(/(https?:\/\/[^\s#]+)#[^\s#]*/g, "$1");
+    const redacted = redact(stripped);
+    return redacted.length > 500 ? `${redacted.slice(0, 497)}...` : redacted;
   }
 
   // Every resume reports the runtime and localmodels tool paths, so an
@@ -2620,6 +2738,8 @@ interface ResumeOutcome {
     origin?: unknown;
     code?: unknown;
     reasons?: unknown;
+    // Why a saved BYOK source's gateway did not come back: `{ code, message }`.
+    byokGateway?: unknown;
   };
   runtime?: InstanceRuntime;
 }
@@ -2838,6 +2958,9 @@ export interface Reconnect {
 }
 
 const RECONNECT: Reconnect = { windowMs: 60_000, maxBackoffMs: 5_000 };
+// The runtime lookup runs a 120-second harness probe, with private file and
+// pinned tool checks before and after it.
+const INSTALLER_RUNTIME_TIMEOUT_MS = 180_000;
 
 const TRANSIENT_CODES = new Set([
   "ECONNRESET",
@@ -3113,8 +3236,25 @@ export class InstallerApi {
 
   // The runtime the installation set up, with the paths of its executable
   // and profile.
-  runtime(): Promise<InstanceRuntime> {
-    return this.#json(`/api/instances/${LOCAL_INSTANCE}/runtime`);
+  async runtime(signal: AbortSignal): Promise<InstanceRuntime> {
+    const deadline = AbortSignal.timeout(INSTALLER_RUNTIME_TIMEOUT_MS);
+    try {
+      return await this.#json(
+        `/api/instances/${LOCAL_INSTANCE}/runtime`,
+        undefined,
+        "GET",
+        AbortSignal.any([signal, deadline]),
+      );
+    } catch (error) {
+      if (!signal.aborted && deadline.aborted)
+        throw new Error(
+          "The installer timed out while reading the selected runtime.",
+          {
+            cause: error,
+          },
+        );
+      throw error;
+    }
   }
 
   // The runtime's sign-in: checks it, or with `start` begins the runtime's
@@ -3140,6 +3280,7 @@ export class InstallerApi {
     pathname: string,
     body?: unknown,
     method = body === undefined ? "GET" : "POST",
+    signal = AbortSignal.timeout(60_000),
   ): Promise<Response> {
     return this.#fetch(new URL(pathname, this.#origin), {
       method,
@@ -3151,7 +3292,7 @@ export class InstallerApi {
         ...(body === undefined ? {} : { "content-type": "application/json" }),
       },
       redirect: "error",
-      signal: AbortSignal.timeout(60_000),
+      signal,
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
   }
@@ -3160,8 +3301,9 @@ export class InstallerApi {
     pathname: string,
     body?: unknown,
     method?: string,
+    signal?: AbortSignal,
   ): Promise<T> {
-    const response = await this.#call(pathname, body, method);
+    const response = await this.#call(pathname, body, method, signal);
     if (!response.ok) {
       const error = (await response.json().catch(() => null)) as {
         message?: string;

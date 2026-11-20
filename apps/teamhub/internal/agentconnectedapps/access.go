@@ -68,10 +68,21 @@ func onlyQueries(document any) bool {
 
 // readTools are the provider reads the wrapped connector commands make,
 // including the draft reads TeamHub makes to build a send-draft card, plus the
+// Discord reads of the connected guild, its channels, threads, and messages
+// (which run at once only inside the connected guild; see discordReadInScope), the
 // Slack reads Agents make through the generic execute to find direct messages
 // and the people in them, and the Linear reads, which have no wrapped command.
 // A read the generic execute names outside this list is held like a write.
 var readTools = map[string]bool{
+	"DISCORDBOT_GET_CONNECTED_GUILD":                      true,
+	"DISCORDBOT_GET_GUILD":                                true,
+	"DISCORDBOT_LIST_GUILD_CHANNELS":                      true,
+	"DISCORDBOT_GET_CHANNEL":                              true,
+	"DISCORDBOT_GET_ACTIVE_GUILD_THREADS":                 true,
+	"DISCORDBOT_LIST_PUBLIC_ARCHIVED_THREADS":             true,
+	"DISCORDBOT_LIST_MESSAGES":                            true,
+	"DISCORDBOT_GET_MESSAGE":                              true,
+	"DISCORDBOT_LIST_PINNED_MESSAGES":                     true,
 	"FAL_AI_GET_MODELS":                                   true,
 	"FAL_AI_GET_PRICING":                                  true,
 	"FAL_AI_GET_QUEUE_REQUEST_RESULT":                     true,

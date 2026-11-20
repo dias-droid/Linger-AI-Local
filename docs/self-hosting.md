@@ -25,8 +25,8 @@ printf '%s\n' 'choose-a-password' | docker compose exec -T teamhub \
 ```
 
 Open <http://localhost:3000> and sign in. The app then shows the commands that
-connect your computer, and it opens once Claude Code, Codex or Pi is installed
-and ready there. With Pi and no model yet, open Settings › Models from
+connect your computer, and it opens once Claude Code, Codex, Pi or Antigravity
+is installed and ready there. With Pi and no model yet, open Settings › Models from
 that screen and load one; Settings stays reachable while the rest of the app
 waits.
 

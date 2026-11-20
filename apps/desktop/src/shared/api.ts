@@ -106,6 +106,13 @@ export interface LingerDesktopApi {
     prepare(): Promise<string>;
     onReturn(callback: (connectedAccountId?: string) => void): () => void;
   };
+  // The link preview panel's frame, named PREVIEW_FRAME_PREFIX + an id,
+  // refused to be framed; url is the page that refused.
+  readonly preview: {
+    onFrameRefused(
+      callback: (frameName: string, url: string) => void,
+    ): () => void;
+  };
   // macOS only.
   readonly permissions?: {
     act(step: DesktopPermissionStep): Promise<void>;
@@ -131,4 +138,5 @@ export const IPC = {
   updateCheck: "update.check",
   connectorOAuthPrepare: "connector-oauth.prepare",
   connectorOAuthReturn: "connector-oauth.return",
+  previewFrameRefused: "preview.frame-refused",
 } as const;

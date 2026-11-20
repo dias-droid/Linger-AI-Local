@@ -33,6 +33,7 @@ const localRuntimeLabels: Record<TeamHubLocalRuntimeType, string> = {
   claude: "Claude Code",
   codex: "Codex",
   pi: "Pi",
+  antigravity: "Antigravity",
 };
 
 const effortLabels: Record<TeamHubAgentReasoningEffort, string> = {

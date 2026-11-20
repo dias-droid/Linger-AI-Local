@@ -169,7 +169,7 @@ func run(args []string) (resultErr error) {
 		return err
 	}
 	logRuntimeDiagnostics(discovered.Diagnostics)
-	diagnostics, err := provider.DiagnosticsJSON(discovered.Diagnostics)
+	diagnostics, err := provider.DiagnosticsJSON(provider.GatewayDiagnostics(discovered.Diagnostics))
 	if err != nil {
 		return err
 	}
@@ -385,7 +385,7 @@ func run(args []string) (resultErr error) {
 		RuntimeDiagnostics: diagnostics, WorkspaceGrants: encodedGrants,
 		StateDirectory:      computer.StateDirectory,
 		RuntimeHomeRoot:     filepath.Join(computer.StateDirectory, "runtime-homes"),
-		RuntimeObservations: runtimeObservations(computer, discovered.Diagnostics, runtimeObservationRevision),
+		RuntimeObservations: runtimeObservations(computer, provider.GatewayDiagnostics(discovered.Diagnostics), runtimeObservationRevision),
 		OnModelUnavailable:  inventory.reject,
 		ControlPlane:        transport.GatewayControlPlane{URL: computer.GatewayURL, BearerToken: computer.GatewayToken},
 		IdentityStore:       transport.IdentityFileStore{Path: filepath.Join(computer.StateDirectory, "daemon-identity.json")},
@@ -660,7 +660,7 @@ func (i *runtimeInventory) publishLocked(ctx context.Context) error {
 	if i.daemon == nil {
 		return nil
 	}
-	visible := i.rejected.Filter(i.diagnostics)
+	visible := i.rejected.Filter(provider.GatewayDiagnostics(i.diagnostics))
 	encoded, err := provider.DiagnosticsJSON(visible)
 	if err != nil {
 		return err

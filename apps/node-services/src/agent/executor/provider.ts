@@ -466,7 +466,7 @@ export interface RuntimeExecutionFailure {
     | "response_too_large"
     | "unclassified";
   /** Absent when the failure was observed without a selected Runtime. */
-  runtime_type?: "codex" | "claude" | "pi";
+  runtime_type?: "codex" | "claude" | "pi" | "antigravity";
   runtime_version?: string;
 }
 

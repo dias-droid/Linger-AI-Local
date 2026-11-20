@@ -17,7 +17,10 @@ import type {
   TeamHubExternalConnection,
 } from "@/features/teamhub/teamhub-types";
 
-import { INSUFFICIENT_PERMISSION_MESSAGE } from "./authorization-error";
+import {
+  DISCORD_SERVER_UNCONFIRMED_MESSAGE,
+  INSUFFICIENT_PERMISSION_MESSAGE,
+} from "./authorization-error";
 import {
   externalConnectionQueryOptions,
   externalConnectionsQueryKey,
@@ -28,6 +31,8 @@ import {
   externalConnectionNeedsAttention,
   openPendingExternalConnection,
   accountIdentityText,
+  externalConnectionEstablished,
+  externalConnectionUnconfirmed,
 } from "./connection-state";
 
 export function AppManageDialog({
@@ -43,12 +48,15 @@ export function AppManageDialog({
     useState<TeamHubExternalConnection | null>(null);
   // Without a Composio key, Connect opens the key dialog on top of this one.
   const connectFlow = useConnectAppFlow();
-  const listed = establishedExternalConnections(connections);
-  // Accounts that need reconnecting stay listed so the Human can repair them.
-  const rows = [
-    ...listed,
-    ...connections.filter(externalConnectionNeedsAttention),
-  ];
+  const established = establishedExternalConnections(connections);
+  // Accounts that need reconnecting or confirming stay listed so the Human
+  // can repair them.
+  const rows = connections.filter(
+    (connection) =>
+      externalConnectionEstablished(connection) ||
+      externalConnectionUnconfirmed(connection) ||
+      externalConnectionNeedsAttention(connection),
+  );
   const canConnect = connectFlow.canStart(app);
   const supportsAutoReminders = app.capabilities.includes(
     "proactive_reminders",
@@ -67,7 +75,7 @@ export function AppManageDialog({
           {canConnect ? (
             <Button
               aria-label={
-                listed.length
+                established.length
                   ? `Add another ${app.display_name} account`
                   : `Connect ${app.display_name}`
               }
@@ -82,7 +90,7 @@ export function AppManageDialog({
               tone="secondary"
             >
               <Icon icon={PlusSignIcon} size={14} />
-              {listed.length ? "Add account" : "Connect"}
+              {established.length ? "Add account" : "Connect"}
             </Button>
           ) : (
             <Button disabled size="compact">
@@ -157,6 +165,8 @@ function ConnectionRow({
   const checking = Boolean(connection.status_check_requested_at);
   const duplicateIdentity =
     connection.status_error_code === "duplicate_remote_principal";
+  const unconfirmed = externalConnectionUnconfirmed(connection);
+  const label = connection.identity_label ?? connection.provider;
 
   return (
     <div className="flex min-h-[58px] flex-wrap items-center gap-3 py-2.5">
@@ -171,18 +181,21 @@ function ConnectionRow({
           {needsReconnecting ? (
             <StatusPill tone="warning">Needs reconnecting</StatusPill>
           ) : (
-            <ConnectionStatus status={connection.status} />
+            <ConnectionStatus
+              status={connection.status}
+              unconfirmed={unconfirmed}
+            />
           )}
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
-        {connection.status === "active" ? (
+        {connection.status === "active" || unconfirmed ? (
           <Button
-            aria-label={`Check ${connection.identity_label ?? connection.provider}`}
+            aria-label={unconfirmed ? `Check again ${label}` : `Check ${label}`}
             disabled={statusCheck.isPending || checking}
             onClick={() => statusCheck.mutate()}
             size="compactIcon"
-            title="Check connection"
+            title={unconfirmed ? "Check again" : "Check connection"}
             tone="ghost"
           >
             <Icon
@@ -217,10 +230,11 @@ function ConnectionRow({
           </Button>
         ) : null}
       </div>
-      {connection.status_error_code === "discord_guild_required" ? (
+      {unconfirmed ? (
         <p className="basis-full text-xs text-app-danger" role="alert">
-          Discord could not verify the authorized Server. Check the Composio
-          project credential masking setting, then reconnect.
+          {connection.status_error_code === "discord_guild_required"
+            ? `${DISCORD_SERVER_UNCONFIRMED_MESSAGE} Check again, or disconnect and reconnect.`
+            : "The connection couldn't be confirmed yet. Check again."}
         </p>
       ) : null}
       {connection.status_error_code === "provider_auth_failed" ? (
@@ -388,12 +402,18 @@ export function DisconnectConnectionDialog({
 
 function ConnectionStatus({
   status,
+  unconfirmed,
 }: {
   status: TeamHubExternalConnection["status"];
+  unconfirmed: boolean;
 }) {
   return (
     <StatusPill tone={status === "active" ? "success" : "warning"}>
-      {status === "active" ? "Active" : "Disconnecting"}
+      {status === "active"
+        ? "Active"
+        : unconfirmed
+          ? "Not confirmed"
+          : "Disconnecting"}
     </StatusPill>
   );
 }

@@ -61,7 +61,7 @@ describe("Runtime failure messages", () => {
 
   it("names a failure the Agent Service observed without a Runtime prefix", () => {
     expect(runtimeFailureMessage({ code: "interrupted" })).toMatch(
-      /^The Run was interrupted before it finished/,
+      /^The Run stopped before it finished because its Computer restarted/,
     );
     expect(runtimeFailureMessage({ code: "computer_unavailable" })).toContain(
       "Make sure the Computer is online",

@@ -3,6 +3,7 @@ import {
   WebContentsView,
   ipcMain,
   nativeImage,
+  net,
   protocol,
   session,
   shell,
@@ -20,19 +21,25 @@ import {
   type ShellPlatform,
   type TitlebarState,
 } from "../shared/shell.js";
+import { IPC } from "../shared/api.js";
 import type { DiagnosticsModule } from "./diagnostics.js";
 import { diagnosticsDialogs } from "./diagnostics-dialogs.js";
 import { sendWithPrompts } from "./diagnostics-upload.js";
 import type { Module, ModuleContext } from "./modules.js";
 import {
   OFFLINE_ORIGIN,
+  PREVIEW_FRAME_PREFIX,
   SHELL_ORIGIN,
+  type WindowLoadReason,
+  type WindowLoadState,
   framableHeaders,
   navigationDecision,
   parseServerUrl,
   permissionAllowed,
+  refusesFraming,
   sameOrigin,
   serverSwitch,
+  windowLoadDecision,
 } from "./navigation.js";
 
 // Must run before app "ready".
@@ -46,9 +53,11 @@ export interface WindowManagerOptions {
   readonly preload: string;
   readonly shellPreload: string;
   readonly background: boolean;
+  readonly localServerResumable?: (serverUrl: string) => Promise<boolean>;
 }
 
 const TITLEBAR_HEIGHT = 40;
+const REVEAL_FALLBACK_MS = 1_500;
 const CANVAS = "#f6f6f6";
 const COMMANDS = new Set<ShellCommand>([
   "back",
@@ -91,6 +100,35 @@ const html = (body: string): Response =>
 const drawsTitlebar = (platform: NodeJS.Platform): boolean =>
   platform !== "darwin";
 
+// Strip query and hash so tokens or room fragments never reach logs.
+const sanitizeTargetUrl = (rawUrl: string): string => {
+  try {
+    const parsed = new URL(rawUrl);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return "";
+  }
+};
+
+const ASSET_SCRIPT_RE = /<script\b[^>]*\bsrc=["'](\/assets\/[^"']+)["']/gi;
+const ASSET_LINK_RE = /<link\b[^>]*>/gi;
+const LINK_REL_RE = /\brel=["'](?:modulepreload|stylesheet)["']/i;
+const LINK_HREF_RE = /\bhref=["'](\/assets\/[^"']+)["']/i;
+
+const extractAssetPaths = (documentHtml: string): string[] => {
+  const paths = new Set<string>();
+  for (const match of documentHtml.matchAll(ASSET_SCRIPT_RE)) {
+    if (match[1]) paths.add(match[1]);
+  }
+  for (const match of documentHtml.matchAll(ASSET_LINK_RE)) {
+    const tag = match[0];
+    if (!LINK_REL_RE.test(tag)) continue;
+    const href = LINK_HREF_RE.exec(tag)?.[1];
+    if (href) paths.add(href);
+  }
+  return [...paths];
+};
+
 // The main window. Native window controls stay native (macOS
 // traffic lights, the Windows caption overlay); Linux gets drawn controls.
 // Closing hides the window; the tray keeps the app running.
@@ -103,6 +141,14 @@ export class WindowManagerModule implements Module {
   #titlebar: WebContentsView | undefined;
   #content: WebContentsView | undefined;
   #quitting = false;
+  #openFromSetupAt: number | undefined;
+  #pendingTargetOrigin: string | undefined;
+  #showingShellPage: WindowLoadState["showingShellPage"] = "none";
+  #loadFailed = false;
+  #loadStartedAt: number | undefined;
+  #lastLoadReason: WindowLoadReason | undefined;
+  #pendingShow = false;
+  #revealTimer: NodeJS.Timeout | undefined;
   readonly #unsubscribe: (() => void)[] = [];
 
   constructor(options: WindowManagerOptions) {
@@ -132,6 +178,7 @@ export class WindowManagerModule implements Module {
 
   async stop(): Promise<void> {
     this.#quitting = true;
+    this.#clearRevealTimer();
     for (const off of this.#unsubscribe.splice(0)) off();
     protocol.unhandle("app");
     this.#window?.destroy();
@@ -151,18 +198,94 @@ export class WindowManagerModule implements Module {
     return this.#content?.webContents;
   }
 
+  markOpenFromSetup(): void {
+    const contents = this.#content?.webContents;
+    const target = this.#serverUrl();
+    if (
+      target &&
+      contents &&
+      !contents.isDestroyed() &&
+      !contents.isLoading() &&
+      sameOrigin(contents.getURL(), target)
+    ) {
+      this.#openFromSetupAt = undefined;
+      this.#ctx?.log.info("local_server.timing", {
+        step: "open_linger_to_load",
+        ms: 0,
+      });
+      return;
+    }
+    this.#openFromSetupAt = Date.now();
+  }
+
   show(): void {
     if (this.#window) {
+      this.#pendingShow = false;
+      this.#clearRevealTimer();
       if (this.#window.isMinimized()) this.#window.restore();
       this.#window.show();
       this.#window.focus();
       return;
     }
+    this.#pendingShow = true;
+    this.#ensureWindow();
+    this.#scheduleRevealFallback();
+    this.#loadConfiguredServer("boot");
+    this.#content?.webContents.focus();
+  }
+
+  // Warms the default session HTTP cache with `/` HTML and `/assets/*` bundles
+  // without mutating cookies or mounting a DOM.
+  async prewarmAssets(origin: string): Promise<void> {
+    const base = parseServerUrl(origin);
+    if (!base) return;
+    try {
+      const response = await net.fetch(`${base}/`, {
+        credentials: "omit",
+      });
+      if (!response.ok) return;
+      const assets = extractAssetPaths(await response.text());
+      await Promise.allSettled(
+        assets.map(async (assetPath) => {
+          const assetResponse = await net.fetch(
+            new URL(assetPath, base).toString(),
+            {
+              credentials: "omit",
+            },
+          );
+          await assetResponse.arrayBuffer();
+        }),
+      );
+    } catch {
+      // Best-effort cache warming; failures do not affect window loading.
+    }
+  }
+
+  // Creates the hidden window and loads the enrolled server in the background
+  // so opening the main window reveals an already-rendered SPA immediately.
+  preloadAuthenticated(origin: string): void {
+    const serverUrl = this.#serverUrl();
+    if (
+      !serverUrl ||
+      !sameOrigin(serverUrl, origin) ||
+      !this.#ctx?.config.get().computerId
+    )
+      return;
+    if (!this.#window) {
+      this.#pendingShow = false;
+      this.#ensureWindow();
+    }
+    this.#navigateToServer(origin, { reason: "prewarm" });
+  }
+
+  #ensureWindow(): void {
+    if (this.#window) return;
     const bounds = this.#ctx!.config.get().window;
     const window = new BaseWindow({
       ...(bounds ?? { width: 1280, height: 820 }),
       minWidth: 800,
       minHeight: 560,
+      show: false,
       title: "Linger",
       backgroundColor: CANVAS,
       icon: nativeImage.createFromBuffer(Buffer.from(iconPng)),
@@ -218,6 +341,8 @@ export class WindowManagerModule implements Module {
     if (titlebar) this.#guardTitlebar(titlebar.webContents);
     this.#guardContent(content.webContents);
     window.on("close", (event) => {
+      this.#pendingShow = false;
+      this.#clearRevealTimer();
       const { x, y, width, height } = window.getNormalBounds();
       this.#ctx!.config.update({ window: { x, y, width, height } });
       if (this.#quitting) return;
@@ -228,17 +353,46 @@ export class WindowManagerModule implements Module {
       titlebar?.webContents.close();
       content.webContents.close();
       if (this.#window === window) {
+        this.#clearRevealTimer();
         this.#window = undefined;
         this.#titlebar = undefined;
         this.#content = undefined;
+        this.#pendingTargetOrigin = undefined;
+        this.#showingShellPage = "none";
+        this.#loadFailed = false;
+        this.#pendingShow = false;
       }
     });
 
     void titlebar?.webContents
       .loadURL(`${SHELL_ORIGIN}/titlebar`)
       .catch(() => undefined);
-    this.loadServer();
-    content.webContents.focus();
+  }
+
+  #scheduleRevealFallback(): void {
+    this.#clearRevealTimer();
+    const timer = setTimeout(() => {
+      this.#revealTimer = undefined;
+      this.#revealIfPending();
+    }, REVEAL_FALLBACK_MS);
+    timer.unref?.();
+    this.#revealTimer = timer;
+  }
+
+  #clearRevealTimer(): void {
+    if (!this.#revealTimer) return;
+    clearTimeout(this.#revealTimer);
+    this.#revealTimer = undefined;
+  }
+
+  #revealIfPending(): void {
+    this.#clearRevealTimer();
+    if (!this.#pendingShow || !this.#window || this.#window.isDestroyed())
+      return;
+    this.#pendingShow = false;
+    if (this.#window.isMinimized()) this.#window.restore();
+    this.#window.show();
+    this.#window.focus();
   }
 
   // Points the app at another server; false when the address is invalid.
@@ -246,26 +400,92 @@ export class WindowManagerModule implements Module {
   // installer moved this computer's server off a taken port): the window
   // follows it as `server.moved`, which keeps this computer's enrollment,
   // instead of `server.changed`, which drops it.
-  setServer(value: string, movedFrom?: string): boolean {
+  setServer(
+    value: string,
+    movedFrom?: string,
+    options?: { reason?: WindowLoadReason },
+  ): boolean {
     const serverUrl = parseServerUrl(value);
     if (!serverUrl) return false;
     const ctx = this.#ctx!;
     const previous = ctx.config.get().serverUrl;
     const { moved, changed } = serverSwitch(previous, serverUrl, movedFrom);
+    const reason: WindowLoadReason =
+      options?.reason ?? (moved ? "port_moved" : "server_changed");
+    const decision = windowLoadDecision(
+      this.#loadState(),
+      previous,
+      serverUrl,
+      { ...(movedFrom !== undefined ? { movedFrom } : {}), reason },
+    );
+    if (
+      decision.action === "noop" &&
+      previous !== undefined &&
+      !sameOrigin(previous, serverUrl)
+    ) {
+      return true;
+    }
     if (serverUrl !== previous) ctx.config.update({ serverUrl });
     if (moved) ctx.bus.emit("server.moved", movedFrom!, serverUrl);
     if (changed) ctx.bus.emit("server.changed", serverUrl);
     setImmediate(() => {
-      this.loadServer();
+      this.#navigateToServer(serverUrl, {
+        ...(movedFrom !== undefined ? { movedFrom } : {}),
+        reason,
+      });
       this.#pushState();
     });
     return true;
   }
 
-  loadServer(): void {
+  loadServer(reason: WindowLoadReason = "retry"): void {
+    this.#loadConfiguredServer(reason);
+  }
+
+  #loadConfiguredServer(reason: WindowLoadReason): void {
     const serverUrl = this.#serverUrl();
-    if (!serverUrl) this.#loadOffline();
-    else void this.#content?.webContents.loadURL(serverUrl).catch(() => {});
+    if (!serverUrl) {
+      this.#loadOffline();
+      return;
+    }
+    this.#navigateToServer(serverUrl, { reason });
+  }
+
+  #loadState(): WindowLoadState {
+    const contents = this.#content?.webContents;
+    const currentUrl =
+      contents && !contents.isDestroyed()
+        ? contents.getURL() || undefined
+        : undefined;
+    return {
+      ...(currentUrl ? { currentUrl } : {}),
+      ...(this.#pendingTargetOrigin
+        ? { pendingTargetOrigin: this.#pendingTargetOrigin }
+        : {}),
+      showingShellPage: this.#showingShellPage,
+      loadFailed: this.#loadFailed,
+    };
+  }
+
+  #navigateToServer(
+    targetOrigin: string,
+    options: { movedFrom?: string; reason: WindowLoadReason },
+  ): void {
+    const contents = this.#content?.webContents;
+    if (!contents || contents.isDestroyed()) return;
+    const decision = windowLoadDecision(
+      this.#loadState(),
+      this.#serverUrl(),
+      targetOrigin,
+      options,
+    );
+    if (decision.action === "noop" || !decision.targetUrl) return;
+    this.#pendingTargetOrigin = new URL(decision.targetUrl).origin;
+    this.#showingShellPage = "none";
+    this.#loadFailed = false;
+    this.#loadStartedAt = Date.now();
+    this.#lastLoadReason = decision.reason;
+    void contents.loadURL(decision.targetUrl).catch(() => undefined);
   }
 
   // While the services on this computer restart on a new version; the
@@ -286,6 +506,9 @@ export class WindowManagerModule implements Module {
   }
 
   #loadLocal(mode: "updating" | "starting" | "failed", value: string): void {
+    this.#pendingTargetOrigin = undefined;
+    this.#showingShellPage = mode === "failed" ? "start-failed" : "starting";
+    this.#loadFailed = mode === "failed";
     const url = new URL(`${OFFLINE_ORIGIN}/`);
     url.searchParams.set(mode, value);
     // Send Diagnostics shows only while a diagnostics server is set up.
@@ -304,6 +527,9 @@ export class WindowManagerModule implements Module {
   }
 
   #loadOffline(error?: string): void {
+    this.#pendingTargetOrigin = undefined;
+    this.#showingShellPage = "offline";
+    this.#loadFailed = Boolean(error);
     const url = new URL(`${OFFLINE_ORIGIN}/`);
     const serverUrl = this.#serverUrl();
     if (serverUrl) url.searchParams.set("server", serverUrl);
@@ -354,7 +580,7 @@ export class WindowManagerModule implements Module {
         break;
       case "reload":
         if (this.#content?.webContents.getURL().startsWith(OFFLINE_ORIGIN))
-          this.loadServer();
+          this.loadServer("retry");
         else this.#content?.webContents.reload();
         break;
       case "minimize":
@@ -388,15 +614,64 @@ export class WindowManagerModule implements Module {
     });
     contents.setWindowOpenHandler(({ url }) => {
       if (navigationDecision(url, this.#serverUrl()) !== "deny")
-        void shell.openExternal(url);
+        this.#openExternal(url);
       return { action: "deny" };
     });
     contents.on("will-attach-webview", (event) => event.preventDefault());
     contents.on("did-fail-load", (_event, code, description, url, isMain) => {
       // -3 is an aborted load, usually a navigation replacing another.
       if (!isMain || code === -3 || url.startsWith(OFFLINE_ORIGIN)) return;
-      this.#ctx!.log.warn("window.load_failed", { code, description });
-      this.#loadOffline(description);
+      this.#revealIfPending();
+      this.#loadFailed = true;
+      this.#pendingTargetOrigin = undefined;
+      this.#ctx!.log.warn("window.load_failed", {
+        code,
+        description,
+        ...(this.#lastLoadReason ? { reason: this.#lastLoadReason } : {}),
+      });
+      const serverUrl = this.#serverUrl();
+      const check =
+        serverUrl && this.#options.localServerResumable
+          ? this.#options.localServerResumable(serverUrl).catch(() => false)
+          : Promise.resolve(false);
+      void check.then((resumable) => {
+        if (this.#showingShellPage !== "none" || !this.#loadFailed) return;
+        if (resumable) this.showStarting();
+        else this.#loadOffline(description);
+      });
+    });
+    contents.on("did-finish-load", () => {
+      this.#revealIfPending();
+      const loadedUrl = contents.getURL();
+      const isOffline = loadedUrl.startsWith(OFFLINE_ORIGIN);
+      if (!isOffline) {
+        this.#pendingTargetOrigin = undefined;
+        this.#showingShellPage = "none";
+        this.#loadFailed = false;
+        if (this.#lastLoadReason !== undefined) {
+          const durationMs =
+            this.#loadStartedAt !== undefined
+              ? Date.now() - this.#loadStartedAt
+              : 0;
+          const reason = this.#lastLoadReason;
+          this.#loadStartedAt = undefined;
+          this.#lastLoadReason = undefined;
+          this.#ctx?.log.info("window.did_finish_load", {
+            reason,
+            duration_ms: durationMs,
+            target: sanitizeTargetUrl(loadedUrl),
+          });
+        }
+      }
+      if (this.#openFromSetupAt === undefined) return;
+      const target = this.#serverUrl();
+      if (!target || !sameOrigin(loadedUrl, target)) return;
+      const startedAt = this.#openFromSetupAt;
+      this.#openFromSetupAt = undefined;
+      this.#ctx?.log.info("local_server.timing", {
+        step: "open_linger_to_load",
+        ms: Date.now() - startedAt,
+      });
     });
     for (const event of [
       "did-navigate",
@@ -415,7 +690,18 @@ export class WindowManagerModule implements Module {
     const decision = navigationDecision(url, this.#serverUrl(), fromUrl);
     if (decision === "allow") return;
     event.preventDefault();
-    if (decision === "external") void shell.openExternal(url);
+    if (decision === "external") this.#openExternal(url);
+  }
+
+  // A link the system browser cannot take otherwise fails silently, so the
+  // failure is logged with the link's origin.
+  #openExternal(url: string): void {
+    shell.openExternal(url).catch((error: unknown) => {
+      this.#ctx?.log.warn("window.open_external_failed", {
+        origin: new URL(url).origin,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   #secureSession(): void {
@@ -448,17 +734,31 @@ export class WindowManagerModule implements Module {
     target.webRequest.onHeadersReceived((details, done) => {
       const contents = this.#content?.webContents;
       const server = this.#serverUrl();
-      done(
-        details.resourceType === "subFrame" &&
-          details.responseHeaders &&
-          contents &&
-          !contents.isDestroyed() &&
-          details.webContentsId === contents.id &&
-          server &&
-          sameOrigin(contents.getURL(), server)
-          ? { responseHeaders: framableHeaders(details.responseHeaders) }
-          : {},
-      );
+      if (
+        details.resourceType !== "subFrame" ||
+        !details.responseHeaders ||
+        !contents ||
+        contents.isDestroyed() ||
+        details.webContentsId !== contents.id ||
+        !server ||
+        !sameOrigin(contents.getURL(), server)
+      ) {
+        done({});
+        return;
+      }
+      const name = details.frame?.name ?? "";
+      if (!name.startsWith(PREVIEW_FRAME_PREFIX)) {
+        done({ responseHeaders: framableHeaders(details.responseHeaders) });
+        return;
+      }
+      // Chromium applies framing rules to the final response only.
+      const redirect = details.statusCode >= 300 && details.statusCode < 400;
+      if (
+        !redirect &&
+        refusesFraming(details.responseHeaders, new URL(server).protocol)
+      )
+        contents.send(IPC.previewFrameRefused, name, details.url);
+      done({});
     });
   }
 

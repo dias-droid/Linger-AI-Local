@@ -61,6 +61,14 @@ const api: LingerDesktopApi = {
       return () => ipcRenderer.off(IPC.connectorOAuthReturn, listener);
     },
   },
+  preview: {
+    onFrameRefused: (callback) => {
+      const listener = (_event: unknown, name: string, url: string): void =>
+        callback(name, url);
+      ipcRenderer.on(IPC.previewFrameRefused, listener);
+      return () => ipcRenderer.off(IPC.previewFrameRefused, listener);
+    },
+  },
   ...(process.platform === "darwin"
     ? {
         permissions: {

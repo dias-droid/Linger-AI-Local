@@ -1,6 +1,9 @@
 import type { TeamHubRuntimePresentationEventRecord } from "@/features/teamhub/teamhub-types";
 
-import { runtimeFailureMessage } from "./runtime-failure-message";
+import {
+  isRunInterruption,
+  runtimeFailureMessage,
+} from "./runtime-failure-message";
 import {
   projectRuntimeChatPresentation,
   type RuntimeActivityEntry,
@@ -161,7 +164,10 @@ export function projectRuntimeActivityPath(
             event.outcome === "failed"
               ? runtimeFailureMessage(event.failure)
               : "Run canceled",
-          tone: event.outcome,
+          tone:
+            event.outcome === "failed" && !isRunInterruption(event.failure)
+              ? "failed"
+              : "canceled",
         });
       }
       continue;

@@ -1,6 +1,7 @@
 import path from "node:path";
 import { lingerHome } from "@linger/local-installation/home";
 import type { LegacyInstanceSkipped } from "@linger/local-installation/legacy-migration";
+import type { RuntimeDescriptor } from "@linger/local-installation/managed-runtimes";
 import { fileURLToPath } from "node:url";
 import { launchInstaller } from "./server/launch.js";
 export { startInstallerServer } from "./server/server.js";
@@ -125,11 +126,15 @@ async function resume(options: ReturnType<typeof parseInstallerArguments>) {
   const { resumeSourceInstance } = await import("./server/resume.js");
   const controller = new AbortController();
   process.once("SIGTERM", () => controller.abort());
+  let runtimeDescriptors: RuntimeDescriptor[] | undefined;
   const outcome = await resumeSourceInstance({
     home: options.home,
     sourceRepo: options.sourceRepo!,
     instanceName: options.instanceName!,
     externalComputer: options.externalComputer,
+    onRuntimeDescriptors: (descriptors) => {
+      runtimeDescriptors = descriptors;
+    },
     signal: controller.signal,
     log: (message) => process.stderr.write(message.replace(/\n?$/, "\n")),
   }).catch((error: unknown) => ({
@@ -144,7 +149,9 @@ async function resume(options: ReturnType<typeof parseInstallerArguments>) {
     outcome.code === 0 && options.externalComputer
       ? await import("./server/instance-runtime.js")
           .then(({ instanceRuntime }) =>
-            instanceRuntime(options.home, options.instanceName!),
+            instanceRuntime(options.home, options.instanceName!, {
+              runtimeDescriptors,
+            }),
           )
           .catch(() => undefined)
       : undefined;
@@ -261,20 +268,42 @@ async function stopInstallation(
   options: ReturnType<typeof parseInstallerArguments>,
 ) {
   const { stopDesktopInstallation } = await import("./server/stop.js");
-  setTimeout(() => process.exit(1), 150_000).unref();
+  const { recordStopOutcome, stopFailure } =
+    await import("./server/stop-diagnostics.js");
+  const failures: ReturnType<typeof stopFailure>[] = [];
+  const save = () =>
+    Promise.race([
+      recordStopOutcome(options.home, failures).catch(() => {
+        process.stderr.write("Could not save stop diagnostics.\n");
+      }),
+      new Promise<void>((resolve) => setTimeout(resolve, 6_000)),
+    ]);
+  let expired = false;
+  const watchdog = setTimeout(() => {
+    expired = true;
+    failures.push(stopFailure("helper", { name: "TimeoutError" }));
+    void save().finally(() => process.exit(1));
+  }, 150_000).unref();
   const outcome = await stopDesktopInstallation({
     home: options.home,
     instanceName: options.instanceName!,
     signal: AbortSignal.timeout(120_000),
     log: (message) => process.stderr.write(message.replace(/\n?$/, "\n")),
-  }).catch((error: unknown) => ({
-    failed: [
-      {
-        home: options.home,
-        message: error instanceof Error ? error.message : String(error),
-      },
-    ],
-  }));
+    onFailure: (stage, error) => failures.push(stopFailure(stage, error)),
+  }).catch((error: unknown) => {
+    failures.push(stopFailure("helper", error));
+    return {
+      failed: [
+        {
+          home: options.home,
+          message: error instanceof Error ? error.message : String(error),
+        },
+      ],
+    };
+  });
+  if (expired) return;
+  clearTimeout(watchdog);
+  await save();
   process.stdout.write(`${JSON.stringify(outcome)}\n`, () =>
     process.exit(outcome.failed.length ? 1 : 0),
   );

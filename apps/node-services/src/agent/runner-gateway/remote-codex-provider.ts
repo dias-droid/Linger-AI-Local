@@ -368,13 +368,15 @@ export class RemoteRuntimeProvider implements AgentProvider {
         : options,
     );
     // Every Runtime defers its native session to the first run.start. Codex's
-    // "" threadId, and Claude's and Pi's UUID, are the first-run markers, so
-    // activation needs no Daemon round trip. A retry after a failed first
+    // and Antigravity's "" threadId, and Claude's and Pi's UUID, are the
+    // first-run markers, so activation needs no Daemon round trip. A retry after a failed first
     // run.start reuses the same pending or UUID identity. CLI installation is
     // awaited by run.start (#start), off the activation path.
     this.#sessionOptions = sessionOptions;
+    // Antigravity, like Codex, names its own session, which the first
+    // run.start reports as its checkpoint.
     const session: RuntimeSession =
-      this.#runtime.type === "codex"
+      this.#runtime.type === "codex" || this.#runtime.type === "antigravity"
         ? { threadId: "" }
         : {
             provider: this.#runtime.type,
@@ -394,7 +396,8 @@ export class RemoteRuntimeProvider implements AgentProvider {
     options: ProviderSessionOptions,
   ): Promise<RuntimeSession> {
     if (
-      this.#runtime.type === "codex" &&
+      (this.#runtime.type === "codex" ||
+        this.#runtime.type === "antigravity") &&
       requireOpaqueObject(session, "session").threadId === ""
     ) {
       return this.createSession(options);
@@ -420,7 +423,10 @@ export class RemoteRuntimeProvider implements AgentProvider {
       this.#sessionOptions = sessionOptions;
       return retained;
     }
-    if (this.#runtime.type === "codex") {
+    if (
+      this.#runtime.type === "codex" ||
+      this.#runtime.type === "antigravity"
+    ) {
       const retained = requireOpaqueObject(session, "session");
       if (typeof retained.threadId !== "string") {
         throw new TypeError("Retained native session identity is invalid");

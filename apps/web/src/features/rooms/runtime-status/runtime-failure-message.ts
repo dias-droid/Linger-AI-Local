@@ -30,7 +30,7 @@ const messages: Record<RuntimeExecutionFailure["code"], string> = {
   reply_not_sent:
     "The Agent finished without sending its reply to the Room. Its model may have answered without using the message command. Ask again, or choose a stronger model for the Agent.",
   interrupted:
-    "The Run was interrupted before it finished, for example by a restart or by stopping the Agent on its Computer. Part of its work may have taken effect; check the result before asking again.",
+    "The Run stopped before it finished because its Computer restarted, for example to apply a system permission, or the Agent was stopped there. Part of its work may have taken effect; check the result before asking again.",
   computer_unavailable:
     "The Agent's Computer could not run it. Make sure the Computer is online, the Agent is not stopped there, and its Runtime is enabled.",
   cleanup_unconfirmed:
@@ -40,6 +40,15 @@ const messages: Record<RuntimeExecutionFailure["code"], string> = {
   unclassified:
     "The Run stopped because of an error the system could not identify. Try again; if it repeats, tell your administrator when it happened.",
 };
+
+/**
+ * An interrupted Run was stopped from outside, by a restart such as the one
+ * macOS asks for after a permission grant, or by stopping the Agent. Nothing
+ * failed, so the Room shows it as a stop, not as an error.
+ */
+export function isRunInterruption(failure?: RuntimeExecutionFailure): boolean {
+  return failure?.code === "interrupted";
+}
 
 export function runtimeFailureMessage(
   failure?: RuntimeExecutionFailure,
@@ -51,6 +60,7 @@ export function runtimeFailureMessage(
     codex: "Codex",
     claude: "Claude",
     pi: "Pi",
+    antigravity: "Antigravity",
   }[failure.runtime_type];
   if (!runtime) return "Run failed";
   const version =

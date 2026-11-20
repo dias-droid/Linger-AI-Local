@@ -58,7 +58,7 @@
     },
     "platform": {
       "owner": "out-of-env",
-      "description": "Variables injected by the runtime environment: image build info, the teamhub-cli runtime, Computer on user machines, deployment platforms, and the Room Document E2E harness. On Linux the Computer reads the desktop session's DISPLAY and WAYLAND_DISPLAY before it opens a browser window. Not part of .env.",
+      "description": "Variables injected by the runtime environment: image build info, the teamhub-cli runtime, Computer on user machines, deployment platforms, and the Room Document E2E harness. On Linux the Computer reads the desktop session's DISPLAY and WAYLAND_DISPLAY before it opens a browser window. The Desktop WSL launcher passes WSL_DISTRO_NAME to the Windows TeamHub CLI so it can resolve local attachment paths. Not part of .env.",
       "names": [
         "APP_VERSION",
         "CLAUDE_CONFIG_DIR",
@@ -90,7 +90,8 @@
         "TEAMHUB_TOKEN",
         "TEAMHUB_TOKEN_FILE",
         "TEAMHUB_URL",
-        "WAYLAND_DISPLAY"
+        "WAYLAND_DISPLAY",
+        "WSL_DISTRO_NAME"
       ]
     },
     "desktop": {

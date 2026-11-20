@@ -1,5 +1,5 @@
-import { afterEach, expect, it } from "vitest";
-import { mkdtemp, rm, writeFile, symlink } from "node:fs/promises";
+import { afterEach, expect, it, vi } from "vitest";
+import { mkdir, mkdtemp, rm, writeFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { windowsPrivatePath } from "./windows-private.js";
@@ -25,6 +25,34 @@ it.skipIf(process.platform !== "win32")(
     await expect(
       windowsPrivatePath(root, "directory"),
     ).resolves.toBeUndefined();
+  },
+);
+it.skipIf(process.platform !== "win32")(
+  "uses the native Get-Acl despite the caller's module path",
+  { timeout: 30_000 },
+  async () => {
+    const root = await fixture();
+    const modules = path.join(root, "modules");
+    const name = "Microsoft.PowerShell.Security";
+    await mkdir(path.join(modules, name), { recursive: true });
+    await writeFile(
+      path.join(modules, name, name + ".psm1"),
+      "function Get-Acl { throw 'UNEXPECTED_ACL_MODULE' }; Export-ModuleMember -Function Get-Acl",
+    );
+    const foreignModules = [modules, process.env.PSModulePath]
+      .filter(Boolean)
+      .join(path.delimiter);
+    vi.stubEnv("PSModulePath", foreignModules);
+    try {
+      const privateFile = path.join(root, "settings.json");
+      await writeFile(privateFile, "{}");
+      await expect(
+        windowsPrivatePath(privateFile, "file"),
+      ).resolves.toBeUndefined();
+      expect(process.env.PSModulePath).toBe(foreignModules);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   },
 );
 it.skipIf(process.platform !== "win32")(
