@@ -51,7 +51,8 @@ func (c *modelSourceComputers) TestLocalComputerByok(_ context.Context, _ roomag
 	c.tested = append(c.tested, request)
 	input := request.Byok
 	if input.ApiKey == nil || *input.ApiKey != modelSourceTestAPIKey {
-		return nodeservicesinternal.ByokTestResult{}, &roomagent.ModelSourceError{Code: "BYOK_AUTH_FAILED"}
+		return nodeservicesinternal.ByokTestResult{}, &roomagent.ModelSourceError{Code: "BYOK_AUTH_FAILED",
+			Message: input.BaseUrl + input.Path + input.Endpoint + " rejected the API key (HTTP 401)."}
 	}
 	return nodeservicesinternal.ByokTestResult{Ok: true, Protocol: input.Protocol, Url: input.BaseUrl + input.Path + input.Endpoint, ModelId: input.ModelId, ContextWindow: 200000}, nil
 }
@@ -175,7 +176,8 @@ func TestLocalComputerModelSourceSwitchMovesAgentsAndEndsChosenWork(t *testing.T
 		t.Fatalf("BYOK test with a path that is not a path: %d %s", status, body)
 	}
 	status, _, body = env.request(alice, http.MethodPost, base+"/test", map[string]any{"byok": map[string]any{"base_url": "https://api.example.com", "path": "/v1", "endpoint": "/messages", "protocol": "anthropic", "api_key": "wrong", "model_id": "vendor/model"}}, "")
-	if status != http.StatusConflict || !containsJSONText(body, "BYOK_AUTH_FAILED") {
+	if status != http.StatusConflict || !containsJSONText(body, "BYOK_AUTH_FAILED") ||
+		!containsJSONText(body, "https://api.example.com/v1/messages rejected the API key (HTTP 401).") {
 		t.Fatalf("BYOK test with a wrong key: %d %s", status, body)
 	}
 	status, _, body = env.request(alice, http.MethodPost, base+"/models", map[string]any{"base_url": "https://api.example.com", "path": "/v1", "endpoint": "/chat/completions", "protocol": "openai-chat", "api_key": modelSourceTestAPIKey}, "")

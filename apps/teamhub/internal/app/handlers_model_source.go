@@ -59,6 +59,18 @@ var modelSourceErrorMessages = map[httpapi.ModelSourceErrorCode]string{
 	httpapi.ModelSourceErrorCodeModelSourceUnconfirmed:        "The Computer did not answer in time",
 }
 
+// For these refusals the Computer's own message names the address it sent to
+// and the endpoint's HTTP status. It never holds the key, and only the
+// Computer's owner can send a BYOK request.
+var modelSourceComputerMessageCodes = map[httpapi.ModelSourceErrorCode]bool{
+	httpapi.ModelSourceErrorCodeByokAuthFailed:       true,
+	httpapi.ModelSourceErrorCodeByokNotFound:         true,
+	httpapi.ModelSourceErrorCodeByokUnreachable:      true,
+	httpapi.ModelSourceErrorCodeByokUpstreamRejected: true,
+}
+
+const maxComputerMessageLength = 1024
+
 var modelSourceErrorStatuses = map[httpapi.ModelSourceErrorCode]int{
 	httpapi.ModelSourceErrorCodeLocalComputerOffline:          http.StatusServiceUnavailable,
 	httpapi.ModelSourceErrorCodeModelSourceForbidden:          http.StatusForbidden,
@@ -354,7 +366,11 @@ func (a *App) writeModelSourceFailure(c *gin.Context, computerID, action string,
 			a.logger.Warn("model_source.refused", "computer_id", computerID, "action", action, "refusal_code", refusal.Code)
 			code = httpapi.ModelSourceErrorCodeModelSourceFailed
 		}
-		a.writeModelSourceError(c, code)
+		message := modelSourceErrorMessages[code]
+		if modelSourceComputerMessageCodes[code] && refusal.Message != "" && len(refusal.Message) <= maxComputerMessageLength {
+			message = refusal.Message
+		}
+		a.writeModelSourceErrorMessage(c, code, message)
 	default:
 		a.logger.Error("model_source.failed", "computer_id", computerID, "action", action, "error", err)
 		a.writeModelSourceError(c, httpapi.ModelSourceErrorCodeModelSourceServiceUnavailable)
@@ -362,11 +378,15 @@ func (a *App) writeModelSourceFailure(c *gin.Context, computerID, action string,
 }
 
 func (a *App) writeModelSourceError(c *gin.Context, code httpapi.ModelSourceErrorCode) {
+	a.writeModelSourceErrorMessage(c, code, modelSourceErrorMessages[code])
+}
+
+func (a *App) writeModelSourceErrorMessage(c *gin.Context, code httpapi.ModelSourceErrorCode, message string) {
 	status, found := modelSourceErrorStatuses[code]
 	if !found {
 		status = http.StatusConflict
 	}
-	a.writeError(c, status, string(code), modelSourceErrorMessages[code])
+	a.writeError(c, status, string(code), message)
 }
 
 func validModelSourceSwitch(request httpapi.ModelSourceSwitchRequest) bool {

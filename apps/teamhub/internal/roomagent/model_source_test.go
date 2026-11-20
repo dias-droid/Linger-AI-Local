@@ -65,7 +65,7 @@ func TestHTTPGatewayAppliesModelSourceAndMapsRefusals(t *testing.T) {
 		var refusal *ModelSourceError
 		switch {
 		case test.want != nil && !errors.Is(err, test.want),
-			test.code != "" && (!errors.As(err, &refusal) || refusal.Code != test.code),
+			test.code != "" && (!errors.As(err, &refusal) || refusal.Code != test.code || refusal.Message != "no"),
 			test.want == nil && test.code == "" && (err == nil || errors.As(err, &refusal)):
 			t.Fatalf("status %d: err=%v", test.status, err)
 		}
