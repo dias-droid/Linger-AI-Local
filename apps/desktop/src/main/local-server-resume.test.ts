@@ -95,7 +95,7 @@ function setupResumeFixture(installerScript: string) {
 }
 
 describe("LocalServerModule resume coordination", () => {
-  it("tracks resuming(), passes resume_ready, and emits structured stage logs", async () => {
+  it("passes resume_ready and emits structured stage logs", async () => {
     const f = setupResumeFixture(`
       setTimeout(() => {
         process.stdout.write(JSON.stringify({ code: 0, details: { origin: "http://localhost:3000" } }) + "\\n");
@@ -103,10 +103,8 @@ describe("LocalServerModule resume coordination", () => {
     `);
 
     await f.host.start();
-    expect(f.module.resuming()).toBe(true);
 
     await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
-    expect(f.module.resuming()).toBe(false);
     expect(f.showStarting).toHaveBeenCalledOnce();
     expect(f.setServer).toHaveBeenCalledWith(
       "http://localhost:3000",
@@ -144,7 +142,6 @@ describe("LocalServerModule resume coordination", () => {
 
     await f.host.start();
     await vi.waitFor(() => expect(f.module.status().phase).toBe("failed"));
-    expect(f.module.resuming()).toBe(false);
 
     const failed = f.logs.find(
       (entry) => entry.event === "local_server.resume_failed",
@@ -160,7 +157,7 @@ describe("LocalServerModule resume coordination", () => {
     await f.host.stop("quit");
   });
 
-  it("reports resumable() true while resuming, true for a valid matching record, and false for malformed or incomplete records", async () => {
+  it("reports resumable() true for the resuming origin only, true for a valid matching record, and false for malformed or incomplete records", async () => {
     const f = setupResumeFixture(`
       setTimeout(() => {
         process.stdout.write(JSON.stringify({ code: 0, details: { origin: "http://localhost:3000" } }) + "\\n");
@@ -168,13 +165,16 @@ describe("LocalServerModule resume coordination", () => {
     `);
 
     await f.host.start();
-    expect(f.module.resuming()).toBe(true);
-    await expect(f.module.resumable("http://localhost:9999")).resolves.toBe(
+    // An active resume vouches only for the origin it resumes, not for a
+    // remote server the user switched to meanwhile.
+    await expect(f.module.resumable("http://localhost:3000")).resolves.toBe(
       true,
+    );
+    await expect(f.module.resumable("http://localhost:9999")).resolves.toBe(
+      false,
     );
 
     await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
-    expect(f.module.resuming()).toBe(false);
     await expect(
       f.module.resumable("http://localhost:3000/rooms/1"),
     ).resolves.toBe(true);

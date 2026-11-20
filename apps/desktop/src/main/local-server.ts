@@ -584,12 +584,9 @@ export class LocalServerModule implements Module {
     }
   }
 
-  resuming(): boolean {
-    return this.#resuming;
-  }
-
   async resumable(serverUrl: string): Promise<boolean> {
-    if (this.#resuming) return true;
+    if (this.#resuming && this.#origin && sameOrigin(this.#origin, serverUrl))
+      return true;
     const record = await this.#readRecord();
     return record !== undefined && sameOrigin(record.origin, serverUrl);
   }

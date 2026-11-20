@@ -466,7 +466,7 @@ export class WindowManagerModule implements Module {
 
   #navigateToServer(
     targetOrigin: string,
-    options?: { movedFrom?: string; reason?: WindowLoadReason },
+    options: { movedFrom?: string; reason: WindowLoadReason },
   ): void {
     const contents = this.#content?.webContents;
     if (!contents || contents.isDestroyed()) return;

@@ -66,20 +66,13 @@ export function windowLoadDecision(
   state: WindowLoadState,
   currentServerUrl: string | undefined,
   nextOrigin: string,
-  options?: { movedFrom?: string; reason?: WindowLoadReason },
+  options: { movedFrom?: string; reason: WindowLoadReason },
 ): WindowLoadDecision {
   const targetOrigin = parseServerUrl(nextOrigin);
   const sw = targetOrigin
-    ? serverSwitch(currentServerUrl, targetOrigin, options?.movedFrom)
+    ? serverSwitch(currentServerUrl, targetOrigin, options.movedFrom)
     : undefined;
-  const reason: WindowLoadReason =
-    options?.reason ??
-    (sw?.moved &&
-    currentServerUrl !== undefined &&
-    options?.movedFrom !== undefined &&
-    sameOrigin(currentServerUrl, options.movedFrom)
-      ? "port_moved"
-      : "server_changed");
+  const { reason } = options;
   if (!targetOrigin) return { action: "noop", reason };
 
   // Keep the current server when a non-explicit load targets another server,
@@ -91,7 +84,7 @@ export function windowLoadDecision(
     reason !== "local_ready" &&
     !(
       sw?.moved &&
-      options?.movedFrom !== undefined &&
+      options.movedFrom !== undefined &&
       sameOrigin(currentServerUrl, options.movedFrom)
     )
   ) {

@@ -228,7 +228,7 @@ describe("windowLoadDecision", () => {
         },
         local,
         moved,
-        { movedFrom: local },
+        { movedFrom: local, reason: "port_moved" },
       ),
     ).toEqual({ action: "load", targetUrl: moved, reason: "port_moved" });
 
