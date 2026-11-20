@@ -63,12 +63,19 @@ try {
     $parentAcl = Get-Acl -LiteralPath $parent.FullName
     $owner = $parentAcl.GetOwner([Security.Principal.SecurityIdentifier]).Value
     if ($owner -notin @($sid.Value, $system, $admins, 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')) { throw 'UNSAFE_PARENT_OWNER' }
+    # An ancestor is unsafe when another account can put a different folder
+    # where the private one is. Delete lets its holder rename or remove the
+    # folder that grants it; a volume root can be neither, and its stock ACL
+    # grants Delete to Authenticated Users. Replacing a child of the root or
+    # rewriting the root's ACL stays refused.
+    $replace = 'DeleteSubdirectoriesAndFiles,ChangePermissions,TakeOwnership'
+    if ($parent.Parent) { $replace = "Delete,$replace" }
     foreach ($rule in $parentAcl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier])) {
       # InheritOnly ACEs do not authorize mutation of this ancestor. They are
       # still checked below when present on the private target itself.
       if ($rule.PropagationFlags -band [Security.AccessControl.PropagationFlags]::InheritOnly) { continue }
       if ($rule.AccessControlType -eq 'Allow' -and $rule.IdentityReference.Value -notin @($sid.Value, $system, $admins, 'S-1-3-0', 'S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464') -and
-          ($rule.FileSystemRights -band [Security.AccessControl.FileSystemRights]'Delete,DeleteSubdirectoriesAndFiles,ChangePermissions,TakeOwnership')) { throw 'UNSAFE_PARENT_ACCESS' }
+          ($rule.FileSystemRights -band [Security.AccessControl.FileSystemRights]$replace)) { throw 'UNSAFE_PARENT_ACCESS' }
     }
     $parent = $parent.Parent
   }
@@ -153,7 +160,8 @@ const WINDOWS_PRIVATE_REASONS = {
   UNSAFE_OWNER: "is owned by another account",
   UNSAFE_PARENT_LINK: "is inside a linked folder",
   UNSAFE_PARENT_OWNER: "is inside a folder another account owns",
-  UNSAFE_PARENT_ACCESS: "is inside a folder other accounts may change",
+  UNSAFE_PARENT_ACCESS:
+    "is inside a folder other accounts on this computer can rename or replace",
   INHERITED_ACCESS: "takes its permissions from its parent folder",
   SHARED_ACCESS: "is shared with other accounts",
   MISSING_OWNER_ACCESS: "does not give your account access",

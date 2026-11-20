@@ -11,6 +11,16 @@ stop unrelated processes, pull mutable images, or delete volumes as recovery.
 Every installation runs natively from a Linger source checkout; Docker is not
 used.
 
+On Windows `windowsPrivatePath` makes a private path owner-only and refuses it
+when another account could put a different folder in its place: an ancestor
+that is a link, that another account owns, or that grants another account the
+right to replace a child, change permissions, or take ownership. Delete on an
+ancestor counts as well, because its holder can rename that folder, except on
+a volume root, which can be neither renamed nor removed. A folder directly on
+a data drive with the stock root ACL therefore passes, and a folder nested in
+one that inherits Modify for Authenticated Users does not. The Daemon's
+`privatefs` treats the volume root the same way.
+
 `atomicPrivate` closes and removes its temporary file on failed writes or
 syncs as well as failed publication. A failed replacement keeps the previous
 private file available, without leaving partial configuration copies behind.
