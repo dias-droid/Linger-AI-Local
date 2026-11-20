@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -33,6 +34,20 @@ type ClaudeToolPolicy struct {
 // and the model loads a definition when it needs that tool, as with Skills.
 // Without it every request carries every MCP tool definition.
 var claudeBuiltinTools = []string{"Read", "Glob", "Grep", "Write", "Edit", "Bash", "TodoWrite", "Skill", "Agent", "WebSearch", "WebFetch", "ToolSearch"}
+
+// claudeWebTools are left out of --tools for a model served through the
+// localmodels gateway, which cannot run Anthropic's server-side web search.
+var claudeWebTools = []string{"WebSearch", "WebFetch"}
+
+// claudeLaunchTools is the --tools list of one launch.
+func claudeLaunchTools(withoutWebTools bool) []string {
+	if !withoutWebTools {
+		return claudeBuiltinTools
+	}
+	return slices.DeleteFunc(slices.Clone(claudeBuiltinTools), func(name string) bool {
+		return slices.Contains(claudeWebTools, name)
+	})
+}
 
 const (
 	claudeInitializeRequestID = "linger-session-restore"
@@ -176,7 +191,7 @@ func claudeBuildArgv(logger *slog.Logger, spec RunSpec) (shaped, launch []string
 		"-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
 		"--permission-mode", "acceptEdits", "--disallowedTools", "AskUserQuestion", "--replay-user-messages",
 		"--permission-prompt-tool", "stdio",
-		"--tools", strings.Join(claudeBuiltinTools, ","),
+		"--tools", strings.Join(claudeLaunchTools(spec.WithoutNativeWebTools), ","),
 		"--strict-mcp-config",
 		"--setting-sources", "project,user",
 		"--managed-settings", claudeManagedSettings(policy),

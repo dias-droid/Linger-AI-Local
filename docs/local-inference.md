@@ -42,6 +42,16 @@ model, and leaving Local model unloads the local models to free memory. When an
 agent is still working, the switch asks first and ends that work only if you
 confirm.
 
+## Web search
+
+On Subscription, Claude Code and Codex keep their own web search. On Local
+model and BYOK the gateway cannot run that provider-hosted search, so the
+computer turns it off and agents search and read pages with `teamhub web search`
+and `teamhub web open`, as Pi always does. Those commands use the web search
+providers set up on the server (Tavily, Brave Search, Firecrawl or You.com,
+whose limited free trial needs no key); pages are read from this computer by
+default. When a provider needs a key, a card in the chat asks for it.
+
 ## Background Memory and Wiki
 
 Memory facts and reports, Agent Memory, and personal Wiki generation use the

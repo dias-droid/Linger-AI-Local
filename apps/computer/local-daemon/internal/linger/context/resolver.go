@@ -27,6 +27,11 @@ type ProviderInstallation struct {
 	// ContextWindows maps a model ID to its discovered context length in
 	// tokens.
 	ContextWindows map[string]int
+	// ModelGateway marks a Runtime whose model is served through the
+	// localmodels gateway (local models or BYOK). Those models have no
+	// provider-hosted web search, so the Runtime's own web tools stay off and
+	// the Agent searches with the TeamHub CLI.
+	ModelGateway bool
 }
 
 type WorkspaceGrant struct {
@@ -47,6 +52,31 @@ type RegistrationBinding struct {
 // defers their definitions behind ToolSearch, so without it the model often
 // does not think to search the web, as with the Computer tools in ToolGuide.
 const claudeWebToolGuide = `Web tools: WebSearch searches the web and WebFetch reads one page. They are loaded on demand: before the first call, load them with ToolSearch (query "select:WebSearch,WebFetch").`
+
+// teamHubWebSupplement follows a subscription Runtime's own web tools.
+const teamHubWebSupplement = "`teamhub web search <query>` and `teamhub web open <url>` also search the web and read pages, through the search providers the user set up."
+
+// teamHubWebToolGuide is the only web access of Pi and of a Runtime on local
+// models or BYOK.
+const teamHubWebToolGuide = "Web tools: search the web with `teamhub web search <query>` and read one page as Markdown with `teamhub web open <url>`; `teamhub web list` shows the search backends and which are ready. Run `teamhub web search --help` for filters."
+
+// webToolGuide describes the web tools an Operation has. Without the TeamHub
+// CLI only Claude's own tools are named.
+func webToolGuide(runtimeType string, modelGateway, teamHubCLI bool) string {
+	native := !modelGateway && (runtimeType == "claude" || runtimeType == "codex")
+	switch {
+	case !teamHubCLI && native && runtimeType == "claude":
+		return claudeWebToolGuide
+	case !teamHubCLI:
+		return ""
+	case native && runtimeType == "claude":
+		return claudeWebToolGuide + " " + teamHubWebSupplement
+	case native:
+		return "Web tools: besides your built-in web search, " + teamHubWebSupplement
+	default:
+		return teamHubWebToolGuide
+	}
+}
 
 type ExecutionResolver struct {
 	// Bound by the local launcher; never accepted from a wire request.
@@ -144,8 +174,13 @@ func (r ExecutionResolver) Resolve(ctx context.Context, command protocol.Command
 	if r.ToolGuide != "" {
 		developerInstructions = strings.TrimSpace(developerInstructions + "\n\n" + r.ToolGuide)
 	}
-	if command.RuntimeType == "claude" {
-		developerInstructions = strings.TrimSpace(developerInstructions + "\n\n" + claudeWebToolGuide)
+	cliInstalled, err := r.cliCredentialInstalled(command.TenantID, command.AgentID)
+	if err != nil {
+		return provider.OperationSpec{}, err
+	}
+	webGuide := webToolGuide(command.RuntimeType, installation.ModelGateway, cliInstalled && r.TeamHubCLIBin != "")
+	if webGuide != "" {
+		developerInstructions = strings.TrimSpace(developerInstructions + "\n\n" + webGuide)
 	}
 	systemPrompt := strings.TrimSpace(strings.Join([]string{
 		instructionValue(request.SessionOptions.BaseInstructions),
@@ -168,9 +203,10 @@ func (r ExecutionResolver) Resolve(ctx context.Context, command protocol.Command
 		DeveloperInstructions: request.SessionOptions.DeveloperInstructions,
 		MCPRelays:             append(json.RawMessage(nil), request.RunResources.MCPServers...),
 		CodexVersion:          installation.Version,
+		WithoutNativeWebTools: installation.ModelGateway,
 		TenantID:              command.TenantID, OwnerActorID: binding.OwnerActorID, AgentID: command.AgentID,
 	}
-	if command.HostAccess == "trusted" || r.ToolGuide != "" {
+	if command.HostAccess == "trusted" || r.ToolGuide != "" || webGuide != "" {
 		spec.DeveloperInstructions = &developerInstructions
 	}
 	// The profile path is stable and depends only on the Agent-level credential,
@@ -188,11 +224,7 @@ func (r ExecutionResolver) Resolve(ctx context.Context, command protocol.Command
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return provider.OperationSpec{}, errors.New("TeamHub CLI configuration is unavailable")
 	}
-	installed, err := r.cliCredentialInstalled(command.TenantID, command.AgentID)
-	if err != nil {
-		return provider.OperationSpec{}, err
-	}
-	if installed {
+	if cliInstalled {
 		if r.TeamHubCLIBin == "" {
 			return provider.OperationSpec{}, errors.New("TeamHub CLI configuration or installation is unavailable; upgrade Local Computer")
 		}

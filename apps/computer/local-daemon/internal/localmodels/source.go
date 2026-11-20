@@ -133,6 +133,19 @@ func isManagedGatewayProfilePath(stateDir, candidate string) bool {
 	return false
 }
 
+// runtimeProfileKeys names the environment variable that selects each
+// Runtime's profile directory.
+var runtimeProfileKeys = map[string]string{"codex": "CODEX_HOME", "claude": "CLAUDE_CONFIG_DIR", "pi": "PI_CODING_AGENT_DIR"}
+
+// GatewayRuntime reports whether a Runtime with this effective environment
+// reaches its model through the localmodels gateway, serving local models or a
+// BYOK endpoint, rather than its own provider: its profile is one localmodels
+// manages. Such models have no provider-hosted web search.
+func GatewayRuntime(environment map[string]string, stateDir, runtimeType string) bool {
+	key, ok := runtimeProfileKeys[runtimeType]
+	return ok && isManagedGatewayProfilePath(stateDir, environment[key])
+}
+
 // OverlayEnvironment computes the effective Runtime discovery/execution
 // environment by applying stateDir/model-source.json over base without
 // restarting the Daemon.

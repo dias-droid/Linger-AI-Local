@@ -328,3 +328,20 @@ func TestModelSourceReportsUnsupportedWhenToolLacksSourceCommand(t *testing.T) {
 	})
 	assertUnsupported("ListByokModels", err)
 }
+
+func TestGatewayRuntimeFollowsTheManagedProfile(t *testing.T) {
+	state := t.TempDir()
+	byok := map[string]string{
+		"CODEX_HOME":          filepath.Join(state, "byok-home", ".codex"),
+		"CLAUDE_CONFIG_DIR":   "/home/user/.claude",
+		"PI_CODING_AGENT_DIR": filepath.Join(state, "gateway-home", ".pi", "agent"),
+	}
+	for runtimeType, want := range map[string]bool{"codex": true, "claude": false, "pi": true, "antigravity": false} {
+		if got := GatewayRuntime(byok, state, runtimeType); got != want {
+			t.Fatalf("GatewayRuntime(%s) = %v", runtimeType, got)
+		}
+	}
+	if GatewayRuntime(byok, "", "codex") {
+		t.Fatal("a Computer without localmodels has no gateway Runtime")
+	}
+}

@@ -113,6 +113,10 @@ type RunSpec struct {
 	// ContextWindow is the model's context length in tokens; zero when
 	// unknown.
 	ContextWindow int
+	// WithoutNativeWebTools turns off Codex's web_search and Claude's
+	// WebSearch and WebFetch: a model served through the localmodels gateway
+	// cannot run provider-hosted search, and the Agent uses teamhub web.
+	WithoutNativeWebTools bool
 	// Readiness counts the spawns, sessions and recycles of this Operation.
 	Readiness           *ReadinessCounters
 	ExposeTurnStarted   bool

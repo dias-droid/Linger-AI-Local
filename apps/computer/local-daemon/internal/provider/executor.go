@@ -78,11 +78,14 @@ type OperationSpec struct {
 	RegistrationID          string
 	DaemonVersion           string
 	CodexVersion            string
-	TenantID                string
-	OwnerActorID            string
-	AgentID                 string
-	ComputerID              string
-	ScopeID                 string
+	// WithoutNativeWebTools turns off the Runtime's own web search and page
+	// fetch, which a model served through the localmodels gateway cannot run.
+	WithoutNativeWebTools bool
+	TenantID              string
+	OwnerActorID          string
+	AgentID               string
+	ComputerID            string
+	ScopeID               string
 	// ContextWindow is the selected model's context length in tokens as
 	// Runtime discovery resolved it; zero when unknown.
 	ContextWindow int
@@ -565,6 +568,7 @@ func (e Executor) Start(ctx context.Context, spec OperationSpec, emit EmitFunc) 
 			MCPServers:            mcpConfig,
 			Effort:                spec.ThinkingLevel,
 			ContextWindow:         spec.ContextWindow,
+			WithoutNativeWebTools: spec.WithoutNativeWebTools,
 			Title:                 spec.ThreadName,
 			AppendPrompt:          spec.SystemPrompt,
 			BaseInstructions:      spec.BaseInstructions,

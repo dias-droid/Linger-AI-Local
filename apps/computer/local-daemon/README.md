@@ -503,9 +503,19 @@ On macOS, `click` takes `delivery_mode: "foreground"` and `action`: the first fo
 The macOS and Linux developer instructions identify the public entry. Codex
 0.163.0 and later calls the public tools directly, outside code mode and
 deferred tool search. Earlier versions use their standard tool discovery.
-Claude Code defers its own `WebSearch` and `WebFetch` behind `ToolSearch`, so
-every Claude Operation's developer instructions also name them and how to load
-them; Codex's `web_search` is not deferred and gets no such line.
+Web tools depend on where the Runtime's model is served. On a subscription,
+Claude Code keeps `WebSearch` and `WebFetch`, deferred behind `ToolSearch`, so
+its developer instructions name them and how to load them; Codex keeps its own
+`web_search`. Both are also told that `teamhub web search` and `teamhub web open`
+search and read through the search providers the user set up. A Runtime whose
+profile is a localmodels-managed gateway profile (local models or BYOK, see
+`localmodels.GatewayRuntime`) cannot run provider-hosted search: Codex launches
+with `web_search="disabled"` after every user override, Claude's `--tools` leaves
+out `WebSearch` and `WebFetch`, and the instructions name only `teamhub web
+search`, `open` and `list`. Pi has no web tools of its own and always gets that
+`teamhub web` line. Without a TeamHub CLI for the Agent, only Claude's own tools
+are named. A parked Codex process launched with the other web setting is not
+reused.
 
 On macOS these tools show only the fields the Computer routes. They hide Cua's `scope` and `capture_id`; only `click` takes `delivery_mode`, as described above.
 Within `ui_exec`, scripts can call individual input methods. An input to a

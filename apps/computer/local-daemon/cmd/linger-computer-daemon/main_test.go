@@ -219,7 +219,7 @@ func TestBoundComputerServiceCommandCannotSelectAnotherConfig(t *testing.T) {
 func TestProviderInstallationsPreserveTerminalExecutionPath(t *testing.T) {
 	environment := map[string]string{"PATH": "daemon-path", "HOME": "/home/user"}
 	discovered := provider.DiscoveryResult{Installations: map[string]provider.RuntimeDiagnostic{"pi": {Type: "pi", ExecutablePath: "/mise/pi", EntryPath: "/mise/latest/pi", ExecutionPath: "terminal-node:daemon-path"}}}
-	installations, _ := providerInstallations(discovered, environment)
+	installations, _ := providerInstallations(discovered, environment, "")
 	if installations["pi"].Environment["PATH"] != "terminal-node:daemon-path" || environment["PATH"] != "daemon-path" {
 		t.Fatalf("terminal execution environment was lost or caller mutated: %+v", installations["pi"])
 	}
@@ -230,7 +230,7 @@ func TestProviderInstallationsKeepDiscoveredContextWindows(t *testing.T) {
 		Type: "codex", ExecutablePath: "/bin/codex",
 		Models: []provider.RuntimeModel{{ID: "local", ContextWindow: 64896}, {ID: "unknown"}},
 	}}}
-	installations, _ := providerInstallations(discovered, nil)
+	installations, _ := providerInstallations(discovered, nil, "")
 	if windows := installations["codex"].ContextWindows; len(windows) != 1 || windows["local"] != 64896 {
 		t.Fatalf("context windows = %v", windows)
 	}
