@@ -905,6 +905,8 @@ async function runNativeSource(
             prepareNativeDatabase({
               instance: current,
               postgresBin: tools.postgresBin,
+              postgresConfigurationExecutable:
+                tools.postgresConfigurationExecutable,
               env,
               signal,
               onOutput: (chunk) => output.write(chunk),

@@ -219,13 +219,16 @@ interface NativeConfiguration {
   executable: string;
   args: string[];
   cwd: string;
+  /** Stable executable path when two cache layouts run the same binary. */
+  configurationExecutable?: string;
+  /** Generated configuration the process reads; a change counts as a new configuration. */
   settings?: string;
 }
 function configurationHash(options: NativeConfiguration): string {
   return createHash("sha256")
     .update(
       JSON.stringify({
-        executable: options.executable,
+        executable: options.configurationExecutable ?? options.executable,
         args: options.args,
         cwd: options.cwd,
         settings: options.settings,
@@ -241,19 +244,16 @@ export async function nativeConfigurationChanged(
   if (!existing || !(await serving(existing))) return false;
   return configurationHash(options) !== existing.configuration;
 }
-export async function startNativeProcess(options: {
-  root: string;
-  name: NativeService;
-  executable: string;
-  args: string[];
-  cwd: string;
-  env: NodeJS.ProcessEnv;
-  signal?: AbortSignal;
-  redactions?: string[];
-  /** Generated configuration the process reads; a change counts as a new configuration. */
-  settings?: string;
-  restartOnConfigurationChange?: boolean;
-}): Promise<NativeProcessState> {
+export async function startNativeProcess(
+  options: NativeConfiguration & {
+    root: string;
+    name: NativeService;
+    env: NodeJS.ProcessEnv;
+    signal?: AbortSignal;
+    redactions?: string[];
+    restartOnConfigurationChange?: boolean;
+  },
+): Promise<NativeProcessState> {
   options.signal?.throwIfAborted();
   const location = paths(options.root, options.name);
   const configuration = configurationHash(options);
