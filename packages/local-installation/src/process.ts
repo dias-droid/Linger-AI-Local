@@ -29,6 +29,8 @@ export interface ProcessOptions {
   env?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** Stops the command after this long without any stdout or stderr output. */
+  idleTimeoutMs?: number;
   capture?: boolean;
   /** Private data sent directly to child stdin; never included in argv or env. */
   input?: string;
@@ -119,8 +121,27 @@ export async function runProcess(
           options.timeoutMs,
         )
       : undefined;
+    let idleTimeout: ReturnType<typeof setTimeout> | undefined;
+    const armIdleTimeout = () => {
+      if (!options.idleTimeoutMs || failure) return;
+      if (idleTimeout) clearTimeout(idleTimeout);
+      idleTimeout = setTimeout(
+        () =>
+          stop(
+            Object.assign(
+              new Error(
+                `Command produced no output for ${Math.round(options.idleTimeoutMs! / 1000)} s`,
+              ),
+              { code: "COMMAND_TIMEOUT" },
+            ),
+          ),
+        options.idleTimeoutMs,
+      );
+    };
+    armIdleTimeout();
     const output = (value: string, stream: "stdout" | "stderr") => {
       if (failure) return;
+      armIdleTimeout();
       if (
         options.capture !== false &&
         stdout.length + stderr.length + value.length > 2_000_000
@@ -161,6 +182,7 @@ export async function runProcess(
     child.once("close", (code) => {
       if (failure) kill("SIGKILL");
       if (timeout) clearTimeout(timeout);
+      if (idleTimeout) clearTimeout(idleTimeout);
       if (killTimer) clearTimeout(killTimer);
       options.signal?.removeEventListener("abort", abort);
       if (failure) reject(failure);

@@ -664,6 +664,12 @@ export async function restoreLocalModels(
   // prepareLocalModels takes the lock itself, and the lock is not reentrant.
   return (
     (await prepareLocalModels(instance, options, dependencies)) ??
-    (await applyNativeSource(home, "local", "pi", options.signal, dependencies))
+    (await applyNativeSource(
+      home,
+      "local",
+      "pi",
+      { signal: options.signal, onEvent: options.onEvent },
+      dependencies,
+    ))
   );
 }

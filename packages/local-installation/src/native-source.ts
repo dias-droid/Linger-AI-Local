@@ -556,12 +556,10 @@ async function runNativeSource(
               (options.setupChoice === "local-models" ||
                 options.localModelsApproval)
             )
-              runtimeOutcome = await applyNativeSource(
-                home,
-                "local",
-                "pi",
+              runtimeOutcome = await applyNativeSource(home, "local", "pi", {
                 signal,
-              );
+                onEvent: emit,
+              });
           } else {
             runtimeOutcome = await prepareRuntime(choice, {
               home,
@@ -580,12 +578,10 @@ async function runNativeSource(
                   ?.code === "RUNTIME_AUTH_REQUIRED")
             )
               runtimeOutcome =
-                (await applyNativeSource(
-                  home,
-                  "subscription",
-                  choice,
+                (await applyNativeSource(home, "subscription", choice, {
                   signal,
-                )) ?? runtimeOutcome;
+                  onEvent: emit,
+                })) ?? runtimeOutcome;
           }
           if (
             runtimeOutcome &&

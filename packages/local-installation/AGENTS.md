@@ -295,8 +295,17 @@ through `onRuntimeDescriptors` so callers avoid a second status probe. Within
 dependency and voice tool preparations stay sequential on the shared
 native-tools lock; collaboration services start concurrently when `node-services`
 is not pre-stopped for a TeamHub config restart. `runLocalmodels`
-forwards `harness apply` `download:retrying` and `total: null` byte progress
-(without a total), and `prepareByokRuntime` logs elapsed time every 10 s while mounting
+reads the kit's JSON event lines from stdout and stderr alike and forwards
+byte progress (`total: null` without a total) and the download
+`connecting`, `switching` and `retrying` stages of every command, labeled per
+command; a host is shown only when it is a plain hostname, and unknown states
+are ignored. `harness apply` also forwards its extract, verify and install
+stages. Setup's `source apply` (`prepareByokRuntime`, `applyNativeSource`) may
+download Bifrost first, so it forwards these events and has no wall-clock
+limit: `idleTimeoutMs` (240 s, above the kit's longest silent span, the BYOK
+endpoint probe of up to about 35 s followed by Bifrost's health wait of up to
+180 s) stops it only after that long with no output. The resume mount
+keeps its 90 s wall clock. `prepareByokRuntime` logs elapsed time every 10 s while mounting
 the BYOK gateway (a log line, since the job appends and persists every stage
 event).
 

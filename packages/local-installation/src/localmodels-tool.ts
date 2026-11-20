@@ -464,6 +464,33 @@ export async function runLocalmodels(
     dependencies.run,
   );
 }
+// Hosts come from the kit's mirror list; anything else is not shown.
+function displayHost(value: unknown): string | undefined {
+  return typeof value === "string" &&
+    value.length <= 253 &&
+    /^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?$/.test(value)
+    ? value
+    : undefined;
+}
+function downloadStageMessage(
+  value: Record<string, unknown>,
+  label: string,
+  harnessApply: boolean,
+): string | undefined {
+  if (value.state === "connecting") {
+    const host = displayHost(value.host);
+    return host ? `${label}: connecting to ${host}…` : `${label}: connecting…`;
+  }
+  if (value.state === "switching") {
+    const host = displayHost(value.to);
+    return host ? `${label}: switching to ${host}…` : `${label}: switching…`;
+  }
+  if (value.state === "retrying")
+    return harnessApply
+      ? "Retrying the Harness download…"
+      : `${label}: retrying…`;
+  return undefined;
+}
 async function runLocalmodelsCommand(
   home: string,
   args: string[],
@@ -490,6 +517,13 @@ async function runLocalmodelsCommand(
   delete env.PYTHONHOME;
   delete env.PYTHONSTARTUP;
   delete env.PYTHONINSPECT;
+  const harnessApply = args[0] === "harness" && args[1] === "apply";
+  const label =
+    args[0] === "gateway"
+      ? "Downloading the application model gateway"
+      : args[0] === "source" && args[1] === "apply"
+        ? "Downloading the model gateway"
+        : "Downloading the selected Harness";
   let pending = "";
   const onOutput = (chunk: string) => {
     options.onOutput?.(chunk);
@@ -504,13 +538,19 @@ async function runLocalmodelsCommand(
       } catch {
         continue;
       }
-      if (
-        args[0] === "harness" &&
-        args[1] === "apply" &&
-        value?.kind === "stage"
-      ) {
+      if (value?.kind === "stage" && value.stage === "download") {
+        const message = downloadStageMessage(value, label, harnessApply);
+        if (message)
+          options.onEvent?.({
+            kind: "stage",
+            stage: "runtime",
+            state: "running",
+            message,
+          });
+        continue;
+      }
+      if (harnessApply && value?.kind === "stage") {
         const messages: Record<string, string> = {
-          "download:retrying": "Retrying the Harness download…",
           "extract:running":
             "Extracting Harness files and applying private permissions…",
           "verify:running": "Verifying the installed Harness executable…",
@@ -549,10 +589,6 @@ async function runLocalmodelsCommand(
           value.completed > value.total)
       )
         continue;
-      const label =
-        args[0] === "gateway"
-          ? "Downloading the application model gateway"
-          : "Downloading the selected Harness";
       options.onEvent?.({
         kind: "stage",
         stage: "runtime",

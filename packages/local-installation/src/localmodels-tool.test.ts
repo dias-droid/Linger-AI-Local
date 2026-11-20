@@ -839,3 +839,148 @@ test("uses a configured development localmodels checkout without downloading a k
     }),
   );
 });
+
+test("maps source apply download stages to model gateway messages", async () => {
+  const f = await fixture();
+  vi.stubEnv("LINGER_LOCALMODELS_TOOL_JSON", JSON.stringify(f.source));
+  const onEvent = vi.fn();
+  const lines = [
+    {
+      kind: "stage",
+      stage: "download",
+      state: "connecting",
+      host: "registry.npmmirror.com",
+      attempt: 1,
+      attempts: 3,
+    },
+    {
+      kind: "stage",
+      stage: "download",
+      state: "connecting",
+      host: "evil.example/path?x=<b>",
+    },
+    {
+      kind: "stage",
+      stage: "download",
+      state: "switching",
+      from: "registry.npmmirror.com",
+      to: "registry.npmjs.org",
+      reason: "slow",
+      completed: 10,
+    },
+    { kind: "stage", stage: "download", state: "switching", to: 42 },
+    {
+      kind: "stage",
+      stage: "download",
+      state: "retrying",
+      attempt: 2,
+      attempts: 3,
+      reason: "private-secret-reason",
+      completed: 5,
+      waitSeconds: 2,
+    },
+    { kind: "stage", stage: "download", state: "teleporting" },
+    {
+      kind: "stage",
+      stage: "download",
+      state: "connecting",
+      host: "a".repeat(254),
+    },
+    {
+      kind: "progress",
+      stage: "download",
+      completed: 4,
+      total: 10,
+      unit: "bytes",
+    },
+  ];
+  const run = vi.fn<typeof import("./process.js").runProcess>(
+    async (_file, _args, options) => {
+      options?.onOutput?.(
+        lines.map((line) => JSON.stringify(line)).join("\n") +
+          '\nnot json\n{"kind":"stage","stage":null}\n',
+      );
+      return { code: 0, stdout: "{}", stderr: "" };
+    },
+  );
+  await runLocalmodels(
+    f.home,
+    ["source", "apply", "--mode", "byok", "--json"],
+    { onEvent },
+    { run },
+  );
+  const messages = onEvent.mock.calls
+    .map(([event]) => event as { kind: string; message: string })
+    .filter((event) => event.kind === "stage")
+    .map((event) => event.message);
+  expect(messages).toEqual([
+    "Downloading the model gateway: connecting to registry.npmmirror.com…",
+    "Downloading the model gateway: connecting…",
+    "Downloading the model gateway: switching to registry.npmjs.org…",
+    "Downloading the model gateway: switching…",
+    "Downloading the model gateway: retrying…",
+    "Downloading the model gateway: connecting…",
+    "Downloading the model gateway…",
+  ]);
+  expect(onEvent).toHaveBeenCalledWith(
+    expect.objectContaining({
+      progress: { completed: 4, total: 10, unit: "bytes" },
+    }),
+  );
+  expect(JSON.stringify(onEvent.mock.calls)).not.toContain("private-secret");
+});
+
+test("labels gateway download stages as the application model gateway", async () => {
+  const f = await fixture();
+  vi.stubEnv("LINGER_LOCALMODELS_TOOL_JSON", JSON.stringify(f.source));
+  const onEvent = vi.fn();
+  const run = vi.fn<typeof import("./process.js").runProcess>(
+    async (_file, _args, options) => {
+      options?.onOutput?.(
+        '{"kind":"stage","stage":"download","state":"connecting","host":"github.com"}\n',
+      );
+      return { code: 0, stdout: "{}", stderr: "" };
+    },
+  );
+  await runLocalmodels(f.home, ["gateway", "install"], { onEvent }, { run });
+  expect(onEvent).toHaveBeenCalledWith(
+    expect.objectContaining({
+      message:
+        "Downloading the application model gateway: connecting to github.com…",
+    }),
+  );
+});
+
+test("reads source apply events from stderr while stdout stays the final document", async () => {
+  const f = await fixture();
+  vi.stubEnv("LINGER_LOCALMODELS_TOOL_JSON", JSON.stringify(f.source));
+  const onEvent = vi.fn();
+  const { runProcess } = await import("./process.js");
+  const run = vi.fn<typeof runProcess>((_file, _args, options) =>
+    runProcess(
+      process.execPath,
+      [
+        "-e",
+        `process.stderr.write(JSON.stringify({kind:"stage",stage:"download",state:"connecting",host:"registry.npmmirror.com"})+"\\n");
+process.stdout.write(JSON.stringify({code:"BYOK_PROBE_FAILED",message:"Endpoint refused."}));`,
+      ],
+      { ...options, cwd: undefined, env: process.env },
+    ),
+  );
+  const result = await runLocalmodels(
+    f.home,
+    ["source", "apply", "--json"],
+    { onEvent },
+    { run },
+  );
+  expect(JSON.parse(result.stdout)).toEqual({
+    code: "BYOK_PROBE_FAILED",
+    message: "Endpoint refused.",
+  });
+  expect(onEvent).toHaveBeenCalledWith(
+    expect.objectContaining({
+      message:
+        "Downloading the model gateway: connecting to registry.npmmirror.com…",
+    }),
+  );
+});

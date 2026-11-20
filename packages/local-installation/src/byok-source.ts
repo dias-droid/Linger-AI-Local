@@ -213,13 +213,26 @@ export async function checkByokEndpoint(
   };
 }
 
+// The kit's longest silent span is a BYOK apply with Bifrost already
+// installed: the endpoint probe (up to about 35 s) and then Bifrost's health
+// wait (up to 180 s), with no output between them. A download may run longer
+// than any wall clock, so a source apply that still reports progress is never
+// cut off.
+const SOURCE_APPLY_IDLE_TIMEOUT_MS = 240_000;
+
 // The installer switches the source through localmodels, as the Computer
 // does from Settings, so model-source.json has one writer.
 function applySource(
   home: string,
   mode: "local" | "subscription" | "byok",
   runtime: NativeRuntime,
-  options: { signal: AbortSignal; timeoutMs: number; input?: string },
+  options: {
+    signal: AbortSignal;
+    timeoutMs?: number;
+    idleTimeoutMs?: number;
+    input?: string;
+    onEvent?: (event: InstallerEvent) => void;
+  },
   localmodels: typeof runLocalmodels,
 ) {
   return localmodels(
@@ -242,7 +255,13 @@ function applySource(
     ],
     {
       signal: options.signal,
-      timeoutMs: options.timeoutMs,
+      ...(options.timeoutMs === undefined
+        ? {}
+        : { timeoutMs: options.timeoutMs }),
+      ...(options.idleTimeoutMs === undefined
+        ? {}
+        : { idleTimeoutMs: options.idleTimeoutMs }),
+      ...(options.onEvent ? { onEvent: options.onEvent } : {}),
       ...(options.input === undefined ? {} : { input: options.input }),
     },
   );
@@ -357,8 +376,9 @@ export async function prepareByokRuntime(
       runtime,
       {
         signal: options.signal,
-        timeoutMs: 180_000,
+        idleTimeoutMs: SOURCE_APPLY_IDLE_TIMEOUT_MS,
         input: byokStdin(validated),
+        onEvent: options.onEvent,
       },
       dependencies.localmodels ?? runLocalmodels,
     );
@@ -393,14 +413,18 @@ export async function applyNativeSource(
   home: string,
   mode: "local" | "subscription",
   runtime: NativeRuntime,
-  signal: AbortSignal,
+  options: { signal: AbortSignal; onEvent?: (event: InstallerEvent) => void },
   dependencies: { localmodels?: typeof runLocalmodels } = {},
 ): Promise<InstallOutcome | undefined> {
   const result = await applySource(
     home,
     mode,
     runtime,
-    { signal, timeoutMs: 180_000 },
+    {
+      signal: options.signal,
+      idleTimeoutMs: SOURCE_APPLY_IDLE_TIMEOUT_MS,
+      ...(options.onEvent ? { onEvent: options.onEvent } : {}),
+    },
     dependencies.localmodels ?? runLocalmodels,
   );
   return result.code === 0
@@ -547,7 +571,7 @@ export async function mountSavedByokSource(
       home,
       "byok",
       source.runtime,
-      { signal: options.signal, timeoutMs: 90_000 },
+      { signal: options.signal, timeoutMs: 90_000, onEvent: options.onEvent },
       dependencies.localmodels ?? runLocalmodels,
     );
     if (result.code !== 0)

@@ -146,7 +146,7 @@ describe("BYOK localmodels integration", () => {
       home,
       "subscription",
       "codex",
-      new AbortController().signal,
+      { signal: new AbortController().signal },
       {
         localmodels: async (_home, args) => {
           calls.push(args);
@@ -173,7 +173,7 @@ describe("BYOK localmodels integration", () => {
       await makeHome(),
       "local",
       "pi",
-      new AbortController().signal,
+      { signal: new AbortController().signal },
       {
         localmodels: async () => ({
           code: 2,
@@ -585,5 +585,85 @@ describe("restoreByokSource", () => {
         },
       ),
     ).rejects.toThrow();
+  });
+});
+
+describe("source apply timeouts and progress", () => {
+  const onEvent = () => {};
+
+  it("bounds a BYOK apply by silence, not wall clock, and forwards events", async () => {
+    const localmodels = vi.fn(async () => ({
+      code: 0,
+      stdout: "{}",
+      stderr: "",
+    }));
+    await prepareByokRuntime(
+      {
+        baseUrl: "https://api.example.com/v1",
+        apiKey: "sk-test",
+        modelId: "m",
+        runtime: "claude",
+      },
+      { home: await makeHome(), signal: new AbortController().signal, onEvent },
+      {
+        prepareNative: async () => ({ code: 0, state: "ready", message: "" }),
+        localmodels,
+      },
+    );
+    const options = (localmodels.mock.calls[0] as unknown[])[2] as Record<
+      string,
+      unknown
+    >;
+    expect(options).toMatchObject({ idleTimeoutMs: 240_000, onEvent });
+    expect(options).not.toHaveProperty("timeoutMs");
+  });
+
+  it("bounds a native source apply by silence and still reads its failure", async () => {
+    const localmodels = vi.fn(async () => ({
+      code: 2,
+      stdout: JSON.stringify({
+        code: "GATEWAY_FAILED",
+        message: "No gateway.",
+      }),
+      stderr:
+        '{"kind":"stage","stage":"download","state":"connecting","host":"registry.npmmirror.com"}\n',
+    }));
+    const outcome = await applyNativeSource(
+      await makeHome(),
+      "local",
+      "pi",
+      { signal: new AbortController().signal, onEvent },
+      { localmodels },
+    );
+    expect(outcome).toMatchObject({
+      message: "No gateway.",
+      details: { code: "GATEWAY_FAILED" },
+    });
+    const options = (localmodels.mock.calls[0] as unknown[])[2] as Record<
+      string,
+      unknown
+    >;
+    expect(options).toMatchObject({ idleTimeoutMs: 240_000, onEvent });
+    expect(options).not.toHaveProperty("timeoutMs");
+  });
+
+  it("keeps the resume mount's wall clock and forwards its events", async () => {
+    const home = await makeHome();
+    await writeSource(home, byokSource(null));
+    const localmodels = vi.fn(async () => ({
+      code: 0,
+      stdout: "{}",
+      stderr: "",
+    }));
+    await restoreByokSource(
+      home,
+      { signal: new AbortController().signal, onEvent },
+      { localmodels },
+    );
+    const apply = localmodels.mock.calls.find((call) =>
+      (call as unknown[])[1]?.toString().startsWith("source,apply"),
+    ) as unknown[] | undefined;
+    expect(apply?.[2]).toMatchObject({ timeoutMs: 90_000, onEvent });
+    expect(apply?.[2]).not.toHaveProperty("idleTimeoutMs");
   });
 });
