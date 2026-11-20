@@ -132,6 +132,9 @@ elsewhere.
 | Publisher / License           | 发布者 / 许可证            |                                                   |
 | Parameters                    | 参数量                     | Of a model.                                       |
 | Model source                  | 模型来源                   |                                                   |
+| Publish (a template)          | 发布                       |                                                   |
+| Marketplace                   | 模板市场                   | Where published Agent templates are listed.       |
+| Official template             | 官方模板                   |                                                   |
 
 ## Style
 
