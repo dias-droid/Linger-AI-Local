@@ -3208,6 +3208,91 @@ LEARN MORE
 {"command":["video-gen"],"description":"Start a video generation job, look up model prices, or check a job and save its result.","read_only":false,"input_schema":{"type":"object","additionalProperties":false,"properties":{"provider":{"enum":["fal","higgsfield"]},"type":{"enum":["image","video"]},"mode":{"enum":["generate","price","job"]},"model":{"type":"string","minLength":1},"parameters":{"type":"object","additionalProperties":true},"files":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"field":{"type":"string","minLength":1},"path":{"type":"string","minLength":1}},"required":["field","path"]}},"jobIds":{"type":"array","items":{"type":"string","minLength":1}},"output":{"type":"string","minLength":1},"limit":{"type":"integer","minimum":1,"maximum":100,"default":20},"cursor":{"type":"string","minLength":1},"account":{"type":"string","minLength":1,"maxLength":240}},"required":["provider","type","mode"]},"output_schema":{"anyOf":[{"anyOf":[{"type":"object","additionalProperties":false,"properties":{"account":{"type":"object","additionalProperties":false,"properties":{"connectionId":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"displayName":{"type":"string"},"identityLabel":{"type":"string"}},"required":["connectionId","name","displayName","identityLabel"]},"models":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"modelId":{"type":"string","minLength":1},"name":{"type":"string"},"outputType":{"enum":["image","video"]},"description":{"type":"string"},"price":{"type":"object","additionalProperties":false,"properties":{"unitPrice":{"type":"number","minimum":0},"unit":{"type":"string"},"currency":{"type":"string"}},"required":["unitPrice"]},"inputs":{"type":"array","items":{"type":"object","additionalProperties":true}},"outputs":{"type":"array","items":{"type":"object","additionalProperties":true}},"parameters":{"type":"array","items":{"type":"object","additionalProperties":true}},"medias":{"type":"array","items":{"type":"object","additionalProperties":true}},"aspectRatios":{"type":"array","items":{}},"durations":{"type":"array","items":{}},"durationRange":{"type":"object","additionalProperties":true},"supportsUnlimited":{"type":"boolean"},"docsUrl":{"type":"string"}},"required":["modelId","outputType"]}},"hasMore":{"type":"boolean"},"nextCursor":{"type":"string","minLength":1},"pricingStatus":{"enum":["available","partial","unavailable"]},"warning":{"type":"string"}},"required":["account","models","hasMore","pricingStatus"]},{"type":"object","additionalProperties":false,"properties":{"account":{"type":"object","additionalProperties":false,"properties":{"connectionId":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"displayName":{"type":"string"},"identityLabel":{"type":"string"}},"required":["connectionId","name","displayName","identityLabel"]},"requestId":{"type":"string","minLength":1},"model":{"type":"string","minLength":1},"status":{"enum":["queued","running","completed","failed"]},"queuePosition":{"type":"integer","minimum":0},"error":{"type":"string"},"outputs":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"url":{"type":"string","minLength":1},"contentType":{"type":"string"},"fileName":{"type":"string"},"sizeBytes":{"type":"integer"}},"required":["url"]}},"result":{"type":"object","additionalProperties":true},"files":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"url":{"type":"string","minLength":1},"path":{"type":"string","minLength":1},"sizeBytes":{"type":"integer","minimum":0},"sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},"warning":{"type":"string"}},"required":["url","path","sizeBytes","sha256"]}},"nextCommand":{"type":"string"},"warning":{"type":"string"}},"required":["account","requestId","model","status"]},{"type":"object","additionalProperties":false,"properties":{"account":{"type":"object","additionalProperties":false,"properties":{"connectionId":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"displayName":{"type":"string"},"identityLabel":{"type":"string"}},"required":["connectionId","name","displayName","identityLabel"]},"jobs":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"jobId":{"type":"string","minLength":1},"type":{"type":"string"},"model":{"type":"string"},"status":{"enum":["queued","running","completed","failed"]},"error":{"type":"string"},"url":{"type":"string"},"thumbnailUrl":{"type":"string"}},"required":["jobId","status"]}},"rejected":{"type":"object","additionalProperties":false,"properties":{"error":{"type":"string"},"reason":{"type":"string"},"recoveryTool":{"type":"string"}},"required":[]},"unlimitedChoice":{},"inputs":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"source":{"type":"string","minLength":1},"mediaId":{"type":"string","minLength":1}},"required":["source","mediaId"]}},"adjustments":{"type":"object","additionalProperties":true},"warning":{"type":"string"},"files":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{"url":{"type":"string","minLength":1},"path":{"type":"string","minLength":1},"sizeBytes":{"type":"integer","minimum":0},"sha256":{"type":"string","pattern":"^[a-f0-9]{64}$"},"warning":{"type":"string"}},"required":["url","path","sizeBytes","sha256"]}},"nextCommand":{"type":"string"}},"required":["account","jobs"]}]},{"type":"object","additionalProperties":false,"properties":{"account":{"type":"object","additionalProperties":false,"properties":{"connectionId":{"type":"string","minLength":1},"name":{"type":"string","minLength":1},"displayName":{"type":"string"},"identityLabel":{"type":"string"}},"required":["connectionId","name","displayName","identityLabel"]},"result":{"type":"object","additionalProperties":false,"properties":{"action":{"const":"confirmation_requested"},"confirmation":{"type":"object","additionalProperties":false,"properties":{"status":{"const":"pending"},"interactionId":{"type":"string","minLength":1},"messageId":{"type":"string","minLength":1},"roomId":{"type":"string","minLength":1}},"required":["status","interactionId","messageId","roomId"]}},"required":["action","confirmation"]}},"required":["account","result"]}]},"cli":{"usage":["teamhub video-gen --provider <provider> --model <model-id> --prompt <text> [flags]","teamhub video-gen --provider <provider> --price [--model <model-id>] [flags]","teamhub video-gen --provider <provider> --model <model-id> --job <job-id> [flags]"],"arguments":[],"options":{"--provider":{"description":"fal or higgsfield; required."},"--model":{"description":"Provider model ID; required for generation and job lookup."},"--prompt":{"description":"What to generate; required for generation."},"--price":{"description":"Read model prices without starting a job; --model selects one model and its parameters.","boolean":true},"--job":{"description":"Check an existing job once without submitting again; repeatable for Higgsfield.","repeatable":true},"--set":{"description":"Model parameter as field=value; repeatable. JSON values keep their types.","repeatable":true},"--file":{"description":"Reference input as field=local-path; repeatable. Use a fal input field or a Higgsfield media role.","repeatable":true},"--output":{"description":"Where finished results are saved: one to a new file, several to a new directory. Saved by the --job check that finds the job finished; never overwrites."},"--limit":{"description":"Price-list page size, 1-100, default 20."},"--cursor":{"description":"Continue the previous price-list page with the same provider and account."},"--account":{"description":"Select a connection ID or complete account label; when authorization is missing, an authorization card is shown in the chat."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true},"--operation-id":{"description":"Stable operation identity for recovery."}},"notes":["Generation spends the selected connected account's balance. --price returns fal unit prices; Higgsfield reports pricingStatus=unavailable because its model catalog exposes no price table. No estimate is substituted and no job starts.","Generation returns as soon as the provider accepts the job; it does not wait for the result. Run the returned nextCommand later to check the job once; it saves to --output when the job has finished. Never repeat a paid submission after an unknown outcome.","--price --model also shows model-specific parameters and reference inputs. Pass those parameters with --set and local reference files with --file.","A single result is saved as delivered under the requested name. A warning reports a mismatched file extension; no conversion is performed.","Help and schema are available offline; TeamHub checks current access at execution time."]}}
 ",
   },
+  "web connect": {
+    "help": "exit 0
+teamhub web connect <tavily|brave|firecrawl|you>
+Ask the user for a web search backend's API key: posts a key card in this chat unless the backend is already ready.
+
+Arguments:
+  <backend>  tavily, brave, firecrawl or you.
+
+Options:
+  --json  Return machine-readable JSON.
+  --help  Show this offline command reference.
+  -h  Show help.
+  --schema  Show offline input and output schemas.
+When it posts the card, end your turn. The card's result wakes you when the user adds a key or declines. Never ask for an API key in a message.
+",
+    "schema": "exit 0
+{"command":["web","connect"],"description":"Ask the user for a web search backend's API key: posts a key card in this chat unless the backend is already ready.","read_only":true,"input_schema":{"type":"object","properties":{"backend":{"enum":["tavily","brave","firecrawl","you"]}},"required":["backend"],"additionalProperties":false},"output_schema":{"type":"object","properties":{"status":{"enum":["ready","connection_requested"]},"backend":{"type":"object"},"message_id":{"type":"string"},"interaction_id":{"type":"string"}},"required":["status"]},"cli":{"usage":["teamhub web connect <tavily|brave|firecrawl|you>"],"arguments":["<backend>  tavily, brave, firecrawl or you."],"options":{"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true}},"notes":["When it posts the card, end your turn. The card's result wakes you when the user adds a key or declines. Never ask for an API key in a message."]}}
+",
+  },
+  "web list": {
+    "help": "exit 0
+teamhub web list [--backend <backend>]
+List the web search backends with what each supports, whether it is ready, and its quota.
+
+Options:
+  --backend <value>  Show only this backend: tavily, brave, firecrawl, you or direct.
+  --json  Return machine-readable JSON.
+  --help  Show this offline command reference.
+  -h  Show help.
+  --schema  Show offline input and output schemas.
+",
+    "schema": "exit 0
+{"command":["web","list"],"description":"List the web search backends with what each supports, whether it is ready, and its quota.","read_only":true,"input_schema":{"type":"object","properties":{"backend":{"enum":["tavily","brave","firecrawl","you","direct"]}},"additionalProperties":false},"output_schema":{"type":"object","properties":{"default_search":{"type":"string"},"chosen_default_search":{"type":"string"},"default_open":{"type":"string"},"can_save_keys":{"type":"boolean"},"backends":{"type":"array","items":{"type":"object"}}},"required":["default_search","default_open","backends"]},"cli":{"usage":["teamhub web list [--backend <backend>]"],"arguments":[],"options":{"--backend":{"description":"Show only this backend: tavily, brave, firecrawl, you or direct."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true}},"notes":[]}}
+",
+  },
+  "web open": {
+    "help": "exit 0
+teamhub web open <url> [--backend direct|tavily|firecrawl|you] [--output <file>]
+Read one web page as Markdown, from this computer or through a provider.
+
+Arguments:
+  <url>  An absolute http or https URL.
+
+Options:
+  --backend <value>  direct (default) fetches the page from this computer; tavily, firecrawl or you read it through the provider, which helps with pages that need JavaScript or block plain requests.
+  --output <value>  Save the Markdown to this new file instead of printing it; never overwrites.
+  --json  Return machine-readable JSON.
+  --help  Show this offline command reference.
+  -h  Show help.
+  --schema  Show offline input and output schemas.
+The Markdown is cut at 20,000 characters; truncated says when it was.
+Examples:
+teamhub web open https://www.postgresql.org/about/news/
+teamhub web open https://example.com/report --backend firecrawl --output report.md
+",
+    "schema": "exit 0
+{"command":["web","open"],"description":"Read one web page as Markdown, from this computer or through a provider.","read_only":true,"input_schema":{"type":"object","properties":{"url":{"type":"string","minLength":1,"maxLength":2048},"backend":{"enum":["tavily","firecrawl","you","direct"]},"output":{"type":"string"}},"required":["url"],"additionalProperties":false},"output_schema":{"type":"object","properties":{"url":{"type":"string"},"title":{"type":"string"},"markdown":{"type":"string","description":"The page as Markdown; absent when saved with --output."},"path":{"type":"string","description":"The file written with --output."},"truncated":{"type":"boolean","description":"True when the page was longer than 20,000 characters."}},"required":["url","truncated"]},"cli":{"usage":["teamhub web open <url> [--backend direct|tavily|firecrawl|you] [--output <file>]"],"arguments":["<url>  An absolute http or https URL."],"options":{"--backend":{"description":"direct (default) fetches the page from this computer; tavily, firecrawl or you read it through the provider, which helps with pages that need JavaScript or block plain requests."},"--output":{"description":"Save the Markdown to this new file instead of printing it; never overwrites."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true}},"notes":["The Markdown is cut at 20,000 characters; truncated says when it was."]}}
+",
+  },
+  "web search": {
+    "help": "exit 0
+teamhub web search <query> [--backend tavily|brave|firecrawl|you] [--limit 1-20] [--recency day|week|month|year] [--site <domain>]...
+Search the web through a provider with the deployment's saved API key.
+
+Arguments:
+  <query>  What to search for; 1-400 characters.
+
+Options:
+  --backend <value>  tavily, brave, firecrawl or you. Without it the user's default runs, else the first ready backend.
+  --limit <value>  Results to return; 1-20, default 5.
+  --recency <value>  Only results from the past day, week, month or year.
+  --site <value>  Only results from this domain; repeat up to the backend's max_sites (teamhub web list).
+  --json  Return machine-readable JSON.
+  --help  Show this offline command reference.
+  -h  Show help.
+  --schema  Show offline input and output schemas.
+A backend never falls back to another one. When it needs an API key, TeamHub posts a card asking the user for it; end your turn and the card's result wakes you with the results.
+Examples:
+teamhub web search "rust 2026 edition release date"
+teamhub web search "postgres 19 features" --recency month --site postgresql.org
+",
+    "schema": "exit 0
+{"command":["web","search"],"description":"Search the web through a provider with the deployment's saved API key.","read_only":true,"input_schema":{"type":"object","properties":{"query":{"type":"string","minLength":1,"maxLength":400},"backend":{"enum":["tavily","brave","firecrawl","you"]},"limit":{"type":"integer","minimum":1,"maximum":20},"recency":{"enum":["day","week","month","year"]},"sites":{"type":"array","maxItems":10,"items":{"type":"string","minLength":3,"maxLength":253}}},"required":["query"],"additionalProperties":false},"output_schema":{"type":"object","properties":{"results":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string"},"url":{"type":"string"},"snippet":{"type":"string"},"published_at":{"type":"string"}},"required":["title","url","snippet"]}}},"required":["results"]},"cli":{"usage":["teamhub web search <query> [--backend tavily|brave|firecrawl|you] [--limit 1-20] [--recency day|week|month|year] [--site <domain>]..."],"arguments":["<query>  What to search for; 1-400 characters."],"options":{"--backend":{"description":"tavily, brave, firecrawl or you. Without it the user's default runs, else the first ready backend."},"--limit":{"description":"Results to return; 1-20, default 5."},"--recency":{"description":"Only results from the past day, week, month or year."},"--site":{"description":"Only results from this domain; repeat up to the backend's max_sites (teamhub web list).","repeatable":true},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true}},"notes":["A backend never falls back to another one. When it needs an API key, TeamHub posts a card asking the user for it; end your turn and the card's result wakes you with the results."]}}
+",
+  },
 }
 `;
 
@@ -3241,6 +3326,7 @@ Commands:
   task
   tracking-items
   video-gen
+  web
   help
 
 Run teamhub <command> --help for command options. Help and schema are offline; TeamHub checks current resource access.
@@ -4390,6 +4476,24 @@ EXAMPLES
 LEARN MORE
   teamhub  --help
   teamhub video-gen --schema --json
+",
+  "web": "exit 0
+web common operations.
+
+USAGE
+  teamhub web <command> [flags]
+
+COMMANDS
+  search             Search the web through a provider with the deployment's saved API key.
+  open               Read one web page as Markdown, from this computer or through a provider.
+  list               List the web search backends with what each supports, whether it is ready, and its quota.
+  connect            Ask the user for a web search backend's API key: posts a key card in this chat unless the backend is already ready.
+
+INHERITED FLAGS
+  -h, --help          Show help
+
+EXAMPLES
+  teamhub web search --help
 ",
 }
 `;

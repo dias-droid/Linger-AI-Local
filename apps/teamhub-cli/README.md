@@ -65,7 +65,7 @@ Connected application commands may have their own file options. For those option
 ## Connected applications
 
 Eight applications have dedicated commands: Gmail, Outlook, Slack, Google Calendar, Notion, Google Drive, Figma and GitHub, with 50 Connector leaf commands. `teamhub gmail --help` and `teamhub gdrive --help` discover them offline, and each command keeps its own help, examples and Composio support boundary.
-Choose an account with `--account <connection ID|full label>`; labels match case-insensitively, connection IDs exactly. A connection ID that no longer matches a delegated account returns `account_ambiguous` with the delegated candidates instead of switching accounts. Without a delegation, the command asks the user in an allowed chat to click an authorization card that names the requested label; run the original command again after authorization.
+Choose an account with `--account <connection ID|full label>`; labels match case-insensitively, connection IDs exactly. A connection ID that no longer matches a delegated account returns `account_ambiguous` with the delegated candidates instead of switching accounts. Without a delegation, the command posts an authorization card in an allowed chat that names the requested label and exits with `authorization_required`; the Agent ends its turn, and the card's result wakes it to run the original command again.
 Mail `--markdown` is converted to HTML by TeamHub; only `--attach` adds attachments.
 
 GitHub reads the connected account, its repositories, issues and pull requests at once; `github comment` and `github create-issue` wait for the sponsor's confirmation card.
@@ -73,3 +73,19 @@ GitHub reads the connected account, its repositories, issues and pull requests a
 Other Connected Apps (such as Canva or Linear) have no dedicated commands and are called through `teamhub apps search/execute`. TeamHub runs the tools it knows as reads at once, including Linear's list, get and search tools and a `LINEAR_RUN_QUERY_OR_MUTATION` document that declares only queries; every other call waits for the sponsor's confirmation card.
 
 `teamhub apps connect <app-key>` asks for access to any Connected App that supports Agent tools; without an authorized account it posts an authorization card in the current chat. `teamhub apps auto-reminders list|set` lists or toggles automatic reminders for the Sponsor's own connections.
+
+## Web search
+
+`teamhub web` searches the web and reads pages through providers whose API keys are saved once for the whole deployment, in TeamHub; keys never reach the Computer.
+
+```bash
+teamhub web search 'postgres 19 features' --recency month --site postgresql.org
+teamhub web open https://www.postgresql.org/about/ --output ./about.md
+teamhub web list
+teamhub web connect tavily
+```
+
+- `web search <query>` runs on Tavily, Brave Search, Firecrawl or You.com (`--backend`), with `--limit 1-20`, `--recency day|week|month|year` and repeatable `--site <domain>`. Without `--backend` it uses the default backend the user chose, else the first ready backend in that order, else You.com's free trial, which is limited and lower quality. Results carry title, URL, snippet and an optional date, never the backend.
+- `web open <url>` fetches the page from this computer by default (`--backend direct`) and converts its main content to Markdown; `--backend tavily|firecrawl|you` reads it through the provider instead, which helps with pages that need JavaScript or block plain requests. The Markdown is cut at 20,000 characters with `truncated: true`, and `--output <file>` saves it to a new file and never overwrites one.
+- `web list` shows each backend's commands, filters, readiness and live quota; `web connect <backend>` posts a key card unless that backend is ready.
+- A backend never falls back to another one. When the requested backend, or the default one, has no key, a rejected key or a used-up free trial, TeamHub posts a key card in the chat and the command exits 4 with `search_key_requested`, the backend and the card in `details`. The Agent ends its turn: a key saved from the card reruns the request and wakes the Agent with its results. A used-up quota (`search_quota_exhausted`) or rate limit (`provider_rate_limited`) lists `ready_backends` to choose from.
