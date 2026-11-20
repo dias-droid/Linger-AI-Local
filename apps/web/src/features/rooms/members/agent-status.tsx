@@ -1,4 +1,8 @@
 import type { TeamHubTenantAgentAvailabilitySnapshot } from "@/features/teamhub/teamhub-types";
+import { type Translate, translate } from "@/i18n/language";
+import { useT } from "@/i18n/use-translation";
+
+import { agentInfoMessages } from "./agent-info.messages";
 
 type AgentAvailability = TeamHubTenantAgentAvailabilitySnapshot["availability"];
 
@@ -9,10 +13,13 @@ const dotClasses: Record<AgentAvailability["status"], string> = {
   unknown: "bg-[var(--app-status-warning-text)]",
 };
 
-function agentStatusDetail(availability: AgentAvailability) {
+function agentStatusDetail(
+  availability: AgentAvailability,
+  t: Translate = translate,
+) {
   const activeTaskCount = availability.active_task_count ?? 0;
   return activeTaskCount > 0
-    ? `${activeTaskCount} ${activeTaskCount === 1 ? "task" : "tasks"} in progress`
+    ? t(agentInfoMessages.tasksInProgress, { count: activeTaskCount })
     : availability.status !== "online"
       ? availability.current_activity?.summary
       : undefined;
@@ -41,9 +48,12 @@ export function AgentStatus({
   availability: AgentAvailability;
   showDetails?: boolean;
 }) {
+  const t = useT();
   const status = availability.status;
-  const label = status === "online" ? "Online" : availability.label;
-  const detail = agentStatusDetail(availability);
+  // Any other status shows the label TeamHub sent, in TeamHub's own words.
+  const label =
+    status === "online" ? t(agentInfoMessages.online) : availability.label;
+  const detail = agentStatusDetail(availability, t);
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5">
       <span
