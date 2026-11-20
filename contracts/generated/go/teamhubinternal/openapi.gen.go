@@ -1321,13 +1321,16 @@ func (e RuntimeHumanInteractionCreatedStatus) Valid() bool {
 
 // Defines values for RuntimePermissionActionRuntime.
 const (
-	RuntimePermissionActionRuntimeClaude RuntimePermissionActionRuntime = "claude"
-	RuntimePermissionActionRuntimeCodex  RuntimePermissionActionRuntime = "codex"
+	RuntimePermissionActionRuntimeAntigravity RuntimePermissionActionRuntime = "antigravity"
+	RuntimePermissionActionRuntimeClaude      RuntimePermissionActionRuntime = "claude"
+	RuntimePermissionActionRuntimeCodex       RuntimePermissionActionRuntime = "codex"
 )
 
 // Valid indicates whether the value is a known member of the RuntimePermissionActionRuntime enum.
 func (e RuntimePermissionActionRuntime) Valid() bool {
 	switch e {
+	case RuntimePermissionActionRuntimeAntigravity:
+		return true
 	case RuntimePermissionActionRuntimeClaude:
 		return true
 	case RuntimePermissionActionRuntimeCodex:

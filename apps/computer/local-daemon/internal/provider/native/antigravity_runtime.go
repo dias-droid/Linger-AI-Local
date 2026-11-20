@@ -163,6 +163,11 @@ func (t *antigravityTurn) exchange(prompt string, servers []any) Outcome {
 	failed := func(code, message string) Outcome {
 		return Outcome{Status: statusFailed, FailureCode: code, Error: message, ElapsedMs: time.Since(started).Milliseconds()}
 	}
+	// A resumed session is known before agy loads it, which takes seconds,
+	// so the Run starts now; a new session reports its id once agy names it.
+	if spec.ResumeID != "" {
+		t.started(spec.ResumeID, started)
+	}
 	if err := acpInitialize(t.runCtx, conn); err != nil {
 		return failed("protocol_incompatible", "Antigravity ACP handshake failed: "+err.Error())
 	}
@@ -224,11 +229,8 @@ func (t *antigravityTurn) exchange(prompt string, servers []any) Outcome {
 	t.mu.Unlock()
 	dispatched := time.Now()
 	t.requests.begin("", dispatched)
-	if spec.ExposeTurnStarted {
-		// The turn-started status carries the session, which is the
-		// checkpoint a first Run reports for its new session.
-		reused := false
-		t.emit(Event{Kind: EventStatus, Status: "running", TurnID: "antigravity-turn-" + piRandomHex(12), SessionID: session.SessionID, ProcessReused: &reused, SentAt: dispatched})
+	if spec.ResumeID == "" {
+		t.started(session.SessionID, dispatched)
 	}
 	raw, err = conn.call(t.runCtx, "session/prompt", map[string]any{
 		"sessionId": session.SessionID,
@@ -333,6 +335,7 @@ func (t *antigravityTurn) handle(frame acpFrame) {
 type acpUpdate struct {
 	SessionUpdate string          `json:"sessionUpdate"`
 	Content       json.RawMessage `json:"content"`
+	Name          string          `json:"name"`
 	MessageID     string          `json:"messageId"`
 	ToolCallID    string          `json:"toolCallId"`
 	Title         string          `json:"title"`
@@ -346,8 +349,18 @@ type acpUpdate struct {
 	} `json:"entries"`
 }
 
+// started reports the turn-started status, which carries the session: the
+// checkpoint a first Run reports for its new session.
+func (t *antigravityTurn) started(sessionID string, at time.Time) {
+	if !t.spec.ExposeTurnStarted {
+		return
+	}
+	reused := false
+	t.emit(Event{Kind: EventStatus, Status: "running", TurnID: "antigravity-turn-" + piRandomHex(12), SessionID: sessionID, ProcessReused: &reused, SentAt: at})
+}
+
 // resumeRefused marks an outcome whose retained session Antigravity does
-// not hold; nothing was emitted, so the executor may start a fresh session.
+// not hold.
 func (t *antigravityTurn) resumeRefused(outcome Outcome) Outcome {
 	outcome.ResumeRefused = true
 	return outcome
@@ -525,8 +538,13 @@ func antigravityReview(call acpUpdate, workspace string) permission.Request {
 	return request
 }
 
-// antigravityToolName is the tool's own title, or its kind without one.
+// antigravityToolName is the tool's own name, such as run_command. The
+// title is a fallback only: Antigravity titles a command with its whole,
+// unredacted command line, which the call's input already carries.
 func antigravityToolName(update acpUpdate) string {
+	if update.Name != "" {
+		return update.Name
+	}
 	if update.Title != "" {
 		return update.Title
 	}

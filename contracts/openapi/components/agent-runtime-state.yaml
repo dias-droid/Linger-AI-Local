@@ -1800,7 +1800,7 @@ components:
       additionalProperties: false
       required: [runtime, surface, tool]
       properties:
-        runtime: { type: string, enum: [claude, codex] }
+        runtime: { type: string, enum: [claude, codex, antigravity] }
         surface:
           type: string
           enum: [shell, file_edit, connected_app, browser, computer, web, other]

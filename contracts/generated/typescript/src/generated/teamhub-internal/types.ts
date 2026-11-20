@@ -1682,7 +1682,7 @@ export interface components {
     };
     RuntimePermissionAction: {
       /** @enum {string} */
-      runtime: "claude" | "codex";
+      runtime: "claude" | "codex" | "antigravity";
       /** @enum {string} */
       surface:
         | "shell"

@@ -125,6 +125,9 @@ func (f *agyFakeProcess) handle(id json.RawMessage, method string, params map[st
 				f.fail(id, -32603, "session could not be loaded")
 				return
 			}
+			if f.mode == "load-hang" {
+				select {}
+			}
 			// Loading replays the stored conversation before answering; an
 			// id Antigravity never stored loads with nothing to replay.
 			if f.mode != "unknown-session" {
@@ -154,7 +157,7 @@ func (f *agyFakeProcess) prompt(id json.RawMessage, sessionID string) {
 		map[string]any{"content": "List files", "status": "in_progress", "priority": "high"},
 		map[string]any{"content": "Report", "status": "pending", "priority": "low"},
 	}})
-	f.update(sessionID, map[string]any{"sessionUpdate": "tool_call", "toolCallId": "call-1", "title": "ls", "kind": "execute", "status": "pending", "rawInput": map[string]any{"CommandLine": "ls", "WaitMsBeforeAsync": 5000}})
+	f.update(sessionID, map[string]any{"sessionUpdate": "tool_call", "toolCallId": "call-1", "name": "run_command", "title": "ls", "kind": "execute", "status": "pending", "rawInput": map[string]any{"CommandLine": "ls", "WaitMsBeforeAsync": 5000}})
 	if f.mode == "permission" || f.mode == "permission-no-reject" {
 		command := os.Getenv(agyFakeCommandEnv)
 		if command == "" {

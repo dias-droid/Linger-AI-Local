@@ -2,6 +2,7 @@ package native
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -112,7 +113,7 @@ func TestAntigravityRunsOneTurnOverACP(t *testing.T) {
 	if !reflect.DeepEqual(kinds, want) {
 		t.Fatalf("kinds=%v", kinds)
 	}
-	if call.ActivityKind != ActivityCommand || call.InvocationID != result.InvocationID || call.Input["command"] != "ls" || result.Output != "a.txt" || result.Status != "completed" {
+	if call.ToolName != "run_command" || call.ActivityKind != ActivityCommand || call.InvocationID != result.InvocationID || call.Input["command"] != "ls" || result.Output != "a.txt" || result.Status != "completed" {
 		t.Fatalf("call=%+v result=%+v", call, result)
 	}
 	if events[1].ID == events[5].ID || events[5].ID != events[6].ID {
@@ -237,8 +238,8 @@ func TestAntigravityReportsAnUnknownRetainedSessionAsNotFound(t *testing.T) {
 			if outcome.Status != statusFailed || outcome.FailureCode != "session_not_found" || !outcome.ResumeRefused || outcome.SessionID != "" {
 				t.Fatalf("outcome=%+v", outcome)
 			}
-			// Nothing reached the Room, so the executor may start afresh.
-			if len(events) != 0 {
+			// The Run started on the retained session before agy refused it.
+			if len(events) != 1 || events[0].Kind != EventStatus || events[0].SessionID != "moved-session" {
 				t.Fatalf("events=%+v", events)
 			}
 			if requests := h.requests(t); len(requests["session/prompt"]) != 0 {
@@ -379,4 +380,24 @@ func TestAntigravityRunCommandMapsToSharedCommandShape(t *testing.T) {
 			t.Fatalf("status %s with %s = %s, want %s", test.status, test.output, got, test.want)
 		}
 	}
+}
+
+func TestAntigravityStartsAResumedRunBeforeTheSessionLoads(t *testing.T) {
+	h := newAgyHarness(t, "load-hang", nil)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	run, err := h.runtime.Start(ctx, "again", RunSpec{Dir: h.dir, ResumeID: "earlier-session", ExposeTurnStarted: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case started := <-run.Events:
+		if started.Kind != EventStatus || started.TurnID == "" || started.SessionID != "earlier-session" {
+			t.Fatalf("first event=%+v", started)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the Run did not start while its session was loading")
+	}
+	cancel()
+	drainAgy(t, run)
 }

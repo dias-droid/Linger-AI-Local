@@ -730,7 +730,9 @@ func normalizeMessage(message native.Event, operationID string) any {
 	if callID == "" {
 		callID = stableEventID("call", operationID+"\x00"+message.ToolName+"\x00"+message.Body)
 	}
-	toolName := message.ToolName
+	// The Runner Gateway caps a tool name at 200 characters and fails the
+	// Operation on a longer one; a Runtime may name a tool by its arguments.
+	toolName := clip(message.ToolName, 200)
 	if toolName == "" {
 		toolName = "provider_tool"
 	}
