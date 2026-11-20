@@ -408,6 +408,25 @@ paths:
                 $ref: "#/components/schemas/ByokCheckReport"
         "400": *a2
         "401": *a3
+  /api/byok/models:
+    post:
+      operationId: listInstallerByokModels
+      summary: List the models a BYOK upstream endpoint serves via localmodels
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ByokEndpoint"
+      responses:
+        "200":
+          description: The endpoint's models, sorted by id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ByokModelReport"
+        "400": *a2
+        "401": *a3
   /api/runtime-login:
     get:
       operationId: inspectInstallerRuntimeLogin
@@ -655,17 +674,57 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CheckResult"
+    ByokUrlPath:
+      description: Empty, or whole path segments each led by one slash, appended to baseUrl.
+      type: string
+      maxLength: 256
+      pattern: '^(/[^/?#\s\\]+)*$'
+    ByokProtocol:
+      type: string
+      enum: [openai-chat, openai-responses, anthropic]
+    ByokEndpoint:
+      description: Requests go to baseUrl + path + endpoint in protocol; models are listed at baseUrl + path + /models.
+      type: object
+      additionalProperties: false
+      required:
+        - baseUrl
+        - path
+        - endpoint
+        - protocol
+      properties:
+        baseUrl:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        path:
+          $ref: "#/components/schemas/ByokUrlPath"
+        endpoint:
+          $ref: "#/components/schemas/ByokUrlPath"
+        protocol:
+          $ref: "#/components/schemas/ByokProtocol"
+        apiKey:
+          type: string
+          maxLength: 4096
     ByokConfiguration:
       type: object
       additionalProperties: false
       required:
         - baseUrl
+        - path
+        - endpoint
+        - protocol
         - modelId
       properties:
         baseUrl:
           type: string
           minLength: 1
           maxLength: 2048
+        path:
+          $ref: "#/components/schemas/ByokUrlPath"
+        endpoint:
+          $ref: "#/components/schemas/ByokUrlPath"
+        protocol:
+          $ref: "#/components/schemas/ByokProtocol"
         apiKey:
           type: string
           maxLength: 4096
@@ -677,25 +736,51 @@ components:
           type: integer
           minimum: 1
           maximum: 2147483647
-        runtime:
+    ByokModelReport:
+      type: object
+      additionalProperties: false
+      required:
+        - url
+        - models
+      properties:
+        url:
           type: string
-          enum: [claude, codex, pi]
+          minLength: 1
+        models:
+          type: array
+          maxItems: 1000
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - id
+            properties:
+              id:
+                type: string
+                minLength: 1
+                maxLength: 256
+              name:
+                type: string
+                maxLength: 256
+              contextWindow:
+                type: integer
+                minimum: 1
+                maximum: 2147483647
     ByokCheckReport:
       type: object
       additionalProperties: false
       required:
         - ok
         - protocol
-        - baseUrl
+        - url
         - modelId
         - contextWindow
       properties:
         ok:
           type: boolean
         protocol:
-          type: string
-          enum: [openai-chat, openai-responses, anthropic]
-        baseUrl: *a1
+          $ref: "#/components/schemas/ByokProtocol"
+        url: *a1
         modelId: *a1
         contextWindow:
           type: integer

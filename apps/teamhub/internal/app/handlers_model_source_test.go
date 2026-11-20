@@ -11,8 +11,19 @@ func TestValidModelSourceSwitchMatchesRuntimeAndInputsToMode(t *testing.T) {
 	unknown := httpapi.ModelSourceRuntime("gemini")
 	model := "qwen3-4b:Q4_K_M"
 	badModel := "../qwen"
-	byok := &httpapi.ByokInput{BaseUrl: "https://api.example.com", ModelId: "vendor/model"}
-	blankURL := &httpapi.ByokInput{BaseUrl: "  ", ModelId: "vendor/model"}
+	byok := &httpapi.ByokInput{
+		BaseUrl: "https://open.bigmodel.cn", Path: "/api/paas/v4", Endpoint: "/chat/completions",
+		Protocol: httpapi.ByokProtocolOpenaiChat, ModelId: "vendor/model",
+	}
+	fullAddress := &httpapi.ByokInput{
+		BaseUrl: "https://gw.example.com/full", Protocol: httpapi.ByokProtocolAnthropic, ModelId: "vendor/model",
+	}
+	with := func(change func(*httpapi.ByokInput)) *httpapi.ByokInput {
+		changed := *byok
+		change(&changed)
+		return &changed
+	}
+	blankURL := with(func(b *httpapi.ByokInput) { b.BaseUrl = "  " })
 	for _, test := range []struct {
 		name    string
 		request httpapi.ModelSourceSwitchRequest
@@ -23,6 +34,12 @@ func TestValidModelSourceSwitchMatchesRuntimeAndInputsToMode(t *testing.T) {
 		{"byok without runtime", httpapi.ModelSourceSwitchRequest{Mode: httpapi.ModelSourceModeByok, Byok: byok}, false},
 		{"byok without endpoint", httpapi.ModelSourceSwitchRequest{Mode: httpapi.ModelSourceModeByok, Runtime: &claude}, false},
 		{"byok blank URL", httpapi.ModelSourceSwitchRequest{Mode: httpapi.ModelSourceModeByok, Runtime: &claude, Byok: blankURL}, false},
+		{"byok full address", httpapi.ModelSourceSwitchRequest{Mode: httpapi.ModelSourceModeByok, Runtime: &claude, Byok: fullAddress}, true},
+		{"byok path without slash", httpapi.ModelSourceSwitchRequest{Mode: httpapi.ModelSourceModeByok, Runtime: &claude, Byok: with(func(b *httpapi.ByokInput) { b.Path = "v1" })}, false},
+		{"byok path with trailing slash", httpapi.ModelSourceSwitchRequest{Mode: httpapi.ModelSourceModeByok, Runtime: &claude, Byok: with(func(b *httpapi.ByokInput) { b.Path = "/v1/" })}, false},
+		{"byok endpoint with host", httpapi.ModelSourceSwitchRequest{Mode: httpapi.ModelSourceModeByok, Runtime: &claude, Byok: with(func(b *httpapi.ByokInput) { b.Endpoint = "//evil.example.com/x" })}, false},
+		{"byok endpoint with query", httpapi.ModelSourceSwitchRequest{Mode: httpapi.ModelSourceModeByok, Runtime: &claude, Byok: with(func(b *httpapi.ByokInput) { b.Endpoint = "/chat?x=1" })}, false},
+		{"byok unknown protocol", httpapi.ModelSourceSwitchRequest{Mode: httpapi.ModelSourceModeByok, Runtime: &claude, Byok: with(func(b *httpapi.ByokInput) { b.Protocol = "gemini" })}, false},
 		{"subscription", httpapi.ModelSourceSwitchRequest{Mode: httpapi.ModelSourceModeSubscription, Runtime: &claude}, true},
 		{"subscription on pi", httpapi.ModelSourceSwitchRequest{Mode: httpapi.ModelSourceModeSubscription, Runtime: &pi}, false},
 		{"subscription with endpoint", httpapi.ModelSourceSwitchRequest{Mode: httpapi.ModelSourceModeSubscription, Runtime: &claude, Byok: byok}, false},

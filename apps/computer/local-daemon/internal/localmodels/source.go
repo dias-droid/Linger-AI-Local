@@ -278,8 +278,13 @@ func NewModelSource(options ModelSourceOptions) *ModelSource {
 	}
 }
 
+// byokStdinPayload sends path and endpoint even when empty: an empty one
+// appends nothing, which localmodels tells apart from a missing field.
 type byokStdinPayload struct {
 	BaseURL       string  `json:"baseUrl"`
+	Path          string  `json:"path"`
+	Endpoint      string  `json:"endpoint"`
+	Protocol      string  `json:"protocol"`
 	APIKey        string  `json:"apiKey,omitempty"`
 	ModelID       string  `json:"modelId"`
 	ContextWindow *uint64 `json:"contextWindow,omitempty"`
@@ -292,6 +297,9 @@ func encodeByokStdin(input *wire.ByokConfigInput) ([]byte, error) {
 	}
 	return json.Marshal(byokStdinPayload{
 		BaseURL:       input.BaseURL,
+		Path:          input.Path,
+		Endpoint:      input.Endpoint,
+		Protocol:      input.Protocol,
 		APIKey:        input.APIKey,
 		ModelID:       input.ModelID,
 		ContextWindow: input.ContextWindow,
@@ -344,29 +352,22 @@ func (m *ModelSource) Status(ctx context.Context) (wire.ModelSourceStatus, error
 	return parseSourceStatus(stdout)
 }
 
-// TestByok probes a BYOK upstream endpoint for runtime, finding the wire
-// format and address it answers, without persisting credentials or mutating
-// the active model source.
-func (m *ModelSource) TestByok(ctx context.Context, runtime string, input wire.ByokConfigInput) (wire.ByokTestResult, error) {
-	if !slices.Contains([]string{"claude", "codex", "pi"}, runtime) {
-		return wire.ByokTestResult{}, &ModelSourceError{
-			Code:    "MODEL_SOURCE_INVALID",
-			Message: "Unsupported AI runtime.",
-		}
-	}
+// TestByok sends one request to the BYOK endpoint's address in its wire
+// format, without persisting credentials or mutating the active model source.
+func (m *ModelSource) TestByok(ctx context.Context, input wire.ByokConfigInput) (wire.ByokTestResult, error) {
 	var doc struct {
 		Protocol      string `json:"protocol"`
-		BaseURL       string `json:"base_url"`
+		URL           string `json:"url"`
 		ModelID       string `json:"model_id"`
 		ContextWindow uint64 `json:"context_window"`
 	}
-	if err := m.runEndpointCommand(ctx, input, modelSourceCheckSchema, &doc, "check", "--runtime", runtime); err != nil {
+	if err := m.runEndpointCommand(ctx, input, modelSourceCheckSchema, &doc, "check"); err != nil {
 		return wire.ByokTestResult{}, err
 	}
 	return wire.ByokTestResult{
 		Ok:            true,
 		Protocol:      doc.Protocol,
-		BaseURL:       doc.BaseURL,
+		URL:           doc.URL,
 		ModelID:       doc.ModelID,
 		ContextWindow: doc.ContextWindow,
 	}, nil

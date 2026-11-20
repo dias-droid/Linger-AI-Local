@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -33,7 +34,7 @@ var modelSourceRefusalCodes = map[string]httpapi.ModelSourceErrorCode{
 	"MODEL_UNKNOWN":            httpapi.ModelSourceErrorCodeLocalModelUnknown,
 	"BYOK_INVALID_CONFIG":      httpapi.ModelSourceErrorCodeByokInvalidConfig,
 	"BYOK_AUTH_FAILED":         httpapi.ModelSourceErrorCodeByokAuthFailed,
-	"BYOK_MODEL_NOT_FOUND":     httpapi.ModelSourceErrorCodeByokModelNotFound,
+	"BYOK_NOT_FOUND":           httpapi.ModelSourceErrorCodeByokNotFound,
 	"BYOK_UNREACHABLE":         httpapi.ModelSourceErrorCodeByokUnreachable,
 	"BYOK_UPSTREAM_REJECTED":   httpapi.ModelSourceErrorCodeByokUpstreamRejected,
 	"MODEL_SOURCE_TIMEOUT":     httpapi.ModelSourceErrorCodeModelSourceUnconfirmed,
@@ -50,7 +51,7 @@ var modelSourceErrorMessages = map[httpapi.ModelSourceErrorCode]string{
 	httpapi.ModelSourceErrorCodeLocalModelUnknown:             "The Computer does not know this model",
 	httpapi.ModelSourceErrorCodeByokInvalidConfig:             "The Computer rejected this endpoint configuration",
 	httpapi.ModelSourceErrorCodeByokAuthFailed:                "The endpoint rejected the API key",
-	httpapi.ModelSourceErrorCodeByokModelNotFound:             "The endpoint does not serve this model",
+	httpapi.ModelSourceErrorCodeByokNotFound:                  "Nothing answered at the endpoint address, or it does not serve this model",
 	httpapi.ModelSourceErrorCodeByokUnreachable:               "The Computer could not reach the endpoint",
 	httpapi.ModelSourceErrorCodeByokUpstreamRejected:          "The endpoint rejected the test request",
 	httpapi.ModelSourceErrorCodeModelSourceFailed:             "The Computer could not change its model source",
@@ -190,7 +191,7 @@ func (a *App) switchLocalComputerModelSource(c *gin.Context) {
 // Computer without saving it anywhere.
 func (a *App) testLocalComputerModelSource(c *gin.Context) {
 	var request httpapi.ByokTestRequest
-	if err := decodeJSON(c, &request); err != nil || !request.Runtime.Valid() || !validByokInput(request.Byok) {
+	if err := decodeJSON(c, &request); err != nil || !validByokInput(request.Byok) {
 		a.writeError(c, http.StatusBadRequest, "INVALID_REQUEST", "BYOK configuration is invalid")
 		return
 	}
@@ -224,8 +225,9 @@ func (a *App) testLocalComputerModelSource(c *gin.Context) {
 // from the owner's Computer.
 func (a *App) listLocalComputerByokModels(c *gin.Context) {
 	var endpoint httpapi.ByokEndpointInput
-	if err := decodeJSON(c, &endpoint); err != nil || strings.TrimSpace(endpoint.BaseUrl) == "" ||
-		len(endpoint.BaseUrl) > 2048 || (endpoint.ApiKey != nil && len(*endpoint.ApiKey) > 4096) {
+	if err := decodeJSON(c, &endpoint); err != nil ||
+		!validByokAddress(endpoint.BaseUrl, endpoint.Path, endpoint.Endpoint, endpoint.Protocol) ||
+		(endpoint.ApiKey != nil && len(*endpoint.ApiKey) > 4096) {
 		a.writeError(c, http.StatusBadRequest, "INVALID_REQUEST", "BYOK endpoint is invalid")
 		return
 	}
@@ -384,8 +386,18 @@ func validModelSourceSwitch(request httpapi.ModelSourceSwitchRequest) bool {
 	return false
 }
 
+// byokURLPathPattern matches a BYOK path or endpoint: empty, or whole
+// segments each led by one slash, so it can only extend the base URL's path.
+var byokURLPathPattern = regexp.MustCompile(`^(/[^/?#\s\\]+)*$`)
+
+func validByokAddress(baseURL, path, endpoint string, protocol httpapi.ByokProtocol) bool {
+	return strings.TrimSpace(baseURL) != "" && len(baseURL) <= 2048 && protocol.Valid() &&
+		len(path) <= 256 && byokURLPathPattern.MatchString(path) &&
+		len(endpoint) <= 256 && byokURLPathPattern.MatchString(endpoint)
+}
+
 func validByokInput(input httpapi.ByokInput) bool {
-	return strings.TrimSpace(input.BaseUrl) != "" && len(input.BaseUrl) <= 2048 &&
+	return validByokAddress(input.BaseUrl, input.Path, input.Endpoint, input.Protocol) &&
 		strings.TrimSpace(input.ModelId) != "" && len(input.ModelId) <= 256 &&
 		(input.ApiKey == nil || len(*input.ApiKey) <= 4096) &&
 		(input.ContextWindow == nil || *input.ContextWindow >= 1)

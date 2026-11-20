@@ -204,7 +204,7 @@ export const runnerGatewayEnvelopeSchema = {
     ServiceFeature: {
       description:
         "An optional Runner behavior the Agent Service accepts. An older service rejects its frames as a protocol violation.",
-      enum: ["local_models"],
+      enum: ["local_models", "byok_endpoint"],
     },
     Timestamp: {
       type: "string",
@@ -1699,17 +1699,36 @@ export const runnerGatewayEnvelopeSchema = {
         },
       ],
     },
+    ByokUrlPath: {
+      description:
+        "A path appended to a BYOK base URL: empty, or whole segments each led by one slash.",
+      type: "string",
+      maxLength: 256,
+      pattern: "^(/[^/?#\\s\\\\]+)*$",
+    },
+    ByokProtocol: {
+      enum: ["openai-chat", "openai-responses", "anthropic"],
+    },
     ByokConfigInput: {
       description:
-        "A BYOK endpoint; model_id is required except to list the endpoint's models.",
+        "A BYOK endpoint: requests go to base_url + path + endpoint in protocol, and models are listed at base_url + path + /models. model_id is required except to list the endpoint's models.",
       type: "object",
       additionalProperties: false,
-      required: ["base_url"],
+      required: ["base_url", "path", "endpoint", "protocol"],
       properties: {
         base_url: {
           type: "string",
           minLength: 1,
           maxLength: 2048,
+        },
+        path: {
+          $ref: "#/$defs/ByokUrlPath",
+        },
+        endpoint: {
+          $ref: "#/$defs/ByokUrlPath",
+        },
+        protocol: {
+          $ref: "#/$defs/ByokProtocol",
         },
         api_key: {
           type: "string",
@@ -1731,6 +1750,8 @@ export const runnerGatewayEnvelopeSchema = {
       },
     },
     ByokSummary: {
+      description:
+        "path and endpoint are sent only to an Agent Service that declares byok_endpoint, and are omitted when empty: a configured summary without them appends nothing there.",
       type: "object",
       additionalProperties: false,
       required: ["configured", "key_saved"],
@@ -1739,11 +1760,17 @@ export const runnerGatewayEnvelopeSchema = {
           type: "boolean",
         },
         protocol: {
-          enum: ["openai-chat", "openai-responses", "anthropic"],
+          $ref: "#/$defs/ByokProtocol",
         },
         base_url: {
           type: "string",
           maxLength: 2048,
+        },
+        path: {
+          $ref: "#/$defs/ByokUrlPath",
+        },
+        endpoint: {
+          $ref: "#/$defs/ByokUrlPath",
         },
         model_id: {
           type: "string",
@@ -1793,9 +1820,9 @@ export const runnerGatewayEnvelopeSchema = {
     ByokModelList: {
       type: "object",
       additionalProperties: false,
-      required: ["base_url", "models"],
+      required: ["url", "models"],
       properties: {
-        base_url: {
+        url: {
           type: "string",
           minLength: 1,
           maxLength: 2048,
@@ -1830,15 +1857,15 @@ export const runnerGatewayEnvelopeSchema = {
     ByokTestResult: {
       type: "object",
       additionalProperties: false,
-      required: ["ok", "protocol", "base_url", "model_id", "context_window"],
+      required: ["ok", "protocol", "url", "model_id", "context_window"],
       properties: {
         ok: {
           type: "boolean",
         },
         protocol: {
-          enum: ["openai-chat", "openai-responses", "anthropic"],
+          $ref: "#/$defs/ByokProtocol",
         },
-        base_url: {
+        url: {
           type: "string",
           minLength: 1,
           maxLength: 2048,

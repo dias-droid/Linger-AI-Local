@@ -282,16 +282,13 @@ export const createLocalComputerRouteHandlers = (options: {
     const management = requireModelSourceManagement(
       options.localComputerManagement,
     );
-    const { runtime, byok } = parseByokTestRequest(
-      await options.readJsonBody(context),
-    );
+    const byok = parseByokTestRequest(await options.readJsonBody(context));
     try {
       const { testResult } = await management.modelSource({
         tenantId: options.pathId(context, "tenantId"),
         ownerActorId: options.pathId(context, "ownerActorId"),
         computerId: options.pathId(context, "computerId"),
         action: "test",
-        runtime,
         byok,
         signal: context.req.raw.signal,
       });
@@ -352,24 +349,60 @@ const requireModelSourceManagement = (
 };
 
 const BYOK_MODEL_ID_PATTERN = /^[-a-zA-Z0-9_./:@]{1,256}$/u;
+// Empty, or whole segments each led by one slash, so a path or endpoint can
+// only extend the base URL's path.
+const BYOK_URL_PATH_PATTERN = /^(?:\/[^/?#\s\\]+)*$/u;
+
+const isByokUrlPath = (value: unknown): value is string =>
+  typeof value === "string" &&
+  value.length <= 256 &&
+  BYOK_URL_PATH_PATTERN.test(value);
+
+const isByokProtocol = (value: unknown): value is ByokConfigInput["protocol"] =>
+  value === "openai-chat" ||
+  value === "openai-responses" ||
+  value === "anthropic";
+
+interface ByokAddress {
+  readonly base_url: string;
+  readonly path: string;
+  readonly endpoint: string;
+  readonly protocol: ByokConfigInput["protocol"];
+}
+
+const byokAddress = (value: Record<string, unknown>): ByokAddress | null =>
+  typeof value.base_url === "string" &&
+  value.base_url.trim().length > 0 &&
+  value.base_url.length <= 2048 &&
+  isByokUrlPath(value.path) &&
+  isByokUrlPath(value.endpoint) &&
+  isByokProtocol(value.protocol)
+    ? {
+        base_url: value.base_url.trim(),
+        path: value.path,
+        endpoint: value.endpoint,
+        protocol: value.protocol,
+      }
+    : null;
+
+const BYOK_ADDRESS_KEYS = ["base_url", "path", "endpoint", "protocol"];
 
 // Never include the request body in the error; it carries the API key.
 const parseByokInput = (value: unknown): ByokConfigInput => {
+  const address = isRecord(value) ? byokAddress(value) : null;
   if (
     !isRecord(value) ||
+    !address ||
     Object.keys(value).some(
       (key) =>
         ![
-          "base_url",
+          ...BYOK_ADDRESS_KEYS,
           "api_key",
           "model_id",
           "context_window",
           "reuse_saved_key",
         ].includes(key),
     ) ||
-    typeof value.base_url !== "string" ||
-    value.base_url.trim().length === 0 ||
-    value.base_url.length > 2048 ||
     typeof value.model_id !== "string" ||
     !BYOK_MODEL_ID_PATTERN.test(value.model_id.trim()) ||
     (value.api_key !== undefined &&
@@ -388,7 +421,7 @@ const parseByokInput = (value: unknown): ByokConfigInput => {
     );
   }
   return {
-    base_url: value.base_url.trim(),
+    ...address,
     ...(value.api_key !== undefined ? { api_key: value.api_key } : {}),
     model_id: value.model_id.trim(),
     ...(value.context_window !== undefined
@@ -402,14 +435,14 @@ const parseByokInput = (value: unknown): ByokConfigInput => {
 
 // Never include the request body in the error; it carries the API key.
 const parseByokEndpointInput = (value: unknown): ByokConfigInput => {
+  const address = isRecord(value) ? byokAddress(value) : null;
   if (
     !isRecord(value) ||
+    !address ||
     Object.keys(value).some(
-      (key) => !["base_url", "api_key", "reuse_saved_key"].includes(key),
+      (key) =>
+        ![...BYOK_ADDRESS_KEYS, "api_key", "reuse_saved_key"].includes(key),
     ) ||
-    typeof value.base_url !== "string" ||
-    value.base_url.trim().length === 0 ||
-    value.base_url.length > 2048 ||
     (value.api_key !== undefined &&
       (typeof value.api_key !== "string" || value.api_key.length > 4096)) ||
     (value.reuse_saved_key !== undefined &&
@@ -422,7 +455,7 @@ const parseByokEndpointInput = (value: unknown): ByokConfigInput => {
     );
   }
   return {
-    base_url: value.base_url.trim(),
+    ...address,
     ...(value.api_key !== undefined ? { api_key: value.api_key } : {}),
     ...(value.reuse_saved_key !== undefined
       ? { reuse_saved_key: value.reuse_saved_key }
@@ -435,24 +468,15 @@ const isModelSourceRuntime = (
 ): value is NonNullable<LocalModelSourceCommand["runtime"]> =>
   value === "claude" || value === "codex" || value === "pi";
 
-const parseByokTestRequest = (
-  value: unknown,
-): {
-  readonly runtime: NonNullable<LocalModelSourceCommand["runtime"]>;
-  readonly byok: ByokConfigInput;
-} => {
-  if (
-    !isRecord(value) ||
-    Object.keys(value).some((key) => !["runtime", "byok"].includes(key)) ||
-    !isModelSourceRuntime(value.runtime)
-  ) {
+const parseByokTestRequest = (value: unknown): ByokConfigInput => {
+  if (!isRecord(value) || Object.keys(value).some((key) => key !== "byok")) {
     throw new LocalComputerHttpError(
       400,
       "BYOK_INVALID_CONFIG",
       "BYOK configuration is invalid",
     );
   }
-  return { runtime: value.runtime, byok: parseByokInput(value.byok) };
+  return parseByokInput(value.byok);
 };
 
 interface ModelSourceApplyBody {

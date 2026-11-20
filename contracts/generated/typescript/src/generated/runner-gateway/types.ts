@@ -32,7 +32,7 @@ export type PositiveInteger = number;
 /**
  * An optional Runner behavior the Agent Service accepts. An older service rejects its frames as a protocol violation.
  */
-export type ServiceFeature = "local_models";
+export type ServiceFeature = "local_models" | "byok_endpoint";
 export type JsonValue =
   | null
   | boolean
@@ -124,6 +124,11 @@ export type CapabilityModelSource = LocalSkillCommandIdentity & {
   local_model_id?: LocalModelId;
   byok?: ByokConfigInput;
 };
+/**
+ * A path appended to a BYOK base URL: empty, or whole segments each led by one slash.
+ */
+export type ByokUrlPath = string;
+export type ByokProtocol = "openai-chat" | "openai-responses" | "anthropic";
 export type OperationPrepare = OperationIdentity & {
   type: "prepare";
   command_id: Id;
@@ -934,10 +939,13 @@ export interface LocalSkillCommandIdentity {
   expires_at: Timestamp;
 }
 /**
- * A BYOK endpoint; model_id is required except to list the endpoint's models.
+ * A BYOK endpoint: requests go to base_url + path + endpoint in protocol, and models are listed at base_url + path + /models. model_id is required except to list the endpoint's models.
  */
 export interface ByokConfigInput {
   base_url: string;
+  path: ByokUrlPath;
+  endpoint: ByokUrlPath;
+  protocol: ByokProtocol;
   api_key?: string;
   model_id?: string;
   context_window?: number;
@@ -1908,23 +1916,28 @@ export interface ModelSourceStatus {
   gateway_url?: string;
   byok: ByokSummary;
 }
+/**
+ * path and endpoint are sent only to an Agent Service that declares byok_endpoint, and are omitted when empty: a configured summary without them appends nothing there.
+ */
 export interface ByokSummary {
   configured: boolean;
-  protocol?: "openai-chat" | "openai-responses" | "anthropic";
+  protocol?: ByokProtocol;
   base_url?: string;
+  path?: ByokUrlPath;
+  endpoint?: ByokUrlPath;
   model_id?: string;
   context_window?: number;
   key_saved: boolean;
 }
 export interface ByokTestResult {
   ok: boolean;
-  protocol: "openai-chat" | "openai-responses" | "anthropic";
-  base_url: string;
+  protocol: ByokProtocol;
+  url: string;
   model_id: string;
   context_window: number;
 }
 export interface ByokModelList {
-  base_url: string;
+  url: string;
   /**
    * @maxItems 1000
    */

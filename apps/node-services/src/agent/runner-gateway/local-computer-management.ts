@@ -44,6 +44,10 @@ export const FIRST_MODEL_INVOKE_CANCEL_COMPUTER_VERSION = "0.53.0";
 export const FIRST_MODEL_SOURCE_COMPUTER_VERSION = "0.54.0";
 // Older Daemons do not decode Pi as a model_invoke Runtime.
 export const FIRST_PI_MODEL_INVOKE_COMPUTER_VERSION = "0.55.0";
+// The first release that decodes a BYOK path, endpoint and protocol and
+// reports them back. An older Computer closes the connection on a byok input
+// that carries them, so it gets no BYOK command and no `byok_endpoint`.
+export const FIRST_BYOK_ENDPOINT_COMPUTER_VERSION = "0.56.0";
 
 const COMPUTER_RELEASE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 

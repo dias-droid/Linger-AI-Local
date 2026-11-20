@@ -300,6 +300,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/byok/models": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** List the models a BYOK upstream endpoint serves via localmodels */
+    post: operations["listInstallerByokModels"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/runtime-login": {
     parameters: {
       query?: never;
@@ -415,19 +432,39 @@ export interface components {
     ModelCheckReport: {
       checks: components["schemas"]["CheckResult"][];
     };
+    /** @description Empty, or whole path segments each led by one slash, appended to baseUrl. */
+    ByokUrlPath: string;
+    /** @enum {string} */
+    ByokProtocol: "openai-chat" | "openai-responses" | "anthropic";
+    /** @description Requests go to baseUrl + path + endpoint in protocol; models are listed at baseUrl + path + /models. */
+    ByokEndpoint: {
+      baseUrl: string;
+      path: components["schemas"]["ByokUrlPath"];
+      endpoint: components["schemas"]["ByokUrlPath"];
+      protocol: components["schemas"]["ByokProtocol"];
+      apiKey?: string;
+    };
     ByokConfiguration: {
       baseUrl: string;
+      path: components["schemas"]["ByokUrlPath"];
+      endpoint: components["schemas"]["ByokUrlPath"];
+      protocol: components["schemas"]["ByokProtocol"];
       apiKey?: string;
       modelId: string;
       contextWindow?: number;
-      /** @enum {string} */
-      runtime?: "claude" | "codex" | "pi";
+    };
+    ByokModelReport: {
+      url: string;
+      models: {
+        id: string;
+        name?: string;
+        contextWindow?: number;
+      }[];
     };
     ByokCheckReport: {
       ok: boolean;
-      /** @enum {string} */
-      protocol: "openai-chat" | "openai-responses" | "anthropic";
-      baseUrl: string;
+      protocol: components["schemas"]["ByokProtocol"];
+      url: string;
       modelId: string;
       contextWindow: number;
     };
@@ -1590,6 +1627,48 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["ByokCheckReport"];
+        };
+      };
+      /** @description Invalid request */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InstallerError"];
+        };
+      };
+      /** @description Local installer session required */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["InstallerError"];
+        };
+      };
+    };
+  };
+  listInstallerByokModels: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["ByokEndpoint"];
+      };
+    };
+    responses: {
+      /** @description The endpoint's models, sorted by id */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["ByokModelReport"];
         };
       };
       /** @description Invalid request */

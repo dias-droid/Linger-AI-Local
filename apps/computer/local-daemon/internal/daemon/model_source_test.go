@@ -26,12 +26,12 @@ func (f *fakeModelSourceManager) Status(ctx context.Context) (wire.ModelSourceSt
 	}, nil
 }
 
-func (f *fakeModelSourceManager) TestByok(ctx context.Context, _ string, input wire.ByokConfigInput) (wire.ByokTestResult, error) {
+func (f *fakeModelSourceManager) TestByok(ctx context.Context, input wire.ByokConfigInput) (wire.ByokTestResult, error) {
 	f.deadline, _ = ctx.Deadline()
 	return wire.ByokTestResult{
 		Ok:            true,
 		Protocol:      "openai-chat",
-		BaseURL:       input.BaseURL,
+		URL:           input.BaseURL + input.Path + input.Endpoint,
 		ModelID:       input.ModelID,
 		ContextWindow: 128000,
 	}, nil
@@ -39,7 +39,7 @@ func (f *fakeModelSourceManager) TestByok(ctx context.Context, _ string, input w
 
 func (f *fakeModelSourceManager) ListByokModels(ctx context.Context, input wire.ByokConfigInput) (wire.ByokModelList, error) {
 	f.deadline, _ = ctx.Deadline()
-	return wire.ByokModelList{BaseURL: input.BaseURL, Models: []wire.ByokModelListModelsItem{{ID: "vendor/model"}}}, nil
+	return wire.ByokModelList{URL: input.BaseURL + input.Path + "/models", Models: []wire.ByokModelListModelsItem{{ID: "vendor/model"}}}, nil
 }
 
 func (f *fakeModelSourceManager) Apply(ctx context.Context, apply localmodels.ModelSourceApply) (wire.ModelSourceStatus, error) {
@@ -50,7 +50,10 @@ func (f *fakeModelSourceManager) Apply(ctx context.Context, apply localmodels.Mo
 		Runtime:      apply.Runtime,
 		RuntimeModel: "localmodels-byok",
 		GatewayURL:   "http://127.0.0.1:43120",
-		Byok:         wire.ByokSummary{Configured: true, KeySaved: true, Protocol: "openai-chat", BaseURL: "https://api.example.com/v1", ModelID: "gpt-5.4"},
+		Byok: wire.ByokSummary{
+			Configured: true, KeySaved: true, Protocol: "openai-chat",
+			BaseURL: "https://api.example.com", Path: "/api/paas/v4", Endpoint: "/chat/completions", ModelID: "gpt-5.4",
+		},
 	}, nil
 }
 
@@ -105,9 +108,12 @@ func TestHandleModelSourceCommandValidatesOwnerExpiryAndActions(t *testing.T) {
 		Mode:            "byok",
 		Runtime:         "claude",
 		Byok: &wire.ByokConfigInput{
-			BaseURL: "https://api.example.com/v1",
-			APIKey:  "sk-secret",
-			ModelID: "gpt-5.4",
+			BaseURL:  "https://api.example.com",
+			Path:     "/api/paas/v4",
+			Endpoint: "/chat/completions",
+			Protocol: "openai-chat",
+			APIKey:   "sk-secret",
+			ModelID:  "gpt-5.4",
 		},
 	})
 	if err := d.handleModelSourceCommand(t.Context(), stream, protocol.Command{
@@ -125,6 +131,26 @@ func TestHandleModelSourceCommandValidatesOwnerExpiryAndActions(t *testing.T) {
 	if succeeded.Status == nil || succeeded.Status.Mode != "byok" || succeeded.Status.RuntimeModel != "localmodels-byok" {
 		t.Fatalf("unexpected apply status payload: %+v", succeeded.Status)
 	}
+	// An Agent Service that did not declare byok_endpoint rejects the
+	// summary's path and endpoint, so they are left out until it does.
+	if succeeded.Status.Byok.Path != "" || succeeded.Status.Byok.Endpoint != "" ||
+		succeeded.Status.Byok.BaseURL != "https://api.example.com" {
+		t.Fatalf("summary for an Agent Service without byok_endpoint = %+v", succeeded.Status.Byok)
+	}
+	d.byokEndpoint.Store(true)
+	if err := d.handleModelSourceCommand(t.Context(), stream, protocol.Command{
+		Type: protocol.CommandCapabilityModelSource, CommandID: "cmd-apply", RunnerID: "comp-1", ConnectionEpoch: 1, Payload: applyCmd,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	succeeded = wire.CapabilityModelSourceSucceeded{}
+	if err := json.Unmarshal(stream.events[len(stream.events)-1].Payload, &succeeded); err != nil {
+		t.Fatal(err)
+	}
+	if succeeded.Status == nil || succeeded.Status.Byok.Path != "/api/paas/v4" || succeeded.Status.Byok.Endpoint != "/chat/completions" {
+		t.Fatalf("summary for an Agent Service with byok_endpoint = %+v", succeeded.Status)
+	}
+	stream.events = stream.events[:2]
 
 	// 3. Another actor is rejected with MODEL_SOURCE_FORBIDDEN.
 	intruderCmd, _ := json.Marshal(wire.CapabilityModelSource{

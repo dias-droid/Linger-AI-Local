@@ -115,13 +115,16 @@ type Daemon struct {
 	connectionEpoch     uint64
 	// contentURL is the current connection's context_content_url, read by
 	// dispatch workers that bring a Context to its View.
-	contentURL  atomic.Pointer[string]
-	welcomeSeen bool
-	prewarmOnce sync.Once
-	welcomedAt  time.Time
-	daemonID    string
-	activeMu    sync.Mutex
-	admissionMu sync.Mutex
+	contentURL atomic.Pointer[string]
+	// byokEndpoint holds whether the current Agent Service declared
+	// serviceFeatureByokEndpoint in its welcome.
+	byokEndpoint atomic.Bool
+	welcomeSeen  bool
+	prewarmOnce  sync.Once
+	welcomedAt   time.Time
+	daemonID     string
+	activeMu     sync.Mutex
+	admissionMu  sync.Mutex
 	// authorityRevision counts, under admissionMu, the commands that can change
 	// what an accepted Operation may start with: Registration snapshots, Agent
 	// Runner commands and Context commands. A start whose revision is unchanged
