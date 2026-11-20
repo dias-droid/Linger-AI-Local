@@ -60,13 +60,18 @@ export function LocalComputerGate({
   const { client } = useTeamHubRuntime();
   const desktop = useDesktopComputer();
   const [platform, setPlatform] = useState(browserComputerPlatform);
+  // The desktop preloads this page hidden so "Open Linger" can reveal a
+  // rendered Room, and the realtime stream is closed while hidden, so the gate
+  // keeps polling in the background or it never sees Another Me arrive.
   const computers = useQuery({
     ...localComputersQueryOptions(client, tenantId),
     refetchInterval: pollIntervalMs,
+    refetchIntervalInBackground: true,
   });
   useQuery({
     ...anotherMeQueryOptions(client, tenantId),
     refetchInterval: pollIntervalMs,
+    refetchIntervalInBackground: true,
   });
   const computer = gateComputer(computers.data?.items ?? []);
   const online = computer?.status === "online" && !computer.upgrade_required;
