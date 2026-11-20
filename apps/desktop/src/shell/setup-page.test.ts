@@ -559,8 +559,31 @@ describe("setup page Quick Install recommendation", () => {
     );
   });
 
-  it("configures BYOK across all runtimes with tooltip, Check, and secret scrubbing", async () => {
-    const { run, push } = await openPage(welcome(small), "welcome");
+  // Types into a field as a person does.
+  const type = (id: string, value: string) => {
+    const input = $(id) as HTMLInputElement;
+    input.value = value;
+    input.dispatchEvent(new Event("input"));
+  };
+  const pick = (comboId: string, value: string) => {
+    (
+      $(comboId).parentElement!.querySelector(".cb-caret") as HTMLButtonElement
+    ).click();
+    $(`${comboId}-menu`)
+      .querySelector<HTMLButtonElement>(`[data-value="${value}"]`)!
+      .click();
+  };
+  const words = (id: string) => $(id).textContent!.replace(/\s+/g, " ").trim();
+  const withLocal = (
+    base: SetupState,
+    localServer: Partial<SetupState["localServer"]>,
+  ): SetupState => ({
+    ...base,
+    localServer: { ...base.localServer, ...localServer },
+  });
+
+  it("builds the request address from base URL, path and endpoint, with tooltip, refresh, Test and secret scrubbing", async () => {
+    const { run } = await openPage(welcome(small), "welcome");
     $("local-customize").click();
     const byokSource = document.querySelector<HTMLButtonElement>(
       '[data-plan="source"] [data-value="byok"]',
@@ -572,73 +595,154 @@ describe("setup page Quick Install recommendation", () => {
     expect($("local-row").hidden).toBe(true);
     expect($("subscription-row").hidden).toBe(true);
     expect(($("local-install") as HTMLButtonElement).disabled).toBe(true);
+    // Grey defaults: /v1, and the runtime's own endpoint.
+    const path = $("byok-path") as HTMLInputElement;
+    const endpoint = $("byok-endpoint") as HTMLInputElement;
+    expect(path.value).toBe("/v1");
+    expect(endpoint.value).toBe("/messages");
+    expect(path.parentElement!.dataset.default).toBe("true");
+    expect(endpoint.parentElement!.dataset.default).toBe("true");
+    expect($("byok-status").textContent).toBe(
+      "Grey values are defaults. Path and endpoint are optional.",
+    );
 
     document
       .querySelector<HTMLButtonElement>(
         '[data-byok="runtime"] [data-value="codex"]',
       )!
       .click();
-    const urlInput = $("byok-url") as HTMLInputElement;
-    const keyInput = $("byok-key") as HTMLInputElement;
-    const modelInput = $("byok-model") as HTMLInputElement;
-    urlInput.value = "https://api.example.com/v1";
-    urlInput.dispatchEvent(new Event("input"));
-    keyInput.value = "sk-top-secret";
-    keyInput.dispatchEvent(new Event("input"));
-    modelInput.value = "gpt-5.4";
-    modelInput.dispatchEvent(new Event("input"));
+    expect(endpoint.value).toBe("/responses");
+    type("byok-url", "https://open.bigmodel.cn/");
+    pick("byok-path", "/api/paas/v4");
+    expect(path.value).toBe("/api/paas/v4");
+    expect(path.parentElement!.dataset.default).toBe("false");
+    pick("byok-endpoint", "/chat/completions");
+    expect($("byok-status").textContent).toBe(
+      "Sends OpenAI Chat Completions requests to https://open.bigmodel.cn/api/paas/v4/chat/completions",
+    );
+    type("byok-key", "sk-top-secret");
 
-    expect(($("local-install") as HTMLButtonElement).disabled).toBe(false);
-    expect($("plan-summary").textContent).toBe("BYOK · Codex · gpt-5.4");
-
-    $("byok-check").click();
-    await vi.waitFor(() =>
-      expect(run).toHaveBeenCalledWith({
-        op: "local.byok.check",
-        byok: {
-          runtime: "codex",
-          baseUrl: "https://api.example.com/v1",
-          apiKey: "sk-top-secret",
-          modelId: "gpt-5.4",
+    // Refresh lists the endpoint's models and opens them.
+    expect(($("byok-test") as HTMLButtonElement).disabled).toBe(true);
+    run.mockImplementationOnce(async () =>
+      withLocal(welcome(small), {
+        byokModels: {
+          state: "ready",
+          url: "https://open.bigmodel.cn/api/paas/v4/models",
+          models: [
+            { id: "glm-4.6", contextWindow: 204_800 },
+            { id: "glm-4.5-air" },
+          ],
         },
       }),
     );
-    const checkedState = welcome(small);
-    push({
-      ...checkedState,
-      localServer: {
-        ...checkedState.localServer,
+    $("byok-list").click();
+    const endpointOf = {
+      baseUrl: "https://open.bigmodel.cn",
+      path: "/api/paas/v4",
+      endpoint: "/chat/completions",
+      protocol: "openai-chat",
+      apiKey: "sk-top-secret",
+    };
+    expect(run).toHaveBeenCalledWith({
+      op: "local.byok.models",
+      byok: endpointOf,
+    });
+    await vi.waitFor(() => expect($("byok-model-menu").hidden).toBe(false));
+    expect(words("byok-model-menu")).toContain(
+      "2 models from https://open.bigmodel.cn/api/paas/v4/models",
+    );
+    expect(words("byok-model-menu")).toContain("glm-4.6 200k context");
+    $("byok-model-menu")
+      .querySelector<HTMLButtonElement>('[data-value="glm-4.6"]')!
+      .click();
+    expect(($("byok-model") as HTMLInputElement).value).toBe("glm-4.6");
+    expect(($("local-install") as HTMLButtonElement).disabled).toBe(false);
+    expect($("plan-summary").textContent).toBe("BYOK · Codex · glm-4.6");
+
+    // Test sends one request and floats the outcome under the button.
+    run.mockImplementationOnce(async () =>
+      withLocal(welcome(small), {
         byokCheck: {
           state: "ready",
-          protocol: "openai-responses",
-          modelId: "gpt-5.4",
-          contextWindow: 200_000,
+          protocol: "openai-chat",
+          url: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+          modelId: "glm-4.6",
+          contextWindow: 204_800,
         },
-      },
-    });
-    expect($("byok-status").textContent).toBe(
-      "Ready · gpt-5.4 (200k context) through OpenAI Responses",
+      }),
+    );
+    $("byok-test").click();
+    const config = { ...endpointOf, modelId: "glm-4.6", runtime: "codex" };
+    expect(run).toHaveBeenCalledWith({ op: "local.byok.check", byok: config });
+    await vi.waitFor(() => expect($("byok-toast").hidden).toBe(false));
+    expect($("byok-toast").dataset.tone).toBe("ok");
+    expect(words("byok-toast")).toBe(
+      "Connected glm-4.6 · 200k context · OpenAI Chat Completionshttps://open.bigmodel.cn/api/paas/v4/chat/completions",
     );
 
     $("local-install").click();
     await vi.waitFor(() => {
       expect(installed(run)).toEqual([
-        {
-          op: "local.start",
-          runtime: "codex",
-          byok: {
-            runtime: "codex",
-            baseUrl: "https://api.example.com/v1",
-            apiKey: "sk-top-secret",
-            modelId: "gpt-5.4",
-          },
-        },
+        { op: "local.start", runtime: "codex", byok: config },
       ]);
-      expect(keyInput.value).toBe("");
+      expect(($("byok-key") as HTMLInputElement).value).toBe("");
     });
   });
 
-  it("offers Use BYOK instead inside the runtime OAuth sign-in modal", async () => {
+  it("sends a pasted full address as is, and keeps a failed test until the fields change", async () => {
+    const { run } = await openPage(welcome(small), "welcome");
+    $("local-customize").click();
+    document
+      .querySelector<HTMLButtonElement>(
+        '[data-plan="source"] [data-value="byok"]',
+      )!
+      .click();
+    type("byok-url", "https://llm.example.com/gateway");
+    pick("byok-path", "");
+    pick("byok-endpoint", "");
+    expect(($("byok-path") as HTMLInputElement).value).toBe("");
+    // No known ending: the Claude Code runtime's own format.
+    expect($("byok-status").textContent).toBe(
+      "Sends Anthropic Messages (the Claude Code format) requests to https://llm.example.com/gateway",
+    );
+    type("byok-path", "a//b");
+    expect($("byok-status").dataset.tone).toBe("err");
+    expect(($("byok-list") as HTMLButtonElement).disabled).toBe(true);
+    type("byok-path", "");
+    type("byok-model", "claude-sonnet-4-6");
+
+    run.mockImplementationOnce(async () =>
+      withLocal(welcome(small), {
+        byokCheck: {
+          state: "failed",
+          message:
+            "Nothing answered at https://llm.example.com/gateway (HTTP 404).",
+        },
+      }),
+    );
+    $("byok-test").click();
+    expect(run).toHaveBeenCalledWith({
+      op: "local.byok.check",
+      byok: {
+        baseUrl: "https://llm.example.com/gateway",
+        path: "",
+        endpoint: "",
+        protocol: "anthropic",
+        modelId: "claude-sonnet-4-6",
+        runtime: "claude",
+      },
+    });
+    await vi.waitFor(() => expect($("byok-toast").hidden).toBe(false));
+    expect($("byok-toast").dataset.tone).toBe("err");
+    expect(words("byok-toast")).toBe(
+      "Couldn't connect Nothing answered at https://llm.example.com/gateway (HTTP 404).",
+    );
+    type("byok-model", "claude-opus-4-1");
+    expect($("byok-toast").hidden).toBe(true);
+  });
+
+  it("offers the same BYOK fields inside the runtime sign-in dialog", async () => {
     const base = state("installing");
     const { run } = await openPage({
       ...base,
@@ -653,15 +757,14 @@ describe("setup page Quick Install recommendation", () => {
     expect($("runtime-signin-byok").hidden).toBe(true);
     $("runtime-signin-byok-toggle").click();
     expect($("runtime-signin-byok").hidden).toBe(false);
-    const url = $("signin-byok-url") as HTMLInputElement;
-    const key = $("signin-byok-key") as HTMLInputElement;
-    const model = $("signin-byok-model") as HTMLInputElement;
-    url.value = "https://api.anthropic.com";
-    url.dispatchEvent(new Event("input"));
-    key.value = "sk-ant-fallback";
-    key.dispatchEvent(new Event("input"));
-    model.value = "claude-sonnet-4-6";
-    model.dispatchEvent(new Event("input"));
+    expect(($("signin-byok-endpoint") as HTMLInputElement).value).toBe(
+      "/messages",
+    );
+    expect($("signin-byok-list")).not.toBeNull();
+    expect($("signin-byok-test")).not.toBeNull();
+    type("signin-byok-url", "https://api.anthropic.com");
+    type("signin-byok-key", "sk-ant-fallback");
+    type("signin-byok-model", "claude-sonnet-4-6");
     $("runtime-signin-byok").dispatchEvent(
       new Event("submit", { cancelable: true }),
     );
@@ -671,12 +774,15 @@ describe("setup page Quick Install recommendation", () => {
         byok: {
           runtime: "claude",
           baseUrl: "https://api.anthropic.com",
+          path: "/v1",
+          endpoint: "/messages",
+          protocol: "anthropic",
           apiKey: "sk-ant-fallback",
           modelId: "claude-sonnet-4-6",
         },
       }),
     );
-    expect(key.value).toBe("");
+    expect(($("signin-byok-key") as HTMLInputElement).value).toBe("");
   });
 });
 

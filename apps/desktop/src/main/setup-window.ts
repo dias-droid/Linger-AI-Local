@@ -243,6 +243,11 @@ export class SetupWindowModule implements Module {
       case "local.byok.check":
         await ctx.get<LocalServerModule>("LocalServer").checkByok(command.byok);
         return;
+      case "local.byok.models":
+        await ctx
+          .get<LocalServerModule>("LocalServer")
+          .listByokModels(command.byok);
+        return;
       case "local.recheck":
         ctx.get<LocalServerModule>("LocalServer").recheck();
         return;
@@ -456,6 +461,8 @@ const localServerState = (
     location,
     keys,
     signIn,
+    byokCheck,
+    byokModels,
     legacyBackup,
   } = local.status();
   const home = os.homedir();
@@ -479,6 +486,8 @@ const localServerState = (
     },
     keys,
     ...(signIn ? { signIn } : {}),
+    ...(byokCheck ? { byokCheck } : {}),
+    ...(byokModels ? { byokModels } : {}),
     ...(legacyBackup ? { legacyBackup: shown(legacyBackup) } : {}),
     ...(account ? { account } : {}),
   };

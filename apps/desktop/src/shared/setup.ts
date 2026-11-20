@@ -49,8 +49,9 @@ export interface SetupLocalServer {
   };
   // While the "signin" step shows: the AI runtime's own sign-in.
   readonly signIn?: SetupRuntimeSignIn;
-  // Latest BYOK endpoint check requested from the setup page.
+  // The latest BYOK endpoint test and model listing asked for on the page.
   readonly byokCheck?: SetupByokCheck;
+  readonly byokModels?: SetupByokModels;
   // Once installed: the owner account, for signing in again after logging
   // out.
   readonly account?: SetupLocalAccount;
@@ -64,21 +65,47 @@ export type SetupByokProtocol =
   | "openai-responses"
   | "anthropic";
 
-export interface SetupByokConfig {
+// A BYOK endpoint's address and key: requests go to baseUrl + path +
+// endpoint in protocol, and models are listed at baseUrl + path + /models.
+// The page derives protocol from the end of that address, else from the
+// runtime's own format.
+export interface SetupByokEndpoint {
   readonly baseUrl: string;
+  readonly path: string;
+  readonly endpoint: string;
+  readonly protocol: SetupByokProtocol;
   readonly apiKey?: string;
+}
+
+export interface SetupByokConfig extends SetupByokEndpoint {
   readonly modelId: string;
   readonly runtime: "claude" | "codex" | "pi";
 }
 
+// One request to the endpoint's address from this computer. message is
+// localmodels' own, naming the address and HTTP status.
 export type SetupByokCheck =
-  | { readonly state: "idle" | "checking" }
   | {
       readonly state: "ready";
-      // The wire format the endpoint answered, found by the check.
       readonly protocol: SetupByokProtocol;
+      readonly url: string;
       readonly modelId: string;
       readonly contextWindow: number;
+    }
+  | { readonly state: "failed"; readonly message: string };
+
+export interface SetupByokModel {
+  readonly id: string;
+  readonly name?: string;
+  readonly contextWindow?: number;
+}
+
+// The models the endpoint lists at url.
+export type SetupByokModels =
+  | {
+      readonly state: "ready";
+      readonly url: string;
+      readonly models: readonly SetupByokModel[];
     }
   | { readonly state: "failed"; readonly message: string };
 
@@ -237,9 +264,14 @@ export type SetupCommand =
       readonly byok?: SetupByokConfig;
       readonly keys?: SetupProviderKeys;
     }
+  // Tests the BYOK endpoint with one request, or lists its models.
   | {
       readonly op: "local.byok.check";
       readonly byok: SetupByokConfig;
+    }
+  | {
+      readonly op: "local.byok.models";
+      readonly byok: SetupByokEndpoint;
     }
   // Checks this computer for a local model again.
   | { readonly op: "local.recheck" }

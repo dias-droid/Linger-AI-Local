@@ -9,10 +9,24 @@ const providerKey = z
   .trim()
   .regex(/^[A-Za-z0-9._~+/=:-]{0,512}$/, "Invalid key");
 
+// Empty, or whole segments each led by one slash, so a path or endpoint can
+// only extend the base URL's path.
+const byokUrlPath = z
+  .string()
+  .max(256)
+  .regex(/^(\/[^/?#\s\\]+)*$/, "Invalid path");
+
+const byokEndpointFields = {
+  baseUrl: z.string().trim().min(1).max(2048),
+  path: byokUrlPath,
+  endpoint: byokUrlPath,
+  protocol: z.enum(["openai-chat", "openai-responses", "anthropic"]),
+  apiKey: z.string().max(4096).optional(),
+};
+
 const byokConfig = z
   .object({
-    baseUrl: z.string().trim().min(1).max(2048),
-    apiKey: z.string().max(4096).optional(),
+    ...byokEndpointFields,
     modelId: z
       .string()
       .trim()
@@ -44,6 +58,12 @@ const setupCommand = z.discriminatedUnion("op", [
     .object({
       op: z.literal("local.byok.check"),
       byok: byokConfig,
+    })
+    .strict(),
+  z
+    .object({
+      op: z.literal("local.byok.models"),
+      byok: z.object(byokEndpointFields).strict(),
     })
     .strict(),
   z.object({ op: z.literal("local.recheck") }).strict(),

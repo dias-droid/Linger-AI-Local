@@ -25,6 +25,8 @@
         --field: #f4f4f0;
         --ok: #2f9e44;
         --error: #b5320a;
+        --filled: #9b9a90;
+        --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
         --ease: cubic-bezier(0.22, 1, 0.36, 1);
         color-scheme: light;
       }
@@ -714,47 +716,336 @@
         font-size: 12px;
         font-weight: 500;
       }
-      .byok-grid {
+      /* BYOK fields, built once by byokFields() for the setup form and the
+         sign-in dialog: the base URL and two optional comboboxes (path and
+         endpoint) on one row, the key, then the model with List models and
+         Test beside it, and one status line. */
+      .byok-fields {
         display: grid;
         gap: 7px;
+        font-size: 12px;
+        text-align: left;
       }
-      .byok-grid input,
-      .signin-byok input,
-      .signin-byok select {
-        width: 100%;
+      .byok-fields .ep {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        gap: 6px;
+      }
+      .byok-fields .ep-base-wrap,
+      .byok-fields .ep > .cb,
+      .byok-fields .cb.standalone,
+      .byok-fields .byok-key {
+        display: flex;
+        align-items: center;
+        min-width: 0;
         height: 30px;
-        padding: 0 10px;
+        padding: 0 4px 0 10px;
         border: 1px solid #e2e2dc;
         border-radius: 8px;
         background: #fafaf8;
+        transition:
+          border-color 140ms ease,
+          background-color 140ms ease;
+      }
+      .byok-fields .byok-key {
+        width: 100%;
+        padding-right: 10px;
         color: var(--ink);
         font: inherit;
-        font-size: 12px;
+        user-select: text;
+        -webkit-user-select: text;
       }
-      .byok-grid input:focus,
-      .signin-byok input:focus,
-      .signin-byok select:focus {
+      .byok-fields .ep-base-wrap:focus-within,
+      .byok-fields .ep > .cb:focus-within,
+      .byok-fields .cb.standalone:focus-within,
+      .byok-fields .byok-key:focus {
         outline: none;
         border-color: var(--ink);
         background: #fff;
       }
-      .byok-actions {
-        display: flex;
+      .ep-base,
+      .cb-input {
+        flex: 1 1 auto;
+        width: 100%;
+        min-width: 0;
+        height: 100%;
+        padding: 0;
+        border: 0;
+        outline: none;
+        background: transparent;
+        color: var(--ink);
+        font: inherit;
+        text-overflow: ellipsis;
+        user-select: text;
+        -webkit-user-select: text;
+      }
+      /* Path and endpoint boxes are as wide as their value; the base URL
+         takes the rest of the row. */
+      .ep > .cb .cb-input {
+        field-sizing: content;
+        width: auto;
+        min-width: 1ch;
+        max-width: 17ch;
+      }
+      .byok-fields input::placeholder {
+        color: var(--faint);
+      }
+      .cb-input::placeholder {
+        font-style: italic;
+      }
+      /* Grey: the default Linger fills in, which is still sent. */
+      .cb[data-default="true"] .cb-input {
+        color: var(--filled);
+      }
+      .cb[data-default="true"] .cb-input:focus {
+        color: #77766c;
+      }
+
+      /* Combobox: type anything, or pick from the list. */
+      .cb {
+        position: relative;
+      }
+      .cb-caret {
+        display: grid;
+        flex: none;
+        place-items: center;
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        border: 0;
+        border-radius: 5px;
+        background: none;
+        color: var(--faint);
+      }
+      .cb-caret:hover:not(:disabled),
+      .cb[data-open="true"] .cb-caret {
+        background: rgba(20, 20, 16, 0.06);
+        color: var(--muted);
+      }
+      .cb-menu {
+        position: absolute;
+        top: calc(100% + 5px);
+        left: -1px;
+        z-index: 30;
+        display: grid;
+        gap: 1px;
+        min-width: calc(100% + 2px);
+        width: max-content;
+        max-width: min(320px, 86vw);
+        max-height: 252px;
+        overflow-y: auto;
+        padding: 4px;
+        border: 1px solid rgba(20, 20, 16, 0.08);
+        border-radius: 11px;
+        background: #fff;
+        box-shadow: 0 16px 36px -14px rgba(20, 20, 16, 0.35);
+        font-size: 12px;
+        line-height: 1.4;
+        cursor: default;
+        animation: menu-in 160ms var(--ease);
+      }
+      .cb-menu[hidden] {
+        display: none;
+      }
+      .ep > .cb .cb-menu {
+        left: auto;
+        right: -1px;
+      }
+      @keyframes menu-in {
+        from {
+          opacity: 0;
+          transform: translateY(-3px);
+        }
+      }
+      .cb-menu [role="option"] {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 16px;
         align-items: center;
-        justify-content: space-between;
-        gap: 10px;
+        gap: 1px 10px;
+        padding: 6px 8px;
+        border: 0;
+        border-radius: 7px;
+        background: none;
+        text-align: left;
+      }
+      .cb-menu [role="option"]:hover,
+      .cb-menu [role="option"]:focus-visible {
+        background: #f4f4f0;
+        outline: none;
+      }
+      .opt-main {
+        color: var(--ink);
+        font: 500 12px var(--mono);
+        overflow-wrap: anywhere;
+      }
+      .opt-label {
+        grid-column: 1;
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .opt-label em {
+        margin-left: 6px;
+        color: #d9822b;
+        font-style: normal;
+        font-weight: 500;
+      }
+      .opt-check {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        visibility: hidden;
+        color: var(--ink);
+      }
+      [aria-selected="true"] > .opt-check {
+        visibility: visible;
+      }
+      .cb-head {
+        padding: 5px 8px 3px;
+        color: var(--faint);
+        font-size: 11px;
+        font-weight: 500;
+      }
+      .cb-note {
+        max-width: 300px;
+        padding: 7px 8px;
+        color: var(--muted);
+        font-size: 11.5px;
+        overflow-wrap: anywhere;
+      }
+      .cb-note[data-tone="err"] {
+        color: var(--error);
+      }
+
+      /* The model box, with List models and Test beside it; the test
+         result floats under Test. */
+      .model-row {
+        position: relative;
+        display: flex;
+        gap: 6px;
+      }
+      .model-row > .cb {
+        flex: 1;
+      }
+      .model-row > .change {
+        height: 30px;
+      }
+      .model-row > .list-btn {
+        display: grid;
+        place-items: center;
+        width: 30px;
+        padding: 0;
+        color: var(--muted);
+      }
+      .model-row > .list-btn:hover:not(:disabled) {
+        color: var(--ink);
+      }
+      .list-btn[data-busy="true"] svg {
+        animation: spin 0.9s linear infinite;
+      }
+      .byok-toast {
+        position: absolute;
+        top: calc(100% + 9px);
+        right: 0;
+        z-index: 40;
+        display: grid;
+        grid-template-columns: 16px minmax(0, 1fr) 20px;
+        align-items: start;
+        gap: 8px;
+        width: min(330px, 100%);
+        padding: 10px 8px 10px 12px;
+        border-radius: 10px;
+        background: #1f1f1d;
+        color: #c9c8bf;
+        box-shadow: 0 14px 32px -10px rgba(20, 20, 16, 0.5);
+        font-size: 12px;
+        line-height: 1.45;
+        text-align: left;
+        user-select: text;
+        -webkit-user-select: text;
+        animation: toast-in 180ms var(--ease);
+      }
+      .byok-toast[hidden] {
+        display: none;
+      }
+      .byok-toast::before {
+        content: "";
+        position: absolute;
+        top: -4px;
+        right: 22px;
+        width: 9px;
+        height: 9px;
+        border-radius: 2px;
+        background: inherit;
+        transform: rotate(45deg);
+      }
+      .byok-toast[data-leaving="true"] {
+        animation: toast-out 200ms ease forwards;
+      }
+      @keyframes toast-in {
+        from {
+          opacity: 0;
+          transform: translateY(-4px);
+        }
+      }
+      @keyframes toast-out {
+        to {
+          opacity: 0;
+          transform: translateY(-4px);
+        }
+      }
+      /* Over the setup form's own .choice strong. */
+      .byok-fields .byok-toast strong {
+        display: block;
+        color: #fff;
+        font-size: 12.5px;
+        font-weight: 550;
+      }
+      .byok-toast .url {
+        color: #ecebe3;
+      }
+      .toast-icon {
+        display: grid;
+        margin-top: 1px;
+      }
+      .byok-toast[data-tone="ok"] .toast-icon {
+        color: #74d08b;
+      }
+      .byok-toast[data-tone="err"] .toast-icon {
+        color: #ff9466;
+      }
+      .toast-close {
+        display: grid;
+        place-items: center;
+        width: 20px;
+        height: 20px;
+        padding: 0;
+        border: 0;
+        border-radius: 5px;
+        background: none;
+        color: #8f8e85;
+      }
+      .toast-close:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
       }
       .byok-status {
-        flex: 1;
         color: var(--faint);
         font-size: 11.5px;
-        line-height: 1.35;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
       }
-      .byok-status[data-state="ready"] {
-        color: #2b7a3d;
-      }
-      .byok-status[data-state="failed"] {
+      .byok-status[data-tone="err"] {
         color: var(--error);
+      }
+      .byok-status .url {
+        color: var(--muted);
+      }
+      .byok-status[data-tone] .url {
+        color: inherit;
+      }
+      .byok-fields .url {
+        font-family: var(--mono);
+        font-size: 0.95em;
+        overflow-wrap: anywhere;
       }
       .choice.optional-keys {
         display: block;
@@ -772,14 +1063,6 @@
       .choice.optional-keys[open] summary {
         margin-bottom: 8px;
         color: var(--ink);
-      }
-      .signin-byok {
-        display: grid;
-        gap: 8px;
-        margin-top: 10px;
-        padding-top: 10px;
-        border-top: 1px solid #ecece7;
-        text-align: left;
       }
       .choices,
       .panel {
@@ -1277,11 +1560,11 @@
       .signin-modal details p {
         margin: 8px 0;
       }
-      .signin-modal form {
+      .signin-modal details form {
         display: flex;
         gap: 8px;
       }
-      .signin-modal input {
+      .signin-modal details input {
         flex: 1;
         min-width: 0;
         padding: 5px 10px;
@@ -1291,19 +1574,14 @@
       }
       .signin-byok {
         display: grid;
-        gap: 7px;
+        gap: 10px;
         margin-top: 8px;
         padding-top: 10px;
         border-top: 1px solid var(--line);
       }
-      .signin-byok .seg {
-        width: 100%;
-      }
-      .signin-byok .seg button {
-        flex: 1;
-      }
-      .signin-byok input {
-        width: 100%;
+      /* The BYOK fields take the room they have on the setup form. */
+      .signin-modal .sheet:has(.signin-byok:not([hidden])) {
+        width: 448px;
       }
       .diagnostics {
         display: flex;
@@ -1623,11 +1901,11 @@
               </div>
               <div class="choice byok-box" id="byok-row" hidden>
                 <div class="byok-row">
-                  <label>AI runtime</label>
+                  <label id="byok-runtime-label">AI runtime</label>
                   <div
                     class="seg"
                     role="radiogroup"
-                    aria-label="BYOK runtime"
+                    aria-labelledby="byok-runtime-label"
                     data-byok="runtime"
                   >
                     <span class="knob"></span>
@@ -1642,40 +1920,7 @@
                     </button>
                   </div>
                 </div>
-                <div class="byok-grid">
-                  <input
-                    id="byok-url"
-                    type="url"
-                    autocomplete="off"
-                    spellcheck="false"
-                    aria-label="BYOK endpoint URL"
-                    placeholder="Endpoint URL (https://… or http://192.168.…)"
-                  />
-                  <input
-                    id="byok-key"
-                    type="password"
-                    autocomplete="off"
-                    spellcheck="false"
-                    aria-label="BYOK API key"
-                    placeholder="API key (stored privately on this computer)"
-                  />
-                  <input
-                    id="byok-model"
-                    type="text"
-                    autocomplete="off"
-                    spellcheck="false"
-                    aria-label="BYOK model ID"
-                    placeholder="Model ID (e.g. gpt-5.4 or claude-sonnet-4-6)"
-                  />
-                </div>
-                <div class="byok-actions">
-                  <span class="byok-status" id="byok-status">
-                    Mounted on local Bifrost for all runtimes.
-                  </span>
-                  <button type="button" class="change" id="byok-check">
-                    Check
-                  </button>
-                </div>
+                <div class="byok-fields" id="byok-fields"></div>
               </div>
               <details class="choice optional-keys" id="optional-keys">
                 <summary>App integrations (optional)</summary>
@@ -1835,30 +2080,7 @@
                 </button>
               </div>
               <form class="signin-byok" id="runtime-signin-byok" hidden>
-                <input
-                  id="signin-byok-url"
-                  type="url"
-                  autocomplete="off"
-                  spellcheck="false"
-                  aria-label="Sign-in BYOK endpoint URL"
-                  placeholder="Endpoint URL (https://… or http://192.168.…)"
-                />
-                <input
-                  id="signin-byok-key"
-                  type="password"
-                  autocomplete="off"
-                  spellcheck="false"
-                  aria-label="Sign-in BYOK API key"
-                  placeholder="API key (stored privately on this computer)"
-                />
-                <input
-                  id="signin-byok-model"
-                  type="text"
-                  autocomplete="off"
-                  spellcheck="false"
-                  aria-label="Sign-in BYOK model ID"
-                  placeholder="Model ID (e.g. gpt-5.4 or claude-sonnet-4-6)"
-                />
+                <div class="byok-fields" id="signin-byok-fields"></div>
                 <button
                   class="secondary"
                   id="runtime-signin-byok-submit"
@@ -2303,33 +2525,617 @@
       let picked = false;
       let pickedAutoBeforeCheck = false;
       let customizing = false;
-      const emptyByok = () => ({
-        runtime: "claude",
-        baseUrl: "",
-        apiKey: "",
-        modelId: "",
-      });
-      let byok = emptyByok();
-      let signInByokOpen = false;
-      let signInByok = {
-        baseUrl: "",
-        apiKey: "",
-        modelId: "",
+      // BYOK. Requests go to the base URL + path + endpoint, used verbatim;
+      // path and endpoint are optional, and a grey value is the default that
+      // is sent. The wire format follows the end of that address, else the
+      // runtime's own, so Bifrost passes the runtime's requests through.
+      // Nothing probes: Test sends one request to that one address.
+      const BYOK_FORMATS = {
+        "openai-chat": {
+          suffix: "/chat/completions",
+          label: "OpenAI Chat Completions",
+        },
+        "openai-responses": { suffix: "/responses", label: "OpenAI Responses" },
+        anthropic: { suffix: "/messages", label: "Anthropic Messages" },
       };
-      const byokProtocolLabels = {
-        anthropic: "Anthropic Messages",
-        "openai-chat": "OpenAI Chat Completions",
-        "openai-responses": "OpenAI Responses",
+      const RUNTIME_FORMATS = {
+        claude: "anthropic",
+        codex: "openai-responses",
+        pi: "openai-chat",
       };
-      const trimByok = (value, runtime) => {
-        const apiKey = value.apiKey.trim();
-        return {
-          runtime,
-          baseUrl: value.baseUrl.trim(),
-          ...(apiKey ? { apiKey } : {}),
-          modelId: value.modelId.trim(),
+      const DEFAULT_PATH = "/v1";
+      const PATH_OPTIONS = [
+        { value: "/v1", label: "Most providers" },
+        {
+          value: "/api/paas/v4",
+          label: "Zhipu GLM (base https://open.bigmodel.cn)",
+        },
+        { value: "/api/v3", label: "Volcano Engine Ark" },
+        { value: "/v1beta/openai", label: "Gemini" },
+        { value: "", label: "No path. The base URL already has it." },
+      ];
+      const ENDPOINT_OPTIONS = [
+        ...Object.values(BYOK_FORMATS).map((format) => ({
+          value: format.suffix,
+          label: format.label,
+        })),
+        { value: "", label: "No endpoint. The base URL is the full address." },
+      ];
+      // What the installer accepts as a path or endpoint: empty, or whole
+      // segments, so neither can change the base URL's host.
+      const BYOK_URL_PATH = /^(\/[^/?#\s\\]+)*$/;
+      const ICONS = {
+        refresh:
+          '<svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.2 6.4A5.3 5.3 0 0 0 3.4 4.6M2.8 9.6a5.3 5.3 0 0 0 9.8 1.8M3.2 2.2v2.6h2.6M12.8 13.8v-2.6h-2.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+        chevron:
+          '<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 3.8 5 6.3l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+        selected:
+          '<svg class="opt-check" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="m3.5 8.5 3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+        ok: '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="m5.2 8.2 1.9 1.9 3.7-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+        err: '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 4.6v4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="11.2" r="0.9" fill="currentColor"/></svg>',
+        close:
+          '<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="m2 2 6 6M8 2 2 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+      };
+      const esc = (value) =>
+        String(value).replace(
+          /[&<>"]/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+        );
+      const urlHtml = (url) => '<span class="url">' + esc(url) + "</span>";
+      const contextLabel = (tokens) =>
+        tokens >= 1024 ** 2
+          ? Math.round((tokens / 1024 ** 2) * 10) / 10 + "M"
+          : Math.round(tokens / 1024) + "k";
+      // A typed path gains its leading slash and loses trailing ones.
+      const normalizePath = (value) => {
+        const trimmed = value.trim().replace(/\/+$/, "");
+        return trimmed && !trimmed.startsWith("/") ? "/" + trimmed : trimmed;
+      };
+      // An IPC error's own message, without Electron's prefix.
+      const ipcMessage = (error) =>
+        String(error?.message ?? error).replace(
+          /^Error invoking remote method '[^']+': (Error: )?/,
+          "",
+        );
+      // Asks the main process to test or list an endpoint. The answer comes
+      // back in the state the command returns; nothing else waits for it.
+      const byokAsk = async (command, field) => {
+        try {
+          state = await setup.run(command);
+          return (
+            state.localServer[field] ?? {
+              state: "failed",
+              message: "Linger did not answer.",
+            }
+          );
+        } catch (error) {
+          return { state: "failed", message: ipcMessage(error) };
+        }
+      };
+
+      // A combobox: type anything, or pick a suggestion from its list.
+      const combos = [];
+      const closeCombos = () => {
+        for (const combo of combos) combo.open = false;
+      };
+      const combobox = (root, cfg) => {
+        root.classList.add("cb");
+        root.innerHTML = `
+          <input class="cb-input" id="${cfg.id}" role="combobox"
+            aria-autocomplete="none" aria-expanded="false"
+            aria-controls="${cfg.id}-menu" autocomplete="off" spellcheck="false"
+            placeholder="${esc(cfg.placeholder)}" aria-label="${cfg.label}" />
+          <button type="button" class="cb-caret" tabindex="-1"
+            aria-label="Show ${cfg.label} suggestions">${ICONS.chevron}</button>
+          <div class="cb-menu" id="${cfg.id}-menu" role="listbox"
+            aria-label="${cfg.label}" hidden></div>`;
+        const input = root.querySelector(".cb-input");
+        const caret = root.querySelector(".cb-caret");
+        const menu = root.querySelector(".cb-menu");
+        const combo = { root, input, open: false };
+        let menuHtml = "";
+        const openMenu = (focusFirst) => {
+          closeCombos();
+          combo.open = true;
+          render();
+          if (focusFirst)
+            (
+              menu.querySelector('[aria-selected="true"]') ||
+              menu.querySelector("button")
+            )?.focus();
         };
+        input.addEventListener("input", () => {
+          cfg.set(input.value);
+          combo.open = false;
+          render();
+        });
+        input.addEventListener("blur", () => {
+          cfg.commit();
+          render();
+        });
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            openMenu(true);
+          } else if (event.key === "Enter") {
+            // Commits the value; inside a form it does not submit it.
+            event.preventDefault();
+            cfg.commit();
+            closeCombos();
+            render();
+          }
+        });
+        caret.addEventListener("mousedown", (event) => event.preventDefault());
+        caret.addEventListener("click", () => {
+          if (combo.open) {
+            closeCombos();
+            render();
+          } else {
+            openMenu(false);
+            input.focus();
+          }
+        });
+        menu.addEventListener("mousedown", (event) => event.preventDefault());
+        menu.addEventListener("click", (event) => {
+          const option = event.target.closest("[data-value]");
+          if (!option) return;
+          cfg.set(option.dataset.value);
+          cfg.commit();
+          closeCombos();
+          render();
+          input.focus();
+        });
+        menu.addEventListener("keydown", (event) => {
+          if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+          event.preventDefault();
+          const options = [...menu.querySelectorAll("button")];
+          const at = options.indexOf(document.activeElement);
+          const step = event.key === "ArrowDown" ? 1 : -1;
+          options[(at + step + options.length) % options.length]?.focus();
+        });
+        combo.sync = () => {
+          const value = cfg.get();
+          if (input.value !== value) input.value = value;
+          root.dataset.default = String(Boolean(cfg.isDefault?.()));
+          root.dataset.open = String(combo.open);
+          input.setAttribute("aria-expanded", String(combo.open));
+          menu.hidden = !combo.open;
+          if (!combo.open) {
+            menuHtml = "";
+            return;
+          }
+          const option = (item) => `
+            <button type="button" role="option" data-value="${esc(item.value)}"
+              aria-selected="${item.value === value}">
+              <span class="opt-main">${item.value ? esc(item.value) : "-"}</span>
+              ${
+                item.label || item.tag
+                  ? `<span class="opt-label">${esc(item.label || "")}${
+                      item.tag ? `<em>${esc(item.tag)}</em>` : ""
+                    }</span>`
+                  : ""
+              }
+              ${ICONS.selected}
+            </button>`;
+          // Notes are HTML their callers escaped.
+          const html =
+            (cfg.heading ? `<div class="cb-head">${cfg.heading}</div>` : "") +
+            cfg
+              .items()
+              .map((item) =>
+                item.note === undefined
+                  ? option(item)
+                  : `<div class="cb-note" data-tone="${item.tone || ""}">${item.note}</div>`,
+              )
+              .join("");
+          if (html !== menuHtml) {
+            menu.innerHTML = html;
+            menuHtml = html;
+          }
+        };
+        combos.push(combo);
+        return combo;
       };
+
+      // The BYOK fields, built once for the setup form and once for the
+      // sign-in dialog. runtimeOf() names the runtime the endpoint serves,
+      // which picks the default endpoint and format; changed() runs on every
+      // edit.
+      const byokForms = [];
+      const byokFields = (root, prefix, runtimeOf, changed) => {
+        root.innerHTML = `
+          <div class="ep">
+            <span class="ep-base-wrap"><input class="ep-base" id="${prefix}-url"
+              type="url" autocomplete="off" spellcheck="false"
+              aria-label="Base URL" placeholder="Base URL (https://…)" /></span>
+            <div></div>
+            <div></div>
+          </div>
+          <input class="byok-key" id="${prefix}-key" type="password"
+            autocomplete="off" spellcheck="false" aria-label="API key"
+            placeholder="API key (stored privately on this computer)" />
+          <div class="model-row">
+            <div class="standalone"></div>
+            <button type="button" class="change list-btn" id="${prefix}-list"
+              aria-label="List models" title="List models">${ICONS.refresh}</button>
+            <button type="button" class="change test-btn" id="${prefix}-test">Test</button>
+            <div class="byok-toast" id="${prefix}-toast" role="status"
+              aria-live="polite" hidden></div>
+          </div>
+          <div class="byok-status" id="${prefix}-status" aria-live="polite"></div>`;
+        const blank = () => ({
+          baseUrl: "",
+          path: DEFAULT_PATH,
+          // null follows the runtime's default.
+          endpoint: null,
+          apiKey: "",
+          modelId: "",
+        });
+        let f = blank();
+        // The latest test and model listing; each sequence number drops an
+        // answer to a request the fields have changed since.
+        let check = null;
+        let models = null;
+        let checkSeq = 0;
+        let modelSeq = 0;
+        let toast = null;
+        let toastTimer = 0;
+        let toastShown = "";
+
+        const defaultEndpoint = () =>
+          BYOK_FORMATS[RUNTIME_FORMATS[runtimeOf()]].suffix;
+        const endpointValue = () => f.endpoint ?? defaultEndpoint();
+        const baseUrl = () => f.baseUrl.trim().replace(/\/+$/, "");
+        const apiRoot = () => baseUrl() + normalizePath(f.path);
+        const requestUrl = () => apiRoot() + normalizePath(endpointValue());
+        const modelsUrl = () => apiRoot() + "/models";
+        const format = () => {
+          const url = requestUrl();
+          for (const [protocol, { suffix }] of Object.entries(BYOK_FORMATS))
+            if (url.endsWith(suffix)) return { protocol, fromUrl: true };
+          return { protocol: RUNTIME_FORMATS[runtimeOf()], fromUrl: false };
+        };
+        const validParts = () =>
+          [normalizePath(f.path), normalizePath(endpointValue())].every(
+            (part) => part.length <= 256 && BYOK_URL_PATH.test(part),
+          );
+        const addressed = () => baseUrl() !== "" && validParts();
+        const complete = () => addressed() && f.modelId.trim() !== "";
+        const endpoint = () => {
+          const apiKey = f.apiKey.trim();
+          return {
+            baseUrl: baseUrl(),
+            path: normalizePath(f.path),
+            endpoint: normalizePath(endpointValue()),
+            protocol: format().protocol,
+            ...(apiKey ? { apiKey } : {}),
+          };
+        };
+
+        // The test result floats under Test: a success fades on its own, a
+        // failure stays until dismissed or the fields change.
+        const showToast = () => {
+          clearTimeout(toastTimer);
+          toast = { leaving: false };
+          if (check?.state === "ready")
+            toastTimer = setTimeout(hideToast, 3500);
+        };
+        const hideToast = () => {
+          clearTimeout(toastTimer);
+          if (!toast || toast.leaving) return;
+          toast.leaving = true;
+          render();
+          toastTimer = setTimeout(() => {
+            toast = null;
+            render();
+          }, 200);
+        };
+        const resetResults = (all) => {
+          checkSeq += 1;
+          check = null;
+          clearTimeout(toastTimer);
+          toast = null;
+          if (all) {
+            modelSeq += 1;
+            models = null;
+          }
+        };
+        const edit = (next, all) => {
+          f = { ...f, ...next };
+          resetResults(all);
+          changed();
+        };
+
+        const base = root.querySelector(".ep-base");
+        base.addEventListener("input", () => {
+          edit({ baseUrl: base.value }, true);
+          render();
+        });
+        base.addEventListener("blur", () => {
+          if (baseUrl() !== f.baseUrl) f = { ...f, baseUrl: baseUrl() };
+          base.scrollLeft = 0;
+          render();
+        });
+        const [pathBox, endpointBox] = root.querySelectorAll(".ep > div");
+        const path = combobox(pathBox, {
+          id: prefix + "-path",
+          label: "Path",
+          heading: "Path · optional",
+          placeholder: "-",
+          get: () => f.path,
+          set: (value) => edit({ path: value }, true),
+          commit: () => {
+            f = { ...f, path: normalizePath(f.path) };
+          },
+          isDefault: () => f.path === DEFAULT_PATH,
+          items: () =>
+            PATH_OPTIONS.map((option) => ({
+              ...option,
+              tag: option.value === DEFAULT_PATH ? "Default" : "",
+            })),
+        });
+        const endpointCombo = combobox(endpointBox, {
+          id: prefix + "-endpoint",
+          label: "Endpoint",
+          heading: "Endpoint · optional",
+          placeholder: "-",
+          get: endpointValue,
+          set: (value) =>
+            edit(
+              { endpoint: value === defaultEndpoint() ? null : value },
+              false,
+            ),
+          commit: () => {
+            if (f.endpoint === null) return;
+            const value = normalizePath(f.endpoint);
+            f = {
+              ...f,
+              endpoint: value === defaultEndpoint() ? null : value,
+            };
+          },
+          isDefault: () => f.endpoint === null,
+          items: () =>
+            ENDPOINT_OPTIONS.map((option) => ({
+              ...option,
+              tag:
+                option.value === defaultEndpoint()
+                  ? RUNTIMES[runtimeOf()] + " default"
+                  : "",
+            })),
+        });
+        const modelCombo = combobox(root.querySelector(".model-row > div"), {
+          id: prefix + "-model",
+          label: "Model",
+          placeholder: "Model ID (e.g. gpt-5.4 or claude-sonnet-4-6)",
+          get: () => f.modelId,
+          set: (value) => edit({ modelId: value }, false),
+          commit: () => {
+            f = { ...f, modelId: f.modelId.trim() };
+          },
+          items: () => {
+            if (!models)
+              return [
+                {
+                  note: "Use the refresh button to list the endpoint's models, or type an ID.",
+                },
+              ];
+            if (models.state === "loading")
+              return [
+                {
+                  note: "Listing models from " + urlHtml(modelsUrl()) + "…",
+                },
+              ];
+            if (models.state === "failed")
+              return [{ note: esc(models.message), tone: "err" }];
+            const count = models.models.length;
+            return [
+              {
+                note:
+                  count +
+                  (count === 1 ? " model" : " models") +
+                  " from " +
+                  urlHtml(models.url),
+              },
+              ...models.models.map((model) => ({
+                value: model.id,
+                label: [
+                  model.name !== model.id && model.name,
+                  model.contextWindow &&
+                    contextLabel(model.contextWindow) + " context",
+                ]
+                  .filter(Boolean)
+                  .join(" · "),
+              })),
+            ];
+          },
+        });
+        const key = root.querySelector(".byok-key");
+        key.addEventListener("input", () => {
+          edit({ apiKey: key.value }, true);
+          render();
+        });
+        const list = root.querySelector(".list-btn");
+        list.addEventListener("click", async () => {
+          if (!addressed()) return;
+          const seq = ++modelSeq;
+          models = { state: "loading" };
+          closeCombos();
+          render();
+          const answer = await byokAsk(
+            { op: "local.byok.models", byok: endpoint() },
+            "byokModels",
+          );
+          if (seq !== modelSeq) return;
+          models = answer;
+          // The list it filled opens; a failure shows on the status line.
+          closeCombos();
+          modelCombo.open = answer.state === "ready";
+          render();
+        });
+        const test = root.querySelector(".test-btn");
+        test.addEventListener("click", async () => {
+          if (!complete()) return;
+          resetResults(false);
+          const seq = checkSeq;
+          check = { state: "checking" };
+          render();
+          const answer = await byokAsk(
+            { op: "local.byok.check", byok: form.config() },
+            "byokCheck",
+          );
+          if (seq !== checkSeq) return;
+          check = answer;
+          showToast();
+          render();
+        });
+        const toastEl = root.querySelector(".byok-toast");
+        toastEl.addEventListener("click", (event) => {
+          if (event.target.closest(".toast-close")) hideToast();
+        });
+        // Hovering keeps a success on screen; leaving lets it fade.
+        toastEl.addEventListener("mouseenter", () => clearTimeout(toastTimer));
+        toastEl.addEventListener("mouseleave", () => {
+          if (check?.state === "ready")
+            toastTimer = setTimeout(hideToast, 1500);
+        });
+        const status = root.querySelector(".byok-status");
+
+        const form = {
+          root,
+          complete,
+          modelId: () => f.modelId.trim(),
+          config: () => ({
+            ...endpoint(),
+            modelId: f.modelId.trim(),
+            runtime: runtimeOf(),
+          }),
+          // The runtime changed: its default endpoint and format may differ.
+          runtimeChanged: () => resetResults(false),
+          clearKey: () => {
+            f = { ...f, apiKey: "" };
+            key.value = "";
+          },
+          reset: () => {
+            f = blank();
+            resetResults(true);
+          },
+          // A click outside the toast and Test dismisses it.
+          dismiss: (target) => {
+            if (toast && !toastEl.contains(target) && !test.contains(target))
+              hideToast();
+          },
+          sync: (busy) => {
+            if (base.value !== f.baseUrl) base.value = f.baseUrl;
+            if (key.value !== f.apiKey) key.value = f.apiKey;
+            path.sync();
+            endpointCombo.sync();
+            modelCombo.sync();
+            const checking = check?.state === "checking";
+            const listing = models?.state === "loading";
+            list.disabled = busy || listing || !addressed();
+            list.dataset.busy = String(listing);
+            list.setAttribute(
+              "aria-label",
+              listing ? "Listing models" : "List models",
+            );
+            test.disabled = busy || checking || !complete();
+            test.textContent = checking ? "Testing…" : "Test";
+            const shown = Boolean(toast && check && !checking);
+            toastEl.hidden = !shown;
+            if (shown) {
+              const ok = check.state === "ready";
+              toastEl.dataset.tone = ok ? "ok" : "err";
+              toastEl.dataset.leaving = String(toast.leaving);
+              const html = `
+                <span class="toast-icon">${ok ? ICONS.ok : ICONS.err}</span>
+                <div>
+                  <strong>${ok ? "Connected" : "Couldn't connect"}</strong>
+                  <div>${
+                    ok
+                      ? `${esc(check.modelId)} · ${contextLabel(check.contextWindow)} context · ${BYOK_FORMATS[check.protocol].label}<br />${urlHtml(check.url)}`
+                      : esc(check.message)
+                  }</div>
+                </div>
+                <button type="button" class="toast-close" aria-label="Dismiss">${ICONS.close}</button>`;
+              if (html !== toastShown) {
+                toastEl.innerHTML = html;
+                toastShown = html;
+              }
+            }
+            let line;
+            if (!validParts())
+              line = {
+                tone: "err",
+                html: "Path and endpoint must be empty or a path such as /v1.",
+              };
+            else if (models?.state === "failed")
+              line = { tone: "err", html: esc(models.message) };
+            else if (listing)
+              line = {
+                html: "Listing models from " + urlHtml(modelsUrl()) + "…",
+              };
+            else if (!baseUrl())
+              line = {
+                html: "Grey values are defaults. Path and endpoint are optional.",
+              };
+            else {
+              const { protocol, fromUrl } = format();
+              line = {
+                html:
+                  "Sends " +
+                  BYOK_FORMATS[protocol].label +
+                  (fromUrl
+                    ? ""
+                    : " (the " + RUNTIMES[runtimeOf()] + " format)") +
+                  " requests to " +
+                  urlHtml(requestUrl()),
+              };
+            }
+            if (line.tone) status.dataset.tone = line.tone;
+            else delete status.dataset.tone;
+            if (status.innerHTML !== line.html) status.innerHTML = line.html;
+          },
+        };
+        byokForms.push(form);
+        return form;
+      };
+      document.addEventListener("pointerdown", (event) => {
+        for (const form of byokForms) form.dismiss(event.target);
+        if (
+          combos.some(
+            (combo) => combo.open && !combo.root.contains(event.target),
+          )
+        ) {
+          closeCombos();
+          render();
+        }
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape") return;
+        const open = combos.find((combo) => combo.open);
+        if (!open) return;
+        closeCombos();
+        render();
+        open.input.focus();
+      });
+      // The setup form's runtime; the sign-in dialog's endpoint serves the
+      // runtime signing in.
+      let byokRuntime = "claude";
+      let signInByokOpen = false;
+      const mainByok = byokFields(
+        $("byok-fields"),
+        "byok",
+        () => byokRuntime,
+        () => {
+          picked = true;
+        },
+      );
+      const signInByok = byokFields(
+        $("signin-byok-fields"),
+        "signin-byok",
+        () => state.localServer.signIn?.runtime ?? "claude",
+        () => {},
+      );
       // Provider keys typed or removed here ("" removes the saved one); kept
       // only in the inputs and sent once with Install.
       let keys = {};
@@ -2553,8 +3359,9 @@
         $("runtime-signin-runtimes").hidden = !otherRuntimes && !pi;
         $("runtime-signin-other").hidden = pi;
         $("runtime-signin-byok").hidden = !signInByokOpen;
+        signInByok.sync(busy);
         $("runtime-signin-byok-submit").disabled =
-          busy || !signInByok.baseUrl.trim() || !signInByok.modelId.trim();
+          busy || !signInByok.complete();
         for (const option of document.querySelectorAll("[data-switch]")) {
           option.hidden = option.dataset.switch === sign.runtime;
           option.disabled = busy;
@@ -2692,7 +3499,7 @@
           choice.source === "local"
             ? "Local model + Pi"
             : choice.source === "byok"
-              ? ["BYOK", RUNTIMES[byok.runtime], byok.modelId.trim()]
+              ? ["BYOK", RUNTIMES[byokRuntime], mainByok.modelId()]
                   .filter(Boolean)
                   .join(" · ")
               : RUNTIMES[choice.runtime];
@@ -2723,9 +3530,7 @@
           $("local-install-label").innerHTML = label;
         document.querySelector('[data-step="welcome"]').dataset.customizing =
           String(customizing && local.available);
-        const byokIncomplete =
-          plan.source === "byok" &&
-          (!byok.baseUrl.trim() || !byok.modelId.trim());
+        const byokIncomplete = plan.source === "byok" && !mainByok.complete();
         const localUnavailable = plan.source === "local" && !model;
         $("local-install").disabled ||=
           checking || byokIncomplete || localUnavailable;
@@ -2879,36 +3684,16 @@
               option.disabled = busy;
             }
           }
-        for (const seg of document.querySelectorAll("[data-byok]"))
-          for (const option of seg.querySelectorAll("button")) {
-            const field = seg.dataset.byok;
-            const value = option.dataset.value;
-            option.setAttribute("aria-checked", String(byok[field] === value));
-            option.disabled = busy;
-          }
-        $("byok-check").disabled =
-          busy || !byok.baseUrl.trim() || !byok.modelId.trim();
-        const byokCheck = local.byokCheck;
-        if (byokCheck?.state === "checking") {
-          $("byok-status").textContent = "Checking endpoint…";
-          $("byok-status").dataset.tone = "";
-        } else if (byokCheck?.state === "ready") {
-          $("byok-status").textContent =
-            "Ready · " +
-            byokCheck.modelId +
-            " (" +
-            Math.round(byokCheck.contextWindow / 1000) +
-            "k context) through " +
-            byokProtocolLabels[byokCheck.protocol];
-          $("byok-status").dataset.tone = "ok";
-        } else if (byokCheck?.state === "failed") {
-          $("byok-status").textContent = byokCheck.message;
-          $("byok-status").dataset.tone = "err";
-        } else {
-          $("byok-status").textContent =
-            "Mounted on local Bifrost for all runtimes.";
-          $("byok-status").dataset.tone = "";
+        for (const option of document.querySelectorAll(
+          '[data-byok="runtime"] button',
+        )) {
+          option.setAttribute(
+            "aria-checked",
+            String(byokRuntime === option.dataset.value),
+          );
+          option.disabled = busy;
         }
+        mainByok.sync(busy);
         requestAnimationFrame(placeKnobs);
 
         // Installing. A restart after a reboot shows here as starting.
@@ -3205,11 +3990,7 @@
           state = await setup.run(command);
           return true;
         } catch (error) {
-          const message = String(error?.message ?? error).replace(
-            /^Error invoking remote method '[^']+': (Error: )?/,
-            "",
-          );
-          if (errorId) $(errorId).textContent = message;
+          if (errorId) $(errorId).textContent = ipcMessage(error);
           return false;
         } finally {
           pending = null;
@@ -3231,12 +4012,12 @@
       // The install runs on its own; this window follows its progress.
       const install = async () => {
         const byokPayload =
-          plan.source === "byok" ? trimByok(byok, byok.runtime) : undefined;
+          plan.source === "byok" ? mainByok.config() : undefined;
         const runtime =
           plan.source === "local"
             ? "local"
             : plan.source === "byok"
-              ? byok.runtime
+              ? byokRuntime
               : plan.runtime === "pi"
                 ? "recommended"
                 : plan.runtime;
@@ -3283,22 +4064,11 @@
         signInByokOpen = !signInByokOpen;
         render();
       });
-      for (const [id, field] of [
-        ["signin-byok-url", "baseUrl"],
-        ["signin-byok-key", "apiKey"],
-        ["signin-byok-model", "modelId"],
-      ])
-        $(id).addEventListener("input", () => {
-          signInByok = { ...signInByok, [field]: $(id).value };
-          render();
-        });
       $("runtime-signin-byok").addEventListener("submit", async (event) => {
         event.preventDefault();
-        const runtime = state.localServer.signIn?.runtime ?? "claude";
-        if (!signInByok.baseUrl.trim() || !signInByok.modelId.trim()) return;
-        const payload = trimByok(signInByok, runtime);
-        $("signin-byok-key").value = "";
-        signInByok = { ...signInByok, apiKey: "" };
+        if (!signInByok.complete()) return;
+        const payload = signInByok.config();
+        signInByok.clearKey();
         await run(
           { op: "local.signin.byok", byok: payload },
           "runtime-signin-error",
@@ -3348,10 +4118,8 @@
       );
       const clearKeys = () => {
         keys = {};
-        byok = { ...byok, apiKey: "" };
-        $("byok-key").value = "";
-        signInByok = { ...signInByok, apiKey: "" };
-        $("signin-byok-key").value = "";
+        mainByok.clearKey();
+        signInByok.clearKey();
         for (const input of document.querySelectorAll("[data-key]")) {
           input.value = "";
           input.type = "password";
@@ -3392,9 +4160,8 @@
         if (!customizing) {
           picked = false;
           pickedAutoBeforeCheck = false;
-          byok = emptyByok();
-          $("byok-url").value = "";
-          $("byok-model").value = "";
+          byokRuntime = "claude";
+          mainByok.reset();
           clearKeys();
           const location = state.localServer.location;
           if (location.custom || location.error)
@@ -3437,30 +4204,15 @@
             }
             render();
           });
-      for (const seg of document.querySelectorAll("[data-byok]"))
-        for (const option of seg.querySelectorAll("button"))
-          option.addEventListener("click", () => {
-            picked = true;
-            byok = { ...byok, [seg.dataset.byok]: option.dataset.value };
-            render();
-          });
-      for (const [id, field] of [
-        ["byok-url", "baseUrl"],
-        ["byok-key", "apiKey"],
-        ["byok-model", "modelId"],
-      ])
-        $(id).addEventListener("input", () => {
+      for (const option of document.querySelectorAll(
+        '[data-byok="runtime"] button',
+      ))
+        option.addEventListener("click", () => {
           picked = true;
-          byok = { ...byok, [field]: $(id).value };
+          byokRuntime = option.dataset.value;
+          mainByok.runtimeChanged();
           render();
         });
-      $("byok-check").addEventListener("click", () => {
-        if (!byok.baseUrl.trim() || !byok.modelId.trim()) return;
-        run(
-          { op: "local.byok.check", byok: trimByok(byok, byok.runtime) },
-          "local-error",
-        );
-      });
       $("location-change").addEventListener("click", () =>
         run({ op: "local.location.pick" }),
       );

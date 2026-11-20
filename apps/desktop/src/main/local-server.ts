@@ -83,6 +83,9 @@ import {
 import type {
   SetupByokCheck,
   SetupByokConfig,
+  SetupByokEndpoint,
+  SetupByokModels,
+  SetupByokProtocol,
   SetupReason,
 } from "../shared/setup.js";
 
@@ -288,6 +291,7 @@ export interface LocalServerStatus {
   // While the "signin" step waits for the person.
   readonly signIn?: RuntimeSignIn;
   readonly byokCheck?: SetupByokCheck;
+  readonly byokModels?: SetupByokModels;
   // Where this installation moved the data of the earlier Simplex app,
   // which it could not upgrade.
   readonly legacyBackup?: string;
@@ -446,6 +450,7 @@ export class LocalServerModule implements Module {
   #daemonConnection: string | undefined;
   #signIn: RuntimeSignIn | undefined;
   #byokCheck: SetupByokCheck | undefined;
+  #byokModels: SetupByokModels | undefined;
   #legacyBackup: string | undefined;
   // The installer that runs the sign-in, and what the person asked for
   // while the step waits.
@@ -628,6 +633,7 @@ export class LocalServerModule implements Module {
       ...(this.#origin ? { origin: this.#origin } : {}),
       ...(this.#signIn ? { signIn: this.#signIn } : {}),
       ...(this.#byokCheck ? { byokCheck: this.#byokCheck } : {}),
+      ...(this.#byokModels ? { byokModels: this.#byokModels } : {}),
       ...(this.#legacyBackup ? { legacyBackup: this.#legacyBackup } : {}),
     };
   }
@@ -734,16 +740,79 @@ export class LocalServerModule implements Module {
     this.inspect();
   }
 
+  // Tests the endpoint with one request from this computer. The page reads
+  // the outcome from byokCheck in the state its command returns, and tells
+  // a test in flight by itself.
   async checkByok(byok: SetupByokConfig): Promise<void> {
-    if (this.#byokCheck?.state === "checking") return;
-    this.#byokCheck = { state: "checking" };
-    this.#ctx?.bus.emit("local-server.changed");
+    const out = await this.#byokCommand("--check-byok", byok, 50_000);
+    this.#byokCheck =
+      out.ok === true &&
+      isByokProtocol(out.protocol) &&
+      typeof out.url === "string"
+        ? {
+            state: "ready",
+            protocol: out.protocol,
+            url: out.url,
+            modelId:
+              typeof out.modelId === "string" ? out.modelId : byok.modelId,
+            contextWindow:
+              typeof out.contextWindow === "number"
+                ? out.contextWindow
+                : 131_072,
+          }
+        : {
+            state: "failed",
+            message: byokFailure(out, "Could not test the BYOK endpoint."),
+          };
+  }
+
+  // Lists the models the endpoint serves at its base URL + path + /models,
+  // read back like a test from byokModels.
+  async listByokModels(endpoint: SetupByokEndpoint): Promise<void> {
+    const out = await this.#byokCommand("--list-byok-models", endpoint, 35_000);
+    this.#byokModels =
+      typeof out.url === "string" && Array.isArray(out.models)
+        ? {
+            state: "ready",
+            url: out.url,
+            models: (out.models as unknown[]).flatMap((row) => {
+              const { id, name, contextWindow } = (row ?? {}) as Record<
+                string,
+                unknown
+              >;
+              return typeof id === "string" && id
+                ? [
+                    {
+                      id,
+                      ...(typeof name === "string" && name ? { name } : {}),
+                      ...(typeof contextWindow === "number"
+                        ? { contextWindow }
+                        : {}),
+                    },
+                  ]
+                : [];
+            }),
+          }
+        : {
+            state: "failed",
+            message: byokFailure(out, "Could not list the endpoint's models."),
+          };
+  }
+
+  // Runs the installer's headless BYOK command: the endpoint and key go on
+  // stdin, never in argv, and its last stdout line is the JSON answer. A
+  // failure to run it comes back as { ok: false, message }.
+  async #byokCommand(
+    flag: "--check-byok" | "--list-byok-models",
+    input: SetupByokEndpoint,
+    timeoutMs: number,
+  ): Promise<Record<string, unknown>> {
     const home = this.#location ?? this.#home;
     try {
       const output = await new Promise<string>((resolve, reject) => {
         const child = spawn(
           process.execPath,
-          [this.#installerScript(), "--home", home, "--check-byok"],
+          [this.#installerScript(), "--home", home, flag],
           {
             stdio: ["pipe", "pipe", "pipe"],
             windowsHide: true,
@@ -752,7 +821,7 @@ export class LocalServerModule implements Module {
               ELECTRON_RUN_AS_NODE: "1",
               LINGER_HOME: home,
             },
-            signal: AbortSignal.timeout(45_000),
+            signal: AbortSignal.timeout(timeoutMs),
           },
         );
         let last = "";
@@ -761,49 +830,18 @@ export class LocalServerModule implements Module {
         });
         child.once("error", reject);
         child.once("close", () => resolve(last));
-        child.stdin.end(JSON.stringify(byok));
+        child.stdin.end(JSON.stringify(input));
       });
-      const parsed = JSON.parse(output) as {
-        ok?: unknown;
-        protocol?: unknown;
-        modelId?: unknown;
-        contextWindow?: unknown;
-        message?: unknown;
-      };
-      if (
-        parsed.ok === true &&
-        (parsed.protocol === "openai-chat" ||
-          parsed.protocol === "openai-responses" ||
-          parsed.protocol === "anthropic")
-      ) {
-        this.#byokCheck = {
-          state: "ready",
-          protocol: parsed.protocol,
-          modelId: String(parsed.modelId ?? byok.modelId),
-          contextWindow:
-            typeof parsed.contextWindow === "number"
-              ? parsed.contextWindow
-              : 131_072,
-        };
-      } else {
-        this.#byokCheck = {
-          state: "failed",
-          message:
-            typeof parsed.message === "string" && parsed.message
-              ? parsed.message
-              : "Could not verify BYOK endpoint.",
-        };
-      }
+      const parsed: unknown = JSON.parse(output);
+      return parsed && typeof parsed === "object"
+        ? (parsed as Record<string, unknown>)
+        : {};
     } catch (error) {
-      this.#byokCheck = {
-        state: "failed",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Could not verify BYOK endpoint.",
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
       };
     }
-    this.#ctx?.bus.emit("local-server.changed");
   }
 
   async #inspect(
@@ -3355,6 +3393,16 @@ interface RuntimeLogin {
 }
 
 // The runtime an installation's setup choice runs; local models run on pi.
+const isByokProtocol = (value: unknown): value is SetupByokProtocol =>
+  value === "openai-chat" ||
+  value === "openai-responses" ||
+  value === "anthropic";
+
+// The installer's own words when it failed with { ok: false, message }:
+// localmodels names the address and HTTP status there.
+const byokFailure = (out: Record<string, unknown>, fallback: string): string =>
+  typeof out.message === "string" && out.message ? out.message : fallback;
+
 const setupRuntime = (choice: string | undefined): LocalRuntime | undefined =>
   choice === "local-models"
     ? "pi"

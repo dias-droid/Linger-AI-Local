@@ -82,8 +82,15 @@ Gateway and runs Agents. The daemon exits with the app.
   printed link and Claude Code's paste-code form sit behind "Having
   trouble?"; Cancel stops the login (`DELETE /api/runtime-login`); the
   dialog also offers installing another runtime instead (a new job with
-  that `setupChoice`). No secret passes through the page. Then it saves the
-  installed runtime's executable and profile paths
+  that `setupChoice`). No sign-in secret passes through the page. The
+  dialog also offers BYOK, with the same form as Customize's BYOK
+  (`byokFields` in `setup.html`): a base URL used verbatim, an optional path
+  (default `/v1`) and endpoint (default the runtime's own), key and model.
+  Its refresh button and Test run the installer headless
+  (`--list-byok-models`, `--check-byok`, the endpoint and key on stdin),
+  which lists `base + path + /models` and sends one request to
+  `base + path + endpoint` in the format the page derived from that address.
+  Then it saves the installed runtime's executable and profile paths
   (`GET /api/instances/desktop/runtime`) as `runtimeEnvironment` in the
   Desktop config, and the runtime its `setupChoice` runs (`local-models` runs
   on Pi) as `preferredRuntime`. The daemon config carries that as
