@@ -2650,5 +2650,24 @@
     "saveFailed": "无法保存 Routine。",
     "deleteFailed": "无法删除 Routine。",
     "runFailed": "无法运行 Routine。"
+  },
+  "roomDocuments": {
+    "title": "文件",
+    "noDocumentsYet": "这个 Room 还没有文档",
+    "fileCount": { "other": "{count} 个文件" },
+    "roomFiles": "Room 文件",
+    "openFile": "打开 {name}",
+    "downloadFile": "下载 {name}",
+    "downloadFailed": "无法下载这个文件。",
+    "copyLink": "复制链接",
+    "copyLinkFailed": "无法复制文件链接。",
+    "actionsFor": "{name} 的操作",
+    "emptyTitle": "还没有 Room 文档",
+    "emptyBody": "在这个 Room 中共享的文档会显示在这里。",
+    "openingDocument": "正在打开文档…",
+    "unavailableTitle": "这个文件已不可用",
+    "unavailableBody": "文件已被移除，或者你已失去访问权限。",
+    "loadFailedTitle": "无法加载文件",
+    "loadFailedBody": "请重试加载这个文件。"
   }
 }
