@@ -639,6 +639,10 @@ function ComposerEditor({
   const [composition, setComposition] = useState<ComposerComposition | null>(
     null,
   );
+  // An input method may recompose text already in the draft, as Android
+  // keyboards do when the caret backs into a word, so the composed range is
+  // read from the caret after each input, never from where composition began.
+  const composedLength = useRef(0);
   return (
     <div className="message-composer-editor relative">
       <textarea
@@ -671,20 +675,27 @@ function ComposerEditor({
           isComposing.current = false;
           setComposition(null);
         }}
-        onCompositionStart={(event) => {
+        onCompositionStart={() => {
           isComposing.current = true;
-          const start = event.currentTarget.selectionStart;
-          setComposition({ start, end: start });
+          composedLength.current = 0;
+          setComposition(null);
         }}
         // Input-method candidates count as typing before they commit.
         onCompositionUpdate={(event) => {
           peek.typed(event.currentTarget.value.length);
-          const data = event.data;
-          setComposition((current) =>
-            current
-              ? { start: current.start, end: current.start + data.length }
-              : current,
-          );
+          composedLength.current = event.data.length;
+        }}
+        // Every composition step fires input, even one that leaves the value
+        // as it was, which change skips.
+        onInput={(event) => {
+          if (!isComposing.current) return;
+          const end =
+            event.currentTarget.selectionStart ??
+            event.currentTarget.value.length;
+          setComposition({
+            start: Math.max(0, end - composedLength.current),
+            end,
+          });
         }}
         onKeyDown={handleKeyDown}
         onPaste={(event) => {
@@ -910,7 +921,7 @@ function ComposerHighlight({
   skillReferences,
 }: {
   body: string;
-  composition?: ComposerComposition | null;
+  composition: ComposerComposition | null;
   documentOptions: MessageDocumentOption[];
   documentReferences: RoomComposerDocumentReference[];
   highlightContentRef: RefObject<HTMLDivElement | null>;
