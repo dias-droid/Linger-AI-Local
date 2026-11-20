@@ -658,6 +658,20 @@ components:
         terminal:
           type: object
           additionalProperties: true
+    AgentLocalRunReplyStatus:
+      type: object
+      additionalProperties: false
+      required: [replied]
+      properties:
+        replied:
+          type: boolean
+          description: >-
+            Whether TeamHub persisted a visible reply from this Local Run: a
+            conversation Message or decision card attributed to the Run, a
+            queued presentation sequence attributed to the Run, or an
+            unattributed conversation Message, presentation sequence, or emoji
+            Reaction written by the Context's Agent in the Room or its Threads
+            since the Run started.
     ClaimAgentLocalRunRequest:
       type: object
       additionalProperties: false

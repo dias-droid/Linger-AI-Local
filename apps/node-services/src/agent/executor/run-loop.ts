@@ -1368,7 +1368,7 @@ export class RunLoop {
     const statusDrainStartedAt = performance.now();
     await this.#settleRuntimeStatusEvents(execution);
     const runtimeStatusDrainMs = performance.now() - statusDrainStartedAt;
-    const terminal = this.#completedTerminal(
+    const terminal = await this.#completedTerminal(
       runId,
       finalResponse,
       replyDelivery,
@@ -1731,15 +1731,34 @@ export class RunLoop {
    * Provider turn is not a succeeded Run when the Room has nothing to show:
    * the Agent tried to post and none landed, or a Human who mentioned it is
    * waiting and it never tried. Its final text is private scratch and is not
-   * posted for it. Task Runs report through their final response and keep it.
+   * posted for it. Because activity classification inspects shell text for
+   * display and can miss compound scripts or decision cards, TeamHub confirms
+   * whether a visible reply landed before failing the Run. Task Runs report
+   * through their final response and keep it.
    */
-  #completedTerminal(
+  async #completedTerminal(
     runId: string,
     finalResponse: string,
     replyDelivery: ReplyDelivery,
-  ): LocalRunTerminal {
+  ): Promise<LocalRunTerminal> {
     const roomRun = this.#executionContextRef?.kind === "meta";
-    const undelivered = roomRun && replyDelivery.replyUndelivered;
+    const suspectedUndelivered = roomRun && replyDelivery.replyUndelivered;
+    const suspectedNotSent = roomRun && replyDelivery.replyNotSent;
+    let confirmedReplied = false;
+    if (suspectedUndelivered || suspectedNotSent) {
+      try {
+        confirmedReplied = await this.#state.hasLocalRunReplied(
+          runId,
+          this.#terminalRecoveryStop.signal,
+        );
+      } catch (error) {
+        this.#logger.log("warn", "local_run.reply_check_failed", {
+          runId,
+          error,
+        });
+      }
+    }
+    const undelivered = suspectedUndelivered && !confirmedReplied;
     if (replyDelivery.hasFailures) {
       this.#logger.log("warn", "local_run.teamhub_messages_failed", {
         runId,
@@ -1755,7 +1774,7 @@ export class RunLoop {
         failure: runFailure("reply_undelivered", this.#runtimeType),
       };
     }
-    if (roomRun && replyDelivery.replyNotSent) {
+    if (suspectedNotSent && !confirmedReplied) {
       this.#logger.log("warn", "local_run.reply_not_sent", {
         runId,
         ...replyDelivery.counts(),

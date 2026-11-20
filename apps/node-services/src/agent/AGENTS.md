@@ -73,11 +73,15 @@ take precedence.
   scheduler, execution store, or Runtime executor beside it, and do not
   restore TeamHub Run admission.
 - A Room Agent speaks only through TeamHub message writes, which the Computer
-  classifies as `message` activities (`reply-delivery.ts`). A Room Run whose
-  every write failed finishes failed with `reply_undelivered`. One that never
-  tried to write while a Human's Message that mentioned the Agent (a direct
-  chat always does) waits finishes failed with `reply_not_sent`. Its final
-  text is private scratch and is never posted for it.
+  classifies as `message` activities (`reply-delivery.ts`). Before failing a
+  Room Run for a missing reply, the Run loop checks TeamHub's persisted reply
+  status (`GET /v0/agent-runtime/runs/reply-status`) so compound scripts,
+  decision cards, presentation sequences, and reactions that activity
+  classification missed are not misreported. A Room Run whose every write
+  failed finishes failed with `reply_undelivered`. One that left no reply while
+  a Human's Message that mentioned the Agent (a direct chat always does) waits
+  finishes failed with `reply_not_sent`. Its final text is private scratch and
+  is never posted for it.
 - Ordinary Room/Meta execution reads effective Agent configuration before a new
   Local Run. Skill saves do not activate idle Contexts. If versions changed,
   reuse graceful activation to resume the same native history; running/steered
