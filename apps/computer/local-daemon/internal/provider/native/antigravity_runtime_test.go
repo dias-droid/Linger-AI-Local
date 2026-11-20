@@ -437,7 +437,7 @@ func TestAntigravityWaitsForACommandItMovedToTheBackground(t *testing.T) {
 		t.Fatal(err)
 	}
 	events, outcome := drainAgy(t, run)
-	if outcome.Status != statusCompleted || outcome.Output != "Found a.txt" {
+	if outcome.Status != statusCompleted || outcome.Output != "\n\nFound a.txt" {
 		t.Fatalf("outcome=%+v", outcome)
 	}
 	var result Event

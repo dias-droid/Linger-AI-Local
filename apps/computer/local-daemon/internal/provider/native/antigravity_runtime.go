@@ -293,7 +293,8 @@ func (t *antigravityTurn) exchange(prompt string, servers []any) Outcome {
 	}
 	outcome := Outcome{ElapsedMs: time.Since(started).Milliseconds()}
 	t.mu.Lock()
-	outcome.Output = strings.TrimSpace(t.output.String())
+	// Untrimmed, as the reply Agent Service reads from the stream.
+	outcome.Output = t.output.String()
 	t.mu.Unlock()
 	if result.Usage != nil {
 		model := spec.Model
