@@ -3475,10 +3475,11 @@ func (e RoutineChangedPayloadChangeKind) Valid() bool {
 
 // Defines values for RoutineListenerApp.
 const (
-	RoutineListenerAppGmail          RoutineListenerApp = "gmail"
-	RoutineListenerAppGoogleCalendar RoutineListenerApp = "google_calendar"
-	RoutineListenerAppOutlook        RoutineListenerApp = "outlook"
-	RoutineListenerAppSlack          RoutineListenerApp = "slack"
+	RoutineListenerAppGmail           RoutineListenerApp = "gmail"
+	RoutineListenerAppGoogleCalendar  RoutineListenerApp = "google_calendar"
+	RoutineListenerAppOutlook         RoutineListenerApp = "outlook"
+	RoutineListenerAppOutlookCalendar RoutineListenerApp = "outlook_calendar"
+	RoutineListenerAppSlack           RoutineListenerApp = "slack"
 )
 
 // Valid indicates whether the value is a known member of the RoutineListenerApp enum.
@@ -3489,6 +3490,8 @@ func (e RoutineListenerApp) Valid() bool {
 	case RoutineListenerAppGoogleCalendar:
 		return true
 	case RoutineListenerAppOutlook:
+		return true
+	case RoutineListenerAppOutlookCalendar:
 		return true
 	case RoutineListenerAppSlack:
 		return true

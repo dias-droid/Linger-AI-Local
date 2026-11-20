@@ -682,10 +682,11 @@ func (e AgentReferenceMessageSegmentTargetType) Valid() bool {
 
 // Defines values for AgentRoutineListenerApp.
 const (
-	Gmail          AgentRoutineListenerApp = "gmail"
-	GoogleCalendar AgentRoutineListenerApp = "google_calendar"
-	Outlook        AgentRoutineListenerApp = "outlook"
-	Slack          AgentRoutineListenerApp = "slack"
+	Gmail           AgentRoutineListenerApp = "gmail"
+	GoogleCalendar  AgentRoutineListenerApp = "google_calendar"
+	Outlook         AgentRoutineListenerApp = "outlook"
+	OutlookCalendar AgentRoutineListenerApp = "outlook_calendar"
+	Slack           AgentRoutineListenerApp = "slack"
 )
 
 // Valid indicates whether the value is a known member of the AgentRoutineListenerApp enum.
@@ -696,6 +697,8 @@ func (e AgentRoutineListenerApp) Valid() bool {
 	case GoogleCalendar:
 		return true
 	case Outlook:
+		return true
+	case OutlookCalendar:
 		return true
 	case Slack:
 		return true

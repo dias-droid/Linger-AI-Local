@@ -5967,7 +5967,12 @@ export interface components {
        * @description Connected app whose new events the Routine hands to proactive judgement.
        * @enum {string}
        */
-      app: "gmail" | "outlook" | "google_calendar" | "slack";
+      app:
+        | "gmail"
+        | "outlook"
+        | "google_calendar"
+        | "outlook_calendar"
+        | "slack";
     };
     /** @description A Routine has exactly one of cadence and listener. A listener Routine is AnotherMe's app listener; it can only be paused and resumed, and goes away when the Human revokes AnotherMe's access to the app. */
     Routine: {
