@@ -13,6 +13,9 @@ export interface AppGroup {
  * adds later appears here only once it is added to a group. Group names avoid
  * product nouns such as Profile, Chats, Docs, Projects and Sources.
  */
+/** The Connectors tab for web search, beside the Composio app groups. */
+export const WEB_SEARCH_FILTER = { id: "web-search", label: "Web search" };
+
 export const APP_GROUPS: readonly AppGroup[] = [
   {
     id: "mail-calendar",

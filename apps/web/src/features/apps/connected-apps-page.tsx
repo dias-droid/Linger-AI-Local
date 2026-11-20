@@ -14,10 +14,14 @@ import type {
   TeamHubExternalAppKey,
   TeamHubExternalConnection,
 } from "@/features/teamhub/teamhub-types";
-import { webSearchBackendsQueryOptions } from "@/features/web-search/web-search-backends";
+import {
+  connectedWebSearchBackends,
+  shownWebSearchBackends,
+  webSearchBackendsQueryOptions,
+} from "@/features/web-search/web-search-backends";
 
 import { AppLogo } from "./app-logo";
-import { appSummary, groupCatalogApps } from "./app-groups";
+import { appSummary, groupCatalogApps, WEB_SEARCH_FILTER } from "./app-groups";
 import {
   AppManageDialog,
   DisconnectConnectionDialog,
@@ -33,12 +37,7 @@ import {
   externalConnectionsQueryOptions,
 } from "./connected-apps-queries";
 import { ConnectAppStatus, useConnectAppFlow } from "./connect-app-flow";
-import {
-  connectedWebSearchBackends,
-  shownWebSearchBackends,
-  WEB_SEARCH_FILTER,
-  WebSearchSection,
-} from "./web-search-connectors";
+import { WebSearchSection } from "./web-search-connectors";
 
 const APP_GRID_CLASS = "grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3";
 

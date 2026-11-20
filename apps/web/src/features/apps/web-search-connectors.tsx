@@ -15,10 +15,10 @@ import type {
   TeamHubWebSearchBackend,
   TeamHubWebSearchBackendList,
   TeamHubWebSearchKeyBackend,
-  TeamHubWebSearchSearchBackend,
 } from "@/features/teamhub/teamhub-types";
 import {
   isWebSearchKeyBackend,
+  type ShownWebSearchBackend,
   webSearchQueryKey,
 } from "@/features/web-search/web-search-backends";
 import { WebSearchKeyForm } from "@/features/web-search/web-search-key-form";
@@ -27,38 +27,8 @@ import { webSearchBackendLogo } from "@/features/web-search/web-search-logos";
 import { formatUpdatedAt } from "@/lib/date-format";
 import { cn } from "@/lib/cn";
 
+import { WEB_SEARCH_FILTER } from "./app-groups";
 import { AppLogo } from "./app-logo";
-
-/** The Connectors tab for web search, beside the Composio app groups. */
-export const WEB_SEARCH_FILTER = { id: "web-search", label: "Web search" };
-
-/**
- * The backends Connectors shows: the ones that search. Direct only opens
- * pages and has nothing to set up.
- */
-export function shownWebSearchBackends(
-  backends: readonly TeamHubWebSearchBackend[],
-) {
-  return backends.filter(
-    (backend): backend is SearchBackend => backend.id !== "direct",
-  );
-}
-
-/**
- * The backends Connected only keeps: a saved key, or a free tier that works
- * without one.
- */
-export function connectedWebSearchBackends(
-  backends: readonly TeamHubWebSearchBackend[],
-) {
-  return shownWebSearchBackends(backends).filter(
-    (backend) => backend.key_state !== "none" || backend.tier === "free",
-  );
-}
-
-type SearchBackend = TeamHubWebSearchBackend & {
-  id: TeamHubWebSearchSearchBackend;
-};
 
 /**
  * The web search backends as Connectors cards. They need no Composio key:
@@ -72,7 +42,7 @@ export function WebSearchSection({
   list,
 }: {
   /** The backends to show, narrowed by Connected only. */
-  backends: readonly SearchBackend[];
+  backends: readonly ShownWebSearchBackend[];
   className?: string;
   heading: boolean;
   list: UseQueryResult<TeamHubWebSearchBackendList>;
@@ -138,7 +108,7 @@ function WebSearchBackendCard({
   isDefault,
   onOpen,
 }: {
-  backend: SearchBackend;
+  backend: ShownWebSearchBackend;
   isDefault: boolean;
   onOpen: () => void;
 }) {
@@ -205,7 +175,7 @@ function WebSearchBackendDialog({
   list,
   onClose,
 }: {
-  backend: SearchBackend;
+  backend: ShownWebSearchBackend;
   list: TeamHubWebSearchBackendList;
   onClose: () => void;
 }) {
@@ -298,7 +268,7 @@ function DefaultSection({
   backend,
   list,
 }: {
-  backend: SearchBackend;
+  backend: ShownWebSearchBackend;
   list: TeamHubWebSearchBackendList;
 }) {
   const { client } = useTeamHubRuntime();
