@@ -17,14 +17,12 @@ import type {
   TeamHubMessageDocumentSegment,
   TeamHubMessageFileSegment,
 } from "@/features/teamhub/teamhub-types";
-import { translate } from "@/i18n/language";
 
 import { useRoomOutletContext } from "../room-connectivity";
 import { artifactPreviewCache } from "../files/artifact-preview-cache";
 import { prefetchArtifactPreview } from "../files/artifact-preview-loader";
 import { documentCardVersionQueryKey } from "../files/use-document-card-metadata";
 import type { RoomComposerDocumentContext } from "../room-drafts";
-import { runtimeStatusMessages } from "../runtime-status/runtime-status.messages";
 
 import type { MessageDocumentOption } from "./message-composer-references";
 import { patchRoomMessageThread } from "./room-projection";
@@ -135,9 +133,7 @@ export function useRoomChatNavigation(
           activityRoomId,
           anchorMessageId: sourceMessageId,
           actorId: agent.id,
-          title: translate(runtimeStatusMessages.activityTabTitle, {
-            name: agent.display_name,
-          }),
+          title: agent.display_name,
         });
         clearProfileParam();
       },
@@ -149,9 +145,7 @@ export function useRoomChatNavigation(
           kind: "agentActivity",
           actorId: agent.id,
           activityRoomId,
-          title: translate(runtimeStatusMessages.activityTabTitle, {
-            name: agent.display_name,
-          }),
+          title: agent.display_name,
         });
         clearProfileParam();
       },
@@ -159,9 +153,7 @@ export function useRoomChatNavigation(
         openPanelTab({
           kind: "agentInfo",
           actorId: actor.id,
-          title: translate(runtimeStatusMessages.agentTabTitle, {
-            name: actor.display_name,
-          }),
+          title: actor.display_name,
         });
         clearProfileParam();
       },

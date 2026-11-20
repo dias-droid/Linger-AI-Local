@@ -216,7 +216,7 @@ function useSyncAgentInfoPanelTitle({
     openPanelTab({
       kind: "agentInfo",
       actorId: agentProfileActor.id,
-      title: `Agent · ${agentProfileActor.display_name}`,
+      title: agentProfileActor.display_name,
     });
   }, [agentProfileActor, openPanelTab]);
   const agentInfoActorId = useRef<string | undefined>(undefined);
@@ -226,7 +226,7 @@ function useSyncAgentInfoPanelTitle({
       directAgent?.actor ??
       (directPeer?.kind === "agent" ? directPeer : undefined);
     if (!agent) return;
-    const title = `Agent · ${agent.display_name}`;
+    const title = agent.display_name;
     if (
       agentInfoActorId.current === agent.id &&
       agentInfoTitle.current === title
@@ -438,7 +438,7 @@ function RoomSurfaceContent({
       openPanelTabFromRoom({
         kind: "agentInfo",
         actorId: actor.id,
-        title: `Agent · ${actor.display_name}`,
+        title: actor.display_name,
       });
       return;
     }
@@ -490,7 +490,7 @@ function RoomSurfaceContent({
                 onOpenSettings={() =>
                   openPanelTab({
                     kind: "roomSettings",
-                    title: t(roomSurfaceMessages.roomSettings),
+                    title: PANEL_COLLECTION_TAB_TITLES.roomSettings,
                   })
                 }
                 onTogglePanel={togglePanel}
@@ -549,7 +549,7 @@ function RoomSurfaceContent({
                       ? () =>
                           openPanelTab({
                             kind: "roomSettings",
-                            title: t(roomSurfaceMessages.roomSettings),
+                            title: PANEL_COLLECTION_TAB_TITLES.roomSettings,
                           })
                       : undefined
                   }
@@ -704,6 +704,7 @@ function RoomPanelSidebarFallback({
       aria-label={t(roomSurfaceMessages.loadingPanelSidebar)}
       className="panel-sidebar relative h-full min-h-0 shrink-0 bg-app-sidebar px-1 pb-1"
       data-open="true"
+      data-voice-area="sidebar"
       style={
         {
           "--panel-sidebar-width": `${readPanelSidebarWidth(accountId)}px`,

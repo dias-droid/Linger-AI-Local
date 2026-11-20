@@ -165,6 +165,8 @@ elsewhere.
 | Email (an address)            | 邮箱                       | `邮件` is a message that is sent.                 |
 | Keep (a Wiki page)            | 保留                       | The opposite of Delete in the Wiki directory.     |
 | Session (a sign-in)           | 登录 / 浏览器会话          | `会话` only for the browser session.              |
+| Panel, Panel view             | 面板、面板视图             | A view in the Room's side panel.                  |
+| Collaboration                 | 协作                       | The panel on how a Room's Agents work together.   |
 
 ## Style
 

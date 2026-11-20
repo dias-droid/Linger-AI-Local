@@ -4385,7 +4385,7 @@ button.question-choice:focus-visible {
     margin-right: -100%;
   }
 
-  .app-room-layout .panel-sidebar [aria-label="Resize sidebar"],
+  .app-room-layout .panel-sidebar [data-panel-resize-handle],
   .panel-maximize-control {
     display: none;
   }

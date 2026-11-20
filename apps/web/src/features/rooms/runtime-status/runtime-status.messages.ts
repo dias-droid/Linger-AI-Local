@@ -55,9 +55,6 @@ export const runtimeStatusMessages = defineMessages("runtimeStatus", {
   runningMinutes: "{minutes} min",
   runningHours: "{hours} h",
   runningDays: "{days} d",
-  // Panel tabs opened from the chat.
-  activityTabTitle: "Activity · {name}",
-  agentTabTitle: "Agent · {name}",
   // The Message a link pointed at, shown above the timeline.
   linkedSourceMessage: "Linked source Message",
   closeLinkedSourceMessage: "Close linked source Message",
