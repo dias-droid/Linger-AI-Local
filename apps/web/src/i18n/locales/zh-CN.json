@@ -1963,5 +1963,18 @@
     "loadingAccess": "正在加载访问权限…",
     "retryAccess": "重新加载访问权限",
     "allowAgentAccess": "允许 Agent 访问 {account}"
+  },
+  "urlPreview": {
+    "forward": "前进",
+    "reload": "重新加载",
+    "urlAddress": "URL 地址",
+    "enterUrl": "输入 URL",
+    "openInNewTab": "在新标签页中打开",
+    "invalidUrl": "请输入有效的 HTTP(S) URL，并且不要包含凭据。",
+    "enterUrlToPreview": "输入 URL 即可预览。",
+    "openInBrowserTab": "请在浏览器标签页中打开这个地址查看。",
+    "openSiteInNewTab": "在新标签页中打开这个网站",
+    "siteRefusesFrame": "{host} 不允许在应用内显示。",
+    "previewTitle": "预览 {url}"
   }
 }

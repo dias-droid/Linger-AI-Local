@@ -154,6 +154,8 @@ elsewhere.
 | Active (a connection)         | 正常                       | A status; `已启用` is for a saved key.            |
 | Auto reminders                | 自动提醒                   |                                                   |
 | Popup (authorization)         | 弹窗                       | `拦截` for a popup the browser blocked.           |
+| Back / Forward / Reload       | 返回 / 前进 / 重新加载     | Buttons of the URL preview panel.                 |
+| Tab (in a browser)            | 标签页                     |                                                   |
 
 ## Style
 
