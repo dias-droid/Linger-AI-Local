@@ -326,9 +326,8 @@ func (t *antigravityTurn) awaitBackground() bool {
 	t.mu.Lock()
 	open := len(t.tools) > 0
 	if open {
-		// The continuation is a new message; the reply is the last one.
+		// The continuation's text is a new message.
 		t.textID = ""
-		t.output.Reset()
 	}
 	t.mu.Unlock()
 	if !open {
@@ -473,7 +472,10 @@ func (t *antigravityTurn) update(params json.RawMessage, observed time.Time) {
 		t.requests.item("", observed)
 		t.mu.Lock()
 		if t.textID == "" {
+			// The reply is the last message, as Agent Service reads the
+			// stream, so a new message replaces the output.
 			t.textID = "antigravity-text-" + piRandomHex(12)
+			t.output.Reset()
 		}
 		id := t.textID
 		t.output.WriteString(text)
@@ -485,10 +487,9 @@ func (t *antigravityTurn) update(params json.RawMessage, observed time.Time) {
 			t.emit(Event{Kind: EventReasoning, ObservedAt: observed, ModelMessageID: update.MessageID, Body: text})
 		}
 	case "tool_call":
-		// Text after a tool call is a new message; the reply is the last one.
+		// Text after a tool call is a new message.
 		t.mu.Lock()
 		t.textID = ""
-		t.output.Reset()
 		t.tools[update.ToolCallID] = true
 		t.mu.Unlock()
 		t.emit(Event{

@@ -191,6 +191,8 @@ func (f *agyFakeProcess) prompt(id json.RawMessage, sessionID string) {
 	f.update(sessionID, map[string]any{"sessionUpdate": "agent_message_chunk", "content": map[string]any{"type": "text", "text": "Found "}})
 	f.update(sessionID, map[string]any{"sessionUpdate": "agent_message_chunk", "content": map[string]any{"type": "text", "text": "a.txt"}})
 	if f.mode == "background" {
+		// A turn may end on a tool call; the reply stays the last message.
+		f.update(sessionID, map[string]any{"sessionUpdate": "tool_call", "toolCallId": "call-2", "name": "run_command", "title": "true", "kind": "execute", "status": "completed", "rawInput": map[string]any{"CommandLine": "true"}})
 		return
 	}
 	f.result(id, map[string]any{"stopReason": "end_turn", "usage": map[string]any{"inputTokens": 10, "outputTokens": 4, "thoughtTokens": 2, "cachedReadTokens": 3}})

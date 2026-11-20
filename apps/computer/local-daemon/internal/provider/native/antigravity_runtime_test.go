@@ -442,7 +442,7 @@ func TestAntigravityWaitsForACommandItMovedToTheBackground(t *testing.T) {
 	}
 	var result Event
 	for _, event := range events {
-		if event.Kind == EventToolOutput {
+		if event.Kind == EventToolOutput && event.InvocationID == antigravityInvocationID("call-1") {
 			result = event
 		}
 	}

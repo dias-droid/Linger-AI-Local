@@ -301,6 +301,8 @@ for a browser sign-in when signed out.
   that ends with an open tool call keeps the Run open. The Run ends once no
   tool call is open and the session has sent nothing for 15 seconds. ACP has
   no event for the end of such a continuation.
+- The Run's reply is its last text message, even when tool calls follow it,
+  because Agent Service reads the reply from the stream the same way.
 - The Daemon's instructions go in `_meta.antigravity.systemPrompt.append`, and
   its MCP servers in the session's `mcpServers`.
 - `session/request_permission` goes to the Run's permission review when the
