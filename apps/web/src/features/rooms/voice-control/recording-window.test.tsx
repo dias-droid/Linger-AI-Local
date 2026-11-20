@@ -617,6 +617,38 @@ describe("Recording window", () => {
     expect(voice.leavePage).not.toHaveBeenCalled();
   });
 
+  it("brings the desktop app's main window back from its floating window", async () => {
+    const { frame, pipWindow, requestWindow } = stubPictureInPicture();
+    const showMainWindow = vi.fn(async () => {});
+    const desktop = window as { lingerDesktop?: unknown };
+    desktop.lingerDesktop = { voiceWindow: { showMainWindow } };
+    const open = vi
+      .spyOn(window, "open")
+      .mockReturnValue(pipWindow as unknown as Window);
+    try {
+      renderWindow(voiceValue());
+      // In the page the main window is already in front.
+      expect(
+        screen.queryByRole("button", { name: "Show Linger window" }),
+      ).toBeNull();
+      await act(() => openVoicePip("recording"));
+      expect(requestWindow).not.toHaveBeenCalled();
+      const floating = within(frame.contentDocument!.body);
+      fireEvent.click(
+        floating.getByRole("button", { name: "Show Linger window" }),
+      );
+      expect(showMainWindow).toHaveBeenCalledOnce();
+      // The recording is untouched and its window stays.
+      expect(
+        floating.getByRole("button", { name: "Stop recording" }),
+      ).toBeTruthy();
+      expect(screen.getByTestId("window-state")).toHaveTextContent("open");
+    } finally {
+      open.mockRestore();
+      delete desktop.lingerDesktop;
+    }
+  });
+
   it("opens a new Meeting at full size after stopping a minimized recording", async () => {
     const { frame, pipWindow, requestWindow } = stubPictureInPicture();
     const firstVoice = voiceValue();

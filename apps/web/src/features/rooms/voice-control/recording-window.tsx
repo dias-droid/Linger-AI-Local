@@ -8,10 +8,12 @@ import {
 import { createPortal } from "react-dom";
 
 import {
+  canShowDesktopMainWindow,
   closeVoicePip,
   onVoicePipClosedByHuman,
   openVoicePip,
   returnedToOpener,
+  showDesktopMainWindow,
   useVoicePip,
   voicePipSupported,
 } from "../chat/voice-mode/voice-pip";
@@ -255,6 +257,9 @@ export default function RecordingWindow() {
             : undefined
         }
         onMoveStart={startMove}
+        onShowMain={
+          pip && canShowDesktopMainWindow() ? showDesktopMainWindow : undefined
+        }
         onViewChange={changeView}
         view={view}
       />
@@ -329,6 +334,7 @@ function RecordingPanel({
   floating,
   onFloat,
   onMoveStart,
+  onShowMain,
   onViewChange,
   view,
 }: {
@@ -336,6 +342,7 @@ function RecordingPanel({
   floating: "page" | "pip";
   onFloat?: () => void;
   onMoveStart: (event: PointerEvent<HTMLDivElement>) => void;
+  onShowMain?: () => void;
   onViewChange: (view: RecordingView | undefined) => void;
   view?: RecordingView;
 }) {
@@ -355,6 +362,7 @@ function RecordingPanel({
       floating={floating}
       onFloat={onFloat}
       onMoveStart={onMoveStart}
+      onShowMain={onShowMain}
       onExit={() => {
         // Saving finishes in the background; the sidebar's Recording tool
         // shows its progress and reopens this window on request.

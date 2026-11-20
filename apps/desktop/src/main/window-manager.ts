@@ -40,7 +40,9 @@ import {
   sameOrigin,
   serverSwitch,
   windowLoadDecision,
+  voiceWindowRequest,
 } from "./navigation.js";
+import { acceptVoiceWindow } from "./voice-window.js";
 
 // Must run before app "ready".
 export const registerAppScheme = (): void => {
@@ -149,6 +151,8 @@ export class WindowManagerModule implements Module {
   #lastLoadReason: WindowLoadReason | undefined;
   #pendingShow = false;
   #revealTimer: NodeJS.Timeout | undefined;
+  // Closes the floating voice window, when there is one.
+  #closeVoiceWindow: (() => void) | undefined;
   readonly #unsubscribe: (() => void)[] = [];
 
   constructor(options: WindowManagerOptions) {
@@ -350,6 +354,7 @@ export class WindowManagerModule implements Module {
       window.hide();
     });
     window.on("closed", () => {
+      this.#closeVoiceWindow?.();
       titlebar?.webContents.close();
       content.webContents.close();
       if (this.#window === window) {
@@ -612,10 +617,40 @@ export class WindowManagerModule implements Module {
     contents.on("will-redirect", (event) => {
       if (event.isMainFrame) this.#guard(event, event.url, contents.getURL());
     });
-    contents.setWindowOpenHandler(({ url }) => {
-      if (navigationDecision(url, this.#serverUrl()) !== "deny")
-        this.#openExternal(url);
+    // The one window the page may open: the floating voice window, which it
+    // fills itself so the call stays in this page.
+    contents.setWindowOpenHandler((details) => {
+      if (voiceWindowRequest(details, this.#serverUrl(), contents.getURL()))
+        return {
+          action: "allow",
+          overrideBrowserWindowOptions: {
+            title: "Linger",
+            // The page asks for the size of its content, as in a browser.
+            useContentSize: true,
+            minimizable: false,
+            maximizable: false,
+            fullscreenable: false,
+            autoHideMenuBar: true,
+            backgroundColor: CANVAS,
+          },
+        };
+      if (navigationDecision(details.url, this.#serverUrl()) !== "deny")
+        this.#openExternal(details.url);
       return { action: "deny" };
+    });
+    contents.on("did-create-window", (child) => {
+      const close = acceptVoiceWindow(
+        child,
+        contents,
+        this.#closeVoiceWindow,
+        process.platform,
+      );
+      if (!close) return;
+      this.#closeVoiceWindow = close;
+      child.on("closed", () => {
+        if (this.#closeVoiceWindow === close)
+          this.#closeVoiceWindow = undefined;
+      });
     });
     contents.on("will-attach-webview", (event) => event.preventDefault());
     contents.on("did-fail-load", (_event, code, description, url, isMain) => {

@@ -39,9 +39,11 @@ import { voiceModeStatusLabel } from "./voice-mode-presentation";
 import styles from "./voice-mode.module.css";
 import { registerVoiceWindow, type VoiceWindowAction } from "./voice-ui-bridge";
 import {
+  canShowDesktopMainWindow,
   onVoicePipClosedByHuman,
   openVoicePip,
   returnedToOpener,
+  showDesktopMainWindow,
   useVoicePip,
   voicePipSupported,
 } from "./voice-pip";
@@ -343,6 +345,22 @@ function MiniWindow({
           )}
           {/* Back in the page, one click floats the call again; the browser
               opens that window only from a click in the page. */}
+          {/* The desktop app's floating window has no back to tab button; this
+              brings its main window forward and the call goes on. */}
+          {pip && canShowDesktopMainWindow() ? (
+            <Button
+              aria-label="Show Linger window"
+              onClick={() => {
+                void navigate(`/t/${tenantId}/rooms/${roomId}/chat`);
+                showDesktopMainWindow();
+              }}
+              size="compactIcon"
+              title="Show the Linger window; the call continues"
+              tone="ghost"
+            >
+              <Icon icon={Maximize01Icon} size={14} />
+            </Button>
+          ) : null}
           {pip || !voicePipSupported() ? null : (
             <Button
               aria-label="Float Voice Mode window"

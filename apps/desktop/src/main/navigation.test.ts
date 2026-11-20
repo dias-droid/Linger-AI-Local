@@ -8,6 +8,7 @@ import {
   permissionAllowed,
   serverSwitch,
   windowLoadDecision,
+  voiceWindowRequest,
 } from "./navigation.js";
 
 const server = "https://linger.example.com";
@@ -317,5 +318,35 @@ describe("windowLoadDecision", () => {
         { reason: "server_changed" },
       ),
     ).toEqual({ action: "noop", reason: "server_changed" });
+  });
+});
+
+describe("voiceWindowRequest", () => {
+  const page = `${server}/t/1/rooms/2/chat`;
+  const open = { url: "about:blank", frameName: "linger-voice-window-3" };
+
+  it("allows the server's page to open its empty voice window", () => {
+    expect(voiceWindowRequest(open, server, page)).toBe(true);
+  });
+
+  it("denies any other window the page opens", () => {
+    expect(
+      voiceWindowRequest({ ...open, frameName: "popup" }, server, page),
+    ).toBe(false);
+    expect(
+      voiceWindowRequest(
+        { url: "https://evil.example.com/", frameName: open.frameName },
+        server,
+        page,
+      ),
+    ).toBe(false);
+  });
+
+  it("denies a page that is not the server's", () => {
+    expect(voiceWindowRequest(open, server, "app://offline/")).toBe(false);
+    expect(voiceWindowRequest(open, server, "https://evil.example.com/")).toBe(
+      false,
+    );
+    expect(voiceWindowRequest(open, undefined, page)).toBe(false);
   });
 });

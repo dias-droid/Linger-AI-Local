@@ -4,6 +4,7 @@ import {
   ArrowUp01Icon,
   Cancel01Icon,
   Loading03Icon,
+  Maximize01Icon,
   Mic01Icon,
   PauseIcon,
   PictureInPictureOnIcon,
@@ -52,6 +53,7 @@ export function VoiceFocusSurface({
   onExit,
   onFloat,
   onMoveStart,
+  onShowMain,
   onViewChange,
   panels,
   view,
@@ -64,6 +66,8 @@ export function VoiceFocusSurface({
   onFloat?: () => void;
   /** Starts moving the in-page window from its title bar. */
   onMoveStart?: (event: PointerEvent<HTMLDivElement>) => void;
+  /** Brings the main window back, from a floating window of the desktop app. */
+  onShowMain?: () => void;
   onViewChange?: (view: RecordingView | undefined) => void;
   /** Present once a recording runs; before that only the transcript shows. */
   panels?: RecordingPanels;
@@ -269,6 +273,17 @@ export function VoiceFocusSurface({
           type="button"
         >
           <Icon icon={PictureInPictureOnIcon} />
+        </button>
+      ) : null}
+      {onShowMain ? (
+        <button
+          aria-label="Show Linger window"
+          className={styles.windowButton}
+          onClick={onShowMain}
+          title="Show the Linger window; recording continues"
+          type="button"
+        >
+          <Icon icon={Maximize01Icon} />
         </button>
       ) : null}
     </div>

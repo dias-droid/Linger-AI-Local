@@ -3,11 +3,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { defineGlobalProperty } from "@/test/global-properties";
 
 import {
+  canShowDesktopMainWindow,
   closeVoicePip,
   onVoicePipClosedByHuman,
   openVoicePip,
   resetVoicePipForTest,
   returnedToOpener,
+  showDesktopMainWindow,
   voicePipSupported,
 } from "./voice-pip";
 
@@ -52,7 +54,7 @@ describe("Voice Mode picture-in-picture window", () => {
     await expect(openVoicePip("voice-mode")).resolves.toBeUndefined();
   });
 
-  it("stays in the page inside the desktop app", async () => {
+  it("stays in the page inside a desktop app that cannot float it", async () => {
     const fake = installFakeVoicePip();
     const desktop = window as { lingerDesktop?: unknown };
     desktop.lingerDesktop = {};
@@ -63,6 +65,56 @@ describe("Voice Mode picture-in-picture window", () => {
     } finally {
       delete desktop.lingerDesktop;
     }
+  });
+
+  it("opens the desktop app's own window when its preload offers one", async () => {
+    // Electron exposes the browser API too but cannot open its window.
+    const fake = installFakeVoicePip();
+    const showMainWindow = vi.fn(async () => {});
+    const desktop = window as { lingerDesktop?: unknown };
+    desktop.lingerDesktop = { voiceWindow: { showMainWindow } };
+    const open = vi
+      .spyOn(window, "open")
+      .mockReturnValue(fake.pipWindow as unknown as Window);
+    try {
+      expect(voicePipSupported()).toBe(true);
+      expect(canShowDesktopMainWindow()).toBe(true);
+      await expect(openVoicePip("recording")).resolves.toBe(fake.pipWindow);
+      expect(fake.requestWindow).not.toHaveBeenCalled();
+      expect(open).toHaveBeenCalledWith(
+        "",
+        expect.stringMatching(/^linger-voice-window-\d+$/),
+        "popup=yes,width=420,height=720",
+      );
+      showDesktopMainWindow();
+      expect(showMainWindow).toHaveBeenCalledOnce();
+
+      const closed = vi.fn();
+      onVoicePipClosedByHuman("recording", closed);
+      fake.pipWindow.close();
+      expect(closed).toHaveBeenCalledOnce();
+    } finally {
+      open.mockRestore();
+      delete desktop.lingerDesktop;
+    }
+  });
+
+  it("stays in the page when the desktop app refuses the window", async () => {
+    const desktop = window as { lingerDesktop?: unknown };
+    desktop.lingerDesktop = {
+      voiceWindow: { showMainWindow: vi.fn(async () => {}) },
+    };
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    try {
+      await expect(openVoicePip("voice-mode")).resolves.toBeUndefined();
+    } finally {
+      open.mockRestore();
+      delete desktop.lingerDesktop;
+    }
+  });
+
+  it("offers no way back to the main window outside the desktop app", () => {
+    expect(canShowDesktopMainWindow()).toBe(false);
   });
 
   it("carries the page's styles and theme, including later ones", async () => {

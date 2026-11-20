@@ -195,6 +195,7 @@ export class DesktopIpcModule implements Module {
       }
     });
 
+    handle(IPC.voiceWindowShowMain, () => windows.show());
     handle(IPC.updateState, () => updateView(updater.state()));
     handle(IPC.updateInstall, () => updater.install());
     handle(IPC.updateCheck, () => updater.check());

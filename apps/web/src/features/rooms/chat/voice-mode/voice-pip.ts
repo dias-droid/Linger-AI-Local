@@ -32,10 +32,59 @@ function noteShown() {
   if (document.visibilityState === "visible") shownAt = performance.now();
 }
 
+/**
+ * The window name the desktop app recognizes; it floats the window opened
+ * under it. The suffix keeps a window that is still closing from being reused.
+ */
+const desktopWindowTarget = "linger-voice-window";
+let desktopWindowCount = 0;
+
+/** The desktop app's own window, standing in for the missing picture-in-picture. */
+const desktopVoiceWindow: DocumentPictureInPicture = {
+  async requestWindow({ height, width } = {}) {
+    const opened = window.open(
+      "",
+      `${desktopWindowTarget}-${++desktopWindowCount}`,
+      `popup=yes,width=${width ?? 320},height=${height ?? 240}`,
+    );
+    if (!opened) throw new Error("The desktop app refused the voice window.");
+    return opened;
+  },
+};
+
+/** Set when the desktop app can open the floating window and bring the main one back. */
+interface DesktopVoiceWindow {
+  showMainWindow(): Promise<void>;
+}
+
+function desktopBridge(): DesktopVoiceWindow | undefined {
+  return (
+    window as Window & {
+      lingerDesktop?: { voiceWindow?: DesktopVoiceWindow };
+    }
+  ).lingerDesktop?.voiceWindow;
+}
+
+/**
+ * Whether the floating window is the desktop app's, whose main window can be
+ * brought back from it. The browser's window has its own back to tab button.
+ */
+export function canShowDesktopMainWindow() {
+  return desktopBridge() !== undefined;
+}
+
+/** Brings the desktop app's main window to the front; the call keeps running. */
+export function showDesktopMainWindow() {
+  void desktopBridge()
+    ?.showMainWindow()
+    .catch(() => undefined);
+}
+
 function api(): DocumentPictureInPicture | undefined {
-  // Electron exposes the API but cannot open its window, so voice windows in
-  // the desktop app stay in the page and offer no float button.
-  if (isDesktopShell()) return undefined;
+  // The desktop app cannot open Document Picture-in-Picture windows, so it
+  // opens its own when its preload says it can; an older app without that
+  // keeps the voice windows in the page.
+  if (isDesktopShell()) return desktopBridge() ? desktopVoiceWindow : undefined;
   return (
     window as Window & { documentPictureInPicture?: DocumentPictureInPicture }
   ).documentPictureInPicture;

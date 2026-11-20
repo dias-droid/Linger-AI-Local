@@ -376,6 +376,57 @@ describe("Voice Mode mini window", () => {
     }
   });
 
+  it("floats in the desktop app's own window and brings its main window back", async () => {
+    const fake = installFakeVoicePip();
+    const showMainWindow = vi.fn(async () => {});
+    const desktop = window as { lingerDesktop?: unknown };
+    desktop.lingerDesktop = { voiceWindow: { showMainWindow } };
+    const open = vi
+      .spyOn(window, "open")
+      .mockReturnValue(fake.pipWindow as unknown as Window);
+    try {
+      renderWindow();
+      // In the page, one click floats the call into the desktop's window.
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("button", { name: "Float Voice Mode window" }),
+        );
+        await Promise.resolve();
+      });
+      const floating = within(fake.document.body);
+      await floating.findByRole("region", { name: "Voice Mode window" });
+      expect(fake.requestWindow).not.toHaveBeenCalled();
+      expect(open).toHaveBeenCalledOnce();
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        "/t/tenant-northstar/rooms/room-other/chat",
+      );
+
+      // The way back opens the conversation and shows the main window; the
+      // floating window and the call stay.
+      fireEvent.click(
+        floating.getByRole("button", { name: "Show Linger window" }),
+      );
+      expect(showMainWindow).toHaveBeenCalledOnce();
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        "/t/tenant-northstar/rooms/room-voice/chat",
+      );
+      expect(voice.exit).not.toHaveBeenCalled();
+      expect(
+        floating.getByRole("region", { name: "Voice Mode window" }),
+      ).toBeInTheDocument();
+
+      // Closing the floating window ends Voice Mode.
+      act(() => fake.pipWindow.close());
+      await waitFor(() => expect(voice.exit).toHaveBeenCalledOnce());
+    } finally {
+      open.mockRestore();
+      delete desktop.lingerDesktop;
+      fake.frame.remove();
+      Reflect.deleteProperty(window, "documentPictureInPicture");
+      resetVoicePipForTest();
+    }
+  });
+
   it("drags from anywhere on the header, including the title", () => {
     renderWindow();
     const panel = screen.getByRole("region", { name: "Voice Mode window" });

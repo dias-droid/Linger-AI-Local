@@ -94,8 +94,13 @@ build:assets` to check the initial JS budget.
   earlier one is saving. Both in-page voice windows retain a visible, draggable
   title bar: dark in browsers, the window's own surface colour in the desktop
   app. Picture-in-picture keeps the browser title bar. The desktop app cannot
-  open picture-in-picture, so there voice windows stay in the page, offer no
-  float button, and on macOS stay out of the window drag strip.
+  open Document Picture-in-Picture; when its preload offers
+  `lingerDesktop.voiceWindow`, `voice-pip.ts` opens the floating window with
+  `window.open("")` instead (the desktop main process allows only that call),
+  renders the same voice UI into it, and shows a Show Linger window button that
+  brings the main window forward while the call keeps running. A desktop app
+  without `voiceWindow` keeps the voice windows in the page, with no float
+  button, and on macOS out of the window drag strip.
 - The compact primary rail reveals labels on hover and keyboard focus without
   moving link hit areas or neighbouring links. A stationary pointer at an edge
   must not trigger repeated hover enter/leave; sidebar expansion and Chat list

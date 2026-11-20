@@ -69,6 +69,9 @@ const api: LingerDesktopApi = {
       return () => ipcRenderer.off(IPC.previewFrameRefused, listener);
     },
   },
+  voiceWindow: {
+    showMainWindow: () => ipcRenderer.invoke(IPC.voiceWindowShowMain),
+  },
   ...(process.platform === "darwin"
     ? {
         permissions: {

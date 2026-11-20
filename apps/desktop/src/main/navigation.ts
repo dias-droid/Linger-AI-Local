@@ -105,6 +105,21 @@ export function windowLoadDecision(
 
   return { action: "load", targetUrl: targetOrigin, reason };
 }
+// The page names the floating voice window it opens with this `window.open`
+// target prefix (a suffix keeps a closing window from being reused).
+export const VOICE_WINDOW_TARGET = "linger-voice-window";
+
+// Whether a `window.open` is the voice window: an empty page the server's own
+// page fills in itself. Anything else the page opens is denied.
+export const voiceWindowRequest = (
+  details: { url: string; frameName: string },
+  serverUrl: string | undefined,
+  fromUrl: string,
+): boolean =>
+  details.url === "about:blank" &&
+  details.frameName.startsWith(VOICE_WINDOW_TARGET) &&
+  serverUrl !== undefined &&
+  sameOrigin(fromUrl, serverUrl);
 
 export type NavigationDecision = "allow" | "external" | "deny";
 
