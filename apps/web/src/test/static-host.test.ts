@@ -228,7 +228,7 @@ describe("Web static host cache policy", () => {
       });
 
       expect(response.status).toBe(404);
-      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("cache-control")).toBe("private, no-store");
     }
   });
 

@@ -87,8 +87,9 @@ export function createStaticHost({ root } = {}) {
 // A release ships only its own fingerprinted assets, so a page from another
 // release asks for files this one lacks. The page must never be replayed from
 // the HTTP cache (history navigation and restored tabs skip no-cache
-// revalidation), and a miss must not be cached either: without an explicit
-// policy the CDN adds its browser TTL and the 404 outlives the rollout.
+// revalidation). no-store also keeps the page out of Chrome's back/forward
+// cache, so back and forward reload the app; that is intended, since a fresh
+// load always gets the current release.
 function cacheControlFor(pathname) {
   if (pathname.startsWith("/assets/")) {
     return "public, max-age=31536000, immutable";
@@ -96,9 +97,16 @@ function cacheControlFor(pathname) {
   return extname(pathname) === ".html" ? "no-store" : "no-cache";
 }
 
+// A miss must not be cached, or a rollout's 404 outlives the rollout. The
+// Cloudflare zone in front of the hosted Web rewrites a shorter origin policy
+// on cacheable extensions (`no-cache` on /favicon.ico leaves as
+// `max-age=14400`); with Origin Cache Control it keeps `private`, and browsers
+// never store a `no-store` response. Check a missing /assets file after a
+// deploy; if the CDN still rewrites it, set its Browser Cache TTL to "Respect
+// Existing Headers".
 function respondNotFound(response) {
   response.statusCode = 404;
-  response.setHeader("cache-control", "no-store");
+  response.setHeader("cache-control", "private, no-store");
   response.end();
 }
 
