@@ -1,3 +1,7 @@
+import {
+  BYOK_URL_PATH_PATTERN,
+  MAX_BYOK_URL_PATH,
+} from "@linger/service-kit/byok-endpoint";
 import { z } from "zod";
 
 import type { SetupCommand } from "../shared/setup.js";
@@ -13,8 +17,8 @@ const providerKey = z
 // only extend the base URL's path.
 const byokUrlPath = z
   .string()
-  .max(256)
-  .regex(/^(\/[^/?#\s\\]+)*$/, "Invalid path");
+  .max(MAX_BYOK_URL_PATH)
+  .regex(BYOK_URL_PATH_PATTERN, "Invalid path");
 
 const byokEndpointFields = {
   baseUrl: z.string().trim().min(1).max(2048),

@@ -12,6 +12,11 @@
       "linger-production": "./dist/index.js",
       "default": "./src/index.ts"
     },
+    "./byok-endpoint": {
+      "types": "./src/byok-endpoint.ts",
+      "linger-production": "./dist/byok-endpoint.js",
+      "default": "./src/byok-endpoint.ts"
+    },
     "./node": {
       "types": "./src/node.ts",
       "linger-production": "./dist/node.js",

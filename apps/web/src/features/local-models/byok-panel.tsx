@@ -4,6 +4,14 @@ import {
   CheckmarkCircle02Icon,
   RefreshIcon,
 } from "@hugeicons/core-free-icons";
+import {
+  byokProtocolFor,
+  DEFAULT_BYOK_PATH,
+  defaultByokEndpoint,
+  normalizeByokBaseUrl,
+  normalizeByokPath,
+  validByokPath,
+} from "@linger/service-kit/byok-endpoint";
 import { useMutation } from "@tanstack/react-query";
 import {
   type CSSProperties,
@@ -29,12 +37,6 @@ import {
   byokContextLabel,
   byokEndpointSuggestions,
   byokPathSuggestions,
-  byokProtocolFor,
-  DEFAULT_BYOK_PATH,
-  defaultByokEndpoint,
-  normalizeByokBaseUrl,
-  normalizeByokPath,
-  validByokPath,
 } from "./byok-endpoint";
 import {
   byokFailureCopy,

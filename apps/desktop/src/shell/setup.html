@@ -2530,6 +2530,8 @@
       // is sent. The wire format follows the end of that address, else the
       // runtime's own, so Bifrost passes the runtime's requests through.
       // Nothing probes: Test sends one request to that one address.
+      // Keep these format endings, runtime defaults and path validation in
+      // sync with packages/service-kit/src/byok-endpoint.ts (source of truth).
       const BYOK_FORMATS = {
         "openai-chat": {
           suffix: "/chat/completions",

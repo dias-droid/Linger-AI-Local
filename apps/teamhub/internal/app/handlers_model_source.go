@@ -408,6 +408,7 @@ func validModelSourceSwitch(request httpapi.ModelSourceSwitchRequest) bool {
 
 // byokURLPathPattern matches a BYOK path or endpoint: empty, or whole
 // segments each led by one slash, so it can only extend the base URL's path.
+// Keep in sync with BYOK_URL_PATH_PATTERN in packages/service-kit/src/byok-endpoint.ts.
 var byokURLPathPattern = regexp.MustCompile(`^(/[^/?#\s\\]+)*$`)
 
 func validByokAddress(baseURL, path, endpoint string, protocol httpapi.ByokProtocol) bool {

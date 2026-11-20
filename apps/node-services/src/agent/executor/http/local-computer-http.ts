@@ -21,6 +21,10 @@ import {
   type LocalModelActionCommand,
 } from "../../runner-gateway/runner-local-models.js";
 import { isRecord } from "@linger/service-kit";
+import {
+  isByokProtocol,
+  validByokPath,
+} from "@linger/service-kit/byok-endpoint";
 
 type LocalComputerHttpStatus = 400 | 404 | 405 | 409 | 410 | 502 | 503;
 
@@ -349,19 +353,9 @@ const requireModelSourceManagement = (
 };
 
 const BYOK_MODEL_ID_PATTERN = /^[-a-zA-Z0-9_./:@]{1,256}$/u;
-// Empty, or whole segments each led by one slash, so a path or endpoint can
-// only extend the base URL's path.
-const BYOK_URL_PATH_PATTERN = /^(?:\/[^/?#\s\\]+)*$/u;
 
 const isByokUrlPath = (value: unknown): value is string =>
-  typeof value === "string" &&
-  value.length <= 256 &&
-  BYOK_URL_PATH_PATTERN.test(value);
-
-const isByokProtocol = (value: unknown): value is ByokConfigInput["protocol"] =>
-  value === "openai-chat" ||
-  value === "openai-responses" ||
-  value === "anthropic";
+  typeof value === "string" && validByokPath(value);
 
 interface ByokAddress {
   readonly base_url: string;

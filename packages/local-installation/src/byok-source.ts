@@ -1,4 +1,9 @@
 import path from "node:path";
+import {
+  isByokProtocol,
+  validByokPath,
+  type ByokProtocol,
+} from "@linger/service-kit/byok-endpoint";
 import { readPrivate } from "./instance.js";
 import {
   localmodelsBaseDirectory,
@@ -12,7 +17,7 @@ import {
 } from "./managed-runtimes.js";
 import type { InstallOutcome, InstallerEvent } from "./events.js";
 
-export type ByokProtocol = "openai-chat" | "openai-responses" | "anthropic";
+export type { ByokProtocol };
 
 /**
  * Requests go to baseUrl + path + endpoint in protocol, and models are listed
@@ -92,18 +97,6 @@ export function isAllowedByokUrl(raw: string): boolean {
   }
 }
 
-// Empty, or whole segments each led by one slash, so a path or endpoint can
-// only extend the base URL's path.
-const BYOK_URL_PATH = /^(?:\/[^/?#\s\\]+)*$/u;
-
-function isByokProtocol(value: unknown): value is ByokProtocol {
-  return (
-    value === "openai-chat" ||
-    value === "openai-responses" ||
-    value === "anthropic"
-  );
-}
-
 function byokRecord(
   value: unknown,
   keys: readonly string[],
@@ -129,11 +122,7 @@ function byokEndpointFields(record: Record<string, unknown>): ByokEndpoint {
     ["Path", record.path],
     ["Endpoint", record.endpoint],
   ] as const)
-    if (
-      typeof value !== "string" ||
-      value.length > 256 ||
-      !BYOK_URL_PATH.test(value)
-    )
+    if (typeof value !== "string" || !validByokPath(value))
       throw new Error(`${label} must be empty or a path such as /v1.`);
   if (!isByokProtocol(record.protocol))
     throw new Error("Invalid BYOK wire format.");

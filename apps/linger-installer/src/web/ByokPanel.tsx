@@ -8,6 +8,16 @@ import {
   type ReactNode,
   type SetStateAction,
 } from "react";
+import {
+  BYOK_PROTOCOL_ENDPOINTS,
+  DEFAULT_BYOK_PATH,
+  byokProtocolFor,
+  defaultByokEndpoint,
+  normalizeByokBaseUrl,
+  normalizeByokPath,
+  validByokPath,
+  type ByokRuntime,
+} from "@linger/service-kit/byok-endpoint";
 import type { components } from "@linger/wire-contracts/linger-installer/types";
 import { request } from "./api.js";
 
@@ -15,7 +25,6 @@ type ByokProtocol = components["schemas"]["ByokProtocol"];
 type ByokEndpoint = components["schemas"]["ByokEndpoint"];
 type ByokCheckReport = components["schemas"]["ByokCheckReport"];
 type ByokModelReport = components["schemas"]["ByokModelReport"];
-type ByokRuntime = "claude" | "codex" | "pi";
 
 /** What the person typed. A null endpoint follows the runtime's default. */
 export interface ByokDraft {
@@ -32,24 +41,22 @@ const RUNTIME_LABELS: Record<ByokRuntime, string> = {
   codex: "Codex",
   pi: "Pi",
 };
-// Each runtime's own wire format, so the gateway forwards its requests untranslated.
-const RUNTIME_PROTOCOL: Record<ByokRuntime, ByokProtocol> = {
-  claude: "anthropic",
-  codex: "openai-responses",
-  pi: "openai-chat",
-};
 const FORMATS: Record<ByokProtocol, { ending: string; label: string }> = {
   "openai-chat": {
-    ending: "/chat/completions",
+    ending: BYOK_PROTOCOL_ENDPOINTS["openai-chat"],
     label: "OpenAI Chat Completions",
   },
-  "openai-responses": { ending: "/responses", label: "OpenAI Responses" },
-  anthropic: { ending: "/messages", label: "Anthropic Messages" },
+  "openai-responses": {
+    ending: BYOK_PROTOCOL_ENDPOINTS["openai-responses"],
+    label: "OpenAI Responses",
+  },
+  anthropic: {
+    ending: BYOK_PROTOCOL_ENDPOINTS.anthropic,
+    label: "Anthropic Messages",
+  },
 };
-const DEFAULT_PATH = "/v1";
-const URL_PATH = /^(\/[^/?#\s\\]+)*$/;
 const PATH_OPTIONS: ComboItem[] = [
-  { value: DEFAULT_PATH, label: "Most providers", tag: "Default" },
+  { value: DEFAULT_BYOK_PATH, label: "Most providers", tag: "Default" },
   { value: "/api/paas/v4", label: "Zhipu GLM (base https://open.bigmodel.cn)" },
   { value: "/api/v3", label: "Volcano Engine Ark" },
   { value: "/v1beta/openai", label: "Gemini" },
@@ -59,49 +66,33 @@ const PATH_OPTIONS: ComboItem[] = [
 export const emptyByokDraft: ByokDraft = {
   runtime: "claude",
   baseUrl: "",
-  path: DEFAULT_PATH,
+  path: DEFAULT_BYOK_PATH,
   endpoint: null,
   apiKey: "",
   modelId: "",
 };
 
-function normalizePath(value: string): string {
-  const trimmed = value.trim().replace(/\/+$/, "");
-  return trimmed && !trimmed.startsWith("/") ? `/${trimmed}` : trimmed;
-}
-function defaultEndpoint(runtime: ByokRuntime): string {
-  return FORMATS[RUNTIME_PROTOCOL[runtime]].ending;
-}
 function requestUrl(endpoint: ByokEndpoint): string {
   return endpoint.baseUrl + endpoint.path + endpoint.endpoint;
 }
 function modelsUrl(endpoint: ByokEndpoint): string {
   return `${endpoint.baseUrl}${endpoint.path}/models`;
 }
-// The wire format follows the end of the address alone; any other ending uses the runtime's own.
-function formatOf(draft: ByokDraft, url: string) {
-  const fromUrl = (Object.keys(FORMATS) as ByokProtocol[]).find((protocol) =>
-    url.endsWith(FORMATS[protocol].ending),
-  );
-  return {
-    protocol: fromUrl ?? RUNTIME_PROTOCOL[draft.runtime],
-    fromUrl: Boolean(fromUrl),
-  };
-}
 
 /** The address and key the draft names, as the installer API takes them. */
 export function byokEndpoint(draft: ByokDraft): ByokEndpoint {
-  const baseUrl = draft.baseUrl.trim().replace(/\/+$/, "");
-  const path = normalizePath(draft.path);
-  const endpoint = normalizePath(
-    draft.endpoint ?? defaultEndpoint(draft.runtime),
+  const baseUrl = normalizeByokBaseUrl(draft.baseUrl);
+  const path = normalizeByokPath(draft.path);
+  const endpoint = normalizeByokPath(
+    draft.endpoint ?? defaultByokEndpoint(draft.runtime),
   );
   const apiKey = draft.apiKey.trim();
   return {
     baseUrl,
     path,
     endpoint,
-    protocol: formatOf(draft, baseUrl + path + endpoint).protocol,
+    protocol: byokProtocolFor(baseUrl + path + endpoint, draft.runtime)
+      .protocol,
     ...(apiKey ? { apiKey } : {}),
   };
 }
@@ -111,12 +102,12 @@ export function byokAddressProblem(
   draft: ByokDraft,
 ): { field: "base" | "path" | "endpoint"; message: string } | undefined {
   const endpoint = byokEndpoint(draft);
-  if (!URL_PATH.test(endpoint.path) || endpoint.path.length > 256)
+  if (!validByokPath(endpoint.path))
     return {
       field: "path",
       message: "Path must be empty or a path such as /v1.",
     };
-  if (!URL_PATH.test(endpoint.endpoint) || endpoint.endpoint.length > 256)
+  if (!validByokPath(endpoint.endpoint))
     return {
       field: "endpoint",
       message: "Endpoint must be empty or a path such as /chat/completions.",
@@ -167,7 +158,7 @@ export function ByokPanel({
 
   const endpoint = byokEndpoint(draft);
   const url = requestUrl(endpoint);
-  const format = formatOf(draft, url);
+  const format = byokProtocolFor(url, draft.runtime);
   const problem = byokAddressProblem(draft);
   const hasBase = endpoint.baseUrl !== "";
   const hasModel = draft.modelId.trim() !== "";
@@ -256,7 +247,7 @@ export function ByokPanel({
 
   const checking = check?.state === "checking";
   const listingNow = listing?.state === "loading";
-  const runtimeDefault = defaultEndpoint(draft.runtime);
+  const runtimeDefault = defaultByokEndpoint(draft.runtime);
   const sends = (
     <>
       {"Sends "}
@@ -354,7 +345,7 @@ export function ByokPanel({
               setBaseTouched(true);
               onDraftChange((current) => ({
                 ...current,
-                baseUrl: current.baseUrl.trim().replace(/\/+$/, ""),
+                baseUrl: normalizeByokBaseUrl(current.baseUrl),
               }));
             }}
           />
@@ -365,7 +356,7 @@ export function ByokPanel({
           fit
           heading="Path · optional"
           value={draft.path}
-          isDefault={draft.path === DEFAULT_PATH}
+          isDefault={draft.path === DEFAULT_BYOK_PATH}
           items={PATH_OPTIONS}
           open={menu === "path"}
           onOpenChange={(open) => setMenu(open ? "path" : undefined)}
@@ -375,7 +366,7 @@ export function ByokPanel({
           onCommit={() =>
             onDraftChange((current) => ({
               ...current,
-              path: normalizePath(current.path),
+              path: normalizeByokPath(current.path),
             }))
           }
         />
@@ -405,17 +396,17 @@ export function ByokPanel({
             change("check", (current) => ({
               ...current,
               endpoint:
-                value === defaultEndpoint(current.runtime) ? null : value,
+                value === defaultByokEndpoint(current.runtime) ? null : value,
             }))
           }
           onCommit={() =>
             onDraftChange((current) => {
               if (current.endpoint === null) return current;
-              const value = normalizePath(current.endpoint);
+              const value = normalizeByokPath(current.endpoint);
               return {
                 ...current,
                 endpoint:
-                  value === defaultEndpoint(current.runtime) ? null : value,
+                  value === defaultByokEndpoint(current.runtime) ? null : value,
               };
             })
           }
