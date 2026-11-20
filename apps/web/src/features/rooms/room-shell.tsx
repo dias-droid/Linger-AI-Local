@@ -141,13 +141,8 @@ function RoomShellReady({
     open: openRoom,
   });
 
-  const shellMarked = useRef(false);
   useEffect(() => {
-    if (shellMarked.current) return;
-    shellMarked.current = true;
-    if (typeof performance?.mark === "function") {
-      performance.mark("room.shell_visible");
-    }
+    performance.mark("room.shell_visible");
   }, []);
 
   useEffect(() => {

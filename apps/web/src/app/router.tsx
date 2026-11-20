@@ -77,16 +77,8 @@ export function createAppRoutes(
 
           // Inspect session before tenants so a 401 always redirects to /login
           // even when a parallel tenants request failed first with a 5xx/network error.
-          if (sessionResult.status === "rejected") {
-            request.signal.throwIfAborted();
-            redirectAuthenticationError(sessionResult.reason, queryClient);
-            throw sessionResult.reason;
-          }
-          if (tenantsResult.status === "rejected") {
-            request.signal.throwIfAborted();
-            redirectAuthenticationError(tenantsResult.reason, queryClient);
-            throw tenantsResult.reason;
-          }
+          if (sessionResult.status === "rejected") throw sessionResult.reason;
+          if (tenantsResult.status === "rejected") throw tenantsResult.reason;
 
           const session = sessionResult.value;
           const tenants = tenantsResult.value;

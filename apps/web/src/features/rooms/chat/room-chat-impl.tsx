@@ -24,9 +24,7 @@ export function RoomChatImpl() {
   useEffect(() => {
     if (markedRoomIdRef.current === roomId) return;
     markedRoomIdRef.current = roomId;
-    if (typeof performance?.mark === "function") {
-      performance.mark("room.chat_ready");
-    }
+    performance.mark("room.chat_ready");
   }, [roomId]);
   return (
     <div className="room-chat-layout flex min-h-0 flex-1">
