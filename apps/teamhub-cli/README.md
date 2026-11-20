@@ -40,6 +40,8 @@ An Agent reads, edits and manages every Document its Human has; no access reques
 
 Write commands that accept `--operation-id` should use one unique ID per logical operation. The CLI keeps no local receipts: after an unknown outcome, rerun the same command and input with the operation ID the error printed, and TeamHub returns the original result. Without `--operation-id` every run is a new write. An operation ID does not replace CAS. `duplicate_request: true` means TeamHub reused the original result and comes with a `reason`; neither a conflict nor an unknown outcome is a success. When a Connected Apps write has an unknown outcome, check the external application first; the CLI never resends it.
 
+A TeamHub write with an operation ID also reports `outcome_unknown` when its successful HTTP response has an interrupted, malformed, oversized, or non-object JSON body. The error preserves the same operation ID for a deliberate retry; receiving success headers alone does not cause the CLI to invent a result or resend the write. A successful `204 No Content` remains a complete empty result.
+
 Task completion uses only the generation, attempt and input revision accepted before work started; Runtime-managed configuration freezes them. `task list` returns authorized summaries only; it does not replace the original Task input or refresh the submission baseline of an old result.
 
 The current entry points are the ones help lists.

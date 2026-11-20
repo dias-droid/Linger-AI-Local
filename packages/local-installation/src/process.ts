@@ -2,6 +2,7 @@ import type { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { asError } from "@linger/service-kit";
 export function windowsTreeTermination(
   child: {
     pid?: number;
@@ -119,6 +120,7 @@ export async function runProcess(
         )
       : undefined;
     const output = (value: string, stream: "stdout" | "stderr") => {
+      if (failure) return;
       if (
         options.capture !== false &&
         stdout.length + stderr.length + value.length > 2_000_000
@@ -130,7 +132,11 @@ export async function runProcess(
         if (stream === "stdout") stdout += value;
         else stderr += value;
       }
-      options.onOutput?.(value);
+      try {
+        options.onOutput?.(value);
+      } catch (error) {
+        stop(asError(error));
+      }
     };
     child
       .stdout!.setEncoding("utf8")

@@ -68,7 +68,8 @@ function publicUrl(value: string) {
  * Only a verified, bounded download may become an installation input. A
  * failed, slow or interrupted transfer moves on to the next mirror and
  * resumes there with an HTTP range request; the checksum still decides what
- * is published. Resolves to the URL that delivered the last bytes.
+ * is published. Resolves to the URL that delivered the last bytes, or the
+ * preferred URL when a complete saved file needs no request.
  */
 export async function downloadVerified(
   options: {
@@ -99,6 +100,7 @@ export async function downloadVerified(
     : `${options.output}.${randomUUID()}.part`;
   let hash: Hash = createHash(options.algorithm);
   let completed = 0;
+  let completePartial = false;
   if (options.resumable) {
     const existing = await lstat(partial).catch(() => undefined);
     if (existing?.isFile() && existing.size <= options.maxBytes) {
@@ -112,11 +114,12 @@ export async function downloadVerified(
         throw error;
       }
       completed = existing.size;
+      completePartial = hash.copy().digest("hex") === options.digest;
     } else await rm(partial, { recursive: true, force: true });
   }
   options.signal.throwIfAborted();
   let handle = await open(partial, options.resumable ? "a" : "ax", 0o600);
-  let size: number | undefined;
+  let size: number | undefined = completePartial ? completed : undefined;
   let lastProgressAt = 0;
   let failure = "no connection";
 
@@ -289,7 +292,7 @@ export async function downloadVerified(
   let published = false;
   let served = urls[0]!;
   try {
-    let result: AttemptOutcome["status"] = "next";
+    let result: AttemptOutcome["status"] = completePartial ? "done" : "next";
     // Hosts that cannot serve the file leave the rotation.
     let active = urls;
     const slowAfterMs = timing.slowCheckAfterMs ?? 0;
@@ -298,6 +301,8 @@ export async function downloadVerified(
     const slowEnabled = slowAfterMs > 0 && slowFloor > 0 && timing.attempts > 1;
     let skipNextDelay = false;
     rounds: for (let round = 0; round < timing.attempts; round += 1) {
+      // A cancelled publication can leave every verified byte on disk.
+      if (completePartial) break;
       if (!active.length) break;
       if (round > 0 && !skipNextDelay)
         await delay(timing.retryDelayMs * 2 ** (round - 1), undefined, {

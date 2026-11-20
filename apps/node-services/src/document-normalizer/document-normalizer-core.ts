@@ -237,7 +237,7 @@ function delimitedToMarkdown(text: string, delimiter: string): string {
   if (rows.length === 0) {
     throw new DocumentNormalizationError("DOCUMENT_SOURCE_EMPTY");
   }
-  const width = Math.max(...rows.map((row) => row.length));
+  const width = rows.reduce((max, row) => Math.max(max, row.length), 0);
   const padded = rows.map((row) =>
     Array.from({ length: width }, (_, index) =>
       (row[index] ?? "").replaceAll("\n", " ").replaceAll("|", "\\|"),
@@ -303,7 +303,18 @@ function parseDelimitedRows(text: string, delimiter: string): string[][] {
 
 function jsonToMarkdown(text: string): string {
   try {
-    return fencedBlock("json", JSON.stringify(JSON.parse(text), null, 2));
+    // Node 26 provides raw JSON values; the project's ES2022 types omit them.
+    const json = JSON as typeof JSON & {
+      rawJSON(source: string): unknown;
+    };
+    const parsed: unknown = JSON.parse(
+      text,
+      (_key: string, value: unknown, context?: { source?: string }): unknown =>
+        typeof value === "number" && context?.source !== undefined
+          ? json.rawJSON(context.source)
+          : value,
+    );
+    return fencedBlock("json", JSON.stringify(parsed, null, 2));
   } catch {
     throw new DocumentNormalizationError("DOCUMENT_SOURCE_INVALID");
   }
@@ -311,5 +322,11 @@ function jsonToMarkdown(text: string): string {
 
 function fencedBlock(language: string, body: string): string {
   const normalized = body.replace(/^\uFEFF/u, "").replace(/\n+$/u, "");
-  return `\`\`\`${language}\n${normalized}\n\`\`\``;
+  let fenceLength = 3;
+  for (const run of normalized.matchAll(/`+/gu)) {
+    fenceLength = Math.max(fenceLength, run[0].length + 1);
+  }
+  const fence = "`".repeat(fenceLength);
+  const info = /^[^`\r\n]*$/u.test(language) ? language : "text";
+  return `${fence}${info}\n${normalized}\n${fence}`;
 }

@@ -155,6 +155,8 @@ lock never frees) is logged and returned as `details.byokGateway`
 
 `runProcess` decodes stdout and stderr as separate UTF-8 streams before
 capture and output callbacks, preserving characters split across pipe reads.
+An output callback failure stops the owned command and rejects its promise
+after the process closes; later output is not delivered to a failed callback.
 
 Each native service runs under a detached supervisor
 (`native-process-worker.mjs`) whose record holds its PID, birth and an
@@ -230,6 +232,8 @@ for the idle timeout or moves on to another mirror.
 Rebuilding the checksum of a saved resumable partial also uses the caller's
 signal, so cancellation stops local reads before another request starts and
 leaves the partial file intact for the next attempt.
+If that saved file already matches the trusted checksum, publish it without
+another network request; the usual cancellation and atomic-rename checks still apply.
 
 Move a freshly downloaded or unpacked file or folder into place with
 `renameRetrying` from `fs-retry.ts`: on Windows antivirus and indexing hold

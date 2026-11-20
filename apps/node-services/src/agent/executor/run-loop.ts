@@ -2021,7 +2021,12 @@ const classifiedRunFailure = (
             : error instanceof StreamingAgentRunLimitError
               ? "response_too_large"
               : "unclassified",
-        runtimeType,
+        // A Run that definitely never started did not reach the Runtime, so
+        // naming it would point the user at the wrong component.
+        error instanceof ProviderRunStartError &&
+          !(error instanceof ProviderRunAdmissionUnavailableError)
+          ? undefined
+          : runtimeType,
       );
 
 const runFailure = (

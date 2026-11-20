@@ -160,9 +160,9 @@ interface WorkerDocumentNormalizerOptions {
 }
 
 /**
- * The process's one normalizer. Text formats convert in process; the rest
- * convert in an isolated worker, one at a time, so a PDF, Office or archive
- * parser that exhausts memory or hangs is stopped without the process. A request
+ * The process's one normalizer. Text formats other than JSON convert in process;
+ * the rest convert in an isolated worker, one at a time, so a parser
+ * that exhausts memory or hangs is stopped without the process. A request
  * waits for the worker at most one timeout and fails as unavailable; the
  * conversion itself then has its own timeout, which is terminal.
  */

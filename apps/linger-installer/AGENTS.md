@@ -18,6 +18,8 @@ it prevents execution after those writes, and shutdown drains that initial save
 before returning, just as it waits for an executing job. An initial input-save
 failure is reported by start without interrupting shutdown's remaining cleanup;
 storage failures for retained jobs still propagate.
+A closed native sign-in input reports failure without stopping the installer;
+retry starts a new owned login process.
 A start returns the instance's running or queued job; a job that finished its
 run and waits for the person (`waiting_user`, e.g. `LOCAL_MODELS_UNAVAILABLE`)
 is canceled and replaced, so Try Again checks the computer again.
