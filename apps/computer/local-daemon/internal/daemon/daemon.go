@@ -206,6 +206,9 @@ type activeOperation struct {
 	// after announcing its retained one; it then declines a scheduler
 	// yield, whose follow-up would resume the session that is gone.
 	sessionMoved atomic.Bool
+	// yieldDeclined is set once a yield was declined. An Agent Service
+	// that resends the same yield as the user's Stop then cancels the Run.
+	yieldDeclined bool
 }
 
 func New(options Options) (*Daemon, error) {

@@ -662,6 +662,14 @@ export class RunnerOperationState {
     if (this.#terminal) {
       return;
     }
+    // Any other cancellation after a yield request stops the Run. The
+    // Computer may have declined the yield, so resending it would not stop
+    // the Run, and a yield terminal would resume it.
+    if (this.#yieldRequested && reason !== "scheduler_yield") {
+      this.#yieldRequested = false;
+      this.#cancelCommand = createCancel(this.start, this.#createId(), reason);
+      return;
+    }
     this.#cancelCommand ??= createCancel(this.start, this.#createId(), reason);
   }
 

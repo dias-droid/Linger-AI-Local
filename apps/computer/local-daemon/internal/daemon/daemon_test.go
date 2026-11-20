@@ -435,13 +435,13 @@ func TestSchedulerYieldIsDeclinedAfterTheSessionMoved(t *testing.T) {
 	if ctx.Err() != nil || active.reason != "" {
 		t.Fatalf("the yield cancelled the Run: reason %q", active.reason)
 	}
-	stop := operationCancelCommand(start)
-	stop.Payload = mustJSON(map[string]string{"reason": "user_stop"})
-	if err := d.handleOperationCancel(stop); err != nil {
+	// An Agent Service that keeps the yield command resends it as the
+	// user's Stop, which must cancel the Run.
+	if err := d.handleOperationCancel(yield); err != nil {
 		t.Fatal(err)
 	}
-	if ctx.Err() == nil || active.reason != "user_stop" {
-		t.Fatalf("a Stop did not cancel the Run: reason %q", active.reason)
+	if ctx.Err() == nil || active.reason != schedulerYield {
+		t.Fatalf("a resent yield did not cancel the Run: reason %q", active.reason)
 	}
 }
 

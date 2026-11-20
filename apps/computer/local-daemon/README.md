@@ -285,8 +285,9 @@ for a browser sign-in when signed out.
   and the Room shows the Agent working from that event. The executor can then
   no longer start a fresh session, so the adapter opens `session/new` in the
   same process and the terminal result carries the new session. Such a Run
-  announced the old session, so the Daemon declines a scheduler yield for it
-  and lets it finish. A Run that resumes after a yield ends as
+  announced the old session, so the Daemon declines one scheduler yield for it
+  and lets it finish. Agent Service sends a later Stop as its own cancel; a
+  resent yield cancels the Run. A Run that resumes after a yield ends as
   `session_not_found` instead. A Run yields to
   the scheduler only after native work, because its session holds no prompt
   before that.
