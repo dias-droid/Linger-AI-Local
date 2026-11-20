@@ -2531,5 +2531,47 @@
     "resizeWeeklyBottomLeft": "拖动左下角调整周报窗口大小",
     "reportUnavailable": "报告不可用。",
     "repeatedCursor": "加载报告时分页返回了重复的游标。"
+  },
+  "routePages": {
+    "notFoundTitle": "找不到页面",
+    "openMessages": "打开消息",
+    "loadingError": "TeamHub 加载出错",
+    "rooms": "Room",
+    "roomNavigation": "Room 导航",
+    "backToRoomsHint": "点击“返回我的 Room”回到你的对话。",
+    "backToRooms": "返回我的 Room",
+    "roomRestrictedTitle": "你无法访问这个 Room",
+    "pageRestrictedTitle": "你无法访问这个页面",
+    "restrictedBody": "你可能没有访问权限，或者它已被删除。请确认登录的账号是否正确，或请分享链接的人邀请你。",
+    "loadFailedBody": "无法加载请求的 TeamHub 数据。",
+    "teamHubUnavailableTitle": "TeamHub 不可用",
+    "viewLoadFailedTitle": "无法加载这个视图"
+  },
+  "sharedDocument": {
+    "title": "共享的文件",
+    "refresh": "刷新文件",
+    "unavailableWithChanges": "链接已不可用。你尚未保存的更改还在这里。",
+    "unavailable": "这个链接不可用，或已被撤销。",
+    "loading": "正在加载文件…",
+    "saveFailed": "无法保存这个版本。",
+    "canEdit": "可编辑",
+    "readOnly": "只读",
+    "download": "下载",
+    "signInToEdit": "登录后编辑",
+    "saving": "正在保存…",
+    "uploadVersion": "上传新版本",
+    "fileContent": "文件内容"
+  },
+  "sharedConversation": {
+    "title": "分享的对话",
+    "snapshot": "只读快照",
+    "snapshotFrom": "只读快照 · {date}",
+    "unavailable": "这个分享的对话不可用，或已被撤销。请向分享的人要一个新链接。",
+    "loading": "正在加载对话…",
+    "empty": "创建这份快照时还没有消息。",
+    "loadMore": "加载更多消息",
+    "messageFrom": "{name} 的消息",
+    "imageUnavailable": "图片不可用：{filename}",
+    "loadingImage": "正在加载图片…"
   }
 }

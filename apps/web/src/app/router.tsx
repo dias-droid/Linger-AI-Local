@@ -57,6 +57,7 @@ import {
   FullPageRouteErrorSurface,
   PanelRouteErrorSurface,
 } from "./route-error-surfaces";
+import { routePagesMessages } from "./route-pages.messages";
 
 export function createAppRoutes(
   queryClient: QueryClient,
@@ -806,6 +807,7 @@ function redirectAuthenticationError(
 }
 
 function NotFoundRoute({ inShell = false }: { inShell?: boolean }) {
+  const t = useT();
   const navigate = useNavigate();
   const { tenantId } = useParams();
 
@@ -813,13 +815,13 @@ function NotFoundRoute({ inShell = false }: { inShell?: boolean }) {
     <main
       className={`flex flex-col items-center justify-center gap-4 bg-app-canvas px-8 text-center text-app-ink ${inShell ? "h-full min-h-0 flex-1" : "min-h-dvh"}`}
     >
-      <h1 className="text-lg">Page not found</h1>
+      <h1 className="text-lg">{t(routePagesMessages.notFoundTitle)}</h1>
       <Button
         onClick={() => {
           void navigate(tenantId ? `/t/${tenantId}/rooms` : "/");
         }}
       >
-        Open Messages
+        {t(routePagesMessages.openMessages)}
       </Button>
     </main>
   );
