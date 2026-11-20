@@ -50,14 +50,20 @@ import {
   managedRuntimeEnvironment,
 } from "./managed-codex.js";
 import { prepareRuntime, runtimeVersionFailure } from "./managed-runtimes.js";
-import { applyNativeSource, prepareByokRuntime } from "./byok-source.js";
+import {
+  applyNativeSource,
+  prepareByokNativeRuntime,
+  prepareByokRuntime,
+  readByokEnvironment,
+  type ByokGatewayFailure,
+} from "./byok-source.js";
 import {
   readSetupChoice,
   writeGpuSharing,
   validateSetupChoice,
   writeSetupChoice,
 } from "./setup-selection.js";
-import { prepareLocalModels } from "./local-models.js";
+import { prepareLocalModels, restoreByokSource } from "./local-models.js";
 import { prepareSourceComputer } from "./source-computer.js";
 import { connectComputer, stopComputer } from "./computer.js";
 import { prepareLocalEnrollment } from "./local-enrollment.js";
@@ -469,6 +475,14 @@ async function runNativeSource(
     const current = instance;
     return await withInstanceLock(current, async () => {
       const home = path.resolve(current.root, "../..");
+      // A restart reads the choice from setup-choice.json, which a source
+      // switched since on the Models page does not update, so a saved BYOK
+      // source keeps its own runtime and gateway.
+      const saved =
+        !options.byok && !options.setupChoice
+          ? await readByokEnvironment(home)
+          : undefined;
+      const restoredByok = saved?.mode === "byok" ? saved : undefined;
       await writeSetupChoice(current, choice);
       if (options.shareGpu !== undefined)
         await writeGpuSharing(current, options.shareGpu);
@@ -485,9 +499,33 @@ async function runNativeSource(
       let runtimeError: unknown;
       let runtimeAborted = false;
       let runtimePending = true;
+      let byokGateway: ByokGatewayFailure | undefined;
       const runtime = (async () => {
         try {
-          if (options.byok) {
+          if (restoredByok) {
+            runtimeOutcome = await prepareByokNativeRuntime(
+              restoredByok.runtime,
+              {
+                home,
+                signal,
+                onEvent: emit,
+                ...(options.resume
+                  ? { reuseInstalled: true }
+                  : {
+                      env: await managedRuntimeEnvironment(home, current.root),
+                    }),
+                onDescriptor: (descriptor) =>
+                  options.onRuntimeDescriptors?.([descriptor]),
+              },
+            );
+            // A gateway that does not come back leaves the services usable,
+            // so the outcome only reports it.
+            if (!runtimeOutcome)
+              byokGateway = await restoreByokSource(home, {
+                signal,
+                onEvent: emit,
+              });
+          } else if (options.byok) {
             const byokRuntime =
               choice === "local-models"
                 ? (options.byok.runtime ?? "claude")
@@ -1063,9 +1101,13 @@ async function runNativeSource(
           // sign-in, retires one an earlier release started.
           await prepareModelGateway(
             current,
-            options.byok && choice !== "local-models"
-              ? { runtime: choice, modelSource: "byok" }
-              : choice,
+            // A restored BYOK source keeps its gateway whatever the saved
+            // choice: a local-models choice would require the local stack.
+            restoredByok
+              ? { runtime: restoredByok.runtime, modelSource: "byok" }
+              : options.byok && choice !== "local-models"
+                ? { runtime: choice, modelSource: "byok" }
+                : choice,
             {
               home,
               signal,
@@ -1217,6 +1259,7 @@ async function runNativeSource(
                 activeOperations: 0,
               },
               businessVerification: "not_run",
+              ...(byokGateway ? { byokGateway } : {}),
             },
           };
         }
@@ -1258,6 +1301,7 @@ async function runNativeSource(
               services: checks,
               computer,
               businessVerification: "not_run",
+              ...(byokGateway ? { byokGateway } : {}),
               ...(authPending && typeof runtimeOutcome?.details === "object"
                 ? runtimeOutcome.details
                 : {}),

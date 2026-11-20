@@ -142,6 +142,16 @@ its approved plan applied again and the local source set again. Deployments,
 that check and the quit-time stop share one lock per home
 (`withLocalModelsLock`); the check waits up to 180 s for it, past the stop's
 150 s hard exit, then asks to try again.
+`restoreByokSource` (`local-models.ts`) brings back a saved BYOK source's
+Bifrost gateway on every resume (warm, or a restart from the saved choice,
+which then prepares the saved runtime and no other source). Under the same
+lock, waiting as the restore check does, it skips a loopback gateway whose
+`/health` answers, otherwise runs `source apply` from the kit's saved
+configuration, so the key never passes through Node. Each re-mount sends
+the kit's one small probe request to the person's endpoint and adds a few
+seconds to a launch after a quit. A failure (`LOCAL_MODELS_BUSY` when the
+lock never frees) is logged and returned as `details.byokGateway`
+(`{ code, message }`) of a successful resume, so Linger still opens.
 
 `runProcess` decodes stdout and stderr as separate UTF-8 streams before
 capture and output callbacks, preserving characters split across pipe reads.
@@ -255,7 +265,8 @@ services), `migrate`, `services`, and `account` run concurrently with `runtime`,
 `services`/`account` `succeeded` events and `saveSourceBinding` until both
 branches succeed and aborting and draining both before rollback on failure;
 upgrades and live re-runs keep `migrate` sequential after `runtime`. When
-`resume: true`, `prepareRuntime` inspects the selected runtime once and skips
+`resume: true`, `prepareRuntime` inspects the selected runtime (or a saved BYOK
+source's runtime) once and skips
 `harness plan` and `harness apply` when it is already installed (falling back to
 a full install if missing or unreadable), and passes the inspected descriptor
 through `onRuntimeDescriptors` so callers avoid a second status probe. Within
