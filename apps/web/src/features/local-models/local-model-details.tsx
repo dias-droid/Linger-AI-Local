@@ -11,6 +11,9 @@ import { Icon } from "@/components/ui/icon";
 import { ModalDialog } from "@/components/ui/modal-dialog";
 import { Select, SelectItem } from "@/components/ui/select";
 import type { TeamHubLocalComputerPage } from "@/features/teamhub/teamhub-types";
+import { commonMessages } from "@/i18n/common.messages";
+import type { Translate } from "@/i18n/language";
+import { useT } from "@/i18n/use-translation";
 import { cn } from "@/lib/cn";
 
 import {
@@ -25,12 +28,14 @@ import {
   modelNoteCopy,
   unavailableCopy,
 } from "./local-models-copy";
+import { localModelsMessages as m } from "./local-models.messages";
 import type { LocalModelPool, LocalModelsView } from "./local-models-queries";
 import {
   contextLabel,
   downloadStopped,
   formatGigabytes,
   isModelOnComputer,
+  joinList,
   memoryReclaimable,
   modelCapabilities,
   modelSourceLabel,
@@ -78,6 +83,7 @@ function Fact({
 }
 
 function CopyEndpoint({ endpoint, name }: { endpoint: string; name: string }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<number | undefined>(undefined);
   const codeRef = useRef<HTMLElement>(null);
@@ -113,12 +119,10 @@ function CopyEndpoint({ endpoint, name }: { endpoint: string; name: string }) {
         {endpoint}
       </code>
       <Button
-        aria-label={
-          copied ? `Copied ${name} endpoint` : `Copy ${name} endpoint`
-        }
+        aria-label={t(copied ? m.copiedEndpointOf : m.copyEndpointOf, { name })}
         onClick={copy}
         size="compactIcon"
-        title={copied ? "Copied" : "Copy endpoint"}
+        title={t(copied ? commonMessages.copied : m.copyEndpoint)}
         tone="ghost"
       >
         <Icon icon={copied ? Tick02Icon : Copy01Icon} size={14} />
@@ -140,35 +144,39 @@ function selectCodeText(element: HTMLElement | null) {
 function gatewayFactValue(
   entry: ModelEntry,
   view: LocalModelsView,
-  computer?: TeamHubLocalComputerPage["items"][number],
+  computer: TeamHubLocalComputerPage["items"][number] | undefined,
+  t: Translate,
 ): ReactNode {
+  // The gateway's name alone, the same in every language.
   if (!computer || !entry.model.pi_model) return "Bifrost";
   const piRuntime = computer.runtimes.find((runtime) => runtime.type === "pi");
   if (!piRuntime) {
     return (
-      <span className="text-muted-foreground">Bifrost · Pi not installed</span>
+      <span className="text-muted-foreground">
+        {t(m.gatewayPiNotInstalled)}
+      </span>
     );
   }
   if (piRuntime.status === "ready") {
     if (piRuntime.models.some((item) => item.id === entry.model.pi_model)) {
-      return "Ready · Bifrost (Pi)";
+      return t(m.gatewayReady);
     }
     return (
-      <span className="text-muted-foreground">
-        Bifrost · Registering with Pi…
-      </span>
+      <span className="text-muted-foreground">{t(m.gatewayRegistering)}</span>
     );
   }
   if (piRuntime.status === "not_installed") {
     return (
       <span className="text-muted-foreground">
-        {view.computer.status === "online"
-          ? "Bifrost · Setting up Pi…"
-          : "Bifrost · Pi not installed"}
+        {t(
+          view.computer.status === "online"
+            ? m.gatewaySettingUp
+            : m.gatewayPiNotInstalled,
+        )}
       </span>
     );
   }
-  return <span className="text-app-warning">Bifrost · Pi unavailable</span>;
+  return <span className="text-app-warning">{t(m.gatewayPiUnavailable)}</span>;
 }
 
 /** Everything about one model on one Computer, shown when its row expands. */
@@ -191,6 +199,7 @@ export function ModelFacts({
   onAssignAgent?: (agent: AssignableLocalModelAgent) => void;
   view: LocalModelsView;
 }) {
+  const t = useT();
   const { model, status } = entry;
   // A stopped download holds only a partial file, so it reads like a model
   // not yet on the Computer.
@@ -198,10 +207,12 @@ export function ModelFacts({
   const onComputer = isModelOnComputer(model, status);
   const pool = poolOf(view, model.pool);
   const plannedPlace =
-    status === "available" || stopped ? placeName(view, model.pool) : undefined;
+    status === "available" || stopped
+      ? placeName(view, model.pool, t)
+      : undefined;
   const capabilities = modelCapabilities(model);
-  const parameters = parametersLabel(model);
-  const speed = speedLabel(model);
+  const parameters = parametersLabel(model, t);
+  const speed = speedLabel(model, t);
   const sourceUrl = safeModelSourceUrl(model.source_url);
   const reclaimable = memoryReclaimable(view, model);
   const availableNeedsRoom =
@@ -232,6 +243,9 @@ export function ModelFacts({
     primaryAgent !== undefined &&
     !isAgentUsingModel(entry, primaryAgent, computerId) &&
     primaryAgent.busy;
+  const memorySize = formatGigabytes(model.memory_bytes, t);
+  const memoryPlace =
+    onComputer && pool ? poolLabel(view, pool, t) : plannedPlace;
   return (
     <div>
       {model.error || status === "unavailable" ? (
@@ -239,17 +253,17 @@ export function ModelFacts({
           {model.error ? (
             <Fact
               bordered={false}
-              label={stopped ? "Last download" : "Last load"}
+              label={t(stopped ? m.factLastDownload : m.factLastLoad)}
             >
               <span className="text-app-danger">
-                {modelErrorCopy(model.error)}
+                {modelErrorCopy(model.error, t)}
               </span>
             </Fact>
           ) : null}
           {status === "unavailable" ? (
-            <Fact bordered={Boolean(model.error)} label="Why not">
+            <Fact bordered={Boolean(model.error)} label={t(m.factWhyNot)}>
               <span className="text-app-danger">
-                {unavailableCopy(model.availability.reason, reclaimable)}
+                {unavailableCopy(model.availability.reason, reclaimable, t)}
               </span>
             </Fact>
           ) : null}
@@ -257,9 +271,13 @@ export function ModelFacts({
       ) : null}
       {model.note ? (
         <div className="my-1.5 rounded-lg border border-[var(--app-status-warning-border)] bg-[var(--app-status-warning-surface)] px-3 py-0.5">
-          <Fact bordered={false} label="Note">
+          <Fact bordered={false} label={t(m.factNote)}>
             <span className="text-app-warning">
-              {modelNoteCopy(model.note.code, placeName(view, model.pool))}
+              {modelNoteCopy(
+                model.note.code,
+                placeName(view, model.pool, t),
+                t,
+              )}
             </span>
           </Fact>
         </div>
@@ -267,60 +285,64 @@ export function ModelFacts({
       {idleUsedWarning ? (
         <div className="my-1.5">
           <FormFeedback tone="warning">
-            {usedNames.join(", ")} {usedNames.length === 1 ? "uses" : "use"}{" "}
-            this model. Load it so {usedNames.length === 1 ? "it" : "they"} can
-            answer.
+            {t(m.idleUsedWarning, {
+              count: usedNames.length,
+              names: joinList(usedNames, t),
+            })}
           </FormFeedback>
         </div>
       ) : null}
       {availableNeedsRoom ? (
         <div className="my-1.5">
           <FormFeedback tone="warning">
-            This model can download now, but only{" "}
-            {formatGigabytes(poolFreeBytes(pool))} is free on{" "}
-            {poolLabel(view, pool)}. Close memory-heavy apps and recheck memory
-            before loading it.
+            {t(m.downloadNeedsRoom, {
+              free: formatGigabytes(poolFreeBytes(pool), t),
+              pool: poolLabel(view, pool, t),
+            })}
           </FormFeedback>
         </div>
       ) : null}
       <div className="mt-1 grid grid-cols-1 gap-x-6 @xl:grid-cols-2">
         {capabilities.length ? (
-          <Fact className="@xl:col-span-2" label="Capabilities">
+          <Fact className="@xl:col-span-2" label={t(m.factCapabilities)}>
             <span className="flex flex-wrap gap-1.5">
               {capabilities.map((capability) => (
                 <span
                   className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-secondary-foreground"
                   key={capability}
                 >
-                  {capabilityCopy(capability)}
+                  {capabilityCopy(capability, t)}
                 </span>
               ))}
             </span>
           </Fact>
         ) : null}
         {model.publisher ? (
-          <Fact label="Publisher">{model.publisher}</Fact>
+          <Fact label={t(m.factPublisher)}>{model.publisher}</Fact>
         ) : null}
-        {parameters ? <Fact label="Parameters">{parameters}</Fact> : null}
-        <Fact label="Memory">
-          {formatGigabytes(model.memory_bytes)}
-          {onComputer && pool
-            ? ` on ${poolLabel(view, pool)}`
-            : plannedPlace
-              ? ` on ${plannedPlace}`
-              : ""}
+        {parameters ? (
+          <Fact label={t(m.factParameters)}>{parameters}</Fact>
+        ) : null}
+        <Fact label={t(m.factMemory)}>
+          {memoryPlace
+            ? t(m.memoryOn, { place: memoryPlace, size: memorySize })
+            : memorySize}
         </Fact>
-        <Fact label={onComputer ? "On disk" : "Download"}>
-          {formatGigabytes(model.download_bytes)}
+        <Fact label={t(onComputer ? m.factOnDisk : m.factDownload)}>
+          {formatGigabytes(model.download_bytes, t)}
         </Fact>
-        <Fact label="Context">{contextLabel(model.context_tokens)}</Fact>
-        <Fact label="Version">
+        <Fact label={t(m.factContext)}>
+          {contextLabel(model.context_tokens, t)}
+        </Fact>
+        <Fact label={t(m.factVersion)}>
           <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-secondary-foreground">
             {model.quant}
           </code>
         </Fact>
-        {speed ? <Fact label="Speed">{speed}</Fact> : null}
-        {model.license ? <Fact label="License">{model.license}</Fact> : null}
+        {speed ? <Fact label={t(m.factSpeed)}>{speed}</Fact> : null}
+        {model.license ? (
+          <Fact label={t(m.factLicense)}>{model.license}</Fact>
+        ) : null}
         {onComputer ? (
           <Fact
             className={
@@ -328,15 +350,15 @@ export function ModelFacts({
                 ? "@xl:col-span-2"
                 : undefined
             }
-            label="Used by"
+            label={t(m.factUsedBy)}
           >
             <span className="flex flex-wrap items-center gap-2">
               <span>
-                {usedNames.length ? usedNames.join(", ") : "No Agent yet"}
+                {usedNames.length ? joinList(usedNames, t) : t(m.noAgentYet)}
               </span>
               {showAgentPicker && onAssignAgent ? (
                 <Select
-                  aria-label={`Switch an Agent to ${model.name}`}
+                  aria-label={t(m.switchAgentTo, { name: model.name })}
                   disabled={disabled || Boolean(assigningAgentId)}
                   onValueChange={(actorId) => {
                     const target = unassigned.find(
@@ -344,9 +366,9 @@ export function ModelFacts({
                     );
                     if (target) onAssignAgent(target);
                   }}
-                  placeholder={
-                    assigningAgentId ? "Switching…" : "Switch Agent…"
-                  }
+                  placeholder={t(
+                    assigningAgentId ? m.switchingAgent : m.switchAgent,
+                  )}
                   value=""
                   variant="pill"
                 >
@@ -356,20 +378,22 @@ export function ModelFacts({
                       key={agent.actorId}
                       value={agent.actorId}
                     >
-                      {agent.busy ? `${agent.name} · Working` : agent.name}
+                      {agent.busy
+                        ? t(m.agentWorking, { name: agent.name })
+                        : agent.name}
                     </SelectItem>
                   ))}
                 </Select>
               ) : primaryBusy ? (
                 <span className="text-xs text-muted-foreground">
-                  Finish the current turn to switch
+                  {t(m.finishTurnToSwitch)}
                 </span>
               ) : null}
             </span>
           </Fact>
         ) : null}
         {sourceUrl ? (
-          <Fact className="@xl:col-span-2" label="Source">
+          <Fact className="@xl:col-span-2" label={t(m.factSource)}>
             <a
               className="inline-flex max-w-full items-center gap-1 text-foreground underline underline-offset-2"
               href={sourceUrl}
@@ -382,12 +406,12 @@ export function ModelFacts({
           </Fact>
         ) : null}
         {status === "loaded" && model.endpoint ? (
-          <Fact className="@xl:col-span-2" label="Gateway">
-            {gatewayFactValue(entry, view, computer)}
+          <Fact className="@xl:col-span-2" label={t(m.factGateway)}>
+            {gatewayFactValue(entry, view, computer, t)}
           </Fact>
         ) : null}
         {model.endpoint ? (
-          <Fact className="@xl:col-span-2" label="Endpoint">
+          <Fact className="@xl:col-span-2" label={t(m.factEndpoint)}>
             <CopyEndpoint
               endpoint={model.endpoint.base_url}
               name={model.name}
@@ -408,7 +432,8 @@ function PoolBar({
   pool: LocalModelPool;
   view: LocalModelsView;
 }) {
-  const label = poolLabel(view, pool);
+  const t = useT();
+  const label = poolLabel(view, pool, t);
   // used_bytes is the device's real use; on a shared card other processes
   // hold memory that no holder accounts for.
   const otherBytes = poolOtherBytes(pool);
@@ -417,10 +442,16 @@ function PoolBar({
   return (
     <div className="flex min-h-10 items-center gap-3 py-1.5 text-sm">
       <span className="w-28 shrink-0 text-muted-foreground">
-        {pool.kind === "gpu" ? `GPU ${pool.gpu_index}` : label}
+        {pool.kind === "gpu"
+          ? t(m.gpuIndex, { index: String(pool.gpu_index) })
+          : label}
       </span>
       <span
-        aria-label={`${label}: ${formatGigabytes(pool.used_bytes)} of ${formatGigabytes(pool.total_bytes)} in use`}
+        aria-label={t(m.poolInUse, {
+          pool: label,
+          total: formatGigabytes(pool.total_bytes, t),
+          used: formatGigabytes(pool.used_bytes, t),
+        })}
         className="flex h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted"
         role="img"
       >
@@ -434,19 +465,21 @@ function PoolBar({
               )}
               key={holder.id}
               style={{ width: width(holder.bytes) }}
-              title={`${holder.name} · ${formatGigabytes(holder.bytes)}`}
+              title={`${holder.name} · ${formatGigabytes(holder.bytes, t)}`}
             />
           ))}
         {otherBytes ? (
           <span
             className="h-full bg-muted-foreground/30"
             style={{ width: width(otherBytes) }}
-            title={`Other apps · ${formatGigabytes(otherBytes)}`}
+            title={t(m.otherAppsSize, {
+              size: formatGigabytes(otherBytes, t),
+            })}
           />
         ) : null}
       </span>
       <span className="w-24 shrink-0 text-right text-xs whitespace-nowrap tabular-nums text-muted-foreground">
-        {formatGigabytes(poolFreeBytes(pool))} free
+        {t(m.memoryFree, { free: formatGigabytes(poolFreeBytes(pool), t) })}
       </span>
     </div>
   );
@@ -460,6 +493,7 @@ export function AdvancedDialog({
   onClose: () => void;
   view: LocalModelsView;
 }) {
+  const t = useT();
   const host = view.computer.host;
   type PoolHolder = LocalModelPool["holders"][number];
   const seenHolderIds = new Set<string>();
@@ -492,13 +526,13 @@ export function AdvancedDialog({
       }
       onClose={onClose}
       size="md"
-      title={`${view.computer.display_name} details`}
+      title={t(m.detailsOf, { name: view.computer.display_name })}
     >
       <div className="px-5 py-4">
         {view.pools.length ? (
           <>
             <h3 className="mb-1 text-sm font-medium text-muted-foreground">
-              Memory
+              {t(m.factMemory)}
             </h3>
             <div className="divide-y divide-border">
               {view.pools.map((pool) => (
@@ -530,7 +564,7 @@ export function AdvancedDialog({
                       aria-hidden
                       className="size-1.5 rounded-full bg-muted-foreground/30"
                     />
-                    Other apps
+                    {t(m.otherApps)}
                   </span>
                 ) : null}
               </p>
@@ -545,19 +579,22 @@ export function AdvancedDialog({
                 view.pools.length > 0 && "mt-5",
               )}
             >
-              Hardware
+              {t(m.hardware)}
             </h3>
             <div>
-              <Fact bordered={false} label="Memory">
-                {formatGigabytes(host.ram_total_bytes)}
+              <Fact bordered={false} label={t(m.factMemory)}>
+                {formatGigabytes(host.ram_total_bytes, t)}
               </Fact>
               {host.gpus.map((gpu) => (
-                <Fact key={gpu.index} label={`GPU ${gpu.index}`}>
-                  {gpu.name} · {formatGigabytes(gpu.total_bytes)}
+                <Fact
+                  key={gpu.index}
+                  label={t(m.gpuIndex, { index: String(gpu.index) })}
+                >
+                  {gpu.name} · {formatGigabytes(gpu.total_bytes, t)}
                 </Fact>
               ))}
-              <Fact label="Free disk">
-                {formatGigabytes(host.disk_free_bytes)}
+              <Fact label={t(m.factFreeDisk)}>
+                {formatGigabytes(host.disk_free_bytes, t)}
               </Fact>
             </div>
           </>

@@ -30,6 +30,9 @@ import { Icon } from "@/components/ui/icon";
 import { Select, SelectItem } from "@/components/ui/select";
 import { TeamHubError } from "@/features/teamhub/teamhub-error";
 import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
+import { commonMessages } from "@/i18n/common.messages";
+import type { Translate } from "@/i18n/language";
+import { RichMessage, useT } from "@/i18n/use-translation";
 import { cn } from "@/lib/cn";
 
 import { ByokCombobox } from "./byok-combobox";
@@ -43,6 +46,7 @@ import {
   byokProtocolLabels,
   modelSourceRuntimeLabels,
 } from "./local-models-copy";
+import { localModelsMessages as m } from "./local-models.messages";
 import type { ModelSourceSwitcher } from "./model-source-panel";
 import {
   type ByokEndpointInput,
@@ -77,10 +81,10 @@ function fittedWidth(value: string): CSSProperties {
   } as CSSProperties;
 }
 
-const failureCopy = (error: unknown) =>
+const failureCopy = (error: unknown, t: Translate) =>
   error instanceof TeamHubError
-    ? byokFailureCopy(error.code, error.message)
-    : byokFailureCopy(undefined, "");
+    ? byokFailureCopy(error.code, error.message, t)
+    : byokFailureCopy(undefined, "", t);
 
 /**
  * The person's own endpoint, addressed as base URL + path + endpoint. The API
@@ -100,6 +104,7 @@ export function ByokPanel({
   switcher: ModelSourceSwitcher;
   tenantId: string;
 }) {
+  const t = useT();
   const { client } = useTeamHubRuntime();
   const saved = status.byok;
   const savedRuntime = status.mode === "byok" ? status.runtime : "claude";
@@ -163,7 +168,7 @@ export function ByokPanel({
       [
         model.name,
         model.context_window
-          ? byokContextLabel(model.context_window)
+          ? byokContextLabel(model.context_window, t)
           : undefined,
       ]
         .filter(Boolean)
@@ -171,12 +176,15 @@ export function ByokPanel({
     value: model.id,
   }));
   const modelHint = models.isPending
-    ? `Listing models from ${modelsUrl}…`
+    ? t(m.byokListingFrom, { url: modelsUrl })
     : models.isError
-      ? failureCopy(models.error)
+      ? failureCopy(models.error, t)
       : models.data
-        ? `${listed.length} ${listed.length === 1 ? "model" : "models"} listed from ${models.data.url}.`
-        : "List the endpoint's models, or type an ID.";
+        ? t(m.byokModelsListedFrom, {
+            count: listed.length,
+            url: models.data.url,
+          })
+        : t(m.byokModelHint);
 
   // Changing the address or key makes listed models and a test result stale;
   // changing only the endpoint, model or Runtime keeps the listed models.
@@ -194,25 +202,22 @@ export function ByokPanel({
     switcher.request({ byok: input, mode: "byok", runtime });
   }
 
-  const sendsHow = format.fromUrl
-    ? byokProtocolLabels[format.protocol]
-    : `${byokProtocolLabels[format.protocol]} (the ${modelSourceRuntimeLabels[runtime]} format)`;
   const addressHintId = `${ids}-address-hint`;
   const modelHintId = `${ids}-model-hint`;
 
   return (
     <form
-      aria-label="BYOK"
+      aria-label={t(m.modeByok)}
       className="mt-6 rounded-xl border border-border"
       onSubmit={save}
     >
       <div className="grid grid-cols-1 gap-4 px-4 py-4">
         <div>
           <p className="mb-1.5 text-sm font-medium text-foreground">
-            AI runtime
+            {t(m.aiRuntime)}
           </p>
           <Select
-            aria-label="AI runtime"
+            aria-label={t(m.aiRuntime)}
             className="w-full"
             disabled={disabled}
             onValueChange={(value) => {
@@ -230,11 +235,13 @@ export function ByokPanel({
         </div>
         <fieldset className="min-w-0">
           <legend className="mb-1.5 text-sm font-medium text-foreground">
-            API address
+            {t(m.byokApiAddress)}
           </legend>
           <div className="grid grid-cols-2 gap-x-1.5 gap-y-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
             <div className="col-span-2 min-w-0 sm:col-span-1">
-              <AddressLabel htmlFor={`${ids}-base`}>Base URL</AddressLabel>
+              <AddressLabel htmlFor={`${ids}-base`}>
+                {t(m.baseUrl)}
+              </AddressLabel>
               <input
                 aria-describedby={addressHintId}
                 autoComplete="off"
@@ -253,19 +260,21 @@ export function ByokPanel({
               />
             </div>
             <div className="min-w-0">
-              <AddressLabel htmlFor={`${ids}-path`}>Path</AddressLabel>
+              <AddressLabel htmlFor={`${ids}-path`}>
+                {t(m.byokPath)}
+              </AddressLabel>
               <ByokCombobox
                 aria-describedby={addressHintId}
                 aria-invalid={!validByokPath(pathValue)}
                 className="sm:w-max"
                 disabled={disabled}
                 filled={path === DEFAULT_BYOK_PATH}
-                heading="Path · optional"
+                heading={t(m.byokPathHeading)}
                 menuClassName="-left-px sm:left-auto sm:-right-px"
                 id={`${ids}-path`}
                 inputClassName="font-mono text-[13px] sm:w-(--byok-fit) sm:flex-none"
                 inputStyle={fittedWidth(path)}
-                label="Path"
+                label={t(m.byokPath)}
                 onCommit={() => setPath(normalizeByokPath)}
                 onOpenChange={(open) => setMenu(open ? "path" : null)}
                 onValueChange={(value) => {
@@ -273,10 +282,10 @@ export function ByokPanel({
                   resetAll();
                 }}
                 open={menu === "path"}
-                options={byokPathSuggestions.map((option) => ({
+                options={byokPathSuggestions(t).map((option) => ({
                   detail:
                     option.value === DEFAULT_BYOK_PATH
-                      ? `${option.label} · Default`
+                      ? t(m.byokDefaultOption, { label: option.label })
                       : option.label,
                   value: option.value,
                 }))}
@@ -285,19 +294,21 @@ export function ByokPanel({
               />
             </div>
             <div className="min-w-0">
-              <AddressLabel htmlFor={`${ids}-endpoint`}>Endpoint</AddressLabel>
+              <AddressLabel htmlFor={`${ids}-endpoint`}>
+                {t(m.byokEndpoint)}
+              </AddressLabel>
               <ByokCombobox
                 aria-describedby={addressHintId}
                 aria-invalid={!validByokPath(endpointValue)}
                 className="sm:w-max"
                 disabled={disabled}
                 filled={endpoint === null}
-                heading="Endpoint · optional"
+                heading={t(m.byokEndpointHeading)}
                 menuClassName="-right-px"
                 id={`${ids}-endpoint`}
                 inputClassName="font-mono text-[13px] sm:w-(--byok-fit) sm:flex-none"
                 inputStyle={fittedWidth(endpoint ?? runtimeEndpoint)}
-                label="Endpoint"
+                label={t(m.byokEndpoint)}
                 onCommit={() =>
                   setEndpoint((current) => {
                     if (current === null) return null;
@@ -314,9 +325,12 @@ export function ByokPanel({
                 options={byokEndpointSuggestions.map((option) => ({
                   detail: option.protocol
                     ? option.value === runtimeEndpoint
-                      ? `${byokProtocolLabels[option.protocol]} · ${modelSourceRuntimeLabels[runtime]} default`
+                      ? t(m.byokEndpointRuntimeDefault, {
+                          protocol: byokProtocolLabels[option.protocol],
+                          runtime: modelSourceRuntimeLabels[runtime],
+                        })
                       : byokProtocolLabels[option.protocol]
-                    : "No endpoint. The base URL is the full address.",
+                    : t(m.byokEndpointNone),
                   value: option.value,
                 }))}
                 placeholder="-"
@@ -328,18 +342,22 @@ export function ByokPanel({
             className="mt-1.5 grid gap-0.5 text-xs text-muted-foreground"
             id={addressHintId}
           >
-            <p>
-              Base URL from your provider&apos;s docs. Path and endpoint are
-              optional: pick one, type your own, or clear it.
-            </p>
+            <p>{t(m.byokAddressHint)}</p>
             {!addressValid ? (
-              <p className="text-destructive">
-                Path and endpoint take segments like /v1, without spaces, ?, #
-                or \.
-              </p>
+              <p className="text-destructive">{t(m.byokAddressInvalid)}</p>
             ) : base ? (
               <p>
-                Sends {sendsHow} requests to <Url>{requestUrl}</Url>
+                <RichMessage
+                  message={
+                    format.fromUrl ? m.byokSendsTo : m.byokSendsToRuntimeFormat
+                  }
+                  tags={{ url: (text) => <Url>{text}</Url> }}
+                  values={{
+                    protocol: byokProtocolLabels[format.protocol],
+                    runtime: modelSourceRuntimeLabels[runtime],
+                    url: requestUrl,
+                  }}
+                />
               </p>
             ) : null}
           </div>
@@ -349,7 +367,7 @@ export function ByokPanel({
             className="mb-1.5 block text-sm font-medium text-foreground"
             htmlFor={`${ids}-key`}
           >
-            API key
+            {t(m.apiKey)}
           </label>
           <input
             aria-describedby={`${ids}-key-hint`}
@@ -368,9 +386,7 @@ export function ByokPanel({
             className="mt-1.5 text-xs text-muted-foreground"
             id={`${ids}-key-hint`}
           >
-            {canReuseSavedKey
-              ? "A key is saved on this computer. Leave blank to keep it."
-              : "Optional for an endpoint on this computer or your local network."}
+            {t(canReuseSavedKey ? m.keySavedHint : m.keyOptionalHint)}
           </p>
         </div>
         <div>
@@ -378,7 +394,7 @@ export function ByokPanel({
             className="mb-1.5 block text-sm font-medium text-foreground"
             htmlFor={`${ids}-model`}
           >
-            Model
+            {t(m.model)}
           </label>
           <div className="relative flex gap-1.5">
             <ByokCombobox
@@ -386,7 +402,7 @@ export function ByokPanel({
               className="min-w-0 flex-1"
               disabled={disabled}
               id={`${ids}-model`}
-              label="Model"
+              label={t(m.model)}
               note={modelOptions.length ? undefined : modelHint}
               onCommit={() => setModelId((current) => current.trim())}
               onOpenChange={(open) => setMenu(open ? "model" : null)}
@@ -400,14 +416,14 @@ export function ByokPanel({
               value={modelId}
             />
             <Button
-              aria-label="List models"
+              aria-label={t(m.listModels)}
               disabled={disabled || base === "" || !addressValid}
               loading={models.isPending}
               onClick={() =>
                 models.mutate(address, { onSuccess: () => setMenu("model") })
               }
               size="large"
-              title="List models"
+              title={t(m.listModels)}
             >
               {models.isPending ? null : <Icon icon={RefreshIcon} size={16} />}
             </Button>
@@ -423,16 +439,16 @@ export function ByokPanel({
               }}
               size="large"
             >
-              Test
+              {t(m.byokTest)}
             </Button>
             {toastShown && test.isSuccess ? (
               <TestToast
                 onDismiss={() => setToastShown(false)}
-                title="Connected"
+                title={t(m.byokConnected)}
                 tone="success"
               >
                 {test.data.model_id} ·{" "}
-                {byokContextLabel(test.data.context_window)} ·{" "}
+                {byokContextLabel(test.data.context_window, t)} ·{" "}
                 {byokProtocolLabels[test.data.protocol]}
                 <br />
                 <Url>{test.data.url}</Url>
@@ -441,10 +457,10 @@ export function ByokPanel({
             {toastShown && test.isError ? (
               <TestToast
                 onDismiss={() => setToastShown(false)}
-                title="Couldn't connect"
+                title={t(m.byokCouldNotConnect)}
                 tone="danger"
               >
-                {failureCopy(test.error)}
+                {failureCopy(test.error, t)}
               </TestToast>
             ) : null}
           </div>
@@ -467,7 +483,7 @@ export function ByokPanel({
           tone="primary"
           type="submit"
         >
-          {active ? "Save" : "Save & Switch to BYOK"}
+          {t(active ? commonMessages.save : m.saveAndSwitch)}
         </Button>
       </footer>
     </form>
@@ -515,6 +531,7 @@ function TestToast({
   title: string;
   tone: "danger" | "success";
 }) {
+  const t = useT();
   const toastRef = useRef<HTMLDivElement>(null);
   const [leaving, setLeaving] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -571,7 +588,8 @@ function TestToast({
         <p className="mt-0.5 [overflow-wrap:anywhere]">{children}</p>
       </div>
       <button
-        aria-label="Dismiss"
+        data-voice-close
+        aria-label={t(m.byokDismiss)}
         className="grid size-5 place-items-center rounded-sm text-primary-foreground/60 transition-colors hover:bg-primary-foreground/10 hover:text-primary-foreground"
         onClick={() => setLeaving(true)}
         type="button"
