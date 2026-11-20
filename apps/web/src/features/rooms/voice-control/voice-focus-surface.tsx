@@ -4,9 +4,9 @@ import {
   ArrowUp01Icon,
   Cancel01Icon,
   Loading03Icon,
-  Maximize01Icon,
   Mic01Icon,
   PauseIcon,
+  PictureInPictureExitIcon,
   PictureInPictureOnIcon,
   PlayIcon,
   StopIcon,
@@ -49,25 +49,29 @@ export interface RecordingPanels {
  */
 export function VoiceFocusSurface({
   autoStart = false,
+  fill = false,
   floating = "page",
   onExit,
   onFloat,
   onMoveStart,
-  onShowMain,
+  onReturn,
   onViewChange,
   panels,
   view,
 }: {
   autoStart?: boolean;
+  /** The in-page window has a height of its own, which the surface fills
+   *  instead of growing with its transcript. */
+  fill?: boolean;
   /** A picture-in-picture window fills its own window instead of floating. */
   floating?: "page" | "pip";
   onExit: () => void;
-  /** Returns the page window to the always-on-top browser window. */
+  /** Returns the page window to the always-on-top window. */
   onFloat?: () => void;
   /** Starts moving the in-page window from its title bar. */
   onMoveStart?: (event: PointerEvent<HTMLDivElement>) => void;
-  /** Brings the main window back, from a floating window of the desktop app. */
-  onShowMain?: () => void;
+  /** Brings the always-on-top window back into the page. */
+  onReturn?: () => void;
   onViewChange?: (view: RecordingView | undefined) => void;
   /** Present once a recording runs; before that only the transcript shows. */
   panels?: RecordingPanels;
@@ -275,15 +279,15 @@ export function VoiceFocusSurface({
           <Icon icon={PictureInPictureOnIcon} />
         </button>
       ) : null}
-      {onShowMain ? (
+      {onReturn ? (
         <button
-          aria-label="Show Linger window"
+          aria-label="Return recording to Linger"
           className={styles.windowButton}
-          onClick={onShowMain}
-          title="Show the Linger window; recording continues"
+          onClick={onReturn}
+          title="Back to Linger; recording continues"
           type="button"
         >
-          <Icon icon={Maximize01Icon} />
+          <Icon icon={PictureInPictureExitIcon} />
         </button>
       ) : null}
     </div>
@@ -296,11 +300,15 @@ export function VoiceFocusSurface({
         className={
           pip
             ? "relative flex min-h-0 flex-1 flex-col bg-app-canvas text-app-ink"
-            : `relative flex max-h-[min(720px,calc(100dvh-132px))] min-h-0 flex-col overflow-hidden rounded-b-2xl bg-app-canvas text-app-ink ${styles.window}`
+            : `relative flex min-h-0 flex-col overflow-hidden rounded-b-2xl bg-app-canvas text-app-ink ${styles.window} ${
+                fill ? "flex-1" : "max-h-[min(720px,calc(100dvh-132px))]"
+              }`
         }
         data-paused={paused || undefined}
       >
-        <header className="flex h-14 shrink-0 items-center gap-2 px-4">
+        {/* A window narrower than its controls keeps their icons and drops
+          the words, which stay as each control's name. */}
+        <header className="@container flex h-14 shrink-0 items-center gap-2 px-4">
           {captureActive ? (
             <>
               <span aria-hidden="true" className={styles.liveBars}>
@@ -351,7 +359,9 @@ export function VoiceFocusSurface({
               ) : (
                 <Icon icon={PauseIcon} size={14} />
               )}
-              {paused ? "Resume" : "Pause"}
+              <span className="@max-[255px]:sr-only">
+                {paused ? "Resume" : "Pause"}
+              </span>
             </button>
           ) : null}
           <button
@@ -367,7 +377,9 @@ export function VoiceFocusSurface({
             ) : (
               <Icon icon={Cancel01Icon} size={14} />
             )}
-            {captureActive ? "Stop" : "Close"}
+            <span className="@max-[255px]:sr-only">
+              {captureActive ? "Stop" : "Close"}
+            </span>
           </button>
         </header>
         {confirmingStop ? (

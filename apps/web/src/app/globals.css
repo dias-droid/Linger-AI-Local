@@ -5563,9 +5563,8 @@ button.question-choice:focus-visible {
   font-size: 12px;
   font-weight: 500;
 }
-/* The desktop app cannot float voice windows into picture-in-picture, so they
-   always stay in the page; there the bar takes the window's own surface
-   instead of a browser-style dark frame. */
+/* A voice window inside the desktop app's page takes the window's own surface
+   for its bar instead of a browser-style dark frame. */
 :root[data-desktop-shell] .voice-window-title {
   background-color: var(--app-canvas);
   color: var(--app-ink);
