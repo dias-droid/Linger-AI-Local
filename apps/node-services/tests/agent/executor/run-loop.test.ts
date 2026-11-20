@@ -2497,6 +2497,29 @@ describe("RunLoop", () => {
     harness.state.close();
   });
 
+  it("does not blame the Runtime for a Run the Agent Service could not start", async () => {
+    const harness = createHarness();
+    harness.provider.startErrors.push(
+      new ProviderRunStartError("definitely_not_started", "first failure"),
+      new ProviderRunStartError("definitely_not_started", "second failure"),
+    );
+    const runId = enqueue(harness.state, message("initial"));
+
+    harness.execution.start();
+    await vi.waitFor(() =>
+      expect(harness.state.getLocalRun(runId)?.status).toBe("failed"),
+    );
+    const terminal = harness.state.getLocalRun(runId)?.terminal;
+    expect(terminal).toMatchObject({
+      type: "failed",
+      failure: { code: "unclassified" },
+    });
+    expect(terminal?.type === "failed" && terminal.failure).not.toHaveProperty(
+      "runtime_type",
+    );
+    harness.state.close();
+  });
+
   it("publishes a classified cold-start failure without checkpointing an empty session or retrying", async () => {
     const publisher = new RecordingRuntimeStatusPublisher();
     const harness = createHarness(undefined, undefined, publisher, {
