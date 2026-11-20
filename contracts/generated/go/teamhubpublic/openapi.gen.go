@@ -906,6 +906,7 @@ const (
 	DecisionKindQuestion            DecisionKind = "question"
 	DecisionKindRoomCreation        DecisionKind = "room_creation"
 	DecisionKindRuntimePermission   DecisionKind = "runtime_permission"
+	DecisionKindSearchKey           DecisionKind = "search_key"
 )
 
 // Valid indicates whether the value is a known member of the DecisionKind enum.
@@ -932,6 +933,8 @@ func (e DecisionKind) Valid() bool {
 	case DecisionKindRoomCreation:
 		return true
 	case DecisionKindRuntimePermission:
+		return true
+	case DecisionKindSearchKey:
 		return true
 	default:
 		return false
@@ -3545,6 +3548,45 @@ func (e RuntimePermissionDecisionViewKind) Valid() bool {
 	}
 }
 
+// Defines values for SearchKeyDecisionViewOrigin.
+const (
+	SearchKeyDecisionViewOriginRequested SearchKeyDecisionViewOrigin = "requested"
+	SearchKeyDecisionViewOriginSuggested SearchKeyDecisionViewOrigin = "suggested"
+)
+
+// Valid indicates whether the value is a known member of the SearchKeyDecisionViewOrigin enum.
+func (e SearchKeyDecisionViewOrigin) Valid() bool {
+	switch e {
+	case SearchKeyDecisionViewOriginRequested:
+		return true
+	case SearchKeyDecisionViewOriginSuggested:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SearchKeyDecisionViewReason.
+const (
+	SearchKeyDecisionViewReasonFreeLimit SearchKeyDecisionViewReason = "free_limit"
+	SearchKeyDecisionViewReasonMissing   SearchKeyDecisionViewReason = "missing"
+	SearchKeyDecisionViewReasonRejected  SearchKeyDecisionViewReason = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the SearchKeyDecisionViewReason enum.
+func (e SearchKeyDecisionViewReason) Valid() bool {
+	switch e {
+	case SearchKeyDecisionViewReasonFreeLimit:
+		return true
+	case SearchKeyDecisionViewReasonMissing:
+		return true
+	case SearchKeyDecisionViewReasonRejected:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SetDocumentLinkShareRole.
 const (
 	Editor SetDocumentLinkShareRole = "editor"
@@ -4040,6 +4082,228 @@ func (e VoiceTranscriptEventKind) Valid() bool {
 	case DictationTurn:
 		return true
 	case Speech:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebSearchBackendKeyState.
+const (
+	WebSearchBackendKeyStateNone       WebSearchBackendKeyState = "none"
+	WebSearchBackendKeyStateRejected   WebSearchBackendKeyState = "rejected"
+	WebSearchBackendKeyStateUnverified WebSearchBackendKeyState = "unverified"
+	WebSearchBackendKeyStateVerified   WebSearchBackendKeyState = "verified"
+)
+
+// Valid indicates whether the value is a known member of the WebSearchBackendKeyState enum.
+func (e WebSearchBackendKeyState) Valid() bool {
+	switch e {
+	case WebSearchBackendKeyStateNone:
+		return true
+	case WebSearchBackendKeyStateRejected:
+		return true
+	case WebSearchBackendKeyStateUnverified:
+		return true
+	case WebSearchBackendKeyStateVerified:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebSearchBackendStatus.
+const (
+	WebSearchBackendStatusKeyRejected WebSearchBackendStatus = "key_rejected"
+	WebSearchBackendStatusKeyRequired WebSearchBackendStatus = "key_required"
+	WebSearchBackendStatusReady       WebSearchBackendStatus = "ready"
+)
+
+// Valid indicates whether the value is a known member of the WebSearchBackendStatus enum.
+func (e WebSearchBackendStatus) Valid() bool {
+	switch e {
+	case WebSearchBackendStatusKeyRejected:
+		return true
+	case WebSearchBackendStatusKeyRequired:
+		return true
+	case WebSearchBackendStatusReady:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebSearchBackendTier.
+const (
+	WebSearchBackendTierFreeTrial WebSearchBackendTier = "free_trial"
+	WebSearchBackendTierKey       WebSearchBackendTier = "key"
+	WebSearchBackendTierNone      WebSearchBackendTier = "none"
+)
+
+// Valid indicates whether the value is a known member of the WebSearchBackendTier enum.
+func (e WebSearchBackendTier) Valid() bool {
+	switch e {
+	case WebSearchBackendTierFreeTrial:
+		return true
+	case WebSearchBackendTierKey:
+		return true
+	case WebSearchBackendTierNone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebSearchBackendId.
+const (
+	WebSearchBackendIdBrave     WebSearchBackendId = "brave"
+	WebSearchBackendIdDirect    WebSearchBackendId = "direct"
+	WebSearchBackendIdFirecrawl WebSearchBackendId = "firecrawl"
+	WebSearchBackendIdTavily    WebSearchBackendId = "tavily"
+	WebSearchBackendIdYou       WebSearchBackendId = "you"
+)
+
+// Valid indicates whether the value is a known member of the WebSearchBackendId enum.
+func (e WebSearchBackendId) Valid() bool {
+	switch e {
+	case WebSearchBackendIdBrave:
+		return true
+	case WebSearchBackendIdDirect:
+		return true
+	case WebSearchBackendIdFirecrawl:
+		return true
+	case WebSearchBackendIdTavily:
+		return true
+	case WebSearchBackendIdYou:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebSearchCommand.
+const (
+	WebSearchCommandOpen   WebSearchCommand = "open"
+	WebSearchCommandSearch WebSearchCommand = "search"
+)
+
+// Valid indicates whether the value is a known member of the WebSearchCommand enum.
+func (e WebSearchCommand) Valid() bool {
+	switch e {
+	case WebSearchCommandOpen:
+		return true
+	case WebSearchCommandSearch:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebSearchFilter.
+const (
+	WebSearchFilterRecency WebSearchFilter = "recency"
+	WebSearchFilterSite    WebSearchFilter = "site"
+)
+
+// Valid indicates whether the value is a known member of the WebSearchFilter enum.
+func (e WebSearchFilter) Valid() bool {
+	switch e {
+	case WebSearchFilterRecency:
+		return true
+	case WebSearchFilterSite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebSearchKeyBackend.
+const (
+	WebSearchKeyBackendBrave     WebSearchKeyBackend = "brave"
+	WebSearchKeyBackendFirecrawl WebSearchKeyBackend = "firecrawl"
+	WebSearchKeyBackendTavily    WebSearchKeyBackend = "tavily"
+	WebSearchKeyBackendYou       WebSearchKeyBackend = "you"
+)
+
+// Valid indicates whether the value is a known member of the WebSearchKeyBackend enum.
+func (e WebSearchKeyBackend) Valid() bool {
+	switch e {
+	case WebSearchKeyBackendBrave:
+		return true
+	case WebSearchKeyBackendFirecrawl:
+		return true
+	case WebSearchKeyBackendTavily:
+		return true
+	case WebSearchKeyBackendYou:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebSearchQuotaFrom.
+const (
+	WebSearchQuotaFromLastResponse WebSearchQuotaFrom = "last_response"
+	WebSearchQuotaFromProvider     WebSearchQuotaFrom = "provider"
+	WebSearchQuotaFromUnavailable  WebSearchQuotaFrom = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the WebSearchQuotaFrom enum.
+func (e WebSearchQuotaFrom) Valid() bool {
+	switch e {
+	case WebSearchQuotaFromLastResponse:
+		return true
+	case WebSearchQuotaFromProvider:
+		return true
+	case WebSearchQuotaFromUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebSearchQuotaReason.
+const (
+	WebSearchQuotaReasonKeyRejected         WebSearchQuotaReason = "key_rejected"
+	WebSearchQuotaReasonNoKey               WebSearchQuotaReason = "no_key"
+	WebSearchQuotaReasonNotObserved         WebSearchQuotaReason = "not_observed"
+	WebSearchQuotaReasonNotReported         WebSearchQuotaReason = "not_reported"
+	WebSearchQuotaReasonProviderUnavailable WebSearchQuotaReason = "provider_unavailable"
+)
+
+// Valid indicates whether the value is a known member of the WebSearchQuotaReason enum.
+func (e WebSearchQuotaReason) Valid() bool {
+	switch e {
+	case WebSearchQuotaReasonKeyRejected:
+		return true
+	case WebSearchQuotaReasonNoKey:
+		return true
+	case WebSearchQuotaReasonNotObserved:
+		return true
+	case WebSearchQuotaReasonNotReported:
+		return true
+	case WebSearchQuotaReasonProviderUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for WebSearchQuotaUnit.
+const (
+	WebSearchQuotaUnitCredits  WebSearchQuotaUnit = "credits"
+	WebSearchQuotaUnitRequests WebSearchQuotaUnit = "requests"
+	WebSearchQuotaUnitUsd      WebSearchQuotaUnit = "usd"
+)
+
+// Valid indicates whether the value is a known member of the WebSearchQuotaUnit enum.
+func (e WebSearchQuotaUnit) Valid() bool {
+	switch e {
+	case WebSearchQuotaUnitCredits:
+		return true
+	case WebSearchQuotaUnitRequests:
+		return true
+	case WebSearchQuotaUnitUsd:
 		return true
 	default:
 		return false
@@ -5148,20 +5412,23 @@ type DecisionAnswer struct {
 	// AttachmentUploadIds Message attachment uploads a profile_setup_sources "done" answer attaches to the Human's message; same rules as message creation.
 	AttachmentUploadIds *[]AttachmentUploadToken `json:"attachment_upload_ids,omitempty"`
 
+	// Backend A backend that takes an API key saved in the product.
+	Backend *WebSearchKeyBackend `json:"backend,omitempty"`
+
 	// Comment The reason given with a denial, or a note with a question's answers.
 	Comment *string `json:"comment,omitempty"`
 
 	// ConnectionId Opaque, case-sensitive identifier. Clients must not infer type or time from it.
 	ConnectionId *Id `json:"connection_id,omitempty"`
 
-	// Decision approve or deny for connector_write, agent_change, runtime_permission, connection_auth and room_creation; deny or connected (recorded by TeamHub once the owner connects Chrome) for browser_connection; deny or configured (recorded by TeamHub once a Composio key is saved) for provider_key; deny or granted (recorded by TeamHub once the Computer reports every permission granted) for computer_permission; submit for question; connected or skipped for profile_setup_apps; done or skipped for profile_setup_sources.
+	// Decision approve or deny for connector_write, agent_change, runtime_permission, connection_auth and room_creation; deny or connected (recorded by TeamHub once the owner connects Chrome) for browser_connection; deny or configured (recorded by TeamHub once a Composio key is saved) for provider_key and search_key (with the backend whose key was saved); deny or granted (recorded by TeamHub once the Computer reports every permission granted) for computer_permission; submit for question; connected or skipped for profile_setup_apps; done or skipped for profile_setup_sources.
 	Decision DecisionAnswerDecision `json:"decision"`
 
 	// Links Absolute http(s) URLs a profile_setup_sources "done" answer shares; trimmed and deduplicated by TeamHub.
 	Links *[]string `json:"links,omitempty"`
 }
 
-// DecisionAnswerDecision approve or deny for connector_write, agent_change, runtime_permission, connection_auth and room_creation; deny or connected (recorded by TeamHub once the owner connects Chrome) for browser_connection; deny or configured (recorded by TeamHub once a Composio key is saved) for provider_key; deny or granted (recorded by TeamHub once the Computer reports every permission granted) for computer_permission; submit for question; connected or skipped for profile_setup_apps; done or skipped for profile_setup_sources.
+// DecisionAnswerDecision approve or deny for connector_write, agent_change, runtime_permission, connection_auth and room_creation; deny or connected (recorded by TeamHub once the owner connects Chrome) for browser_connection; deny or configured (recorded by TeamHub once a Composio key is saved) for provider_key and search_key (with the backend whose key was saved); deny or granted (recorded by TeamHub once the Computer reports every permission granted) for computer_permission; submit for question; connected or skipped for profile_setup_apps; done or skipped for profile_setup_sources.
 type DecisionAnswerDecision string
 
 // DecisionAnswerValue A radio or checkbox answer names option ids. Any other value is the Human's own written answer, which every option question accepts, so a checkbox answer holds up to 20 options and one written answer.
@@ -5272,7 +5539,10 @@ type DecisionRequestedMessageCard struct {
 	// RuntimePermission The view of a runtime_permission decision: a tool call that needs the sponsor's approval. title is built by rules from the call and host evidence, never by the judge model; tool and input are the full call.
 	RuntimePermission *RuntimePermissionDecisionView `json:"runtime_permission,omitempty"`
 
-	// Status For connector_write and agent_change, approved and executing mean TeamHub is running the approved request, and unknown means a run stopped midway and may have taken effect; TeamHub does not run it again. A question or AnotherMe setup card ends answered. An approved runtime_permission lets the Agent retry that one call until expires_at, and ends consumed once it does. An approved connection_auth is authorizing until the OAuth it started completes (succeeded), fails, or expires. A provider_key ends answered when someone saves a Composio key, denied when its Human declines. A browser_connection ends answered when its owner connects, denied when they decline. A room_creation ends succeeded with its Room created, or denied. A computer_permission ends answered once every permission it asks for is granted, denied when its owner declines.
+	// SearchKey The view of a search_key decision: the web search backend the card shows. origin is requested when the Agent's command named it, and suggested when the command named none and nothing was usable, so TeamHub picked the first backend in its order that still needs a key. reason says why: no key is saved (missing), the provider refused the saved one (rejected), or the keyless You.com searches are used up (free_limit). The Human may add a key for any other backend instead; saving any web search key answers the card configured with that backend.
+	SearchKey *SearchKeyDecisionView `json:"search_key,omitempty"`
+
+	// Status For connector_write and agent_change, approved and executing mean TeamHub is running the approved request, and unknown means a run stopped midway and may have taken effect; TeamHub does not run it again. A question or AnotherMe setup card ends answered. An approved runtime_permission lets the Agent retry that one call until expires_at, and ends consumed once it does. An approved connection_auth is authorizing until the OAuth it started completes (succeeded), fails, or expires. A provider_key ends answered when someone saves a Composio key, denied when its Human declines. A browser_connection ends answered when its owner connects, denied when they decline. A room_creation ends succeeded with its Room created, or denied. A computer_permission ends answered once every permission it asks for is granted, denied when its owner declines. A search_key ends answered when someone saves any web search key, denied when its Human declines.
 	Status DecisionStatus `json:"status"`
 
 	// Title What the card asks; a question card's prompt.
@@ -5280,7 +5550,7 @@ type DecisionRequestedMessageCard struct {
 	Version int64  `json:"version"`
 }
 
-// DecisionStatus For connector_write and agent_change, approved and executing mean TeamHub is running the approved request, and unknown means a run stopped midway and may have taken effect; TeamHub does not run it again. A question or AnotherMe setup card ends answered. An approved runtime_permission lets the Agent retry that one call until expires_at, and ends consumed once it does. An approved connection_auth is authorizing until the OAuth it started completes (succeeded), fails, or expires. A provider_key ends answered when someone saves a Composio key, denied when its Human declines. A browser_connection ends answered when its owner connects, denied when they decline. A room_creation ends succeeded with its Room created, or denied. A computer_permission ends answered once every permission it asks for is granted, denied when its owner declines.
+// DecisionStatus For connector_write and agent_change, approved and executing mean TeamHub is running the approved request, and unknown means a run stopped midway and may have taken effect; TeamHub does not run it again. A question or AnotherMe setup card ends answered. An approved runtime_permission lets the Agent retry that one call until expires_at, and ends consumed once it does. An approved connection_auth is authorizing until the OAuth it started completes (succeeded), fails, or expires. A provider_key ends answered when someone saves a Composio key, denied when its Human declines. A browser_connection ends answered when its owner connects, denied when they decline. A room_creation ends succeeded with its Room created, or denied. A computer_permission ends answered once every permission it asks for is granted, denied when its owner declines. A search_key ends answered when someone saves any web search key, denied when its Human declines.
 type DecisionStatus string
 
 // DirectRoomOpenRequest defines model for DirectRoomOpenRequest.
@@ -8443,6 +8713,28 @@ type SaveVoiceProviderKeyRequest struct {
 	ApiKey string `json:"api_key"`
 }
 
+// SaveWebSearchKeyRequest defines model for SaveWebSearchKeyRequest.
+type SaveWebSearchKeyRequest struct {
+	ApiKey string `json:"api_key"`
+
+	// DecisionId The search_key card the key is added from. TeamHub then runs the search or page open that card was posted for against this backend with the new key before saving it, and answers the card with what that call returned. Without it, or for a card posted by a connect request, the key gets the official check.
+	DecisionId *string `json:"decision_id,omitempty"`
+}
+
+// SearchKeyDecisionView The view of a search_key decision: the web search backend the card shows. origin is requested when the Agent's command named it, and suggested when the command named none and nothing was usable, so TeamHub picked the first backend in its order that still needs a key. reason says why: no key is saved (missing), the provider refused the saved one (rejected), or the keyless You.com searches are used up (free_limit). The Human may add a key for any other backend instead; saving any web search key answers the card configured with that backend.
+type SearchKeyDecisionView struct {
+	// Backend A backend that takes an API key saved in the product.
+	Backend WebSearchKeyBackend         `json:"backend"`
+	Origin  SearchKeyDecisionViewOrigin `json:"origin"`
+	Reason  SearchKeyDecisionViewReason `json:"reason"`
+}
+
+// SearchKeyDecisionViewOrigin defines model for SearchKeyDecisionView.Origin.
+type SearchKeyDecisionViewOrigin string
+
+// SearchKeyDecisionViewReason defines model for SearchKeyDecisionView.Reason.
+type SearchKeyDecisionViewReason string
+
 // SendMailCanvasRequest defines model for SendMailCanvasRequest.
 type SendMailCanvasRequest struct {
 	// ConnectionId Opaque, case-sensitive identifier. Clients must not infer type or time from it.
@@ -8485,6 +8777,12 @@ type SetExternalConnectionAgentAccessRequest struct {
 // SetExternalConnectionAutoRemindersRequest defines model for SetExternalConnectionAutoRemindersRequest.
 type SetExternalConnectionAutoRemindersRequest struct {
 	Enabled bool `json:"enabled"`
+}
+
+// SetWebSearchDefaultRequest defines model for SetWebSearchDefaultRequest.
+type SetWebSearchDefaultRequest struct {
+	// Backend A backend that takes an API key saved in the product.
+	Backend WebSearchKeyBackend `json:"backend"`
 }
 
 // Sha256 defines model for Sha256.
@@ -9290,6 +9588,121 @@ type VoiceTranscriptEventPage struct {
 	PartialStartOffsetMs *int64                 `json:"partial_start_offset_ms,omitempty"`
 	PartialTranscript    *string                `json:"partial_transcript,omitempty"`
 }
+
+// WebSearchBackend One backend with the static text a client shows for it and its live state. status is ready when a call would run now: direct always, You.com also without a key, the others with a key that is not rejected.
+type WebSearchBackend struct {
+	Commands []WebSearchCommand `json:"commands"`
+
+	// Filters The search filters the backend honors; any other is refused before a call.
+	Filters []WebSearchFilter `json:"filters"`
+
+	// FreeTier The provider's free allowance, for display.
+	FreeTier *string `json:"free_tier,omitempty"`
+
+	// Id A web search backend. direct opens pages only and is fetched by the Agent CLI on the Agent's computer; TeamHub never fetches a page itself.
+	Id       WebSearchBackendId       `json:"id"`
+	KeyState WebSearchBackendKeyState `json:"key_state"`
+
+	// KeyUrl Where the Human gets a key.
+	KeyUrl *string `json:"key_url,omitempty"`
+
+	// Keyless Whether the backend works without a saved key.
+	Keyless bool `json:"keyless"`
+
+	// MaxLimit The most results one search returns; 0 for a backend without search.
+	MaxLimit int `json:"max_limit"`
+
+	// MaxSites How many sites one search may name; 0 when it takes no site filter.
+	MaxSites int    `json:"max_sites"`
+	Name     string `json:"name"`
+
+	// OfficialKeyCheck Whether the provider has an official endpoint TeamHub checks a key with before saving it. Without one the key is saved unverified and proven by its first call.
+	OfficialKeyCheck bool `json:"official_key_check"`
+
+	// Quota What is left on the backend's account. from says where the numbers came from: provider is the provider's official usage endpoint read for this response; last_response is the rate-limit headers of the last call (Brave), as of observed_at; unavailable carries no numbers and reason says why.
+	Quota  WebSearchQuota         `json:"quota"`
+	Status WebSearchBackendStatus `json:"status"`
+
+	// Tier How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free_trial: You.com without a key, a limited trial with lower quality results that TeamHub does not count; none: direct, which needs no account.
+	Tier WebSearchBackendTier `json:"tier"`
+
+	// TierText A short display line for the tier, set for free_trial.
+	TierText *string `json:"tier_text,omitempty"`
+}
+
+// WebSearchBackendKeyState defines model for WebSearchBackend.KeyState.
+type WebSearchBackendKeyState string
+
+// WebSearchBackendStatus defines model for WebSearchBackend.Status.
+type WebSearchBackendStatus string
+
+// WebSearchBackendTier How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free_trial: You.com without a key, a limited trial with lower quality results that TeamHub does not count; none: direct, which needs no account.
+type WebSearchBackendTier string
+
+// WebSearchBackendId A web search backend. direct opens pages only and is fetched by the Agent CLI on the Agent's computer; TeamHub never fetches a page itself.
+type WebSearchBackendId string
+
+// WebSearchBackendList Every backend in TeamHub's default order. default_search is the backend a search without one uses now: the default a Human saved (chosen_default_search) even when its key stopped working, else the first ready backend in that order.
+type WebSearchBackendList struct {
+	Backends []WebSearchBackend `json:"backends"`
+
+	// CanSaveKeys False when the deployment has no TEAMHUB_SECRET_ENCRYPTION_KEY to seal keys with.
+	CanSaveKeys bool `json:"can_save_keys"`
+
+	// ChosenDefaultSearch A backend that takes an API key saved in the product.
+	ChosenDefaultSearch *WebSearchKeyBackend `json:"chosen_default_search,omitempty"`
+	DefaultOpen         string               `json:"default_open"`
+
+	// DefaultSearch A backend that takes an API key saved in the product.
+	DefaultSearch WebSearchKeyBackend `json:"default_search"`
+}
+
+// WebSearchCommand defines model for WebSearchCommand.
+type WebSearchCommand string
+
+// WebSearchDefault defines model for WebSearchDefault.
+type WebSearchDefault struct {
+	// ChosenDefaultSearch A backend that takes an API key saved in the product.
+	ChosenDefaultSearch *WebSearchKeyBackend `json:"chosen_default_search,omitempty"`
+
+	// DefaultSearch A backend that takes an API key saved in the product.
+	DefaultSearch WebSearchKeyBackend `json:"default_search"`
+}
+
+// WebSearchFilter defines model for WebSearchFilter.
+type WebSearchFilter string
+
+// WebSearchKeyBackend A backend that takes an API key saved in the product.
+type WebSearchKeyBackend string
+
+// WebSearchQuota What is left on the backend's account. from says where the numbers came from: provider is the provider's official usage endpoint read for this response; last_response is the rate-limit headers of the last call (Brave), as of observed_at; unavailable carries no numbers and reason says why.
+type WebSearchQuota struct {
+	From WebSearchQuotaFrom `json:"from"`
+
+	// Limit Absent when the provider reports no cap.
+	Limit *float32 `json:"limit,omitempty"`
+
+	// ObservedAt UTC timestamp in RFC 3339 format with an explicit offset.
+	ObservedAt *Timestamp `json:"observed_at,omitempty"`
+	Plan       *string    `json:"plan,omitempty"`
+
+	// Reason no_key: no key is saved; not_reported: there is no usage endpoint to read (keyless You.com, direct); not_observed: Brave has answered no call yet; key_rejected: the provider refused the saved key; provider_unavailable: the usage endpoint did not answer in time.
+	Reason    *WebSearchQuotaReason `json:"reason,omitempty"`
+	Remaining *float32              `json:"remaining,omitempty"`
+
+	// ResetsAt UTC timestamp in RFC 3339 format with an explicit offset.
+	ResetsAt *Timestamp          `json:"resets_at,omitempty"`
+	Unit     *WebSearchQuotaUnit `json:"unit,omitempty"`
+}
+
+// WebSearchQuotaFrom defines model for WebSearchQuota.From.
+type WebSearchQuotaFrom string
+
+// WebSearchQuotaReason no_key: no key is saved; not_reported: there is no usage endpoint to read (keyless You.com, direct); not_observed: Brave has answered no call yet; key_rejected: the provider refused the saved key; provider_unavailable: the usage endpoint did not answer in time.
+type WebSearchQuotaReason string
+
+// WebSearchQuotaUnit defines model for WebSearchQuota.Unit.
+type WebSearchQuotaUnit string
 
 // WorkItem defines model for WorkItem.
 type WorkItem struct {
@@ -10346,6 +10759,12 @@ type StartVoiceCaptureJSONRequestBody = VoiceCaptureStartRequest
 
 // CommitVoiceDictationTurnJSONRequestBody defines body for CommitVoiceDictationTurn for application/json ContentType.
 type CommitVoiceDictationTurnJSONRequestBody = VoiceDictationCommitRequest
+
+// SaveWebSearchKeyJSONRequestBody defines body for SaveWebSearchKey for application/json ContentType.
+type SaveWebSearchKeyJSONRequestBody = SaveWebSearchKeyRequest
+
+// SetWebSearchDefaultJSONRequestBody defines body for SetWebSearchDefault for application/json ContentType.
+type SetWebSearchDefaultJSONRequestBody = SetWebSearchDefaultRequest
 
 // UpdateWorkItemJSONRequestBody defines body for UpdateWorkItem for application/json ContentType.
 type UpdateWorkItemJSONRequestBody = WorkItemUpdateRequest

@@ -235,6 +235,21 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
   environment key over one saved in the product (`voice_provider_keys`, sealed
   with `TEAMHUB_SECRET_ENCRYPTION_KEY`), so a save applies without a restart
   on every replica. A save wakes the Node Services voice workers best effort.
+- Web search: `internal/websearch` runs Agent searches and page reads through
+  Tavily, Brave, Firecrawl and You.com with deployment-wide keys in
+  `web_search_keys` (sealed with `TEAMHUB_SECRET_ENCRYPTION_KEY`, read at each
+  call) and the chosen default in `web_search_settings`. TeamHub calls only the
+  providers' fixed API hosts; the CLI reads `direct` pages itself. A search
+  without a backend uses the chosen default, else the first backend with a
+  usable key, else You.com's keyless MCP trial, which TeamHub does not count;
+  a failed call never falls back to another backend. A missing or refused key,
+  or the end of the trial, posts a `search_key` card that stores the request.
+  A key added from that card replays the request first: a provider 401/403
+  leaves the key unsaved and the card open; any other outcome saves it and
+  answers the card `configured` with the backend and the call's results or
+  error code. Any save answers every other pending card `configured` with the
+  saved backend, which the Agent reruns with; saves outside a card use the
+  official check (Brave has none and stays unverified until its first call).
 - Local models: `local_computer_model_snapshots` keeps each Computer's latest
   model library snapshot and the last host any snapshot carried; removing the
   Computer deletes the row in the same transaction. Recording a snapshot

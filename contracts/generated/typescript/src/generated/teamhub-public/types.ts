@@ -2509,6 +2509,73 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/v0/web-search/backends": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List the web search backends with their display text, state and live quota.
+     * @description Every backend in TeamHub's default order, with what a client needs to render one row each: name, commands, filters, free tier text, where to get a key, the key state and live quota. Quota is read from each provider's official usage endpoint for this request, in parallel and briefly.
+     */
+    get: operations["listWebSearchBackends"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/web-search/backends/{backend}/key": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        backend: components["schemas"]["WebSearchKeyBackend"];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Save the deployment's API key for one web search backend.
+     * @description From a search_key card (decision_id, its decision owner only), TeamHub first runs the search or page open the card was posted for against this backend with the new key. A provider refusing the key leaves it unsaved and the card open (400 WEB_SEARCH_KEY_REJECTED). Any other outcome saves the key, verified once the provider proved it, and answers the card configured with this backend and that call's results or error code, so the Agent need not run it again. Otherwise TeamHub checks the key with the provider's official endpoint when it has one (Tavily usage, You.com account balance, Firecrawl credit usage); a Brave key is saved unverified and its first call proves it. Keys are stored encrypted with TEAMHUB_SECRET_ENCRYPTION_KEY and never returned; any signed-in Human may save one. Saving answers every other open search_key card configured with this backend and wakes the waiting Agents. 400 carries INVALID_REQUEST or WEB_SEARCH_KEY_REJECTED, 403 FORBIDDEN, 404 NOT_FOUND for a card the caller cannot see, 503 WEB_SEARCH_KEY_STORAGE_UNAVAILABLE or WEB_SEARCH_PROVIDER_UNAVAILABLE.
+     */
+    put: operations["saveWebSearchKey"];
+    post?: never;
+    /**
+     * Remove the saved API key of one web search backend.
+     * @description The backend also stops being the chosen default, so searches without a backend fall back to TeamHub's order. Removing a key that is not saved succeeds.
+     */
+    delete: operations["deleteWebSearchKey"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/v0/web-search/default": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Choose the backend a search without one uses.
+     * @description The backend must be ready (409 WEB_SEARCH_KEY_REQUIRED otherwise). Any signed-in Human may choose it; it applies to the whole deployment.
+     */
+    put: operations["setWebSearchDefault"];
+    post?: never;
+    /** Return searches without a backend to TeamHub's order. */
+    delete: operations["clearWebSearchDefault"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/v0/work-items/{workItemId}/documents/uploads": {
     parameters: {
       query?: never;
@@ -5487,9 +5554,10 @@ export interface components {
       | "provider_key"
       | "browser_connection"
       | "room_creation"
-      | "computer_permission";
+      | "computer_permission"
+      | "search_key";
     /**
-     * @description For connector_write and agent_change, approved and executing mean TeamHub is running the approved request, and unknown means a run stopped midway and may have taken effect; TeamHub does not run it again. A question or AnotherMe setup card ends answered. An approved runtime_permission lets the Agent retry that one call until expires_at, and ends consumed once it does. An approved connection_auth is authorizing until the OAuth it started completes (succeeded), fails, or expires. A provider_key ends answered when someone saves a Composio key, denied when its Human declines. A browser_connection ends answered when its owner connects, denied when they decline. A room_creation ends succeeded with its Room created, or denied. A computer_permission ends answered once every permission it asks for is granted, denied when its owner declines.
+     * @description For connector_write and agent_change, approved and executing mean TeamHub is running the approved request, and unknown means a run stopped midway and may have taken effect; TeamHub does not run it again. A question or AnotherMe setup card ends answered. An approved runtime_permission lets the Agent retry that one call until expires_at, and ends consumed once it does. An approved connection_auth is authorizing until the OAuth it started completes (succeeded), fails, or expires. A provider_key ends answered when someone saves a Composio key, denied when its Human declines. A browser_connection ends answered when its owner connects, denied when they decline. A room_creation ends succeeded with its Room created, or denied. A computer_permission ends answered once every permission it asks for is granted, denied when its owner declines. A search_key ends answered when someone saves any web search key, denied when its Human declines.
      * @enum {string}
      */
     DecisionStatus:
@@ -5504,13 +5572,18 @@ export interface components {
       | "answered"
       | "consumed"
       | "authorizing";
+    /**
+     * @description A backend that takes an API key saved in the product.
+     * @enum {string}
+     */
+    WebSearchKeyBackend: "tavily" | "brave" | "firecrawl" | "you";
     /** @description A radio or checkbox answer names option ids. Any other value is the Human's own written answer, which every option question accepts, so a checkbox answer holds up to 20 options and one written answer. */
     DecisionAnswerValue: string | string[];
     /** @description Service-signed upload credential. It names the uploading Human, the Room, and the stored file, and it expires at the upload's expires_at; clients must not construct or parse it. */
     AttachmentUploadToken: string;
     DecisionAnswer: {
       /**
-       * @description approve or deny for connector_write, agent_change, runtime_permission, connection_auth and room_creation; deny or connected (recorded by TeamHub once the owner connects Chrome) for browser_connection; deny or configured (recorded by TeamHub once a Composio key is saved) for provider_key; deny or granted (recorded by TeamHub once the Computer reports every permission granted) for computer_permission; submit for question; connected or skipped for profile_setup_apps; done or skipped for profile_setup_sources.
+       * @description approve or deny for connector_write, agent_change, runtime_permission, connection_auth and room_creation; deny or connected (recorded by TeamHub once the owner connects Chrome) for browser_connection; deny or configured (recorded by TeamHub once a Composio key is saved) for provider_key and search_key (with the backend whose key was saved); deny or granted (recorded by TeamHub once the Computer reports every permission granted) for computer_permission; submit for question; connected or skipped for profile_setup_apps; done or skipped for profile_setup_sources.
        * @enum {string}
        */
       decision:
@@ -5526,6 +5599,8 @@ export interface components {
       comment?: string;
       /** @description The Connection a connection_auth approval chose. */
       connection_id?: components["schemas"]["Id"];
+      /** @description The web search backend whose key was saved, on a configured search_key answer; it may differ from the backend the card showed. */
+      backend?: components["schemas"]["WebSearchKeyBackend"];
       /** @description Map of question id to the Human's answer; only with submit. */
       answers?: {
         [key: string]: components["schemas"]["DecisionAnswerValue"];
@@ -5683,6 +5758,14 @@ export interface components {
       permissions: components["schemas"]["ComputerPermissionId"][];
       reason?: string;
     };
+    /** @description The view of a search_key decision: the web search backend the card shows. origin is requested when the Agent's command named it, and suggested when the command named none and nothing was usable, so TeamHub picked the first backend in its order that still needs a key. reason says why: no key is saved (missing), the provider refused the saved one (rejected), or the keyless You.com searches are used up (free_limit). The Human may add a key for any other backend instead; saving any web search key answers the card configured with that backend. */
+    SearchKeyDecisionView: {
+      backend: components["schemas"]["WebSearchKeyBackend"];
+      /** @enum {string} */
+      origin: "requested" | "suggested";
+      /** @enum {string} */
+      reason: "missing" | "rejected" | "free_limit";
+    };
     /** @description A request waiting on one Human's decision. TeamHub runs what the decision approves and reports the result to the requesting Agent. Exactly the view property named by kind is present; both AnotherMe setup kinds use profile_setup. */
     DecisionRequestedMessageCard: {
       /** @constant */
@@ -5718,6 +5801,7 @@ export interface components {
       browser_connection?: components["schemas"]["BrowserConnectionDecisionView"];
       room_creation?: components["schemas"]["RoomCreationDecisionView"];
       computer_permission?: components["schemas"]["ComputerPermissionDecisionView"];
+      search_key?: components["schemas"]["SearchKeyDecisionView"];
     };
     /** @description The Message author, an Agent, created this General Agent. Without approved_by it was created here and joined this Room; with approved_by it was created after that Human approved the confirmation card and joined no Room. */
     AgentCreatedNotice: {
@@ -7318,6 +7402,95 @@ export interface components {
       media_type?: string;
       /** Format: binary */
       content: string;
+    };
+    /**
+     * @description A web search backend. direct opens pages only and is fetched by the Agent CLI on the Agent's computer; TeamHub never fetches a page itself.
+     * @enum {string}
+     */
+    WebSearchBackendId: "tavily" | "brave" | "firecrawl" | "you" | "direct";
+    /** @enum {string} */
+    WebSearchCommand: "search" | "open";
+    /** @enum {string} */
+    WebSearchFilter: "recency" | "site";
+    /** @description What is left on the backend's account. from says where the numbers came from: provider is the provider's official usage endpoint read for this response; last_response is the rate-limit headers of the last call (Brave), as of observed_at; unavailable carries no numbers and reason says why. */
+    WebSearchQuota: {
+      /** @enum {string} */
+      from: "provider" | "last_response" | "unavailable";
+      remaining?: number;
+      /** @description Absent when the provider reports no cap. */
+      limit?: number;
+      /** @enum {string} */
+      unit?: "credits" | "usd" | "requests";
+      plan?: string;
+      resets_at?: components["schemas"]["Timestamp"];
+      observed_at?: components["schemas"]["Timestamp"];
+      /**
+       * @description no_key: no key is saved; not_reported: there is no usage endpoint to read (keyless You.com, direct); not_observed: Brave has answered no call yet; key_rejected: the provider refused the saved key; provider_unavailable: the usage endpoint did not answer in time.
+       * @enum {string}
+       */
+      reason?:
+        | "no_key"
+        | "not_reported"
+        | "not_observed"
+        | "key_rejected"
+        | "provider_unavailable";
+    };
+    /** @description One backend with the static text a client shows for it and its live state. status is ready when a call would run now: direct always, You.com also without a key, the others with a key that is not rejected. */
+    WebSearchBackend: {
+      id: components["schemas"]["WebSearchBackendId"];
+      name: string;
+      /**
+       * @description How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free_trial: You.com without a key, a limited trial with lower quality results that TeamHub does not count; none: direct, which needs no account.
+       * @enum {string}
+       */
+      tier: "key" | "free_trial" | "none";
+      /** @description A short display line for the tier, set for free_trial. */
+      tier_text?: string;
+      commands: components["schemas"]["WebSearchCommand"][];
+      /** @description The search filters the backend honors; any other is refused before a call. */
+      filters: components["schemas"]["WebSearchFilter"][];
+      /** @description The most results one search returns; 0 for a backend without search. */
+      max_limit: number;
+      /** @description How many sites one search may name; 0 when it takes no site filter. */
+      max_sites: number;
+      /** @description Whether the backend works without a saved key. */
+      keyless: boolean;
+      /** @description Whether the provider has an official endpoint TeamHub checks a key with before saving it. Without one the key is saved unverified and proven by its first call. */
+      official_key_check: boolean;
+      /** @description The provider's free allowance, for display. */
+      free_tier?: string;
+      /**
+       * Format: uri
+       * @description Where the Human gets a key.
+       */
+      key_url?: string;
+      /** @enum {string} */
+      status: "ready" | "key_required" | "key_rejected";
+      /** @enum {string} */
+      key_state: "none" | "verified" | "unverified" | "rejected";
+      quota: components["schemas"]["WebSearchQuota"];
+    };
+    /** @description Every backend in TeamHub's default order. default_search is the backend a search without one uses now: the default a Human saved (chosen_default_search) even when its key stopped working, else the first ready backend in that order. */
+    WebSearchBackendList: {
+      default_search: components["schemas"]["WebSearchKeyBackend"];
+      chosen_default_search?: components["schemas"]["WebSearchKeyBackend"];
+      /** @constant */
+      default_open: "direct";
+      /** @description False when the deployment has no TEAMHUB_SECRET_ENCRYPTION_KEY to seal keys with. */
+      can_save_keys: boolean;
+      backends: components["schemas"]["WebSearchBackend"][];
+    };
+    SaveWebSearchKeyRequest: {
+      api_key: string;
+      /** @description The search_key card the key is added from. TeamHub then runs the search or page open that card was posted for against this backend with the new key before saving it, and answers the card with what that call returned. Without it, or for a card posted by a connect request, the key gets the official check. */
+      decision_id?: string;
+    };
+    SetWebSearchDefaultRequest: {
+      backend: components["schemas"]["WebSearchKeyBackend"];
+    };
+    WebSearchDefault: {
+      default_search: components["schemas"]["WebSearchKeyBackend"];
+      chosen_default_search?: components["schemas"]["WebSearchKeyBackend"];
     };
     DocumentMetadataUpdateRequest: {
       title: string;
@@ -12509,6 +12682,128 @@ export interface operations {
       409: components["responses"]["Conflict"];
       413: components["responses"]["PayloadTooLarge"];
       503: components["responses"]["ServiceUnavailable"];
+    };
+  };
+  listWebSearchBackends: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The backends. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WebSearchBackendList"];
+        };
+      };
+      401: components["responses"]["Unauthenticated"];
+    };
+  };
+  saveWebSearchKey: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        backend: components["schemas"]["WebSearchKeyBackend"];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SaveWebSearchKeyRequest"];
+      };
+    };
+    responses: {
+      /** @description The backend after saving. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WebSearchBackend"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthenticated"];
+      403: components["responses"]["Forbidden"];
+      404: components["responses"]["NotFound"];
+      503: components["responses"]["ServiceUnavailable"];
+    };
+  };
+  deleteWebSearchKey: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        backend: components["schemas"]["WebSearchKeyBackend"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The key is gone. */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthenticated"];
+    };
+  };
+  setWebSearchDefault: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SetWebSearchDefaultRequest"];
+      };
+    };
+    responses: {
+      /** @description The default now in effect. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WebSearchDefault"];
+        };
+      };
+      400: components["responses"]["BadRequest"];
+      401: components["responses"]["Unauthenticated"];
+      409: components["responses"]["Conflict"];
+    };
+  };
+  clearWebSearchDefault: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The default now in effect. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["WebSearchDefault"];
+        };
+      };
+      401: components["responses"]["Unauthenticated"];
     };
   };
   uploadWorkItemDocument: {
