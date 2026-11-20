@@ -83,6 +83,7 @@ import {
 import { applySearchTermHighlight } from "./search-term-highlight";
 import { settledCardNotice } from "../cards/card-notice";
 import { CardNoticeRows } from "./card-notice-rows";
+import type { PendingMessageFailure } from "./pending-message-failure";
 import { ReplyContext } from "./reply-context";
 import { RoomNoticeRow } from "./room-notice-row";
 import { ThreadReplyPreview } from "./thread-reply-preview";
@@ -108,7 +109,10 @@ export interface PendingRoomMessage {
   clientId: string;
   // Epoch milliseconds of the first send; retries keep it.
   createdAt: number;
+  // TeamHub's own words for a refusal, or the sentence an older client stored.
   error?: string;
+  // Why this client could not finish the send; worded when it is shown.
+  failure?: PendingMessageFailure;
   mentions: TeamHubActorRef[];
   status: "failed" | "sending" | "unknown";
 }

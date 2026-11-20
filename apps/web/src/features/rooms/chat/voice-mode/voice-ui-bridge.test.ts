@@ -440,7 +440,7 @@ describe("Voice Mode screen actions", () => {
   it("lists named text fields and fills one as typing would, never a password", () => {
     document.body.innerHTML = `
       <main>
-        <textarea aria-label="Message Room">Draft</textarea>
+        <textarea aria-label="Message Room" data-chat-composer>Draft</textarea>
         <input type="search" placeholder="Search files" />
         <input type="password" aria-label="Password" />
         <input aria-label="Read only" readonly />

@@ -7,7 +7,7 @@
 const voiceWindow = '[aria-label="Voice Mode window"]';
 const outsideContent = `${voiceWindow}, [data-voice-area], aside[aria-label$=" sidebar"], [aria-hidden="true"], [inert]`;
 // The Human's unsent draft and secrets are never read.
-const privateInput = `input, textarea, select, [aria-label="Message Room"]`;
+const privateInput = `input, textarea, select, [data-chat-composer]`;
 // A chat message row is one block, read with its author and time.
 const messageRow = "article[data-message-author]";
 const blocks = `${messageRow}, h1, h2, h3, h4, h5, h6, p, li, blockquote, pre, td, th, dt, dd, figcaption, [role="article"], [role="listitem"], [role="row"]`;

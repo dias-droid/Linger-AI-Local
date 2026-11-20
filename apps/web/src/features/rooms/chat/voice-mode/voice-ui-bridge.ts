@@ -546,7 +546,7 @@ export function voiceTextFields(): VoiceTextField[] {
   return fields;
 }
 
-const composer = '[aria-label^="Message "]';
+const composer = "[data-chat-composer]";
 
 /**
  * Fills a text field as typing would: the native setter, then an input

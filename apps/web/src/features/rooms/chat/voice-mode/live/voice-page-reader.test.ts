@@ -29,7 +29,7 @@ beforeEach(() => {
         <li>Codex 10:21 <p>Build passed</p></li>
       </ul>
       <p>The release plan is still in review.</p>
-      <textarea aria-label="Message Room">Unsent draft</textarea>
+      <textarea aria-label="Message Room" data-chat-composer>Unsent draft</textarea>
     </main>
     <section aria-label="Voice Mode window"><p>Text in the voice window</p></section>`;
 });

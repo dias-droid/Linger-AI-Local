@@ -4,10 +4,14 @@ import { useState } from "react";
 import { localComputersQueryOptions } from "@/features/local-computer/local-computer-queries";
 import { localModelsQueryOptions } from "@/features/local-models/local-models-queries";
 import type { TeamHubClient } from "@/features/teamhub/teamhub-client";
+import { translate, type Translate } from "@/i18n/language";
+import type { Message } from "@/i18n/messages";
 import type {
   TeamHubAgentReasoningEffort,
   TeamHubTenantAgent,
 } from "@/features/teamhub/teamhub-types";
+
+import { composerMessages } from "../chat/composer.messages";
 
 interface RuntimeModel {
   id: string;
@@ -47,18 +51,22 @@ export function useAgentModelSelection(models: readonly RuntimeModel[]) {
   };
 }
 
-export function reasoningEffortLabel(value: TeamHubAgentReasoningEffort) {
-  return (
-    {
-      none: "None",
-      low: "Low",
-      medium: "Medium",
-      high: "High",
-      xhigh: "Extra high",
-      max: "Maximum",
-      ultra: "Ultra",
-    } satisfies Record<TeamHubAgentReasoningEffort, string>
-  )[value];
+export const reasoningEffortMessages = {
+  none: composerMessages.effortNone,
+  low: composerMessages.effortLow,
+  medium: composerMessages.effortMedium,
+  high: composerMessages.effortHigh,
+  xhigh: composerMessages.effortExtraHigh,
+  max: composerMessages.effortMaximum,
+  ultra: composerMessages.effortUltra,
+} satisfies Record<TeamHubAgentReasoningEffort, Message>;
+
+/** The effort's name; a component passes its own `t` to follow the language. */
+export function reasoningEffortLabel(
+  value: TeamHubAgentReasoningEffort,
+  t: Translate = translate,
+) {
+  return t(reasoningEffortMessages[value]);
 }
 
 /**

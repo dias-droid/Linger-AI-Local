@@ -266,7 +266,7 @@ build:assets` to check the initial JS budget.
     helpers.
   - A label on a translated surface follows the language, so CSS and DOM
     queries never select by its text. Use a class or a `data-*` marker such as
-    `data-voice-area`, not `[aria-label="…"]`.
+    `data-voice-area` and `data-chat-composer`, not `[aria-label="…"]`.
   - A translated control tells Voice Mode what clicking it does with a
     marker, never with words in its label: `data-voice-risk="never"` for
     deleting, removing, sending, leaving, signing out, paying, archiving or
@@ -276,6 +276,10 @@ build:assets` to check the initial JS budget.
     that closes its panel or dialog. An `ActionMenu` item takes `voiceRisk`.
     `voice-risk-markers.test.ts` fails when a control named by such a message
     lacks its marker.
+  - Text this client keeps beyond the screen (the Outbox, saved state) is
+    stored as a reason or a key and worded when it is shown, so it follows a
+    language switch and a reload. `pending-message-failure.ts` is the pattern:
+    the Outbox stores `failure.reason`, the hook words it with `t`.
   - Names and text that come from TeamHub or from people (Agent names, message
     previews, server error messages) are data and are shown as they are.
   - Add a language: add it to `LANGUAGES` and `catalogLoaders` in

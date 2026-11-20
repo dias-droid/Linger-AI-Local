@@ -53,7 +53,7 @@ elsewhere.
 | Reaction                      | 表情回应                   |                                                   |
 | Forward                       | 转发                       |                                                   |
 | Mention                       | 提及                       | `@` stays as it is.                               |
-| Member                        | 成员                       |                                                   |
+| Member, Person, People        | 成员                       | Also a Human's tag in the mention picker.         |
 | Owner                         | 所有者                     |                                                   |
 | Document                      | 文档                       |                                                   |
 | File                          | 文件                       |                                                   |
