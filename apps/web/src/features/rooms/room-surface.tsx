@@ -128,6 +128,19 @@ const ActorProfilePanel = lazy(async () => ({
   default: (await import("./members/actor-profile")).ActorProfilePanel,
 }));
 
+function loadRoomChatModule() {
+  return import("./chat/room-chat");
+}
+
+/** Preloads the Room chat chunk without surfacing rejections to route loaders. */
+export function preloadRoomChat(): Promise<unknown> {
+  return loadRoomChatModule().catch(() => {});
+}
+
+export const LazyRoomChat = lazy(async () => ({
+  default: (await loadRoomChatModule()).RoomChat,
+}));
+
 const EMPTY_ACTORS: TeamHubActor[] = [];
 const EMPTY_TENANT_AGENTS: TeamHubTenantAgent[] = [];
 const EMPTY_AVAILABILITY: TeamHubTenantAgentAvailabilitySnapshot[] = [];

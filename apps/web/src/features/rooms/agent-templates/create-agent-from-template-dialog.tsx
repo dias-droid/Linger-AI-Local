@@ -32,7 +32,7 @@ import {
   storeAgentAvatarKey,
 } from "../members/agent-avatar";
 import { AgentPlacementFields } from "../members/agent-placement-fields";
-import { loadAllManifestPages } from "../members/agent-resource-catalog";
+import { loadAllManifestPages } from "../members/manifest-pages";
 import {
   reasoningEffortLabel,
   useAgentModelSelection,

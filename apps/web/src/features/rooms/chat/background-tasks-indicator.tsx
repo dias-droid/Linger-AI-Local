@@ -1,16 +1,21 @@
 import { ArrowUp01Icon } from "@hugeicons/core-free-icons";
-import { useEffect, useId, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useId, useRef, useState } from "react";
 
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
 import type { TeamHubClient } from "@/features/teamhub/teamhub-client";
 import type { TeamHubRoomBackgroundTask } from "@/features/teamhub/teamhub-types";
-import { TaskConversationDialog } from "../task-sidebar/adapters/task-conversation-dialog";
 import { CancelTaskButton } from "./cancel-task-button";
 import {
   useCancelRoomBackgroundTask,
   useRoomBackgroundTasks,
 } from "./use-room-background-tasks";
+
+const TaskConversationDialog = lazy(() =>
+  import("../task-sidebar/adapters/task-conversation-dialog").then((m) => ({
+    default: m.TaskConversationDialog,
+  })),
+);
 
 /**
  * One floating line above the composer while this Room's Meta has background
@@ -43,13 +48,15 @@ export function BackgroundTasksIndicator({
         </div>
       ) : null}
       {opened ? (
-        <TaskConversationDialog
-          onClose={() => setOpened(undefined)}
-          originRoomId={roomId}
-          taskId={opened.id}
-          tenantId={tenantId}
-          title={opened.title}
-        />
+        <Suspense fallback={null}>
+          <TaskConversationDialog
+            onClose={() => setOpened(undefined)}
+            originRoomId={roomId}
+            taskId={opened.id}
+            tenantId={tenantId}
+            title={opened.title}
+          />
+        </Suspense>
       ) : null}
     </>
   );
