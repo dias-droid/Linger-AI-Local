@@ -137,6 +137,16 @@ elsewhere.
 | Official template             | 官方模板                   |                                                   |
 | Docs                          | 文档                       | The short form of Documents in search.            |
 | Search scope                  | 搜索范围                   | Messages, Members, Docs or Rooms.                 |
+| Folder                        | 文件夹                     |                                                   |
+| Upload / Import               | 上传 / 导入                |                                                   |
+| Rename                        | 重命名                     |                                                   |
+| Move (a file or folder)       | 移动                       |                                                   |
+| Duplicate                     | 创建副本                   | A copy beside the original.                       |
+| Owned by Me / My Documents    | 我的页面                   | Older names of My pages.                          |
+| Viewer / Editor / Manager     | 查看者 / 编辑者 / 管理者   | Roles on a shared Document.                       |
+| Expand / Collapse             | 展开 / 收起                | Never `关闭` for folding a tree.                  |
+| Trash                         | 回收站                     |                                                   |
+| Archives (file type)          | 压缩包                     | Compressed files; `归档` is the archive action.   |
 
 ## Style
 
