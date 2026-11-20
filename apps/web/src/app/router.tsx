@@ -46,6 +46,8 @@ import {
   type TeamHubClient,
 } from "@/features/teamhub/teamhub-client";
 import type { TeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
+import { commonMessages } from "@/i18n/common.messages";
+import { useT } from "@/i18n/use-translation";
 import {
   tenantWorkItemTargetQueryOptions,
   tenantWorkItemsDashboardQueryOptions,
@@ -756,6 +758,14 @@ function createSettingsRoute(): RouteObject {
         }),
         path: "models",
       },
+      {
+        lazy: async () => ({
+          Component: (
+            await import("@/features/settings/language-settings-page")
+          ).LanguageSettingsPage,
+        }),
+        path: "language",
+      },
       { loader: openModels, path: "local-models" },
       { loader: openProfile, path: "administration" },
     ],
@@ -771,14 +781,15 @@ function createSettingsRoute(): RouteObject {
 }
 
 export function InitialAppLoading() {
+  const t = useT();
   return (
     <main
       aria-busy="true"
-      aria-label="Loading TeamHub"
+      aria-label={t(commonMessages.loadingApp)}
       className="flex min-h-dvh items-center justify-center gap-2 bg-app-canvas text-sm text-app-muted"
     >
       <Spinner />
-      Loading Room...
+      {t(commonMessages.loadingRoom)}
     </main>
   );
 }

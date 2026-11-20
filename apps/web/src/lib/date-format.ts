@@ -1,9 +1,14 @@
 export const APP_LOCALE = "en-US";
 
+/**
+ * Text that is translated passes the locale of the language on screen
+ * (`formatLocale()` of `@/i18n/language`); everything else stays in English.
+ */
 export function dateTimeFormat(
   options?: Intl.DateTimeFormatOptions,
+  locale: string = APP_LOCALE,
 ): Intl.DateTimeFormat {
-  return new Intl.DateTimeFormat(APP_LOCALE, options);
+  return new Intl.DateTimeFormat(locale, options);
 }
 
 export function formatDateTime(
@@ -12,8 +17,9 @@ export function formatDateTime(
     dateStyle: "medium",
     timeStyle: "short",
   },
+  locale?: string,
 ): string {
-  return dateTimeFormat(options).format(new Date(value));
+  return dateTimeFormat(options, locale).format(new Date(value));
 }
 
 /** `YYYY-MM-DD` of the instant in the browser's time zone. Memory, Pocket Notes

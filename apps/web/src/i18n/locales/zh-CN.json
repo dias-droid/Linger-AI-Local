@@ -1,0 +1,26 @@
+{
+  "common": {
+    "close": "关闭",
+    "loadingApp": "正在加载 TeamHub",
+    "loadingRoom": "正在加载 Room…",
+    "unavailableTitle": "Web 客户端暂不可用",
+    "unavailableBody": "应用未能完成加载。",
+    "tryAgain": "重试"
+  },
+  "settings": {
+    "navigation": "设置导航",
+    "title": "设置",
+    "sections": "设置分区",
+    "profile": "个人资料",
+    "security": "安全",
+    "computers": "电脑",
+    "models": "模型",
+    "language": "语言",
+    "loadingComputers": "正在加载电脑",
+    "loadingContent": "正在加载内容",
+    "languageDescription": "选择 Linger 界面使用的语言。",
+    "interfaceLanguage": "界面语言",
+    "interfaceLanguageHint": "仅保存在这台设备上。Agent 和其他人写的内容保持原样，不会被翻译。",
+    "languageUnavailable": "无法加载这种语言，请检查网络后重试。"
+  }
+}

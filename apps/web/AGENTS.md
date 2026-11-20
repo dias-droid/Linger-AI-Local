@@ -74,6 +74,10 @@ build:assets` to check the initial JS budget.
   accounts for) when unloading models cannot free enough, and says a model
   cannot fit only when it needs more than the pool's total. A Computer's detail
   on the Computers page links here and reads no model state itself.
+- `src/i18n`: the interface languages (English and Simplified Chinese).
+  `messages.ts` is the React-free core, `language.ts` holds the language on
+  screen and the stored choice, `use-translation.tsx` is the React side, and
+  `locales/` holds one catalog per translated language plus its glossary.
 - `src/test`: unit-test support, including the in-process TeamHub test server.
 - `e2e`: Playwright product workflows; every spec runs on the real TeamHub and
   Document Runtime stack (`make check-e2e-room-document`).
@@ -236,3 +240,37 @@ build:assets` to check the initial JS budget.
   React Doctor catches this and it renders fine in unit tests, so assert the outcome
   (the wrapper carries the positioning, the clamped node carries no `block`) in a test
   and confirm that test fails when the utility is put back on the same element.
+- Interface text on a translated surface comes from a message, not a literal.
+  English is the source and the fallback: a string with no translation shows
+  its English text.
+  - Add a string: declare it in the feature's `*.messages.ts` with
+    `defineMessages("<namespace>", { name: "English text" })`, show it with
+    `const t = useT()` and `t(messages.name)`, and add the same
+    `<namespace>.<name>` to `src/i18n/locales/zh-CN.json` following
+    `src/i18n/locales/zh-CN.glossary.md`. `src/i18n/catalog.test.ts` fails when
+    a key, a `{placeholder}`, a `<tag>` or a plural form is missing from a
+    catalog, or when a catalog keeps a key the source no longer has.
+  - Values go in `{name}` placeholders (`t(m.space, { name })`); never join
+    translated fragments into a sentence, because word order differs. A count
+    is a plural message, `{ one: "{count} file", other: "{count} files" }`,
+    called with `count`; a catalog lists the plural forms of its own language.
+    An element inside a sentence is a `<name>…</name>` span rendered with
+    `RichMessage`, which keeps user-supplied text as text.
+  - Outside React (a toast, an error built in a helper) call `translate()`
+    when the text is shown, never at module load: a module-level string keeps
+    the language it was created in after the Human switches.
+  - Dates and numbers inside translated text take `formatLocale(language)`.
+    `lib/date-format.ts` stays on `APP_LOCALE` for surfaces that are still
+    English, so one screen does not mix an English sentence with a Chinese
+    date.
+  - Names and text that come from TeamHub or from people (Agent names, message
+    previews, server error messages) are data and are shown as they are.
+  - Add a language: add it to `LANGUAGES` and `catalogLoaders` in
+    `src/i18n/language.ts` and add `src/i18n/locales/<tag>.json`. Catalogs
+    load on demand, so English users download none.
+  - The choice is stored on the device (`localStorage["linger.language"]`);
+    an absent value means no explicit choice, which is English today. Tests
+    start in English: `src/test/setup.ts` resets the language after each test,
+    and a test of translated text reads the expected string from the catalog
+    instead of writing Chinese, which the repository gate allows only under
+    `src/i18n/locales/`.

@@ -169,7 +169,7 @@ describe("Settings surfaces", () => {
       within(settingsNav)
         .getAllByRole("link")
         .map((link) => link.textContent?.replace(/\s+/g, " ").trim()),
-    ).toEqual(["Profile", "Security", "Computers", "Models"]);
+    ).toEqual(["Profile", "Security", "Computers", "Models", "Language"]);
     expect(
       screen.queryByRole("button", { name: "Log out" }),
     ).not.toBeInTheDocument();
