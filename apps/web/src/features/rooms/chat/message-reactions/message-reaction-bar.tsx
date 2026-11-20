@@ -6,11 +6,11 @@ import type {
   TeamHubMessageReactionId,
 } from "@/features/teamhub/teamhub-types";
 import { commonMessages } from "@/i18n/common.messages";
-import { useT } from "@/i18n/use-translation";
+import { useTranslation } from "@/i18n/use-translation";
 
 import { chatMessages } from "../chat.messages";
 
-import { useReactionCatalog } from "./reaction-catalog";
+import { reactionName, useReactionCatalog } from "./reaction-catalog";
 import { animateTransform, animationsEnabled } from "./reaction-motion";
 
 /**
@@ -35,7 +35,7 @@ export function MessageReactionBar({
   message: TeamHubMessage;
   onToggle?: (reactionId: TeamHubMessageReactionId) => void;
 }) {
-  const t = useT();
+  const { language, t } = useTranslation();
   const catalog = useReactionCatalog();
   const reactions = catalog ? (message.reactions ?? []) : [];
   const rowRef = useRef<HTMLDivElement>(null);
@@ -125,7 +125,7 @@ export function MessageReactionBar({
                 <button
                   aria-label={t(chatMessages.reactionSummary, {
                     count,
-                    emoji: entry.name,
+                    emoji: reactionName(entry, language),
                     names: reactors,
                   })}
                   aria-pressed={own}

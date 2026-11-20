@@ -43,6 +43,7 @@ import emojiData from "@emoji-mart/data/sets/15/native.json";
 import {
   buildReactionCatalog,
   reactionCategoryLabel,
+  reactionName,
   searchReactionCatalog,
 } from "./reaction-catalog";
 import {
@@ -182,6 +183,17 @@ describe("Reaction state", () => {
     expect(
       searchReactionCatalog(catalog, "amour").map((entry) => entry.id),
     ).toEqual(["heart"]);
+  });
+
+  it("names a Reaction from the annotation only in its language", () => {
+    const catalog = buildReactionCatalog(emojiData, [
+      { hexcode: "1F44C", label: "annotated ok" },
+    ]);
+    const annotated = catalog.byId.get("ok_hand")!;
+    const plain = catalog.byId.get("tada")!;
+    expect(reactionName(annotated, "en")).toBe("Ok Hand");
+    expect(reactionName(annotated, "zh-CN")).toBe("annotated ok");
+    expect(reactionName(plain, "zh-CN")).toBe("Party Popper");
   });
 
   it("supports only ordinary chat Messages", () => {

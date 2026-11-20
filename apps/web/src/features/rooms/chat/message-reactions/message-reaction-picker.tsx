@@ -24,13 +24,14 @@ import { createPortal } from "react-dom";
 import { Icon, type IconSvgElement } from "@/components/ui/icon";
 import { Spinner } from "@/components/ui/spinner";
 import type { TeamHubMessageReactionId } from "@/features/teamhub/teamhub-types";
-import { useT } from "@/i18n/use-translation";
+import { useTranslation } from "@/i18n/use-translation";
 
 import { chatMessages } from "../chat.messages";
 
 import {
   reactionCategoryLabel,
   type ReactionCatalogEntry,
+  reactionName,
   searchReactionCatalog,
   useReactionCatalog,
 } from "./reaction-catalog";
@@ -94,7 +95,7 @@ export function MessageReactionPicker({
   onClose: () => void;
   onSelect: (id: TeamHubMessageReactionId) => void;
 }) {
-  const t = useT();
+  const { language, t } = useTranslation();
   const catalog = useReactionCatalog();
   const [expanded, setExpanded] = useState(false);
   const [query, setQuery] = useState("");
@@ -354,11 +355,11 @@ export function MessageReactionPicker({
           <>
             {quick.map((entry) => (
               <button
-                aria-label={entry.name}
+                aria-label={reactionName(entry, language)}
                 className="flex size-9 items-center justify-center rounded-full text-[22px] leading-none hover:bg-accent focus-visible:outline-2 focus-visible:outline-app-focus"
                 key={entry.id}
                 onClick={() => pick(entry)}
-                title={entry.name}
+                title={reactionName(entry, language)}
                 type="button"
               >
                 {entry.glyph}
@@ -478,7 +479,7 @@ export function MessageReactionPicker({
                     const isActive = flatIndex === activeIndex;
                     return (
                       <button
-                        aria-label={entry.name}
+                        aria-label={reactionName(entry, language)}
                         aria-selected={isActive}
                         className={`flex size-10 items-center justify-center rounded-md text-[22px] leading-none hover:bg-accent ${
                           isActive ? "bg-accent" : ""
@@ -489,7 +490,7 @@ export function MessageReactionPicker({
                         onMouseEnter={() => setActiveIndex(flatIndex)}
                         role="option"
                         tabIndex={-1}
-                        title={entry.name}
+                        title={reactionName(entry, language)}
                         type="button"
                       >
                         {entry.glyph}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import type { Translate } from "@/i18n/language";
+import type { Language, Translate } from "@/i18n/language";
 import type { Message } from "@/i18n/messages";
 
 import { chatMessages } from "../chat.messages";
@@ -31,6 +31,8 @@ export interface ReactionCatalogEntry {
   readonly id: string;
   readonly glyph: string;
   readonly name: string;
+  /** The CLDR name in the annotation language, when the set has one. */
+  readonly annotationName?: string;
   readonly keywords: readonly string[];
 }
 
@@ -76,10 +78,19 @@ export function reactionCategoryLabel(categoryId: string, t: Translate) {
 }
 
 // The emoji-mart dataset is English-only; CLDR Chinese annotations let
-// Chinese-speaking users search Reactions too. The path stays a literal so the
-// bundler emits one lazy chunk instead of one per emojibase locale.
+// Chinese-speaking users search Reactions too and name them in Chinese. The
+// path stays a literal so the bundler emits one lazy chunk instead of one per
+// emojibase locale.
 const loadReactionAnnotationLocale = () =>
   import("emojibase-data/zh/compact.json");
+const ANNOTATION_LANGUAGE: Language = "zh-CN";
+
+/** A Reaction's name in the language on screen; English without an annotation. */
+export function reactionName(entry: ReactionCatalogEntry, language: Language) {
+  return language === ANNOTATION_LANGUAGE && entry.annotationName
+    ? entry.annotationName
+    : entry.name;
+}
 
 // Both datasets spell the same code point sequence, but only emoji-mart keeps
 // the FE0F variation selector and uses lowercase hex.
@@ -114,6 +125,7 @@ export function buildReactionCatalog(
         id,
         glyph,
         name: emoji.name,
+        ...(annotation?.label ? { annotationName: annotation.label } : {}),
         keywords: [
           ...new Set([
             ...emoji.keywords,
