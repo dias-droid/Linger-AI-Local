@@ -29,6 +29,11 @@ const (
 // finishes. Tests lower it.
 var antigravityQuietWindow = 15 * time.Second
 
+// antigravityBackgroundLimit bounds that wait, since a production Run has no
+// budget and a background command, such as a server, may never finish.
+// Tests lower it.
+var antigravityBackgroundLimit = 30 * time.Minute
+
 // antigravityRuntime runs each Operation in its own `agy acp` process. The
 // conversation lives in Antigravity's own store and is reopened by id with
 // session/load, so no process is parked between turns.
@@ -287,9 +292,14 @@ func (t *antigravityTurn) exchange(prompt string, servers []any) Outcome {
 		Usage      *antigravityTokens `json:"usage"`
 	}
 	_ = json.Unmarshal(raw, &result)
-	if result.StopReason == "end_turn" && !t.awaitBackground() {
-		_, _ = t.cancelPrompt(session.SessionID)
-		result.StopReason = "cancelled"
+	if result.StopReason == "end_turn" {
+		switch err := t.awaitBackground(); {
+		case errors.Is(err, errACPClosed):
+			return failed("", "Antigravity exited before the turn finished")
+		case err != nil:
+			_, _ = t.cancelPrompt(session.SessionID)
+			result.StopReason = "cancelled"
+		}
 	}
 	outcome := Outcome{ElapsedMs: time.Since(started).Milliseconds()}
 	t.mu.Lock()
@@ -322,8 +332,11 @@ func (t *antigravityTurn) exchange(prompt string, servers []any) Outcome {
 // Antigravity moves a long command to the background, ends the turn, and
 // continues on its own once the command finishes; the process stops when the
 // Run ends, so the Run waits for every open tool call and then for the
-// session to go quiet. It reports false when the Run was cancelled first.
-func (t *antigravityTurn) awaitBackground() bool {
+// session to go quiet. It returns errACPClosed when Antigravity exits first
+// and the run context's error when the Run is cancelled first. After
+// antigravityBackgroundLimit the turn ends as it is, like a command that
+// never reports a terminal status.
+func (t *antigravityTurn) awaitBackground() error {
 	t.mu.Lock()
 	open := len(t.tools) > 0
 	if open {
@@ -332,24 +345,33 @@ func (t *antigravityTurn) awaitBackground() bool {
 	}
 	t.mu.Unlock()
 	if !open {
-		return true
+		return nil
 	}
 	if t.profile.Logger != nil {
 		t.profile.Logger.Info("runtime.turn.background_wait", "provider", "antigravity")
 	}
+	limit := time.NewTimer(antigravityBackgroundLimit)
+	defer limit.Stop()
 	tick := time.NewTicker(antigravityQuietWindow / 30)
 	defer tick.Stop()
 	for {
 		select {
 		case <-t.runCtx.Done():
-			return false
+			return t.runCtx.Err()
+		case <-t.proc.conn.closed:
+			return errACPClosed
+		case <-limit.C:
+			if t.profile.Logger != nil {
+				t.profile.Logger.Warn("runtime.turn.background_limit", "provider", "antigravity")
+			}
+			return nil
 		case <-tick.C:
 		}
 		t.mu.Lock()
 		settled := len(t.tools) == 0 && time.Since(t.lastUpdate) >= antigravityQuietWindow
 		t.mu.Unlock()
 		if settled {
-			return true
+			return nil
 		}
 	}
 }

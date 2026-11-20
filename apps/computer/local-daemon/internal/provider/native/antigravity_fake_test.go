@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -178,12 +179,18 @@ func (f *agyFakeProcess) prompt(id json.RawMessage, sessionID string) {
 	if f.mode == "hang" {
 		select {}
 	}
-	if f.mode == "background" {
+	if strings.HasPrefix(f.mode, "background") {
 		// Antigravity ends the turn while the command runs in the background
 		// and continues on its own once it finishes.
 		f.update(sessionID, map[string]any{"sessionUpdate": "agent_message_chunk", "content": map[string]any{"type": "text", "text": "Running in the background."}})
 		f.result(id, map[string]any{"stopReason": "end_turn"})
 		time.Sleep(50 * time.Millisecond)
+		switch f.mode {
+		case "background-exit":
+			os.Exit(0)
+		case "background-stuck":
+			select {}
+		}
 	}
 	f.update(sessionID, map[string]any{"sessionUpdate": "tool_call_update", "toolCallId": "call-1", "status": "completed", "content": []any{
 		map[string]any{"type": "content", "content": map[string]any{"type": "text", "text": "a.txt"}},

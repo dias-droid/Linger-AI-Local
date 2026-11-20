@@ -285,9 +285,11 @@ for a browser sign-in when signed out.
   and the Room shows the Agent working from that event. The executor can then
   no longer start a fresh session, so the adapter opens `session/new` in the
   same process and the terminal result carries the new session. Such a Run
-  announced the old session, so the Daemon declines one scheduler yield for it
-  and lets it finish. Agent Service sends a later Stop as its own cancel; a
-  resent yield cancels the Run. A Run that resumes after a yield ends as
+  announced the old session, so the Daemon declines every scheduler yield for
+  it, including the one Agent Service resends after a reconnect, and lets it
+  finish. Agent Service sends a later Stop as its own cancel with its own
+  reason. An Agent Service released before this sends no such cancel, so its
+  Stop cannot end such a Run. A Run that resumes after a yield ends as
   `session_not_found` instead. A Run yields to
   the scheduler only after native work, because its session holds no prompt
   before that.
@@ -300,7 +302,9 @@ for a browser sign-in when signed out.
   the Run ends, which would kill the command and lose the reply. So a turn
   that ends with an open tool call keeps the Run open. The Run ends once no
   tool call is open and the session has sent nothing for 15 seconds. ACP has
-  no event for the end of such a continuation.
+  no event for the end of such a continuation. If `agy` exits during the wait,
+  the Run fails. The wait ends after 30 minutes, because a backgrounded
+  server never finishes and a Run has no time budget.
 - The Run's reply is its last text message, even when tool calls follow it,
   because Agent Service reads the reply from the stream the same way.
 - The Daemon's instructions go in `_meta.antigravity.systemPrompt.append`, and

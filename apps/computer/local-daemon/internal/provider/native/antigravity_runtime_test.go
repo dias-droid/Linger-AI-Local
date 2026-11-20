@@ -450,3 +450,30 @@ func TestAntigravityWaitsForACommandItMovedToTheBackground(t *testing.T) {
 		t.Fatalf("the background command's result was lost: %+v", result)
 	}
 }
+
+func TestAntigravityEndsTheBackgroundWaitWhenAgyExits(t *testing.T) {
+	h := newAgyHarness(t, "background-exit", nil)
+	run, err := h.runtime.Start(t.Context(), "list files", RunSpec{Dir: h.dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, outcome := drainAgy(t, run)
+	if outcome.Status != statusFailed || outcome.Error != "Antigravity exited before the turn finished" {
+		t.Fatalf("outcome=%+v", outcome)
+	}
+}
+
+func TestAntigravityBoundsTheBackgroundWait(t *testing.T) {
+	limit := antigravityBackgroundLimit
+	antigravityBackgroundLimit = 300 * time.Millisecond
+	t.Cleanup(func() { antigravityBackgroundLimit = limit })
+	h := newAgyHarness(t, "background-stuck", nil)
+	run, err := h.runtime.Start(t.Context(), "list files", RunSpec{Dir: h.dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, outcome := drainAgy(t, run)
+	if outcome.Status != statusCompleted || outcome.Output != "Running in the background." {
+		t.Fatalf("outcome=%+v", outcome)
+	}
+}
