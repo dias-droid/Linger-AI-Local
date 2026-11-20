@@ -233,6 +233,14 @@ export async function downloadVerified(
         await response.body.cancel();
         throw new Error("Download size exceeds limit.");
       }
+      // The slow check compares transfer throughput, so its window starts
+      // when the response arrives. Time to first byte is not throughput,
+      // and the first host tried would otherwise be charged for cold-start
+      // latency that later hosts never pay.
+      clearTimeout(slowTimer);
+      windowBytes = 0;
+      windowStartedAt = performance.now();
+      scheduleSlowCheck();
       const reader = response.body.getReader();
       // Some bodies ignore the fetch signal; either abort still ends the read.
       let abortRead: (() => void) | undefined;
@@ -313,6 +321,10 @@ export async function downloadVerified(
         let slowLimit: SlowLimit | undefined;
         if (round === 0 && slowEnabled && active.length > 1) {
           if (bestSlowRate === undefined) {
+            // With nothing measured yet the last host runs without a
+            // limit: no faster host has been proven, so a limit here
+            // could only send the download back to a host that already
+            // yielded without delivering a byte.
             if (remainingHosts > 0) {
               slowLimit = {
                 afterMs: slowAfterMs,
@@ -344,24 +356,46 @@ export async function downloadVerified(
           continue;
         }
         if (outcome.status === "slow") {
-          measured.set(url, outcome.bytesPerSecond);
-          if (outcome.bytes > 0) anySlowProgress = true;
-          bestSlowRate =
-            bestSlowRate === undefined
-              ? outcome.bytesPerSecond
-              : Math.max(bestSlowRate, outcome.bytesPerSecond);
+          // A yield before the first byte carries no transfer rate: the
+          // host may only be slow to start. Recording it as a measured 0
+          // would disarm the speed check for every later host and let any
+          // of them displace the primary unproven.
+          if (outcome.bytes > 0) {
+            measured.set(url, outcome.bytesPerSecond);
+            bestSlowRate =
+              bestSlowRate === undefined
+                ? outcome.bytesPerSecond
+                : Math.max(bestSlowRate, outcome.bytesPerSecond);
+            anySlowProgress = true;
+          }
         }
       }
       if (round === 0 && measured.size > 0) {
         const primary = active[0];
-        const baseRate = primary ? (measured.get(primary) ?? 0) : 0;
+        const primaryRate = primary ? measured.get(primary) : undefined;
         let bestUrl = primary;
-        let bestRate = baseRate;
+        let bestRate = primaryRate ?? 0;
         for (const [url, rate] of measured) {
-          if (
-            rate > bestRate &&
-            (baseRate === 0 ? rate > 0 : rate >= baseRate * SLOW_SWITCH_RATIO)
-          ) {
+          if (url === primary || rate <= bestRate) continue;
+          // A challenger displaces the primary by clearing the bar by the
+          // switch ratio. The bar is the primary's own rate, or — when the
+          // primary yielded before its first byte and has no measurement —
+          // the best rate among the other measured hosts. With no other
+          // measurement the challenger is the only host that delivered
+          // bytes, so it displaces the unmeasured primary outright.
+          let bar = primaryRate;
+          if (bar === undefined) {
+            const others = [...measured]
+              .filter(([other]) => other !== url)
+              .map(([, otherRate]) => otherRate);
+            if (others.length === 0) {
+              bestUrl = url;
+              bestRate = rate;
+              continue;
+            }
+            bar = Math.max(...others);
+          }
+          if (rate >= bar * SLOW_SWITCH_RATIO) {
             bestUrl = url;
             bestRate = rate;
           }
