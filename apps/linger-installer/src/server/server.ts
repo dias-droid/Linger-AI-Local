@@ -423,26 +423,37 @@ export async function startInstallerServer(options: ServerOptions) {
         ) {
           const input = await body(req);
           const check = url.pathname === "/api/byok/check";
-          // Validate before the try, so a malformed body stays a plain 400.
-          const run = check
-            ? (() => {
-                const byok = validateByok(input);
-                return () =>
-                  checkByokEndpoint(
-                    options.home,
-                    byok,
-                    AbortSignal.timeout(45_000),
-                  );
-              })()
-            : (() => {
-                const endpoint = validateByokEndpoint(input);
-                return () =>
-                  listByokModels(
-                    options.home,
-                    endpoint,
-                    AbortSignal.timeout(30_000),
-                  );
-              })();
+          let run: () => Promise<unknown>;
+          try {
+            if (check) {
+              const byok = validateByok(input);
+              run = () =>
+                checkByokEndpoint(
+                  options.home,
+                  byok,
+                  AbortSignal.timeout(45_000),
+                );
+            } else {
+              const endpoint = validateByokEndpoint(input);
+              run = () =>
+                listByokModels(
+                  options.home,
+                  endpoint,
+                  AbortSignal.timeout(30_000),
+                );
+            }
+          } catch (invalid) {
+            // The form shows why its address or key was refused.
+            error(
+              res,
+              400,
+              "BYOK_INVALID_CONFIG",
+              invalid instanceof Error
+                ? invalid.message
+                : "Invalid BYOK configuration.",
+            );
+            return;
+          }
           try {
             json(res, 200, await run());
           } catch (failure) {
