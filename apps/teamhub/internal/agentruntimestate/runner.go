@@ -249,13 +249,7 @@ func (s *Service) RemoveLocalComputer(ctx context.Context, input LocalComputerCr
 		if assignedAgents > 0 {
 			return "has_agents", nil, nil
 		}
-		if err := queries.PurgeAgentRuntimeLocalComputerEnrollmentsByComputer(ctx, input.ComputerID); err != nil {
-			return "", nil, err
-		}
-		if err := queries.DeleteLocalComputerModelSnapshot(ctx, input.ComputerID); err != nil {
-			return "", nil, err
-		}
-		if _, err := queries.RemoveAgentRuntimeLocalComputer(ctx, input.ComputerID); err != nil {
+		if err := purgeAndRemoveLocalComputer(ctx, queries, input.ComputerID); err != nil {
 			return "", nil, err
 		}
 		return "removed", &input.Owner, nil
@@ -378,16 +372,23 @@ func removeOrphanLocalComputer(ctx context.Context, queries *store.Queries, owne
 	if err != nil || placedAgents > 0 {
 		return false, err
 	}
-	if err := queries.PurgeAgentRuntimeLocalComputerEnrollmentsByComputer(ctx, computerID); err != nil {
-		return false, err
-	}
-	if err := queries.DeleteLocalComputerModelSnapshot(ctx, computerID); err != nil {
-		return false, err
-	}
-	if _, err := queries.RemoveAgentRuntimeLocalComputer(ctx, computerID); err != nil {
+	if err := purgeAndRemoveLocalComputer(ctx, queries, computerID); err != nil {
 		return false, err
 	}
 	return true, nil
+}
+
+// purgeAndRemoveLocalComputer drops the Computer's enrollments and model
+// snapshot and marks it removed. Callers check ownership, status and Agents.
+func purgeAndRemoveLocalComputer(ctx context.Context, queries *store.Queries, computerID string) error {
+	if err := queries.PurgeAgentRuntimeLocalComputerEnrollmentsByComputer(ctx, computerID); err != nil {
+		return err
+	}
+	if err := queries.DeleteLocalComputerModelSnapshot(ctx, computerID); err != nil {
+		return err
+	}
+	_, err := queries.RemoveAgentRuntimeLocalComputer(ctx, computerID)
+	return err
 }
 
 func (s *Service) ConsumeLocalComputerEnrollment(ctx context.Context, input ConsumeLocalComputerEnrollmentInput) (ConsumeLocalComputerEnrollmentResult, error) {
