@@ -280,11 +280,14 @@ for a browser sign-in when signed out.
   stored is not a usable session: `session/load` accepts it, but the prompt
   then fails, so Linger never assigns one. A stored session replays at least
   the prompt that made it, so a load that replays no prompt, or that
-  Antigravity refuses, ends as `session_not_found` before the prompt is sent.
-  A resumed Run reports its turn-started event before `session/load`,
-  because loading takes seconds and the Room shows the Agent working from
-  that event. A Run yields to the scheduler only after native work, because
-  its session holds no prompt before that.
+  Antigravity refuses, finds no session. A resumed Run reports its
+  turn-started event before `session/load`, because loading takes seconds
+  and the Room shows the Agent working from that event. The executor can then
+  no longer start a fresh session, so the adapter opens `session/new` in the
+  same process and the terminal result carries the new session. A Run that
+  resumes after a yield ends as `session_not_found` instead. A Run yields to
+  the scheduler only after native work, because its session holds no prompt
+  before that.
 - A tool call is named by Antigravity's own tool name, such as
   `run_command`; its title is the whole command line, which the call's
   redacted input already shows.
@@ -294,7 +297,8 @@ for a browser sign-in when signed out.
   Context has one, with `execute` calls reviewed as shell commands from
   `rawInput.CommandLine`. A completed `run_command` whose `rawOutput.exit_code`
   is not zero finishes as failed. Otherwise
-  the adapter selects the allow option, as Pi runs without review.
+  the adapter selects the allow option, as the Runtime runs with the Agent's
+  full local authority.
 - Antigravity reports a model error, such as a rejected API key, as reply text
   and ends the turn with `end_turn`. With no structured signal, such a Run
   completes and the Room shows the text.

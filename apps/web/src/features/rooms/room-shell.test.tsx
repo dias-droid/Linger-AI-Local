@@ -714,7 +714,11 @@ describe("Room shell Tenant transition", () => {
     await renderAccountShell({
       initialEntry: "/t/tenant-northstar/rooms/room-all/chat",
     });
-    expect(markSpy).toHaveBeenCalledWith("room.shell_visible");
+    // The mark is a passive effect, which may run after the shell's DOM is
+    // found on a loaded runner.
+    await waitFor(() =>
+      expect(markSpy).toHaveBeenCalledWith("room.shell_visible"),
+    );
   });
 });
 

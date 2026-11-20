@@ -165,7 +165,9 @@ func (t *antigravityTurn) exchange(prompt string, servers []any) Outcome {
 	}
 	// A resumed session is known before agy loads it, which takes seconds,
 	// so the Run starts now; a new session reports its id once agy names it.
-	if spec.ResumeID != "" {
+	resumed := spec.ResumeID != ""
+	startedEarly := resumed && spec.ExposeTurnStarted
+	if startedEarly {
 		t.started(spec.ResumeID, started)
 	}
 	if err := acpInitialize(t.runCtx, conn); err != nil {
@@ -179,34 +181,60 @@ func (t *antigravityTurn) exchange(prompt string, servers []any) Outcome {
 	// one and replays it as updates, which the turn drops until its own
 	// prompt is sent.
 	method := "session/new"
-	if spec.ResumeID != "" {
+	if resumed {
 		method, params["sessionId"] = "session/load", spec.ResumeID
 	}
-	raw, err := acpOpenSession(t.runCtx, conn, t.profile.Env, func() (json.RawMessage, error) {
-		return conn.call(t.runCtx, method, params)
-	})
+	open := func() (json.RawMessage, error) {
+		return acpOpenSession(t.runCtx, conn, t.profile.Env, func() (json.RawMessage, error) {
+			return conn.call(t.runCtx, method, params)
+		})
+	}
+	raw, err := open()
 	if acpNeedsAuth(err) {
 		return failed("authentication_required", "Antigravity sign-in is required")
 	}
+	refusal := ""
 	var refused *acpError
-	if spec.ResumeID != "" && errors.As(err, &refused) {
-		return t.resumeRefused(failed("session_not_found", "Antigravity could not load session "+spec.ResumeID+": "+err.Error()))
-	}
-	if err != nil {
+	switch {
+	case resumed && errors.As(err, &refused):
+		refusal = "Antigravity could not load session " + spec.ResumeID + ": " + err.Error()
+	case err != nil:
 		return failed("", "Antigravity "+method+" failed: "+err.Error())
+	case resumed:
+		t.mu.Lock()
+		replayed := t.replayedPrompts
+		t.mu.Unlock()
+		// session/load accepts an id Antigravity never stored and only the
+		// prompt fails. A stored session holds at least the prompt of the
+		// turn that made it, so a load that replays no prompt found no
+		// session.
+		if replayed == 0 {
+			refusal = "Antigravity has no stored session " + spec.ResumeID
+		}
 	}
-	t.mu.Lock()
-	replayed := t.replayedPrompts
-	t.mu.Unlock()
-	// session/load accepts an id Antigravity never stored and only the
-	// prompt fails. A stored session holds at least the prompt of the turn
-	// that made it, so a load that replays no prompt found no session.
-	if spec.ResumeID != "" && replayed == 0 {
-		return t.resumeRefused(failed("session_not_found", "Antigravity has no stored session "+spec.ResumeID))
+	if refusal != "" {
+		// The Run already started on the retained session, so the executor
+		// can no longer continue it in a new one; this process does, and the
+		// terminal result carries the new session.
+		if !startedEarly || !spec.FreshSessionOnRefusal {
+			return t.resumeRefused(failed("session_not_found", refusal))
+		}
+		if t.profile.Logger != nil {
+			t.profile.Logger.Warn("runtime.session.fresh_start", "provider", "antigravity", "reason", "session_not_found")
+		}
+		resumed, method = false, "session/new"
+		delete(params, "sessionId")
+		raw, err = open()
+		if acpNeedsAuth(err) {
+			return failed("authentication_required", "Antigravity sign-in is required")
+		}
+		if err != nil {
+			return failed("", "Antigravity "+method+" failed: "+err.Error())
+		}
 	}
 	var session acpSession
 	if json.Unmarshal(raw, &session) != nil || session.SessionID == "" {
-		if spec.ResumeID == "" {
+		if !resumed {
 			return failed("", "Antigravity "+method+" returned no session")
 		}
 		session.SessionID = spec.ResumeID
@@ -229,7 +257,7 @@ func (t *antigravityTurn) exchange(prompt string, servers []any) Outcome {
 	t.mu.Unlock()
 	dispatched := time.Now()
 	t.requests.begin("", dispatched)
-	if spec.ResumeID == "" {
+	if !startedEarly {
 		t.started(session.SessionID, dispatched)
 	}
 	raw, err = conn.call(t.runCtx, "session/prompt", map[string]any{

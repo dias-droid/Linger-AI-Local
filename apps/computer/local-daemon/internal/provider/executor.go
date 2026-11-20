@@ -566,6 +566,7 @@ func (e Executor) Start(ctx context.Context, spec OperationSpec, emit EmitFunc) 
 			AssignSessionID:       spec.CreateProviderSessionID,
 			ResumeID:              spec.ResumeSessionID,
 			ResumeRequired:        spec.ResumeSessionID != "",
+			FreshSessionOnRefusal: !spec.ResumeAfterYield,
 			Budget:                spec.Timeout,
 			ComputerArgs:          append([]string(nil), spec.ExtraArgs...),
 			AgentArgs:             append([]string(nil), spec.CustomArgs...),

@@ -87,12 +87,16 @@ type Profile struct {
 }
 
 type RunSpec struct {
-	Dir                   string
-	Model                 string
-	Budget                time.Duration
-	ResumeID              string
-	AssignSessionID       string
-	ResumeRequired        bool
+	Dir             string
+	Model           string
+	Budget          time.Duration
+	ResumeID        string
+	AssignSessionID string
+	ResumeRequired  bool
+	// FreshSessionOnRefusal lets a Runtime that reported its turn started
+	// before its retained session loaded continue in a new session when the
+	// session is gone, as the executor does for one that reported nothing.
+	FreshSessionOnRefusal bool
 	PrepareOnly           bool
 	WarmMCP               bool
 	MCPReady              func(context.Context) error

@@ -401,3 +401,27 @@ func TestAntigravityStartsAResumedRunBeforeTheSessionLoads(t *testing.T) {
 	cancel()
 	drainAgy(t, run)
 }
+
+func TestAntigravityContinuesAnEarlyStartedRunInANewSession(t *testing.T) {
+	h := newAgyHarness(t, "unknown-session", nil)
+	run, err := h.runtime.Start(t.Context(), "again", RunSpec{Dir: h.dir, ResumeID: "moved-session", ExposeTurnStarted: true, FreshSessionOnRefusal: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, outcome := drainAgy(t, run)
+	if outcome.Status != statusCompleted || outcome.SessionID != "fake-session" {
+		t.Fatalf("outcome=%+v", outcome)
+	}
+	var starts []Event
+	for _, event := range events {
+		if event.Kind == EventStatus && event.TurnID != "" {
+			starts = append(starts, event)
+		}
+	}
+	if len(starts) != 1 || starts[0].SessionID != "moved-session" {
+		t.Fatalf("turn-started events=%+v", starts)
+	}
+	if requests := h.requests(t); len(requests["session/new"]) != 1 || len(requests["session/prompt"]) != 1 {
+		t.Fatalf("requests=%v", requests)
+	}
+}
