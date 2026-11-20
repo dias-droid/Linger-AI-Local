@@ -294,6 +294,13 @@ for a browser sign-in when signed out.
 - A tool call is named by Antigravity's own tool name, such as
   `run_command`; its title is the whole command line, which the call's
   redacted input already shows.
+- `run_command` moves a command that outlasts its `WaitMsBeforeAsync` to the
+  background and ends the turn with `end_turn`. Once the command finishes,
+  Antigravity continues on its own with no new prompt. The process stops when
+  the Run ends, which would kill the command and lose the reply. So a turn
+  that ends with an open tool call keeps the Run open. The Run ends once no
+  tool call is open and the session has sent nothing for 15 seconds. ACP has
+  no event for the end of such a continuation.
 - The Daemon's instructions go in `_meta.antigravity.systemPrompt.append`, and
   its MCP servers in the session's `mcpServers`.
 - `session/request_permission` goes to the Run's permission review when the

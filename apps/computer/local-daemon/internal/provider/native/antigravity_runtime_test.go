@@ -426,3 +426,27 @@ func TestAntigravityContinuesAnEarlyStartedRunInANewSession(t *testing.T) {
 		t.Fatalf("requests=%v", requests)
 	}
 }
+
+func TestAntigravityWaitsForACommandItMovedToTheBackground(t *testing.T) {
+	quiet := antigravityQuietWindow
+	antigravityQuietWindow = 300 * time.Millisecond
+	t.Cleanup(func() { antigravityQuietWindow = quiet })
+	h := newAgyHarness(t, "background", nil)
+	run, err := h.runtime.Start(t.Context(), "list files", RunSpec{Dir: h.dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, outcome := drainAgy(t, run)
+	if outcome.Status != statusCompleted || outcome.Output != "Found a.txt" {
+		t.Fatalf("outcome=%+v", outcome)
+	}
+	var result Event
+	for _, event := range events {
+		if event.Kind == EventToolOutput {
+			result = event
+		}
+	}
+	if result.Output != "a.txt" || result.Status != "completed" {
+		t.Fatalf("the background command's result was lost: %+v", result)
+	}
+}

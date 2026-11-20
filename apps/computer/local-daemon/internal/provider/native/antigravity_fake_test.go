@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 )
 
 // The test binary doubles as a fake `agy acp` when agyFakeEnv names a mode.
@@ -177,10 +178,20 @@ func (f *agyFakeProcess) prompt(id json.RawMessage, sessionID string) {
 	if f.mode == "hang" {
 		select {}
 	}
+	if f.mode == "background" {
+		// Antigravity ends the turn while the command runs in the background
+		// and continues on its own once it finishes.
+		f.update(sessionID, map[string]any{"sessionUpdate": "agent_message_chunk", "content": map[string]any{"type": "text", "text": "Running in the background."}})
+		f.result(id, map[string]any{"stopReason": "end_turn"})
+		time.Sleep(50 * time.Millisecond)
+	}
 	f.update(sessionID, map[string]any{"sessionUpdate": "tool_call_update", "toolCallId": "call-1", "status": "completed", "content": []any{
 		map[string]any{"type": "content", "content": map[string]any{"type": "text", "text": "a.txt"}},
 	}})
 	f.update(sessionID, map[string]any{"sessionUpdate": "agent_message_chunk", "content": map[string]any{"type": "text", "text": "Found "}})
 	f.update(sessionID, map[string]any{"sessionUpdate": "agent_message_chunk", "content": map[string]any{"type": "text", "text": "a.txt"}})
+	if f.mode == "background" {
+		return
+	}
 	f.result(id, map[string]any{"stopReason": "end_turn", "usage": map[string]any{"inputTokens": 10, "outputTokens": 4, "thoughtTokens": 2, "cachedReadTokens": 3}})
 }

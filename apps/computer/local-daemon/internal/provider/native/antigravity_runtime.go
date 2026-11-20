@@ -23,6 +23,12 @@ const (
 	antigravityEventBuffer  = 256
 )
 
+// antigravityQuietWindow is how long a session with no open tool call must
+// stay silent before a background continuation counts as finished.
+// Antigravity starts the continuation about four seconds after the command
+// finishes. Tests lower it.
+var antigravityQuietWindow = 15 * time.Second
+
 // antigravityRuntime runs each Operation in its own `agy acp` process. The
 // conversation lives in Antigravity's own store and is reopened by id with
 // session/load, so no process is parked between turns.
@@ -110,6 +116,8 @@ type antigravityTurn struct {
 	textID          string
 	output          strings.Builder
 	tools           map[string]bool
+	// lastUpdate is when the prompted session last reported anything.
+	lastUpdate time.Time
 }
 
 func (t *antigravityTurn) emit(event Event) {
@@ -279,6 +287,10 @@ func (t *antigravityTurn) exchange(prompt string, servers []any) Outcome {
 		Usage      *antigravityTokens `json:"usage"`
 	}
 	_ = json.Unmarshal(raw, &result)
+	if result.StopReason == "end_turn" && !t.awaitBackground() {
+		_, _ = t.cancelPrompt(session.SessionID)
+		result.StopReason = "cancelled"
+	}
 	outcome := Outcome{ElapsedMs: time.Since(started).Milliseconds()}
 	t.mu.Lock()
 	outcome.Output = strings.TrimSpace(t.output.String())
@@ -303,6 +315,43 @@ func (t *antigravityTurn) exchange(prompt string, servers []any) Outcome {
 		outcome.Status, outcome.Error = statusFailed, "Antigravity stopped the turn: "+result.StopReason
 	}
 	return outcome
+}
+
+// awaitBackground holds a turn that ended while a tool call still runs.
+// Antigravity moves a long command to the background, ends the turn, and
+// continues on its own once the command finishes; the process stops when the
+// Run ends, so the Run waits for every open tool call and then for the
+// session to go quiet. It reports false when the Run was cancelled first.
+func (t *antigravityTurn) awaitBackground() bool {
+	t.mu.Lock()
+	open := len(t.tools) > 0
+	if open {
+		// The continuation is a new message; the reply is the last one.
+		t.textID = ""
+		t.output.Reset()
+	}
+	t.mu.Unlock()
+	if !open {
+		return true
+	}
+	if t.profile.Logger != nil {
+		t.profile.Logger.Info("runtime.turn.background_wait", "provider", "antigravity")
+	}
+	tick := time.NewTicker(antigravityQuietWindow / 30)
+	defer tick.Stop()
+	for {
+		select {
+		case <-t.runCtx.Done():
+			return false
+		case <-tick.C:
+		}
+		t.mu.Lock()
+		settled := len(t.tools) == 0 && time.Since(t.lastUpdate) >= antigravityQuietWindow
+		t.mu.Unlock()
+		if settled {
+			return true
+		}
+	}
 }
 
 // cancelPrompt asks Antigravity to end the running prompt. The process is
@@ -407,6 +456,9 @@ func (t *antigravityTurn) update(params json.RawMessage, observed time.Time) {
 	prompting := t.prompting
 	if !prompting && update.SessionUpdate == "user_message_chunk" {
 		t.replayedPrompts++
+	}
+	if prompting {
+		t.lastUpdate = observed
 	}
 	t.mu.Unlock()
 	if !prompting {
