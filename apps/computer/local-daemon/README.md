@@ -503,20 +503,24 @@ On macOS, `click` takes `delivery_mode: "foreground"` and `action`: the first fo
 The macOS and Linux developer instructions identify the public entry. Codex
 0.163.0 and later calls the public tools directly, outside code mode and
 deferred tool search. Earlier versions use their standard tool discovery.
-Web tools depend on where the Runtime's model is served. On a subscription,
-Claude Code keeps `WebSearch` and `WebFetch`, deferred behind `ToolSearch`, so
-its developer instructions name them and how to load them; Codex keeps its own
-`web_search`. Both are also told that `teamhub web search` and `teamhub web open`
-search and read through the search providers the user set up, or DuckDuckGo
-without a key. A Runtime whose
-profile is a localmodels-managed gateway profile (local models or BYOK, see
-`localmodels.GatewayRuntime`) cannot run provider-hosted search: Codex launches
-with `web_search="disabled"` after every user override, Claude's `--tools` leaves
-out `WebSearch` and `WebFetch`, and the instructions name only `teamhub web
-search`, `open` and `list`. Pi has no web tools of its own and always gets that
-`teamhub web` line. Without a TeamHub CLI for the Agent, only Claude's own tools
-are named. A parked Codex process launched with the other web setting is not
-reused.
+Web tools depend on the link the Runtime reaches its model through
+(`RuntimeModel.Link`). On a vendor subscription, Claude Code keeps `WebSearch`
+and `WebFetch`, deferred behind `ToolSearch`, so its developer instructions name
+them and how to load them; Codex keeps its own `web_search`. Both are told to
+use their own tools first and, when those fail, `teamhub web search` and
+`teamhub web open`, which search and read through the search providers the user
+set up, or DuckDuckGo without a key. On an API link, an endpoint and key set up
+in the Runtime's own configuration, provider-hosted search may not run, so the
+instructions name `teamhub web search`, `open` and `list` and tell the model to
+use them instead of its own web tools. A Runtime whose profile is a
+localmodels-managed gateway profile (local models or BYOK, see
+`localmodels.GatewayRuntime`) is on an API link that cannot run provider-hosted
+search at all: Codex launches with `web_search="disabled"` after every user
+override, Claude's `--tools` leaves out `WebSearch` and `WebFetch`, and the
+instructions name only the `teamhub web` commands. Pi has no web tools of its
+own and always gets that `teamhub web` line. Without a TeamHub CLI for the
+Agent, only Claude's own tools are named. A parked Codex process launched with
+the other web setting is not reused.
 
 On macOS these tools show only the fields the Computer routes. They hide Cua's `scope` and `capture_id`; only `click` takes `delivery_mode`, as described above.
 Within `ui_exec`, scripts can call individual input methods. An input to a

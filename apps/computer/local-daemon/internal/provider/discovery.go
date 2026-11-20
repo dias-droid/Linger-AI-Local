@@ -52,6 +52,10 @@ type RuntimeModel struct {
 	resolved string
 }
 
+// OnAPILink reports whether the Runtime reaches the model through an API
+// gateway and key in its own configuration rather than a vendor subscription.
+func (m RuntimeModel) OnAPILink() bool { return m.Link == linkAPI }
+
 type DiagnosticError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`

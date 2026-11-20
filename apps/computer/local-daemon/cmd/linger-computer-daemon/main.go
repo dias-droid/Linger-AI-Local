@@ -745,10 +745,12 @@ func providerInstallations(discovered provider.DiscoveryResult, environment map[
 				contextWindows[model.ID] = model.ContextWindow
 			}
 		}
+		gateway := localmodels.GatewayRuntime(environment, localModelsStateDir, runtimeType)
 		providers[runtimeType] = lingercontext.ProviderInstallation{
 			Type: runtimeType, ExecutablePath: diagnostic.ExecutablePath, EntryPath: diagnostic.EntryPath,
 			Environment: runtimeEnvironment, Version: diagnostic.Version, ContextWindows: contextWindows,
-			ModelGateway: localmodels.GatewayRuntime(environment, localModelsStateDir, runtimeType),
+			ModelGateway: gateway,
+			APILink:      gateway || slices.ContainsFunc(diagnostic.Models, provider.RuntimeModel.OnAPILink),
 		}
 		runtimes = append(runtimes, runtimeType)
 	}

@@ -236,6 +236,23 @@ func TestProviderInstallationsKeepDiscoveredContextWindows(t *testing.T) {
 	}
 }
 
+func TestProviderInstallationsMarkTheAPILink(t *testing.T) {
+	discovered := provider.DiscoveryResult{Installations: map[string]provider.RuntimeDiagnostic{
+		"codex":  {Type: "codex", ExecutablePath: "/bin/codex", Models: []provider.RuntimeModel{{ID: "gpt", Link: "api"}}},
+		"claude": {Type: "claude", ExecutablePath: "/bin/claude", Models: []provider.RuntimeModel{{ID: "opus", Link: "subscription"}}},
+	}}
+	installations, _ := providerInstallations(discovered, nil, "")
+	if !installations["codex"].APILink || installations["claude"].APILink {
+		t.Fatalf("API links = codex %v, claude %v", installations["codex"].APILink, installations["claude"].APILink)
+	}
+	state := t.TempDir()
+	gateway := map[string]string{"CLAUDE_CONFIG_DIR": filepath.Join(state, "byok-home", ".claude")}
+	installations, _ = providerInstallations(discovered, gateway, state)
+	if claude := installations["claude"]; !claude.ModelGateway || !claude.APILink {
+		t.Fatalf("gateway Claude = %+v", claude)
+	}
+}
+
 func TestByokRuntimeCatalogsShowTheEnteredModel(t *testing.T) {
 	diagnostics := []provider.RuntimeDiagnostic{
 		{Type: "claude", Models: []provider.RuntimeModel{

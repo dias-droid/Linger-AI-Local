@@ -297,34 +297,38 @@ func TestExecutionResolverNamesClaudeWebTools(t *testing.T) {
 	}
 }
 
-func TestWebToolGuideFollowsTheModelSource(t *testing.T) {
+func TestWebToolGuideFollowsTheModelLink(t *testing.T) {
 	cases := []struct {
-		runtimeType   string
-		gateway, cli  bool
-		want, notWant string
+		runtimeType           string
+		apiLink, gateway, cli bool
+		want, notWant         string
 	}{
-		{"claude", false, true, "select:WebSearch,WebFetch", ""},
-		{"claude", false, true, "also search the web", ""},
-		{"codex", false, true, "besides your built-in web search", "select:WebSearch"},
-		{"claude", true, true, "Web tools: search the web with `teamhub web search <query>`", "WebFetch"},
-		{"codex", true, true, "`teamhub web list`", "built-in"},
-		{"pi", false, true, "`teamhub web open <url>`", "built-in"},
-		{"claude", false, false, "select:WebSearch,WebFetch", "teamhub"},
+		{"claude", false, false, true, "select:WebSearch,WebFetch", ""},
+		{"claude", false, false, true, "Use them first. If that fails, `teamhub web search <query>`", ""},
+		{"codex", false, false, true, "use your built-in web search first. If that fails, `teamhub web search", "select:WebSearch"},
+		{"claude", true, false, true, "instead of your built-in web search and fetch tools", "select:WebSearch"},
+		{"codex", true, false, true, "Web tools: search the web with `teamhub web search <query>`", "first"},
+		{"claude", true, true, true, "Web tools: search the web with `teamhub web search <query>`", "built-in"},
+		{"codex", true, true, true, "`teamhub web list`", "built-in"},
+		{"pi", false, false, true, "`teamhub web open <url>`", "built-in"},
+		{"pi", true, false, true, "`teamhub web open <url>`", "built-in"},
+		{"claude", false, false, false, "select:WebSearch,WebFetch", "teamhub"},
+		{"claude", true, false, false, "select:WebSearch,WebFetch", "teamhub"},
 	}
 	for _, c := range cases {
-		guide := webToolGuide(c.runtimeType, c.gateway, c.cli)
+		guide := webToolGuide(c.runtimeType, c.apiLink, c.gateway, c.cli)
 		if !strings.Contains(guide, c.want) || (c.notWant != "" && strings.Contains(guide, c.notWant)) {
-			t.Fatalf("webToolGuide(%s, gateway=%v, cli=%v) = %q", c.runtimeType, c.gateway, c.cli, guide)
+			t.Fatalf("webToolGuide(%s, api=%v, gateway=%v, cli=%v) = %q", c.runtimeType, c.apiLink, c.gateway, c.cli, guide)
 		}
 	}
-	if webToolGuide("codex", true, false) != "" || webToolGuide("pi", false, false) != "" {
+	if webToolGuide("codex", true, true, false) != "" || webToolGuide("pi", false, false, false) != "" {
 		t.Fatal("a guide named teamhub without the TeamHub CLI")
 	}
 }
 
 func TestExecutionResolverTurnsOffNativeWebToolsOnTheGateway(t *testing.T) {
 	resolver := ExecutionResolver{
-		Providers:       map[string]ProviderInstallation{"claude": {Type: "claude", ExecutablePath: "/local/bin/claude", ModelGateway: true}},
+		Providers:       map[string]ProviderInstallation{"claude": {Type: "claude", ExecutablePath: "/local/bin/claude", ModelGateway: true, APILink: true}},
 		WorkspaceGrants: map[string]WorkspaceGrant{"grant-local": {GrantID: "grant-local", TenantID: "tenant-acme", Path: "/local/workspace"}},
 		Views:           testContextViews{root: "/local/workspace"},
 		Registrations: map[string]RegistrationBinding{

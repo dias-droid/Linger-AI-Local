@@ -32,6 +32,12 @@ type ProviderInstallation struct {
 	// provider-hosted web search, so the Runtime's own web tools stay off and
 	// the Agent searches with the TeamHub CLI.
 	ModelGateway bool
+	// APILink marks a Runtime that reaches its models through an API gateway
+	// and key rather than a vendor subscription: the localmodels gateway or
+	// one the user set up in the Runtime's own configuration. Provider-hosted
+	// web search may not run there, so its Agents are told to search with the
+	// TeamHub CLI. Codex and Claude reach every model through one link.
+	APILink bool
 }
 
 type WorkspaceGrant struct {
@@ -48,33 +54,42 @@ type RegistrationBinding struct {
 	Status         registration.Status
 }
 
-// claudeWebToolGuide names Claude's web tools for every Operation. Claude Code
+// claudeWebToolGuide names Claude's own web tools when it uses them. Claude Code
 // defers their definitions behind ToolSearch, so without it the model often
 // does not think to search the web, as with the Computer tools in ToolGuide.
 const claudeWebToolGuide = `Web tools: WebSearch searches the web and WebFetch reads one page. They are loaded on demand: before the first call, load them with ToolSearch (query "select:WebSearch,WebFetch").`
 
-// teamHubWebSupplement follows a subscription Runtime's own web tools.
-const teamHubWebSupplement = "`teamhub web search <query>` and `teamhub web open <url>` also search the web and read pages, through the search providers the user set up, or DuckDuckGo without a key."
+// teamHubWebFallback follows a subscription Runtime's own web tools, which it
+// is told to use first.
+const teamHubWebFallback = "If that fails, `teamhub web search <query>` and `teamhub web open <url>` search the web and read pages through the search providers the user set up, or DuckDuckGo without a key."
 
-// teamHubWebToolGuide is the only web access of Pi and of a Runtime on local
-// models or BYOK.
+// teamHubWebToolGuide is the web access of Pi and of a Runtime on an API link.
 const teamHubWebToolGuide = "Web tools: search the web with `teamhub web search <query>` and read one page as Markdown with `teamhub web open <url>`; `teamhub web list` shows the search backends and which are ready. Run `teamhub web search --help` for filters."
 
-// webToolGuide describes the web tools an Operation has. Without the TeamHub
-// CLI only Claude's own tools are named.
-func webToolGuide(runtimeType string, modelGateway, teamHubCLI bool) string {
-	native := !modelGateway && (runtimeType == "claude" || runtimeType == "codex")
+// teamHubWebOverOwnTools follows teamHubWebToolGuide for a Runtime on an API
+// link that still has its own web tools.
+const teamHubWebOverOwnTools = "Use them instead of your built-in web search and fetch tools, which may not work through the API this model is served by."
+
+// webToolGuide describes the web tools an Operation has. A Runtime on a
+// vendor subscription uses its own web tools first and the TeamHub CLI when
+// they fail; one on an API link uses the TeamHub CLI, and on the localmodels
+// gateway it has no web tools of its own. Without the TeamHub CLI only
+// Claude's own tools are named.
+func webToolGuide(runtimeType string, apiLink, modelGateway, teamHubCLI bool) string {
+	ownTools := !modelGateway && (runtimeType == "claude" || runtimeType == "codex")
 	switch {
-	case !teamHubCLI && native && runtimeType == "claude":
+	case !teamHubCLI && ownTools && runtimeType == "claude":
 		return claudeWebToolGuide
 	case !teamHubCLI:
 		return ""
-	case native && runtimeType == "claude":
-		return claudeWebToolGuide + " " + teamHubWebSupplement
-	case native:
-		return "Web tools: besides your built-in web search, " + teamHubWebSupplement
-	default:
+	case !ownTools:
 		return teamHubWebToolGuide
+	case apiLink:
+		return teamHubWebToolGuide + " " + teamHubWebOverOwnTools
+	case runtimeType == "claude":
+		return claudeWebToolGuide + " Use them first. " + teamHubWebFallback
+	default:
+		return "Web tools: use your built-in web search first. " + teamHubWebFallback
 	}
 }
 
@@ -178,7 +193,8 @@ func (r ExecutionResolver) Resolve(ctx context.Context, command protocol.Command
 	if err != nil {
 		return provider.OperationSpec{}, err
 	}
-	webGuide := webToolGuide(command.RuntimeType, installation.ModelGateway, cliInstalled && r.TeamHubCLIBin != "")
+	webGuide := webToolGuide(command.RuntimeType, installation.APILink, installation.ModelGateway,
+		cliInstalled && r.TeamHubCLIBin != "")
 	if webGuide != "" {
 		developerInstructions = strings.TrimSpace(developerInstructions + "\n\n" + webGuide)
 	}
