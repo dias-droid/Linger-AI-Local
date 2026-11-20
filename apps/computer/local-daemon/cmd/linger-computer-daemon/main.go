@@ -288,9 +288,7 @@ func run(args []string) (resultErr error) {
 		} else if runtime.GOOS == "linux" {
 			resolver.ToolGuide = localtools.NativeLinuxToolGuide
 		}
-		if toolManager.ConnectsEverydayBrowser() {
-			browserConnections = toolManager
-		}
+		browserConnections = toolManager
 		defer func() { resultErr = errors.Join(resultErr, toolManager.Close()) }()
 	}
 	// The Desktop app owns stdio: stdin carries its hello and permission

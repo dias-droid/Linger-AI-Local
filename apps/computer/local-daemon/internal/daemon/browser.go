@@ -53,7 +53,12 @@ func (d *Daemon) handleBrowserCommand(ctx context.Context, stream transport.Stre
 	case !request.ExpiresAt.After(time.Now()):
 		fail("BROWSER_CONNECTION_EXPIRED", "the browser connection request expired; try again", true)
 	case d.browserConnections == nil:
-		fail("BROWSER_CONNECTION_UNSUPPORTED", "this Computer cannot connect an everyday browser", false)
+		if request.Action == "status" {
+			result["outcome"] = wire.OutcomeSucceeded
+			result["status"] = localtools.UnsupportedBrowserStatus()
+		} else {
+			fail("BROWSER_CONNECTION_UNSUPPORTED", "this Computer cannot connect an everyday browser", false)
+		}
 	default:
 		// The Gateway stops waiting at expires_at. Work past it would store a
 		// token after the owner already saw the request fail.

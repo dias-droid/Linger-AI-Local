@@ -4,15 +4,18 @@ import "./room-document-blocknote.css";
 import "@/components/knowledge-document.css";
 
 import { CommentsExtension } from "@blocknote/core/comments";
+import { FormattingToolbarExtension } from "@blocknote/core/extensions";
 import { BlockNoteView } from "@blocknote/mantine";
 import {
   FilePanel,
   FilePanelController,
+  FormattingToolbarController,
   SuggestionMenuController,
   type FilePanelProps,
   useBlockNoteEditor,
   useComponentsContext,
   useCreateBlockNote,
+  useExtensionState,
 } from "@blocknote/react";
 import { useQuery } from "@tanstack/react-query";
 import { TextSelection } from "@tiptap/pm/state";
@@ -487,6 +490,7 @@ export function RoomDocumentBlockNoteEditor({
         editable={editable}
         editor={editor}
         filePanel={false}
+        formattingToolbar={false}
         onChange={(changedEditor) => {
           imagePreviewStore.reconcile(changedEditor);
           setIsEmptyDocument(
@@ -507,6 +511,9 @@ export function RoomDocumentBlockNoteEditor({
         slashMenu={false}
         theme="light"
       >
+        <RoomDocumentFormattingToolbar
+          pendingSelection={readOnlyCommentPending}
+        />
         <SuggestionMenuController
           floatingUIOptions={{
             elementProps: { className: "room-document-slash-popover" },
@@ -699,6 +706,37 @@ function DocumentCommentsControl({
       {controller}
     </RoomDocumentCommentsOpenProvider>
   );
+}
+
+/**
+ * Suppresses BlockNote's floating formatting toolbar while a comment thread is
+ * being drafted so transactions from pending-comment highlights cannot reopen
+ * it over the Comments sidebar.
+ */
+function RoomDocumentFormattingToolbar({
+  pendingSelection,
+}: {
+  pendingSelection: boolean;
+}) {
+  const editor = useBlockNoteEditor();
+  const formattingToolbar = editor.getExtension(FormattingToolbarExtension);
+  const { pendingComment } = useExtensionState(CommentsExtension);
+  const suppressed = pendingComment || pendingSelection;
+
+  useEffect(() => {
+    if (!formattingToolbar || !suppressed) return;
+    formattingToolbar.store.setState(false);
+    return formattingToolbar.store.subscribe(() => {
+      if (formattingToolbar.store.state) {
+        formattingToolbar.store.setState(false);
+      }
+    });
+  }, [formattingToolbar, suppressed]);
+
+  if (!formattingToolbar || suppressed) {
+    return null;
+  }
+  return <FormattingToolbarController />;
 }
 
 function extractDocumentHeadings(

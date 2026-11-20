@@ -140,6 +140,84 @@ describe("Library Home", () => {
     expect(screen.queryByText(/blocknote/i)).not.toBeInTheDocument();
   });
 
+  it("omits Visible in Personal Wiki on non-indexable binary Recent cards", async () => {
+    const runtime = createDocumentTestRuntime();
+    const baseNote = seedNativeDocument(runtime, "wiki-note");
+    const indexable = {
+      ...baseNote,
+      current_version: null,
+      from: [
+        {
+          binding_kind: "wiki_source" as const,
+          context_id: "wiki-1",
+          label: "Personal Wiki",
+        },
+      ],
+      title: "Architecture notes",
+    };
+    const binaryArchive = {
+      ...indexable,
+      can_edit_native_content: false,
+      draft_capability: "none" as const,
+      format: "file",
+      from: [
+        {
+          binding_kind: "wiki_source" as const,
+          context_id: "wiki-1",
+          label: "Personal Wiki",
+        },
+      ],
+      id: "document-archive-zip",
+      representation_format: "zip",
+      title: "release-assets.zip",
+    };
+    const roomZip = {
+      ...binaryArchive,
+      from: [
+        {
+          binding_kind: "wiki_source" as const,
+          context_id: "wiki-1",
+          label: "Personal Wiki",
+        },
+        {
+          binding_kind: "room" as const,
+          context_id: "room-all",
+          label: "Product room",
+        },
+      ],
+      id: "document-room-zip",
+      title: "room-bundle.zip",
+    };
+    const docs = documentSeeds(runtime).documents;
+    docs.clear();
+    docs.set(indexable.id, indexable);
+    docs.set(binaryArchive.id, binaryArchive);
+    docs.set(roomZip.id, roomZip);
+
+    renderHome(runtime);
+
+    const recent = await screen.findByRole("region", { name: "Recent" });
+    const noteLink = await within(recent).findByRole("link", {
+      name: "Architecture notes.md",
+    });
+    expect(
+      within(noteLink).getByText("Visible in Personal Wiki"),
+    ).toBeVisible();
+
+    const zipLink = within(recent).getByRole("link", {
+      name: "release-assets.zip",
+    });
+    expect(within(zipLink).queryByText(/Personal Wiki/)).toBeNull();
+
+    const roomZipLink = within(recent).getByRole("link", {
+      name: "room-bundle.zip",
+    });
+    expect(
+      within(roomZipLink).getByText("Visible in Product room"),
+    ).toBeVisible();
+    expect(within(roomZipLink).queryByText(/Personal Wiki/)).toBeNull();
+  });
+
   it("opens a recent file through its document route", async () => {
     const runtime = createDocumentTestRuntime();
 

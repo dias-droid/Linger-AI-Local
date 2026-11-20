@@ -196,6 +196,14 @@ function ProfileSetupApps(props: Props) {
   const decision = useSetupDecision(props);
   const apps = card.profile_setup?.apps ?? [];
   const moreApps = card.profile_setup?.more_apps ?? [];
+  const setupAppKeys = new Set([...apps, ...moreApps]);
+  const hasConnectedAccount =
+    activeExternalConnections(
+      (connections.data?.connections ?? []).filter(
+        (connection) =>
+          setupAppKeys.size === 0 || setupAppKeys.has(connection.provider),
+      ),
+    ).length > 0;
   const catalogApp = (key: string) =>
     catalog.data?.apps.find((app) => app.key === key);
 
@@ -205,6 +213,7 @@ function ProfileSetupApps(props: Props) {
         canDecide ? (
           <SetupReplies
             decision={decision}
+            primaryDisabled={!hasConnectedAccount}
             replies={[
               { decision: "connected", label: "Connected" },
               { decision: "skipped", label: "Skip for now" },
@@ -359,6 +368,8 @@ function ProfileSetupSources(props: Props) {
   const files = items.filter((item) => item.kind === "file");
   const uploading = files.some((item) => !item.upload && !item.error);
   const failedUpload = files.some((item) => item.error);
+  const hasReadyFile = files.some((item) => Boolean(item.upload));
+  const hasSource = links.length > 0 || hasReadyFile || draft.trim().length > 0;
 
   function updateFile(id: string, change: Partial<SourceItem>) {
     setItems((current) =>
@@ -454,7 +465,6 @@ function ProfileSetupSources(props: Props) {
         canDecide ? (
           <SetupReplies
             decision={decision}
-            doneDisabled={uploading || failedUpload}
             onDone={() => {
               const pendingLink = draft.trim();
               const error = pendingLink ? validateLink(pendingLink) : null;
@@ -469,6 +479,7 @@ function ProfileSetupSources(props: Props) {
                 links: pendingLink ? [...links, pendingLink] : links,
               });
             }}
+            primaryDisabled={uploading || failedUpload || !hasSource}
             replies={[
               { decision: "done", label: "That's all" },
               { decision: "skipped", label: "Skip" },
@@ -635,20 +646,18 @@ function SourceRow({
 /** The replies of a pending setup card; the first one is the main answer. */
 function SetupReplies({
   decision,
-  doneDisabled = false,
   onDone,
+  primaryDisabled = false,
   replies,
 }: {
   decision: ReturnType<typeof useSetupDecision>;
-  doneDisabled?: boolean;
   onDone?: () => void;
+  primaryDisabled?: boolean;
   replies: { decision: SetupDecision; label: string }[];
 }) {
   return replies.map((reply, index) => (
     <Button
-      disabled={
-        decision.submitting || (reply.decision === "done" && doneDisabled)
-      }
+      disabled={decision.submitting || (index === 0 && primaryDisabled)}
       key={reply.decision}
       onClick={() =>
         reply.decision === "done" && onDone

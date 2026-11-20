@@ -148,3 +148,93 @@ func TestClaudeCatalogPreservesNativeChoicesAndVersions(t *testing.T) {
 		t.Fatalf("concrete choice = %+v", pinned)
 	}
 }
+
+func TestClaudeCatalogPreservesDistinctLabelsForGatewayModels(t *testing.T) {
+	list, err := DiscoverModels(context.Background(), "claude", fixtureInvocation(t, "claude-catalog", map[string]string{
+		"FIXTURE_MODELS": `[
+   {"value":"default","displayName":"Default (recommended)","description":"via magpie"},
+   {"value":"auto/deepseek-v4.1-flash-1017[1m]","displayName":"auto/deepseek-v4.1-flash-1017[1m]","description":"via magpie"},
+   {"value":"sub2api-codex/gpt-6.1-sol","displayName":"sub2api-codex/gpt-6.1-sol","description":"via magpie"},
+   {"value":"sub2api-claude/claude-fable-5-2[1m]","displayName":"sub2api-claude/claude-fable-5-2[1m]","description":"via magpie"},
+   {"value":"opus","displayName":"Opus","description":"via magpie"},
+   {"value":"sonnet","displayName":"Sonnet","description":"via magpie"},
+   {"value":"haiku","displayName":"Haiku","description":"via magpie"},
+   {"value":"mistral/deepseek-v4-1-flash-1017[1m]","displayName":"","description":"via magpie"}
+  ]`,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids, labels []string
+	for _, model := range list.Models {
+		ids = append(ids, model.ID)
+		labels = append(labels, model.Label)
+	}
+	wantIDs := []string{
+		"default",
+		"auto/deepseek-v4.1-flash-1017[1m]",
+		"sub2api-codex/gpt-6.1-sol",
+		"sub2api-claude/claude-fable-5-2[1m]",
+		"opus",
+		"sonnet",
+		"haiku",
+		"mistral/deepseek-v4-1-flash-1017[1m]",
+	}
+	wantLabels := []string{
+		"Default (recommended) · via magpie",
+		"auto/deepseek-v4.1-flash-1017[1m]",
+		"sub2api-codex/gpt-6.1-sol",
+		"sub2api-claude/claude-fable-5-2[1m]",
+		"Opus",
+		"Sonnet",
+		"Haiku",
+		"mistral/deepseek-v4-1-flash-1017[1m]",
+	}
+	if !reflect.DeepEqual(ids, wantIDs) || !reflect.DeepEqual(labels, wantLabels) {
+		t.Fatalf("models = %+v", list.Models)
+	}
+}
+
+func TestClaudeCatalogHandlesSharedSummaryAndSinglePlainDescription(t *testing.T) {
+	t.Run("shared dot summary falls back to display name or id", func(t *testing.T) {
+		list, err := DiscoverModels(context.Background(), "claude", fixtureInvocation(t, "claude-catalog", map[string]string{
+			"FIXTURE_MODELS": `[
+    {"value":"sub2api-codex/gpt-6.1-sol","displayName":"GPT 6.1 Sol","description":"via magpie · 200K context"},
+    {"value":"sub2api-claude/claude-fable-5-2[1m]","displayName":"","description":"via magpie · 1M context"},
+    {"value":"opus","displayName":"Opus","description":"Opus 5.5 · Best for everyday tasks"},
+    {"value":"opus[1m]","displayName":"Opus (1M)","description":"Opus 5.5 · 1M context"},
+    {"value":"sonnet","displayName":"Sonnet","description":"Sonnet 5.5 · Efficient"}
+   ]`,
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var labels []string
+		for _, model := range list.Models {
+			labels = append(labels, model.Label)
+		}
+		want := []string{
+			"GPT 6.1 Sol",
+			"sub2api-claude/claude-fable-5-2[1m]",
+			"Opus",
+			"Opus (1M)",
+			"Sonnet 5.5",
+		}
+		if !reflect.DeepEqual(labels, want) {
+			t.Fatalf("labels = %q, want %q", labels, want)
+		}
+	})
+	t.Run("single entry with plain description keeps display name or id", func(t *testing.T) {
+		list, err := DiscoverModels(context.Background(), "claude", fixtureInvocation(t, "claude-catalog", map[string]string{
+			"FIXTURE_MODELS": `[
+    {"value":"sub2api-codex/gpt-6.1-sol","displayName":"GPT 6.1 Sol","description":"via magpie"}
+   ]`,
+		}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(list.Models) != 1 || list.Models[0].Label != "GPT 6.1 Sol" {
+			t.Fatalf("models = %+v", list.Models)
+		}
+	})
+}

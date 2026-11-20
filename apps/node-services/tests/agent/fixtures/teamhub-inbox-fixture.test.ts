@@ -7,6 +7,9 @@ import path from "node:path";
 import type { components } from "@linger/wire-contracts/teamhub-internal/types";
 import { expect, it } from "vitest";
 import { createTeamHubAgentResourcesResolver } from "../../../src/agent/executor/teamhub-context-resolvers.js";
+import { createTeamHubRuntimeStateClient } from "../../../src/agent/executor/teamhub-runtime-state-client.js";
+import { createTeamHubLocalComputerRegistry } from "../../../src/agent/runner-gateway/local-computer-registry.js";
+import { hello as runnerHello } from "../runner-gateway/runner-gateway-fixtures.js";
 
 type RuntimeStateSchemas = components["schemas"];
 
@@ -166,6 +169,15 @@ it("queues a Run for a mentioning Message and keeps session heartbeat read-only"
     expect(await workState()).toMatchObject({
       has_pending_work: true,
       has_queued_runs: true,
+      next_run_origins: [
+        {
+          notification: true,
+          task_inbox: false,
+          author_type: "user",
+          message_kind: "message",
+          fired_routine: false,
+        },
+      ],
     });
     const waiting = (await (
       await fetch(origin + "/v0/agent-runtime/runs/waiting", {
@@ -173,6 +185,146 @@ it("queues a Run for a mentioning Message and keeps session heartbeat read-only"
       })
     ).json()) as RuntimeStateSchemas["AgentRuntimeWaitingContexts"];
     expect(waiting.context_keys).toEqual([key]);
+
+    const client = createTeamHubRuntimeStateClient({
+      baseUrl: origin,
+      serviceToken: "fixture-service",
+      epoch: "epoch-a",
+    });
+    const registry = createTeamHubLocalComputerRegistry(client);
+    const owner = { tenantId: "tenant-fixture", ownerActorId: "human-fixture" };
+    await fetch(origin + "/__test__/local-computers", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer fixture-service",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        computer_id: "computer-fixture",
+        display_name: "Fixture Computer",
+        owner: {
+          tenant_id: owner.tenantId,
+          owner_actor_id: owner.ownerActorId,
+        },
+      }),
+    });
+    await expect(
+      registry.credentialGeneration("computer-fixture", owner),
+    ).resolves.toBe(0);
+    await expect(
+      registry.credentialGeneration("computer-fixture", {
+        tenantId: "tenant-fixture",
+        ownerActorId: "other-human",
+      }),
+    ).resolves.toBeNull();
+    const hello = {
+      ...runnerHello(),
+      runner_id: "computer-fixture",
+      display_name: "Fixture Computer",
+      platform: "linux" as const,
+      workspace_grants: [],
+    };
+    const placements = await registry.connect({
+      computerId: "computer-fixture",
+      owner,
+      credentialGeneration: 0,
+      hello,
+      status: "offline",
+    });
+    expect(placements).toEqual([
+      {
+        agentId: "agent-fixture",
+        tenantId: "tenant-fixture",
+        ownerActorId: "human-fixture",
+        runtimeType: "codex",
+        model: "fixture",
+        workspaceGrantId: "grant-fixture",
+        assignmentRevision: 1,
+      },
+    ]);
+    await expect(
+      registry.touch("computer-fixture", {
+        status: "online",
+        seenAt: new Date().toISOString(),
+        activeOperations: 0,
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      registry.recordLocalModels("computer-fixture", {
+        available: false,
+        reason: { code: "TOOL_NOT_INSTALLED" },
+        observed_at: new Date().toISOString(),
+        pools: [],
+        models: [],
+      }),
+    ).resolves.toBeUndefined();
+    const claimed = await client.claimRun({
+      context_key: key,
+      epoch: "epoch-a",
+      claim_id: "claim-fixture",
+    });
+    expect(claimed.claimed).toBe(true);
+    await expect(
+      client.recordRunOperation({
+        context_key: key,
+        epoch: "epoch-a",
+        run_id: claimed.run!.run_id,
+        operation_id: "op-fixture-1",
+        runtime_type: "codex",
+      }),
+    ).resolves.toEqual({ success: true });
+    const runtimeState = (await (
+      await fetch(origin + "/__test__/runtime-state", {
+        headers: { authorization: "Bearer fixture-service" },
+      })
+    ).json()) as {
+      operation_receipts: {
+        operation_id: string;
+        agent_id: string;
+        connection_epoch: number;
+        run_id: string;
+      }[];
+    };
+    expect(runtimeState.operation_receipts).toEqual([
+      {
+        operation_id: "op-fixture-1",
+        agent_id: "agent-fixture",
+        connection_epoch: 1,
+        run_id: claimed.run!.run_id,
+      },
+    ]);
+    await expect(
+      registry.remove({ computerId: "computer-fixture", ...owner }),
+    ).resolves.toBe("has-agents");
+    const revoked = await fetch(
+      origin + "/__test__/runtime-configs/agent-fixture",
+      {
+        method: "DELETE",
+        headers: { authorization: "Bearer fixture-service" },
+      },
+    );
+    expect(revoked.status).toBe(204);
+    await expect(
+      client.getDeletionSnapshot("agent-fixture"),
+    ).resolves.toMatchObject({
+      agent_id: "agent-fixture",
+      tenant_id: "tenant-fixture",
+    });
+    await expect(
+      registry.connect({
+        computerId: "computer-fixture",
+        owner,
+        credentialGeneration: 0,
+        hello,
+        status: "online",
+      }),
+    ).resolves.toEqual([]);
+    await expect(
+      registry.remove({ computerId: "computer-fixture", ...owner }),
+    ).resolves.toBe("removed");
+    await expect(
+      registry.credentialGeneration("computer-fixture", owner),
+    ).resolves.toBeNull();
   } finally {
     if (child.exitCode === null && child.signalCode === null) {
       child.kill("SIGTERM");

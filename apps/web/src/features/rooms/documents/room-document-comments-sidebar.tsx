@@ -1,4 +1,5 @@
 import { CommentsExtension, type ThreadData } from "@blocknote/core/comments";
+import { FormattingToolbarExtension } from "@blocknote/core/extensions";
 import {
   getReferenceText,
   useBlockNoteEditor,
@@ -90,6 +91,7 @@ export function RoomDocumentCommentsController({
   showTrigger?: boolean;
   threadStore: TeamHubDocumentThreadStore;
 }) {
+  const editor = useBlockNoteEditor();
   const comments = useExtension(CommentsExtension);
   const threads = useThreads();
   const { selectedThreadId, pendingComment } =
@@ -98,8 +100,12 @@ export function RoomDocumentCommentsController({
   const sharedOpen = useContext(CommentsOpenContext);
   const setSharedOpen = sharedOpen?.setOpen;
   const open = sharedOpen?.open ?? controlledOpen ?? internalOpen;
+  const dismissFormattingToolbar = () => {
+    editor.getExtension?.(FormattingToolbarExtension)?.store.setState(false);
+  };
   const setOpen = (next: boolean) => {
     if (!next) {
+      dismissFormattingToolbar();
       comments.stopPendingComment();
       onCancelSelection?.();
     }
@@ -110,11 +116,18 @@ export function RoomDocumentCommentsController({
 
   useEffect(() => {
     if (!selectedThreadId && !pendingComment && !pendingSelection) return;
+    editor.getExtension?.(FormattingToolbarExtension)?.store.setState(false);
     // BlockNote selection is external state. Latch the drawer open so clearing the selection does not close it.
     // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change -- Preserve the drawer lifecycle when synchronizing external editor events.
     setInternalOpen(true);
     setSharedOpen?.(true);
-  }, [selectedThreadId, pendingComment, pendingSelection, setSharedOpen]);
+  }, [
+    editor,
+    selectedThreadId,
+    pendingComment,
+    pendingSelection,
+    setSharedOpen,
+  ]);
 
   if (threads.size === 0 && !open) return null;
 
@@ -122,6 +135,7 @@ export function RoomDocumentCommentsController({
     <aside
       aria-label="All Document comments"
       className="room-document-comments-popover"
+      onFocusCapture={dismissFormattingToolbar}
     >
       <div className="room-document-comments-heading">
         <h3>Comments</h3>

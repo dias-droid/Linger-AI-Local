@@ -22,6 +22,7 @@ const blockNote = vi.hoisted(() => ({
   doc: undefined as ProseMirrorNode | undefined,
   coordsAtPos: vi.fn(),
   domAtPos: vi.fn(),
+  formattingToolbarSetState: vi.fn(),
   selectedThreadId: undefined as string | undefined,
   pendingComment: false,
   stopPendingComment: vi.fn(),
@@ -33,6 +34,9 @@ const blockNote = vi.hoisted(() => ({
 vi.mock("@blocknote/react", () => ({
   getReferenceText: () => "selected text",
   useBlockNoteEditor: () => ({
+    getExtension: () => ({
+      store: { setState: blockNote.formattingToolbarSetState },
+    }),
     prosemirrorState: { selection: blockNote.selection, doc: blockNote.doc },
     prosemirrorView: {
       coordsAtPos: blockNote.coordsAtPos,
@@ -56,6 +60,7 @@ describe("Room Document Comments popover", () => {
     blockNote.selectedThreadId = undefined;
     blockNote.pendingComment = false;
     blockNote.doc = undefined;
+    blockNote.formattingToolbarSetState.mockReset();
     blockNote.stopPendingComment.mockReset();
     blockNote.selectThread.mockReset();
     blockNote.threadPositions.clear();
@@ -85,9 +90,14 @@ describe("Room Document Comments popover", () => {
     const sidebar = await screen.findByRole("complementary", {
       name: "All Document comments",
     });
-    expect(
-      within(sidebar).getByRole("textbox", { name: "Pending comment" }),
-    ).toBeVisible();
+    expect(blockNote.formattingToolbarSetState).toHaveBeenCalledWith(false);
+    const textbox = within(sidebar).getByRole("textbox", {
+      name: "Pending comment",
+    });
+    expect(textbox).toBeVisible();
+    blockNote.formattingToolbarSetState.mockClear();
+    fireEvent.focus(textbox);
+    expect(blockNote.formattingToolbarSetState).toHaveBeenCalledWith(false);
     fireEvent.click(screen.getByRole("button", { name: "Close comments" }));
     expect(blockNote.stopPendingComment).toHaveBeenCalledOnce();
   });

@@ -68,7 +68,10 @@ export function browserConnectionStateCopy(
   }
 }
 
-export function browserConnectionErrorMessage(error: unknown): string {
+export function browserConnectionErrorMessage(
+  error: unknown,
+  platform?: string,
+): string {
   const code = error instanceof TeamHubError ? error.code : undefined;
   switch (code) {
     case "INVALID_BROWSER_TOKEN":
@@ -77,8 +80,12 @@ export function browserConnectionErrorMessage(error: unknown): string {
       return "This Computer is offline. Make sure it's on and running Linger Computer.";
     case "LOCAL_COMPUTER_NOT_FOUND":
       return "Can't find this Computer. It may have been removed.";
+    case "BROWSER_CONNECTION_NOT_SUPPORTED":
+      return "This Computer can't use your browser. Agents use a separate browser without your sign-ins.";
     case "BROWSER_CONNECTION_UNSUPPORTED":
-      return "Linger Computer on this Computer is out of date. Update it, then connect your browser.";
+      return platform === "linux"
+        ? "This Computer can't use your browser. Agents use a separate browser without your sign-ins."
+        : "Linger Computer on this Computer is out of date. Update it, then connect your browser.";
     case "BROWSER_CONNECTION_TIMEOUT":
       return "Connection timed out. Make sure Chrome is open and the extension is enabled, then try again.";
     case "BROWSER_TOKEN_REJECTED":

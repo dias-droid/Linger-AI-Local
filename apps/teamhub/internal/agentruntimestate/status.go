@@ -20,6 +20,7 @@ var (
 	taskInboxPattern     = regexp.MustCompile(`^task:([A-Za-z0-9][A-Za-z0-9._:-]{0,127})$`)
 	taskMetaInboxPattern = regexp.MustCompile(`^taskmeta:([A-Za-z0-9][A-Za-z0-9._:-]{0,127})$`)
 	metaInboxPattern     = regexp.MustCompile(`^meta:`)
+	documentInboxPattern = regexp.MustCompile(`^document:([A-Za-z0-9][A-Za-z0-9._:-]{0,254})$`)
 	activityIDPattern    = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 	commandIDPattern     = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{7,255}$`)
 )
@@ -290,6 +291,8 @@ func resolveRuntimeStatusRoom(
 		} else if metaInboxPattern.MatchString(inboxID) {
 			return "", "", false, nil
 		} else if taskMetaInboxPattern.MatchString(inboxID) {
+			return "", "", false, nil
+		} else if documentInboxPattern.MatchString(inboxID) {
 			return "", "", false, nil
 		} else {
 			return "", "", false, ErrInvalid

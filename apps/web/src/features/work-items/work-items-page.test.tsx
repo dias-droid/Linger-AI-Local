@@ -77,14 +77,27 @@ describe("Dashboard page", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("keeps Task deep links focused without rendering a detail surface", async () => {
+  it("opens a read-only detail drawer for deep-linked and clicked Work Items and closes cleanly", async () => {
     const runtime = await testRuntime();
     const identity = runtime.seed.identity;
     const human = identity.actors[0]!;
     const item = workItem(human, {
+      description: "Investigate delegated task completion.",
       id: "workitem-linked",
       kind: "task",
+      origin_room_id: "room-all",
       state: "in_progress",
+      task_execution: {
+        control_revision: 1,
+        control_settled_revision: 1,
+        desired_control: "run",
+        execution_revision: 2,
+        execution_updated_at: "2026-07-30T01:00:00Z",
+        generation: 1,
+        pending_control: false,
+        reason_code: "run_succeeded",
+        status: "idle",
+      },
       title: "Linked task",
     });
     seedWorkItems(runtime, [item]);
@@ -94,9 +107,43 @@ describe("Dashboard page", () => {
     const card = await screen.findByRole("link", { name: /Linked task/ });
     expect(card).toHaveAttribute("aria-current", "location");
     expect(card).toHaveFocus();
-    expect(screen.queryByText("Task status")).not.toBeInTheDocument();
-    expect(screen.queryByText("Current phase")).not.toBeInTheDocument();
-    expect(screen.queryByText("Delivery result")).not.toBeInTheDocument();
+
+    const detail = screen.getByRole("complementary", {
+      name: "Work Item details",
+    });
+    expect(
+      within(detail).getByRole("heading", { name: "Linked task" }),
+    ).toBeVisible();
+    expect(
+      within(detail).getByText("Investigate delegated task completion."),
+    ).toBeVisible();
+    expect(
+      within(detail).getByText("Run finished (awaiting resolution)"),
+    ).toBeVisible();
+    expect(within(detail).getByRole("link", { name: "#all" })).toHaveAttribute(
+      "href",
+      "/t/tenant-northstar/rooms/room-all/chat",
+    );
+
+    fireEvent.click(
+      within(detail).getByRole("button", { name: "Close detail" }),
+    );
+    expect(
+      screen.queryByRole("complementary", { name: "Work Item details" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "/t/tenant-northstar/dashboard",
+    );
+
+    fireEvent.click(screen.getByRole("link", { name: /Linked task/ }));
+    expect(
+      await screen.findByRole("complementary", { name: "Work Item details" }),
+    ).toBeVisible();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(
+      screen.queryByRole("complementary", { name: "Work Item details" }),
+    ).not.toBeInTheDocument();
   });
 
   it("does not expose Work Item mutation controls", async () => {
@@ -488,7 +535,7 @@ describe("Dashboard page", () => {
       runtime,
       "/t/tenant-northstar/dashboard/workitem-focus",
     );
-    await screen.findByText("Fix login failure");
+    await screen.findByRole("link", { name: /Fix login failure/ });
     await act(async () => {
       await queryClient.invalidateQueries({
         queryKey: tenantWorkItemTargetQueryKey(
@@ -506,7 +553,9 @@ describe("Dashboard page", () => {
     });
     expect(tryingAgain).toBeDisabled();
     await act(async () => retry.resolve(item));
-    expect(await screen.findByText("Fix login failure")).toBeVisible();
+    expect(
+      await screen.findByRole("link", { name: /Fix login failure/ }),
+    ).toBeVisible();
     expect(get).toHaveBeenCalledTimes(3);
   });
 

@@ -12,6 +12,7 @@ import { TeamHubRuntimeProvider } from "@/features/teamhub/teamhub-runtime";
 import type { TeamHubBrowserConnectionStatus } from "@/features/teamhub/teamhub-types";
 
 import { BrowserConnectionDialog } from "./browser-connection-dialog";
+import { browserConnectionErrorMessage } from "./browser-connection-copy";
 
 const tenantId = "tenant-northstar";
 const token = "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8S9t0U_-";
@@ -241,6 +242,29 @@ describe("BrowserConnectionDialog", () => {
     ).toBeVisible();
     await waitFor(() =>
       expect(screen.queryByLabelText("Extension token")).toBeNull(),
+    );
+  });
+
+  it("distinguishes unsupported platforms from outdated daemons in error copy", () => {
+    const unsupportedPlatform = new TeamHubError({
+      code: "BROWSER_CONNECTION_NOT_SUPPORTED",
+      message: "This Computer cannot connect an everyday browser",
+      status: 409,
+    });
+    const legacyCapability = new TeamHubError({
+      code: "BROWSER_CONNECTION_UNSUPPORTED",
+      message: "Upgrade the Local Computer before connecting your browser",
+      status: 409,
+    });
+
+    expect(browserConnectionErrorMessage(unsupportedPlatform, "linux")).toBe(
+      "This Computer can't use your browser. Agents use a separate browser without your sign-ins.",
+    );
+    expect(browserConnectionErrorMessage(legacyCapability, "linux")).toBe(
+      "This Computer can't use your browser. Agents use a separate browser without your sign-ins.",
+    );
+    expect(browserConnectionErrorMessage(legacyCapability, "darwin")).toBe(
+      "Linger Computer on this Computer is out of date. Update it, then connect your browser.",
     );
   });
 });

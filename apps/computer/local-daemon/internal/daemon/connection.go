@@ -426,13 +426,10 @@ func (d *Daemon) clearDiagnosticsStream(stream transport.Stream) {
 // capabilities lists the host features this Computer has; everything else is
 // part of protocol 2 itself.
 func (d *Daemon) capabilities() []string {
-	// Every platform answers computer_permission: a non-macOS Computer
-	// reports that it has no permissions to grant.
-	capabilities := []string{wire.CapabilityComputerPermissions}
-	if d.browserConnections != nil {
-		capabilities = append(capabilities, wire.CapabilityBrowserConnection)
-	}
-	return capabilities
+	// Every platform answers computer_permission and browser_connection:
+	// platforms or installs without them report unsupported on status reads
+	// instead of appearing as an outdated Daemon.
+	return []string{wire.CapabilityComputerPermissions, wire.CapabilityBrowserConnection}
 }
 
 func (d *Daemon) handleLocalSkillCommand(ctx context.Context, stream transport.Stream, command protocol.Command) error {

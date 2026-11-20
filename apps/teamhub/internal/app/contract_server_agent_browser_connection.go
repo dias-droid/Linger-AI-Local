@@ -53,6 +53,10 @@ func (a *App) requestAgentBrowserConnection(c *gin.Context) {
 	})
 	switch {
 	case errors.Is(err, roomagent.ErrLocalBrowserUnsupported):
+		if a.localComputerPlatform(ctx, auth.TenantID, ownerID, computerID) == "linux" {
+			a.writeAgentAPIError(c, http.StatusConflict, api.AgentApiErrorCodeOperationForbidden, browserConnectionUnsupportedMessage)
+			return
+		}
 		a.writeAgentAPIError(c, http.StatusConflict, api.AgentApiErrorCodeOperationForbidden, "This Computer must be upgraded before it can use the user's Chrome")
 		return
 	case errors.Is(err, roomagent.ErrLocalComputerOffline), errors.Is(err, roomagent.ErrLocalComputerNotFound):
@@ -69,7 +73,11 @@ func (a *App) requestAgentBrowserConnection(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ready"})
 		return
 	case err == nil && status.State == "unsupported":
-		a.writeAgentAPIError(c, http.StatusConflict, api.AgentApiErrorCodeOperationForbidden, "This Computer must be upgraded before it can use the user's Chrome")
+		message := status.Message
+		if message == "" {
+			message = browserConnectionUnsupportedMessage
+		}
+		a.writeAgentAPIError(c, http.StatusConflict, api.AgentApiErrorCodeOperationForbidden, message)
 		return
 	}
 	roomID, err := a.humanConfirmationRoom(ctx, auth, ownerID)

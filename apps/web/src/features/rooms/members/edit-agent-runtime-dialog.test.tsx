@@ -663,6 +663,48 @@ describe("EditAgentRuntimeDialog", () => {
       ).toHaveTextContent("Qwen3 Coder 30B · Unavailable"),
     );
   });
+
+  it("constrains the form fieldset with min-w-0 so long model labels cannot cause horizontal overflow", async () => {
+    const computer = localComputer("computer-old", "Old Mac", "online");
+    computer.runtimes = [
+      {
+        models: [
+          {
+            id: "default",
+            label:
+              "Default (recommended) · Use the default model (currently Opus 5.5)",
+          },
+        ],
+        status: "ready",
+        type: "claude",
+      },
+    ];
+    const registration = localCodexAgent();
+    registration.runtime = {
+      model: "default",
+      placement: {
+        computer_id: "computer-old",
+        runtime_type: "claude",
+        type: "local",
+        workspace_grant_id: "grant-workspace",
+      },
+    };
+    renderDialog({
+      computersOverride: { items: [computer] },
+      onSave: vi.fn(),
+      registration,
+    });
+    const model = await screen.findByRole("combobox", { name: "Agent model" });
+    await waitFor(() =>
+      expect(model).toHaveTextContent(
+        "Default (recommended) · Use the default model (currently Opus 5.5)",
+      ),
+    );
+    const fieldset = model.closest("fieldset");
+    expect(fieldset).not.toBeNull();
+    expect(fieldset).toHaveClass("min-w-0");
+    expect(fieldset?.closest("form")).toHaveClass("min-w-0");
+  });
 });
 
 function renderDialog({

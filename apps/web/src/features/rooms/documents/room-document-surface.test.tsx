@@ -333,7 +333,7 @@ describe("Unified Document legacy convergence", () => {
           screen.getByRole("button", { name: "Document mode" }),
         ).toHaveTextContent("Edit mode");
         expect(
-          screen.getByRole("status", { name: /people in this document/ }),
+          screen.getByRole("status", { name: /1 person in this document/ }),
         ).toBeVisible();
         expect(
           screen.getByText(`By ${document.owner.display_name}`),
@@ -367,7 +367,9 @@ describe("Unified Document legacy convergence", () => {
         screen.queryByRole("button", { name: "Document mode" }),
       ).toBeNull();
       expect(
-        screen.queryByRole("status", { name: /people in this document/ }),
+        screen.queryByRole("status", {
+          name: /(?:person|people) in this document/,
+        }),
       ).toBeNull();
       const actions = window.document.querySelector(
         ".room-document-header-actions",
@@ -405,7 +407,7 @@ describe("Unified Document legacy convergence", () => {
     ]);
     expect(
       within(actions).queryByRole("status", {
-        name: /people in this document/,
+        name: /(?:person|people) in this document/,
       }),
     ).toBeNull();
   });
@@ -1174,6 +1176,57 @@ describe("Unified Document page", () => {
     ).toBeVisible();
     expect(
       screen.queryByRole("heading", { name: "Collaborator management" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("closes Share with the top-right Close button or Escape without requesting link-share on restricted documents", async () => {
+    const runtime = createDocumentTestRuntime();
+    const document = seedNativeDocument(runtime, "share-close-document");
+    runtime.server.on(
+      "GET",
+      "/v0/documents/{documentId}/collaborators",
+      () => ({
+        caller_content_role: "owner",
+        can_manage_collaborators: true,
+        general_access: {
+          canonical_url: `/t/tenant-northstar/documents/${document.id}`,
+          scope: "restricted" as const,
+        },
+        schema_version: 2,
+        sources: [],
+      }),
+    );
+
+    renderUnifiedDocumentPage(
+      runtime,
+      `/t/tenant-northstar/documents/${document.id}`,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Share" }));
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Share Document",
+    });
+    expect(
+      await within(dialog).findByRole("heading", {
+        name: "Invite collaborators",
+      }),
+    ).toBeVisible();
+    expect(
+      runtime.server.requestsTo("GET", "/v0/documents/{documentId}/link-share"),
+    ).toHaveLength(0);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    expect(
+      screen.queryByRole("dialog", { name: "Share Document" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+    const reopened = await screen.findByRole("dialog", {
+      name: "Share Document",
+    });
+    fireEvent.keyDown(reopened, { key: "Escape" });
+    expect(
+      screen.queryByRole("dialog", { name: "Share Document" }),
     ).not.toBeInTheDocument();
   });
 

@@ -1,12 +1,23 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { createBuiltinAgentFeatures } from "../../../src/agent/agent-features/builtin.js";
+import type { ContextRuntimeActivator } from "../../../src/agent/executor/activation.js";
 import type { ExecutionContextRecord } from "../../../src/agent/executor/context-ref.js";
+import { createTeamHubContextRuntimeState } from "../../../src/agent/executor/context-runtime-state.js";
 import { TeamHubExecutionContextStore } from "../../../src/agent/executor/context-store.js";
+import type { AgentProvider } from "../../../src/agent/executor/provider.js";
+import { ExecutorRegistry } from "../../../src/agent/executor/registry.js";
 import {
   TeamHubRuntimeStateError,
   type RuntimeContext,
 } from "../../../src/agent/executor/teamhub-runtime-state-client.js";
-import { createTeamHubRuntimeStateClientFake } from "../test-support/teamhub-runtime-state-client.js";
+import type { AgentLogger } from "../../../src/agent/observability/agent-log.js";
+import type { LocalRuntimeSettings } from "../../../src/agent/runtime-settings.js";
+import { createInMemoryGhostStore } from "../test-support/in-memory-ghost-store.js";
+import {
+  createInMemoryTeamHubRuntimeState,
+  createTeamHubRuntimeStateClientFake,
+} from "../test-support/teamhub-runtime-state-client.js";
 
 // Native Promise timers do not follow Vitest's global fake clock.
 vi.mock("node:timers/promises", async (importOriginal) => {
@@ -136,6 +147,286 @@ describe("TeamHub Execution Context store", () => {
       ).toBeNull();
       expect(await store.list()).toEqual([]);
     } finally {
+      await store.close();
+    }
+  });
+
+  it("binds an unheld active Document Context on a change hint without breaking release invariants", async () => {
+    let context = documentRuntimeContext("suspended", "1", "0");
+    const store = await startedStore({ getContext: async () => context });
+    const published: ExecutionContextRecord[] = [];
+    store.subscribe((value) => published.push(value));
+    try {
+      // Suspended Document Contexts (for example while an anchor is pending) stay unheld.
+      expect(
+        await store.claimByKey(context.context_key, true, "changed", "1"),
+      ).toBeNull();
+      expect(await store.list()).toEqual([]);
+
+      context = documentRuntimeContext("suspended", "2", "1");
+      expect(
+        await store.claimByKey(context.context_key, true, "changed", "2"),
+      ).toBeNull();
+      expect(await store.list()).toEqual([]);
+
+      // TeamHub activates the Document Context when its comment Run is claimable.
+      context = documentRuntimeContext("active", "3", "1");
+      expect(
+        await store.claimByKey(context.context_key, true, "changed", "3"),
+      ).toEqual(documentRecord("active"));
+      expect(store.isUnusedContext(documentRef)).toBe(false);
+      expect(await store.list()).toEqual([documentRecord("active")]);
+      expect(published).toEqual([documentRecord("active")]);
+
+      // After idle suspension and local release, suspended hints do not re-bind it.
+      context = documentRuntimeContext("suspended", "4", "1");
+      expect(
+        await store.claimByKey(context.context_key, true, "changed", "4"),
+      ).toEqual(documentRecord("suspended"));
+      expect(await store.releaseIfIdle(documentRef)).toBe(true);
+      expect(await store.list()).toEqual([]);
+      expect(
+        await store.claimByKey(context.context_key, true, "changed", "4"),
+      ).toBeNull();
+      expect(await store.list()).toEqual([]);
+
+      // A later comment activation re-binds the previously released Document Context.
+      context = documentRuntimeContext("active", "5", "2");
+      expect(
+        await store.claimByKey(context.context_key, true, "changed", "5"),
+      ).toEqual(documentRecord("active"));
+      expect(await store.list()).toEqual([documentRecord("active")]);
+
+      // Terminal Document Contexts never bind on a change hint.
+      await store.releaseIfIdle(documentRef);
+      context = {
+        ...documentRuntimeContext("active", "6", "2"),
+        terminal_reason: "context_deleted",
+        terminated_at: "2026-11-03T00:00:00.000Z",
+      };
+      expect(
+        await store.claimByKey(context.context_key, true, "changed", "6"),
+      ).toBeNull();
+      expect(await store.list()).toEqual([]);
+    } finally {
+      await store.close();
+    }
+  });
+
+  it("does not bind unheld used Meta or active alter_ego Contexts on a change hint", async () => {
+    const usedMeta: RuntimeContext = {
+      ...runtimeContext("active"),
+      state_revision: "2",
+      next_input_sequence: "4",
+    };
+    const activeAlterEgo: RuntimeContext = {
+      context_key: '["alter_ego","agent-reviewer","task-1"]',
+      ref: { kind: "alter_ego", agent_id: "agent-reviewer", task_id: "task-1" },
+      tenant_id: "tenant-acme",
+      agent_actor_id: "actor-reviewer",
+      target_residency: "active",
+      state_revision: "2",
+      next_input_sequence: "1",
+    };
+    const contexts = new Map<string, RuntimeContext>([
+      [usedMeta.context_key, usedMeta],
+      [activeAlterEgo.context_key, activeAlterEgo],
+    ]);
+    const store = await startedStore({
+      getContext: async (key) => contexts.get(key)!,
+    });
+    try {
+      expect(
+        await store.claimByKey(usedMeta.context_key, true, "changed", "2"),
+      ).toBeNull();
+      expect(
+        await store.claimByKey(
+          activeAlterEgo.context_key,
+          true,
+          "changed",
+          "2",
+        ),
+      ).toBeNull();
+      expect(await store.list()).toEqual([]);
+    } finally {
+      await store.close();
+    }
+  });
+
+  it("wakes, binds, activates, and claims an unheld Document Context on context.changed without periodic sweep", async () => {
+    const memory = createInMemoryTeamHubRuntimeState();
+    const wireDocumentRef = {
+      kind: "document" as const,
+      agent_id: documentRef.agentId,
+      document_id: documentRef.documentId,
+    };
+    memory.putConfig({
+      agent_id: documentRef.agentId,
+      tenant_id: "tenant-acme",
+      actor_id: "actor-reviewer",
+      configuration_revision: "1",
+      runtime_configuration_revision: "1",
+      content_hash: "doc-wake-test",
+      permission_review: false,
+      agent: { name: "Reviewer", instructions: "Reply to comments." },
+      runtime: {
+        type: "local",
+        model: "test-model",
+        placement: {
+          tenant_id: "tenant-acme",
+          owner_actor_id: "owner-1",
+          computer_id: "computer-1",
+          runtime_type: "codex",
+          workspace_grant_id: "grant-1",
+          assignment_revision: "1",
+        },
+      },
+      resources: { skills: [], mcp_servers: [] },
+    });
+    const listWaitingContexts = vi.fn(async () => {
+      throw new Error("periodic waiting sweep should not be called");
+    });
+    const claimRun = vi.fn(async () => {
+      memory.putWorkState(wireDocumentRef, {
+        has_pending_work: false,
+        has_queued_runs: false,
+      });
+      return { claimed: false as const };
+    });
+    memory.client.listWaitingContexts = listWaitingContexts;
+    memory.client.claimRun = claimRun;
+
+    const store = new TeamHubExecutionContextStore({ client: memory.client });
+    const startup = await store.start();
+    expect(startup.waitingContextKeys).toEqual([]);
+
+    const ghostStore = createInMemoryGhostStore<LocalRuntimeSettings>();
+    await ghostStore.insert({
+      agentId: documentRef.agentId,
+      actorId: "actor-reviewer",
+      tenantId: "tenant-acme",
+      revision: "1",
+      agent: { name: "Reviewer", instructions: "Reply to comments." },
+      runtime: {
+        type: "local",
+        model: "test-model",
+        placement: {
+          type: "local",
+          tenantId: "tenant-acme",
+          ownerActorId: "owner-1",
+          computerId: "computer-1",
+          runtimeType: "codex",
+          workspaceGrantId: "grant-1",
+          assignmentRevision: 1,
+        },
+      },
+      resources: { skills: [], mcpServers: [] },
+    });
+    const provider: AgentProvider = {
+      async createSession() {
+        throw new Error("unexpected createSession");
+      },
+      async resumeSession() {
+        throw new Error("unexpected resumeSession");
+      },
+      async startRun() {
+        throw new Error("unexpected startRun");
+      },
+      async steer() {
+        throw new Error("unexpected steer");
+      },
+      async close() {},
+    };
+    const activate = vi.fn(async (request) => ({
+      ref: request.ref,
+      provider,
+      runtimeName: "test",
+      runtimeSession: { threadId: "doc-thread-1" },
+      sessionSpec: {
+        workingDirectory: "/workspace",
+        threadName: "Doc",
+        sandboxMode: "workspace-write" as const,
+        resources: { mcpServers: [] },
+      },
+      setActiveRunContext() {},
+      async deactivate() {
+        await provider.close();
+      },
+    }));
+    const activator: ContextRuntimeActivator<LocalRuntimeSettings> = {
+      activate,
+    };
+    const silentLogger: AgentLogger = {
+      log: () => undefined,
+      child: () => silentLogger,
+    };
+    const manager = new ExecutorRegistry<LocalRuntimeSettings>({
+      ghostStore,
+      contextStore: store,
+      identityResolver: {
+        async resolveIdentity() {
+          return {
+            actorId: "actor-reviewer",
+            agentType: "general",
+            sponsor: { actorId: "human-1", displayName: "Human" },
+          };
+        },
+      },
+      executorServices: {
+        activator,
+        stateFactory: (input) =>
+          createTeamHubContextRuntimeState({
+            client: memory.client,
+            ref: input.ref,
+            configurationRevision: input.configurationRevision,
+            providerKind: "codex",
+          }),
+      },
+      features: createBuiltinAgentFeatures({
+        services: { logger: silentLogger },
+      }),
+    });
+    try {
+      await manager.restore();
+      const created = await memory.client.ensureContext({
+        ref: wireDocumentRef,
+        target_residency: "suspended",
+      });
+      const contextKey = created.context.context_key;
+      memory.putWorkState(wireDocumentRef, {
+        has_pending_work: true,
+        has_queued_runs: true,
+      });
+
+      // Suspended change hint does not bind or activate.
+      expect(
+        await store.claimByKey(
+          contextKey,
+          true,
+          "changed",
+          created.context.state_revision,
+        ),
+      ).toBeNull();
+      expect(activate).not.toHaveBeenCalled();
+
+      // TeamHub activates the Document Context and emits context.changed.
+      const activated = await memory.client.setContextResidency({
+        context_key: contextKey,
+        expected_revision: created.context.state_revision,
+        target_residency: "active",
+      });
+      const bound = await store.claimByKey(
+        contextKey,
+        true,
+        "changed",
+        activated.state_revision,
+      );
+      expect(bound).toEqual(documentRecord("active"));
+      await vi.waitFor(() => expect(claimRun).toHaveBeenCalled());
+      expect(activate).toHaveBeenCalledOnce();
+      expect(listWaitingContexts).not.toHaveBeenCalled();
+    } finally {
+      await manager.close();
       await store.close();
     }
   });
@@ -402,10 +693,23 @@ const roomRef = {
   roomId: "room-review",
 };
 
+const documentRef = {
+  kind: "document" as const,
+  agentId: "agent-reviewer",
+  documentId: "doc-standalone",
+};
+
 const record = (): ExecutionContextRecord => ({
   ref: roomRef,
   roomKind: "collaboration",
   targetResidency: "suspended",
+});
+
+const documentRecord = (
+  targetResidency: ExecutionContextRecord["targetResidency"],
+): ExecutionContextRecord => ({
+  ref: documentRef,
+  targetResidency,
 });
 
 const runtimeContext = (
@@ -420,4 +724,22 @@ const runtimeContext = (
   target_residency: targetResidency,
   state_revision: "1",
   next_input_sequence: "0",
+});
+
+const documentRuntimeContext = (
+  targetResidency: RuntimeContext["target_residency"],
+  stateRevision = "1",
+  nextInputSequence = "0",
+): RuntimeContext => ({
+  context_key: `["document","agent-reviewer","${documentRef.documentId}"]`,
+  ref: {
+    kind: "document",
+    agent_id: "agent-reviewer",
+    document_id: documentRef.documentId,
+  },
+  tenant_id: "tenant-acme",
+  agent_actor_id: "actor-reviewer",
+  target_residency: targetResidency,
+  state_revision: stateRevision,
+  next_input_sequence: nextInputSequence,
 });

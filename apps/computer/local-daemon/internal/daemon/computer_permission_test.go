@@ -116,12 +116,13 @@ func TestComputerPermissionCommandEchoesIdentityAndOutcome(t *testing.T) {
 	}
 }
 
-func TestComputerPermissionsCapabilityIsAlwaysAdvertised(t *testing.T) {
-	if got := (&Daemon{}).capabilities(); len(got) != 1 || got[0] != "computer_permissions" {
-		t.Fatalf("capabilities = %v", got)
+func TestHostCapabilitiesAreAlwaysAdvertised(t *testing.T) {
+	want := []string{"computer_permissions", "browser_connection"}
+	if got := (&Daemon{}).capabilities(); !slices.Equal(got, want) {
+		t.Fatalf("capabilities without manager = %v, want %v", got, want)
 	}
 	d := &Daemon{browserConnections: &deadlineBrowserConnections{}}
-	if got := d.capabilities(); len(got) != 2 || got[0] != "computer_permissions" || got[1] != "browser_connection" {
-		t.Fatalf("capabilities = %v", got)
+	if got := d.capabilities(); !slices.Equal(got, want) {
+		t.Fatalf("capabilities with manager = %v, want %v", got, want)
 	}
 }

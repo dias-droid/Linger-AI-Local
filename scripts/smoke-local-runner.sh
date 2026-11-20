@@ -43,8 +43,16 @@ mkdir -p \
   "$TMP_ROOT/workspace-c"
 touch "$CALLBACK_LOG" "$PROXY_EVENTS"
 printf '[]\n' >"$INBOX_MESSAGES"
-mkdir -p "$TMP_ROOT/agent-codex-home"
+mkdir -p \
+  "$TMP_ROOT/agent-codex-home" \
+  "$TMP_ROOT/daemon-claude-home" \
+  "$TMP_ROOT/daemon-pi-home"
 printf '{}\n' >"$TMP_ROOT/agent-codex-home/auth.json"
+# Keep the deterministic smoke isolated from host provider configs and API links.
+unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY OPENAI_BASE_URL OPENAI_API_KEY
+export CODEX_HOME="$TMP_ROOT/agent-codex-home"
+export CLAUDE_CONFIG_DIR="$TMP_ROOT/daemon-claude-home"
+export PI_CODING_AGENT_DIR="$TMP_ROOT/daemon-pi-home"
 
 cleanup() {
   local exit_code=$?
@@ -288,38 +296,104 @@ wait_for_two_running_runs() {
   done
   printf 'Two concurrent run.start operations were not observed\n' >&2
   computer daemon runners --json >&2 || true
-  node - "$TMP_ROOT/computer-state/operations.sqlite" <<'NODE' >&2 || true
-import { DatabaseSync } from "node:sqlite";
-const database = new DatabaseSync(process.argv[2], { readOnly: true });
-	console.error(JSON.stringify(database.prepare(`
-	  SELECT operation_id,status,last_acked_seq,last_emitted_seq
-	  FROM operations ORDER BY created_at,operation_id
-	`).all()));
-database.close();
+  node - "$PROXY_EVENTS" <<'NODE' >&2 || true
+import { readFileSync } from "node:fs";
+const operations = new Map();
+for (const line of readFileSync(process.argv[2], "utf8").split("\n")) {
+  if (!line.trim()) continue;
+  const event = JSON.parse(line);
+  if (event.type === "operation_start") {
+    const entry = operations.get(event.operation_id) ?? {
+      operation_id: event.operation_id,
+      status: "starting",
+      last_acked_seq: 0,
+      last_emitted_seq: 0,
+    };
+    entry.operation_kind = event.operation_kind;
+    operations.set(event.operation_id, entry);
+  } else if (event.type === "operation_daemon_frame") {
+    const entry = operations.get(event.operation_id) ?? {
+      operation_id: event.operation_id,
+      status: "running",
+      last_acked_seq: 0,
+      last_emitted_seq: 0,
+    };
+    if (typeof event.seq === "number" && event.seq > entry.last_emitted_seq) {
+      entry.last_emitted_seq = event.seq;
+    }
+    if (
+      event.frame_type === "operation.completed" ||
+      event.frame_type === "operation.failed" ||
+      event.frame_type === "operation.cancelled"
+    ) {
+      entry.status = "terminal";
+    } else if (entry.status !== "terminal") {
+      entry.status = "running";
+    }
+    operations.set(event.operation_id, entry);
+  } else if (event.type === "operation_ack") {
+    const entry = operations.get(event.operation_id);
+    if (entry && event.through_seq > entry.last_acked_seq) {
+      entry.last_acked_seq = event.through_seq;
+    }
+  }
+}
+console.error(JSON.stringify([...operations.values()]));
 NODE
   return 1
 }
 
 snapshot_active_run_owners() {
   local output_file=$1
-  node - "$TMP_ROOT/computer-state/operations.sqlite" "$output_file" <<'NODE'
-import { writeFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
+  node - "$PROXY_EVENTS" "$output_file" <<'NODE'
+import { readFileSync, writeFileSync } from "node:fs";
 
-const database = new DatabaseSync(process.argv[2], { readOnly: true });
-const rows = database.prepare(`
-	  SELECT operation_id,identity_json,operation_kind
-	  FROM operations
-	  WHERE status='running' ORDER BY operation_id
-	`).all().flatMap(({ operation_id, identity_json, operation_kind }) => {
-	  if (operation_kind !== "run.start") return [];
-  const encoded = typeof identity_json === "string"
-    ? identity_json
-    : Buffer.from(identity_json).toString("utf8");
-  const identity = JSON.parse(encoded);
-  return [{ agent_id: identity.agent_id, operation_id }];
-});
-database.close();
+const operations = new Map();
+for (const line of readFileSync(process.argv[2], "utf8").split("\n")) {
+  if (!line.trim()) continue;
+  const event = JSON.parse(line);
+  if (event.type === "operation_start") {
+    const entry = operations.get(event.operation_id) ?? {
+      agent_id: event.agent_id,
+      operation_id: event.operation_id,
+      operation_kind: event.operation_kind,
+      accepted: false,
+      terminal: false,
+    };
+    entry.agent_id = event.agent_id;
+    entry.operation_kind = event.operation_kind;
+    operations.set(event.operation_id, entry);
+  } else if (event.type === "operation_daemon_frame") {
+    const entry = operations.get(event.operation_id) ?? {
+      agent_id: event.agent_id,
+      operation_id: event.operation_id,
+      operation_kind: null,
+      accepted: false,
+      terminal: false,
+    };
+    entry.agent_id ??= event.agent_id;
+    if (
+      event.frame_type === "operation.accepted" ||
+      event.frame_type === "operation.event"
+    ) {
+      entry.accepted = true;
+    } else if (
+      event.frame_type === "operation.completed" ||
+      event.frame_type === "operation.failed" ||
+      event.frame_type === "operation.cancelled"
+    ) {
+      entry.terminal = true;
+    }
+    operations.set(event.operation_id, entry);
+  }
+}
+const rows = [...operations.values()]
+  .filter(
+    (entry) =>
+      entry.operation_kind === "run.start" && entry.accepted && !entry.terminal,
+  )
+  .map(({ agent_id, operation_id }) => ({ agent_id, operation_id }))
+  .sort((left, right) => left.operation_id.localeCompare(right.operation_id));
 if (rows.length !== 2) process.exit(1);
 writeFileSync(process.argv[3], JSON.stringify(rows));
 NODE
@@ -403,14 +477,13 @@ wait_for_run_receipt_terminal() {
       >"$TMP_ROOT/runtime-state-snapshot.json" 2>/dev/null &&
       node - \
       "$TMP_ROOT/runtime-state-snapshot.json" \
-      "$TMP_ROOT/computer-state/operations.sqlite" \
+      "$PROXY_EVENTS" \
       "$agent_id" \
       "$expected_receipt_count" \
       "$expected_connection_epoch" <<'NODE'
 import { readFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
 
-const [snapshotPath, ledgerPath, agentId, expectedCountText, epochText] =
+const [snapshotPath, proxyEventsPath, agentId, expectedCountText, epochText] =
   process.argv.slice(2);
 const starts = JSON.parse(readFileSync(snapshotPath, "utf8"))
   .operation_receipts
@@ -422,21 +495,35 @@ const starts = JSON.parse(readFileSync(snapshotPath, "utf8"))
 if (starts.length < Number(expectedCountText)) process.exit(1);
 const latest = starts.at(-1);
 
-const ledger = new DatabaseSync(ledgerPath, { readOnly: true });
-const operation = ledger
-  .prepare(`
-	    SELECT operation_id,status,last_acked_seq,last_emitted_seq,
-	           terminal_event_json
-    FROM operations WHERE operation_id = ?
-  `)
-  .get(latest.operation_id);
-ledger.close();
-if (
-  operation?.status !== "terminal" ||
-  !operation.terminal_event_json ||
-  operation.last_emitted_seq < 1 ||
-  operation.last_acked_seq !== operation.last_emitted_seq
-) process.exit(1);
+let terminal = false;
+let lastEmittedSeq = 0;
+let lastAckedSeq = 0;
+for (const line of readFileSync(proxyEventsPath, "utf8").split("\n")) {
+  if (!line.trim()) continue;
+  const event = JSON.parse(line);
+  if (event.operation_id !== latest.operation_id) continue;
+  if (event.type === "operation_daemon_frame") {
+    if (typeof event.seq === "number" && event.seq > lastEmittedSeq) {
+      lastEmittedSeq = event.seq;
+    }
+    if (
+      event.frame_type === "operation.completed" ||
+      event.frame_type === "operation.failed" ||
+      event.frame_type === "operation.cancelled"
+    ) {
+      terminal = true;
+    }
+  } else if (
+    event.type === "operation_ack" &&
+    typeof event.through_seq === "number" &&
+    event.through_seq > lastAckedSeq
+  ) {
+    lastAckedSeq = event.through_seq;
+  }
+}
+if (!terminal || lastEmittedSeq < 1 || lastAckedSeq !== lastEmittedSeq) {
+  process.exit(1);
+}
 NODE
     then
       return 0
@@ -517,21 +604,46 @@ wait_for_agent_runtime_status() {
 wait_for_two_unacknowledged_run_events() {
   local output_file=$1
   for _ in {1..240}; do
-    if node - "$TMP_ROOT/computer-state/operations.sqlite" "$output_file" <<'NODE'
-import { writeFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
+    if node - "$PROXY_EVENTS" "$output_file" <<'NODE'
+import { readFileSync, writeFileSync } from "node:fs";
 
-const database = new DatabaseSync(process.argv[2], { readOnly: true });
-const rows = database
-  .prepare(`
-	    SELECT operation_id,last_emitted_seq
-	    FROM operations
-	    WHERE last_emitted_seq > last_acked_seq
-    ORDER BY operation_id
-  `)
-  .all()
-  .map(({ operation_id, last_emitted_seq }) => ({ operation_id, last_emitted_seq }));
-database.close();
+const operations = new Map();
+for (const line of readFileSync(process.argv[2], "utf8").split("\n")) {
+  if (!line.trim()) continue;
+  const event = JSON.parse(line);
+  if (
+    event.type === "operation_daemon_frame" &&
+    typeof event.seq === "number"
+  ) {
+    const entry = operations.get(event.operation_id) ?? {
+      operation_id: event.operation_id,
+      last_emitted_seq: 0,
+      last_acked_seq: 0,
+    };
+    if (event.seq > entry.last_emitted_seq) entry.last_emitted_seq = event.seq;
+    operations.set(event.operation_id, entry);
+  } else if (
+    event.type === "operation_ack" &&
+    typeof event.through_seq === "number"
+  ) {
+    const entry = operations.get(event.operation_id) ?? {
+      operation_id: event.operation_id,
+      last_emitted_seq: 0,
+      last_acked_seq: 0,
+    };
+    if (event.through_seq > entry.last_acked_seq) {
+      entry.last_acked_seq = event.through_seq;
+    }
+    operations.set(event.operation_id, entry);
+  }
+}
+const rows = [...operations.values()]
+  .filter((entry) => entry.last_emitted_seq > entry.last_acked_seq)
+  .map(({ operation_id, last_emitted_seq }) => ({
+    operation_id,
+    last_emitted_seq,
+  }))
+  .sort((left, right) => left.operation_id.localeCompare(right.operation_id));
 if (rows.length !== 2) {
   process.exit(1);
 }
@@ -549,20 +661,26 @@ NODE
 wait_for_replayed_event_acknowledgements() {
   local expected_file=$1
   for _ in {1..240}; do
-    if node - "$TMP_ROOT/computer-state/operations.sqlite" "$expected_file" <<'NODE'
+    if node - "$PROXY_EVENTS" "$expected_file" <<'NODE'
 import { readFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
 
 const expected = JSON.parse(readFileSync(process.argv[3], "utf8"));
-const database = new DatabaseSync(process.argv[2], { readOnly: true });
-const statement = database.prepare(`
-  SELECT last_acked_seq FROM operations WHERE operation_id = ?
-`);
-const acknowledged = expected.every(({ operation_id, last_emitted_seq }) => {
-  const row = statement.get(operation_id);
-  return row && row.last_acked_seq >= last_emitted_seq;
-});
-database.close();
+const acked = new Map();
+for (const line of readFileSync(process.argv[2], "utf8").split("\n")) {
+  if (!line.trim()) continue;
+  const event = JSON.parse(line);
+  if (
+    event.type === "operation_ack" &&
+    typeof event.through_seq === "number" &&
+    event.through_seq > (acked.get(event.operation_id) ?? 0)
+  ) {
+    acked.set(event.operation_id, event.through_seq);
+  }
+}
+const acknowledged = expected.every(
+  ({ operation_id, last_emitted_seq }) =>
+    (acked.get(operation_id) ?? 0) >= last_emitted_seq,
+);
 process.exit(acknowledged ? 0 : 1);
 NODE
     then
@@ -646,19 +764,24 @@ enroll_computer() {
 
 verify_offline_agent_removal() {
   local agent_id=$1
-  # Product deletion succeeds while the old identity is offline. Its retained
-  # Runner tombstone must still clean up the real Daemon on the next connection.
+  # Product deletion succeeds while the Computer is offline. On reconnect,
+  # TeamHub omits the revoked Agent from connect placements, so the Daemon
+  # reconciles without holding an active Runner for it.
   revoke_agent "$agent_id"
   SHELL="$LOGIN_SHELL_FIXTURE" \
   computer daemon start >"$TMP_ROOT/daemon-after-offline-delete.log" 2>&1
   DAEMON_PID="$(computer daemon status --json | jq -er '.daemon.pid')"
   wait_for_gateway_ready
   for attempt in {1..160}; do
-    computer daemon runners --json >"$TMP_ROOT/runners-after-offline-delete.json"
-    if jq -e --arg agent "$agent_id" \
-      'any(.runners[]; .agent_id == $agent and .state == "removed" and .pid == null)' \
-      "$TMP_ROOT/runners-after-offline-delete.json" >/dev/null; then
-      break
+    if computer daemon status --json 2>/dev/null | jq -e \
+      '.daemon.gateway_state == "connected" and .daemon.reconciled == true' \
+      >/dev/null; then
+      computer daemon runners --json >"$TMP_ROOT/runners-after-offline-delete.json"
+      if jq -e --arg agent "$agent_id" \
+        'all(.runners[]; .agent_id != $agent or (.state == "removed" and .pid == null))' \
+        "$TMP_ROOT/runners-after-offline-delete.json" >/dev/null; then
+        break
+      fi
     fi
     if [[ "$attempt" == 160 ]]; then
       printf 'Offline Agent removal did not reconcile on reconnect\n' >&2
@@ -936,23 +1059,31 @@ wait_for_run_receipt_terminal \
   1
 
 DAEMON_PID_BEFORE_LOGIN="$(computer daemon status --json | jq -er '.daemon.pid')"
-node - "$TMP_ROOT/computer-state/operations.sqlite" "$TMP_ROOT/auth-operation-baseline.json" <<'NODE'
-import { writeFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
+node - "$PROXY_EVENTS" "$TMP_ROOT/auth-operation-baseline.json" <<'NODE'
+import { readFileSync, writeFileSync } from "node:fs";
 
-const database = new DatabaseSync(process.argv[2], { readOnly: true });
+const kinds = new Map();
+const terminal = new Set();
+for (const line of readFileSync(process.argv[2], "utf8").split("\n")) {
+  if (!line.trim()) continue;
+  const event = JSON.parse(line);
+  if (event.type === "operation_start" && event.operation_kind) {
+    kinds.set(event.operation_id, event.operation_kind);
+  } else if (
+    event.type === "operation_daemon_frame" &&
+    (event.frame_type === "operation.completed" ||
+      event.frame_type === "operation.failed" ||
+      event.frame_type === "operation.cancelled")
+  ) {
+    terminal.add(event.operation_id);
+  }
+}
 const counts = Object.entries(
-  database.prepare("SELECT terminal_event_json FROM operations WHERE status='terminal'").all()
-    .map(({ terminal_event_json }) => JSON.parse(
-      typeof terminal_event_json === "string"
-        ? terminal_event_json
-        : Buffer.from(terminal_event_json).toString("utf8"),
-    ).payload?.type)
-    .map((type) => type === "run" ? "run.start" : type)
+  [...terminal]
+    .map((operationId) => kinds.get(operationId))
     .filter((kind) => kind === "run.start")
     .reduce((result, kind) => ({ ...result, [kind]: (result[kind] ?? 0) + 1 }), {}),
 ).sort(([left], [right]) => left.localeCompare(right));
-database.close();
 writeFileSync(process.argv[3], JSON.stringify(counts));
 NODE
 curl --fail-with-body --silent --show-error \
@@ -998,23 +1129,31 @@ jq -e \
   --slurpfile baseline "$TMP_ROOT/auth-retired-invocation-baseline.json" \
   '.count == $baseline[0].count' \
   "$TEAMHUB_FIXTURE_STATE" >/dev/null
-node - "$TMP_ROOT/computer-state/operations.sqlite" "$TMP_ROOT/auth-operation-baseline.json" <<'NODE'
+node - "$PROXY_EVENTS" "$TMP_ROOT/auth-operation-baseline.json" <<'NODE'
 import { readFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
 
-const database = new DatabaseSync(process.argv[2], { readOnly: true });
+const kinds = new Map();
+const terminal = new Set();
+for (const line of readFileSync(process.argv[2], "utf8").split("\n")) {
+  if (!line.trim()) continue;
+  const event = JSON.parse(line);
+  if (event.type === "operation_start" && event.operation_kind) {
+    kinds.set(event.operation_id, event.operation_kind);
+  } else if (
+    event.type === "operation_daemon_frame" &&
+    (event.frame_type === "operation.completed" ||
+      event.frame_type === "operation.failed" ||
+      event.frame_type === "operation.cancelled")
+  ) {
+    terminal.add(event.operation_id);
+  }
+}
 const counts = Object.entries(
-  database.prepare("SELECT terminal_event_json FROM operations WHERE status='terminal'").all()
-    .map(({ terminal_event_json }) => JSON.parse(
-      typeof terminal_event_json === "string"
-        ? terminal_event_json
-        : Buffer.from(terminal_event_json).toString("utf8"),
-    ).payload?.type)
-    .map((type) => type === "run" ? "run.start" : type)
+  [...terminal]
+    .map((operationId) => kinds.get(operationId))
     .filter((kind) => kind === "run.start")
     .reduce((result, kind) => ({ ...result, [kind]: (result[kind] ?? 0) + 1 }), {}),
 ).sort(([left], [right]) => left.localeCompare(right));
-database.close();
 const baseline = JSON.parse(readFileSync(process.argv[3], "utf8"));
 if (JSON.stringify(counts) !== JSON.stringify(baseline)) {
   throw new Error("Runtime authentication failure started a Run Operation");
@@ -1136,26 +1275,30 @@ kill -USR2 "$PROXY_PID"
 wait_for_proxy_event "block_agent_to_daemon"
 wait_for_two_unacknowledged_run_events "$TMP_ROOT/unacknowledged-run-events.json"
 node - \
-  "$TMP_ROOT/computer-state/operations.sqlite" \
+  "$PROXY_EVENTS" \
   "$TMP_ROOT/unacknowledged-run-events.json" \
   "$TMP_ROOT/runs-during-disconnect.owners" <<'NODE'
 import { readFileSync, writeFileSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
 
 const expected = JSON.parse(readFileSync(process.argv[3], "utf8"));
-const database = new DatabaseSync(process.argv[2], { readOnly: true });
-const statement = database.prepare(
-  "SELECT identity_json FROM operations WHERE operation_id=?",
-);
+const agentsByOperation = new Map();
+for (const line of readFileSync(process.argv[2], "utf8").split("\n")) {
+  if (!line.trim()) continue;
+  const event = JSON.parse(line);
+  if (
+    (event.type === "operation_start" ||
+      event.type === "operation_daemon_frame") &&
+    event.operation_id &&
+    event.agent_id
+  ) {
+    agentsByOperation.set(event.operation_id, event.agent_id);
+  }
+}
 const owners = expected.map(({ operation_id }) => {
-  const row = statement.get(operation_id);
-  if (!row) throw new Error(`Missing retained Operation ${operation_id}`);
-  const encoded = typeof row.identity_json === "string"
-    ? row.identity_json
-    : Buffer.from(row.identity_json).toString("utf8");
-  return { agent_id: JSON.parse(encoded).agent_id, operation_id };
+  const agentId = agentsByOperation.get(operation_id);
+  if (!agentId) throw new Error(`Missing retained Operation ${operation_id}`);
+  return { agent_id: agentId, operation_id };
 }).sort((left, right) => left.operation_id.localeCompare(right.operation_id));
-database.close();
 writeFileSync(process.argv[4], JSON.stringify(owners));
 NODE
 cmp \
@@ -1186,21 +1329,30 @@ computer daemon runners --json | jq -e \
   '.runners | length == 3 and all(.[]; .state == "ready" and .active_operation_id == null)' \
   >/dev/null
 
-node - "$TMP_ROOT/computer-state/operations.sqlite" <<'NODE'
-import { DatabaseSync } from "node:sqlite";
+node - "$PROXY_EVENTS" <<'NODE'
+import { readFileSync } from "node:fs";
 
-const database = new DatabaseSync(process.argv[2], { readOnly: true });
+const kinds = new Map();
+const terminal = new Set();
+for (const line of readFileSync(process.argv[2], "utf8").split("\n")) {
+  if (!line.trim()) continue;
+  const event = JSON.parse(line);
+  if (event.type === "operation_start" && event.operation_kind) {
+    kinds.set(event.operation_id, event.operation_kind);
+  } else if (
+    event.type === "operation_daemon_frame" &&
+    (event.frame_type === "operation.completed" ||
+      event.frame_type === "operation.failed" ||
+      event.frame_type === "operation.cancelled")
+  ) {
+    terminal.add(event.operation_id);
+  }
+}
 const rows = Object.entries(
-  database.prepare("SELECT terminal_event_json FROM operations WHERE status='terminal'").all()
-    .map(({ terminal_event_json }) => JSON.parse(
-      typeof terminal_event_json === "string"
-        ? terminal_event_json
-        : Buffer.from(terminal_event_json).toString("utf8"),
-    ).payload?.type)
-    .map((type) => type === "run" ? "run.start" : type)
+  [...terminal]
+    .map((operationId) => kinds.get(operationId) ?? "unknown")
     .reduce((result, kind) => ({ ...result, [kind]: (result[kind] ?? 0) + 1 }), {}),
 ).map(([kind, count]) => ({ kind, count })).sort((left, right) => left.kind.localeCompare(right.kind));
-database.close();
 const expected = [{ kind: "run.start", count: 5 }];
 if (JSON.stringify(rows) !== JSON.stringify(expected)) {
   throw new Error(`Unexpected operation ledger: ${JSON.stringify(rows)}`);

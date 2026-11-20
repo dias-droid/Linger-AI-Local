@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createMemoryRouter, Outlet, RouterProvider } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -594,7 +594,61 @@ describe("TeamHub routes", () => {
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "TeamHub unavailable" }),
+      screen.getByRole("heading", { name: "Linger is unavailable" }),
+    ).toBeVisible();
+    expect(screen.queryByRole("heading", { name: /TeamHub/ })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Back to my Rooms" }),
+    ).toBeVisible();
+  });
+
+  it("renders user-facing wording and a working Back to my Rooms action on client route errors", async () => {
+    const runtime = createTestTeamHubRuntime();
+    const queryClient = testQueryClient();
+    const routes = createAppRoutes(queryClient, runtime);
+    const tenantRoute = routes.find((route) => route.path === "/t/:tenantId")!;
+    tenantRoute.children = [
+      {
+        loader: () => {
+          throw new Error("Unexpected client crash");
+        },
+        path: "rooms/crash-room/chat",
+      },
+      ...(tenantRoute.children ?? []),
+    ];
+    const router = createMemoryRouter(routes, {
+      initialEntries: ["/t/tenant-northstar/rooms/crash-room/chat"],
+    });
+
+    renderApp(queryClient, runtime, router);
+
+    expect(
+      await screen.findByRole("heading", { name: "Something went wrong" }),
+    ).toBeVisible();
+    expect(screen.queryByText(/TeamHub/i)).toBeNull();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeVisible();
+    const backButton = screen.getByRole("button", { name: "Back to my Rooms" });
+    expect(backButton).toBeVisible();
+
+    fireEvent.click(backButton);
+    await waitFor(() =>
+      expect(router.state.location.pathname).toMatch(
+        /^\/t\/tenant-northstar\/rooms\/room-/,
+      ),
+    );
+  });
+
+  it("routes /t/:tenantId/dashboard without requiring a workItemId", async () => {
+    const runtime = createTestTeamHubRuntime();
+    const queryClient = testQueryClient();
+    const router = createMemoryRouter(createAppRoutes(queryClient, runtime), {
+      initialEntries: ["/t/tenant-northstar/dashboard"],
+    });
+
+    renderApp(queryClient, runtime, router);
+
+    expect(
+      await screen.findByRole("heading", { name: "Fixture Dashboard" }),
     ).toBeVisible();
   });
 

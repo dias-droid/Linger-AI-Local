@@ -56,7 +56,13 @@ import {
   type ComputerReadiness,
 } from "./computer-readiness";
 import { relativeTime } from "./computer-relative-time";
-import { ComputerRow, ProgressChip, RowMark, StatusDot } from "./computer-row";
+import {
+  ComputerRow,
+  ProgressChip,
+  ProgressConnector,
+  RowMark,
+  StatusDot,
+} from "./computer-row";
 import { isUpgradeRecommended } from "./computer-version";
 
 type LocalComputer = TeamHubLocalComputerPage["items"][number];
@@ -78,7 +84,10 @@ export function ComputerDetail({
   agentAvailabilities: ReadonlyMap<string, AgentAvailability>;
   agents: TeamHubTenantAgent[];
   /** The browser status as a progress chip or an Access row; the page owns its TeamHub reads. */
-  browserConnection?: (variant: "chip" | "row") => ReactNode;
+  browserConnection?: (
+    variant: "chip" | "row",
+    options?: { connectorDashed?: boolean },
+  ) => ReactNode;
   computer: LocalComputer;
   /** Where this Computer's Local models page is; the page owns the route. */
   localModelsHref?: string;
@@ -125,7 +134,9 @@ export function ComputerDetail({
       role="region"
     >
       <ComputerSummary
-        browserChip={browserConnection?.("chip")}
+        browserChip={browserConnection?.("chip", {
+          connectorDashed: readiness.kind !== "ready",
+        })}
         computer={computer}
         displayStatus={displayStatus}
         onConnect={onConnect}
@@ -338,7 +349,7 @@ function ComputerSummary({
               state="done"
             />
           )}
-          <span aria-hidden className="w-6 border-t border-border-hover" />
+          <ProgressConnector />
           {readiness.kind === "ready" ? (
             <ProgressChip
               hint={`Agents use ${appNames[readiness.app]} here`}
@@ -382,13 +393,6 @@ function ComputerSummary({
               state="attention"
             />
           )}
-          <span
-            aria-hidden
-            className={cn(
-              "w-6 border-t border-border-hover",
-              readiness.kind !== "ready" && "border-dashed",
-            )}
-          />
           {browserChip}
         </div>
       )}

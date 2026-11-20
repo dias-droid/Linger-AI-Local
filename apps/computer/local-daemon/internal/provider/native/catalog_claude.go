@@ -72,24 +72,44 @@ func claudeCatalog(ctx context.Context, inv Invocation) (ModelList, error) {
 	if err != nil {
 		return ModelList{}, err
 	}
-	var models catalogModels
-	var resolved []ModelOption
+	var entries []claudeCatalogModel
+	seen := map[string]bool{}
+	summaryCounts := map[string]int{}
 	for _, raw := range advertised {
 		var entry claudeCatalogModel
 		if json.Unmarshal(raw, &entry) != nil {
 			continue
 		}
-		id := entry.Value
-		if !validCatalogToken(id) {
-			id = entry.ResolvedModel
+		entries = append(entries, entry)
+		id := claudeCatalogID(entry)
+		if !validCatalogToken(id) || seen[id] {
+			continue
 		}
+		seen[id] = true
+		if entry.Value != "default" {
+			if summary, hasDetail := claudeDescriptionSummary(entry.Description); hasDetail && summary != "" {
+				summaryCounts[summary]++
+			}
+		}
+	}
+	var models catalogModels
+	var resolved []ModelOption
+	for _, entry := range entries {
+		id := claudeCatalogID(entry)
 		var efforts effortCatalog
 		if entry.SupportsEffort == nil || *entry.SupportsEffort {
 			for _, level := range entry.SupportedEffortLevels {
 				efforts.add(level, "")
 			}
 		}
-		option := ModelOption{ID: id, Label: claudeModelLabel(entry), Provider: "anthropic", Default: entry.Value == "default", Effort: efforts.support("")}
+		summary, hasDetail := claudeDescriptionSummary(entry.Description)
+		option := ModelOption{
+			ID:       id,
+			Label:    claudeModelLabel(entry, hasDetail && summaryCounts[summary] == 1),
+			Provider: "anthropic",
+			Default:  entry.Value == "default",
+			Effort:   efforts.support(""),
+		}
 		if entry.ResolvedModel != id {
 			option.Resolved = entry.ResolvedModel
 		}
@@ -113,16 +133,36 @@ func claudeCatalog(ctx context.Context, inv Invocation) (ModelList, error) {
 	return models.list(), nil
 }
 
-// The native picker puts the concrete version in its description, while the
-// display name is only a family label. This formatting never selects a model.
-func claudeModelLabel(entry claudeCatalogModel) string {
+func claudeCatalogID(entry claudeCatalogModel) string {
+	if validCatalogToken(entry.Value) {
+		return entry.Value
+	}
+	return entry.ResolvedModel
+}
+
+func claudeDescriptionSummary(description string) (string, bool) {
+	summary, _, hasDetail := strings.Cut(strings.TrimSpace(description), " · ")
+	return strings.TrimSpace(summary), hasDetail
+}
+
+// Native entries put the concrete version before " · " in description while
+// displayName is only a family label. Gateway entries or descriptions without
+// a unique " · " summary keep displayName (falling back to the model ID when
+// empty). This formatting never selects a model.
+func claudeModelLabel(entry claudeCatalogModel, useDescriptionSummary bool) string {
 	label := strings.TrimSpace(entry.DisplayName)
-	summary, _, _ := strings.Cut(strings.TrimSpace(entry.Description), " · ")
+	summary, _ := claudeDescriptionSummary(entry.Description)
 	if summary == "" {
 		return label
 	}
-	if entry.Value == "default" && label != "" {
-		return label + " · " + summary
+	if entry.Value == "default" {
+		if label != "" {
+			return label + " · " + summary
+		}
+		return summary
 	}
-	return summary
+	if useDescriptionSummary {
+		return summary
+	}
+	return label
 }

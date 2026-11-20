@@ -70,9 +70,16 @@ type BrowserCommandError struct {
 
 func (e *BrowserCommandError) Error() string { return e.Code + ": " + e.Message }
 
-// ConnectsEverydayBrowser reports whether this Computer can attach the
-// user's everyday Chrome. Linux cannot, so it does not declare the capability.
-func (m *Manager) ConnectsEverydayBrowser() bool { return m.userChromeSupported() }
+// UnsupportedBrowserStatus describes a Computer that cannot attach the user's
+// everyday Chrome; Agents keep their own isolated browser.
+func UnsupportedBrowserStatus() BrowserStatus {
+	return BrowserStatus{
+		Mode:     "isolated",
+		State:    browserUnsupported,
+		Platform: runtime.GOOS,
+		Message:  "This Computer has no everyday browser to connect; Agents use their own browser without the user's sign-ins.",
+	}
+}
 
 func (m *Manager) userChromeSupported() bool {
 	return m.journal != nil && !m.noEverydayChrome
@@ -139,12 +146,10 @@ func (m *Manager) markBrowserConnection(connection *browserConnection, state, me
 }
 
 func (m *Manager) browserStatus(connection *browserConnection) BrowserStatus {
-	status := BrowserStatus{Mode: "isolated", State: browserIsolated, Platform: runtime.GOOS}
 	if !m.userChromeSupported() {
-		status.State = browserUnsupported
-		status.Message = "This Computer has no everyday browser to connect; Agents use their own browser without the user's sign-ins."
-		return status
+		return UnsupportedBrowserStatus()
 	}
+	status := BrowserStatus{Mode: "isolated", State: browserIsolated, Platform: runtime.GOOS}
 	if connection == nil {
 		if m.everydayChrome() {
 			status.State = browserNotConnected

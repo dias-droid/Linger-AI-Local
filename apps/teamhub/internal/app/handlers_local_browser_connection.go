@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"regexp"
@@ -11,7 +12,10 @@ import (
 	httpapi "github.com/simplexai-labs/linger/contracts-go/teamhubpublic"
 )
 
-const browserExtensionTokenPrefix = "PLAYWRIGHT_MCP_EXTENSION_TOKEN=" //nolint:gosec // G101: the variable name prefix, not a credential
+const (
+	browserExtensionTokenPrefix         = "PLAYWRIGHT_MCP_EXTENSION_TOKEN=" //nolint:gosec // G101: the variable name prefix, not a credential
+	browserConnectionUnsupportedMessage = "This Computer has no everyday browser to connect; Agents use their own browser without the user's sign-ins."
+)
 
 var (
 	browserExtensionTokenPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{20,256}$`)
@@ -63,7 +67,16 @@ func (a *App) forwardLocalBrowserConnection(c *gin.Context, command roomagent.Lo
 	command.TenantID, command.OwnerActorID, command.ComputerID = tenantID, ownerID, c.Param("computerId")
 	status, err := a.localComputers.ConnectLocalBrowser(c.Request.Context(), command)
 	if err != nil {
-		a.writeLocalBrowserConnectionError(c, command.Action, err)
+		var platform string
+		if errors.Is(err, roomagent.ErrLocalBrowserUnsupported) {
+			platform = a.localComputerPlatform(c.Request.Context(), tenantID, ownerID, command.ComputerID)
+		}
+		if fallback, ok := unsupportedLocalBrowserStatus(command.Action, err, platform); ok {
+			c.Header("Cache-Control", "no-store")
+			c.JSON(http.StatusOK, browserConnectionStatusModel(fallback))
+			return
+		}
+		a.writeLocalBrowserConnectionError(c, command.Action, platform, err)
 		return
 	}
 	a.settleBrowserConnectionCards(c.Request.Context(), command, status)
@@ -71,13 +84,42 @@ func (a *App) forwardLocalBrowserConnection(c *gin.Context, command roomagent.Lo
 	c.JSON(http.StatusOK, browserConnectionStatusModel(status))
 }
 
-func (a *App) writeLocalBrowserConnectionError(c *gin.Context, action roomagent.LocalBrowserConnectionAction, err error) {
+func (a *App) localComputerPlatform(ctx context.Context, tenantID, ownerID, computerID string) string {
+	if a.agentRuntimeState == nil {
+		return ""
+	}
+	computer, err := a.agentRuntimeState.GetLocalComputer(ctx, computerID)
+	if err != nil || computer.Owner.TenantID != tenantID || computer.Owner.OwnerActorID != ownerID {
+		return ""
+	}
+	return computer.Platform
+}
+
+// A Linux Computer without the browser_connection capability still reports
+// unsupported on status reads so clients do not ask for an upgrade.
+func unsupportedLocalBrowserStatus(action roomagent.LocalBrowserConnectionAction, err error, platform string) (roomagent.LocalBrowserConnectionStatus, bool) {
+	if action != roomagent.LocalBrowserConnectionStatusAction || !errors.Is(err, roomagent.ErrLocalBrowserUnsupported) || platform != "linux" {
+		return roomagent.LocalBrowserConnectionStatus{}, false
+	}
+	return roomagent.LocalBrowserConnectionStatus{
+		Mode:     "isolated",
+		State:    "unsupported",
+		Platform: "linux",
+		Message:  browserConnectionUnsupportedMessage,
+	}, true
+}
+
+func (a *App) writeLocalBrowserConnectionError(c *gin.Context, action roomagent.LocalBrowserConnectionAction, platform string, err error) {
 	switch {
 	case errors.Is(err, roomagent.ErrLocalComputerNotFound):
 		a.writeError(c, http.StatusNotFound, "LOCAL_COMPUTER_NOT_FOUND", "Local Computer was not found")
 	case errors.Is(err, roomagent.ErrLocalComputerOffline):
 		a.writeError(c, http.StatusServiceUnavailable, "LOCAL_COMPUTER_OFFLINE", "Local Computer is offline")
 	case errors.Is(err, roomagent.ErrLocalBrowserUnsupported):
+		if platform == "linux" {
+			a.writeError(c, http.StatusConflict, "BROWSER_CONNECTION_NOT_SUPPORTED", "This Computer cannot connect an everyday browser")
+			return
+		}
 		a.writeError(c, http.StatusConflict, "BROWSER_CONNECTION_UNSUPPORTED", "Upgrade the Local Computer before connecting your browser")
 	case errors.Is(err, roomagent.ErrLocalBrowserConnectionTimeout):
 		a.writeError(c, http.StatusServiceUnavailable, "BROWSER_CONNECTION_TIMEOUT", "Local Computer did not finish connecting your browser")
@@ -85,6 +127,10 @@ func (a *App) writeLocalBrowserConnectionError(c *gin.Context, action roomagent.
 		// Forward only the Computer's known codes; each needs its own guidance.
 		var typed *roomagent.LocalBrowserConnectionError
 		if errors.As(err, &typed) {
+			if typed.Code == "BROWSER_CONNECTION_UNSUPPORTED" {
+				a.writeError(c, http.StatusConflict, "BROWSER_CONNECTION_NOT_SUPPORTED", "This Computer cannot connect an everyday browser")
+				return
+			}
 			if message, ok := browserConnectionFailures[typed.Code]; ok {
 				a.writeError(c, http.StatusBadGateway, typed.Code, message)
 				return

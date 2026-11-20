@@ -416,7 +416,7 @@ describe("Wiki Profile sources", () => {
     expect(
       await within(dialog).findByRole("button", { name: "Add Gmail" }),
     ).toBeVisible();
-    expect(within(dialog).queryByText("Open Apps")).toBeNull();
+    expect(within(dialog).queryByText("Open Connectors")).toBeNull();
   });
 
   it("waits for an explicit GitHub content choice after a new connection", async () => {
@@ -620,7 +620,7 @@ describe("Wiki Profile sources", () => {
     );
   });
 
-  it("sends an expired app to Apps from Add source instead of connecting again", async () => {
+  it("sends an expired app to Connectors from Add source instead of connecting again", async () => {
     const runtime = await testRuntime();
     const existing = (await runtime.client.listExternalConnections())
       .connections[0]!;
@@ -644,9 +644,78 @@ describe("Wiki Profile sources", () => {
       name: "Add profile sources",
     });
     expect(
-      await within(dialog).findByRole("link", { name: "Open Apps" }),
+      await within(dialog).findByRole("link", { name: "Open Connectors" }),
     ).toHaveAttribute("href", "/t/tenant-northstar/apps?app=slack");
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it("offers inline Composio key setup and Connectors wording when Composio key is unset", async () => {
+    const runtime = await testRuntime();
+    const configuredCatalog = await runtime.client.listExternalApps();
+    const listApps = vi
+      .spyOn(runtime.client, "listExternalApps")
+      .mockResolvedValue({
+        apps: configuredCatalog.apps.map((app) => ({
+          ...app,
+          availability: "unavailable",
+          capabilities: [],
+        })),
+        provider_configured: false,
+        provider_key: { can_save: true, source: "none" },
+      });
+    const saveKey = vi
+      .spyOn(runtime.client, "saveExternalProviderKey")
+      .mockImplementation(async () => {
+        listApps.mockResolvedValue(configuredCatalog);
+        return { can_save: true, source: "stored" };
+      });
+    renderProfile(runtime);
+    await openAddSource();
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Add profile sources",
+    });
+    expect(
+      within(dialog).getByText(/Connections remain available in Connectors\./),
+    ).toBeVisible();
+    expect(
+      within(dialog).queryByText("Profile apps are unavailable right now."),
+    ).toBeNull();
+    expect(
+      within(dialog).getByRole("link", { name: "Settings › Security" }),
+    ).toHaveAttribute("href", "/t/tenant-northstar/settings/security");
+    expect(within(dialog).getByLabelText("Composio API key")).toBeVisible();
+
+    fireEvent.change(within(dialog).getByLabelText("Composio API key"), {
+      target: { value: "composio-secret-key" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save key" }));
+
+    await waitFor(() =>
+      expect(saveKey).toHaveBeenCalledWith("composio-secret-key"),
+    );
+    expect(
+      await within(dialog).findByRole("button", { name: "Add Gmail" }),
+    ).toBeVisible();
+  });
+
+  it("shows Composio setup instructions and Settings link when saving keys is disabled", async () => {
+    const runtime = await testRuntime();
+    vi.spyOn(runtime.client, "listExternalApps").mockResolvedValue({
+      apps: [],
+      provider_configured: false,
+      provider_key: { can_save: false, source: "none" },
+    });
+    renderProfile(runtime);
+    await openAddSource();
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Add profile sources",
+    });
+    expect(await within(dialog).findByText(/COMPOSIO_API_KEY/)).toBeVisible();
+    expect(
+      within(dialog).getByRole("link", { name: "Open Settings › Security" }),
+    ).toHaveAttribute("href", "/t/tenant-northstar/settings/security");
   });
 
   it("disconnects a connected account from its logo", async () => {

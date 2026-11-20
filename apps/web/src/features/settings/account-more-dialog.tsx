@@ -23,6 +23,9 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { ModalDialog } from "@/components/ui/modal-dialog";
 import { AppLogo } from "@/features/apps/app-logo";
+import { ConnectorsNotConfiguredMessage } from "@/features/apps/connect-app-flow";
+import { ComposioKeyForm } from "@/features/apps/provider-key-form";
+import { ComposioKeyGuide } from "@/features/apps/provider-key-guide";
 import { writeClipboardText } from "@/lib/clipboard";
 import { connectionAuthorizationError } from "@/features/apps/authorization-error";
 import {
@@ -85,7 +88,7 @@ const EXTERNAL_AI_PROFILE_PROMPT =
   "Based on our previous conversations and what you know about me, write a concise personal profile and list the key memories that would help another AI understand me. Include my current roles, projects, goals, working style, preferences, tools, and important constraints. Clearly separate facts I explicitly shared from your inferences, flag anything uncertain or possibly outdated, and exclude secrets or other people's sensitive information.";
 const SOURCE_PRIVACY_COPY: Record<SourcePane, string> = {
   accounts:
-    "Only the account and content you choose are used for this profile update. Connections remain available in Apps.",
+    "Only the account and content you choose are used for this profile update. Connections remain available in Connectors.",
   ai: "The pasted summary updates your Profile. It is not added to Personal Wiki or used as Personal Insight evidence.",
   files: "Files stay in your library.",
 };
@@ -297,9 +300,12 @@ export function AccountMoreDialog({
             <AccountMoreAccountsPane
               appsPending={apps.isPending || connections.isPending}
               busy={busy}
+              canSaveKey={apps.data?.provider_key.can_save === true}
               client={client}
+              onClose={onClose}
               pickerConnection={pickerConnection}
               profileApps={profileApps}
+              providerConfigured={apps.data?.provider_configured}
               selections={selections}
               tenantId={tenantId}
               waiting={flowConnection?.status === "pending"}
@@ -465,8 +471,10 @@ function AccountMorePaneNav({
 function AccountMoreAccountsPane({
   appsPending,
   busy,
+  canSaveKey,
   client,
   onBackSelection,
+  onClose,
   onConnect,
   onContinueAuthorization,
   onGenerate,
@@ -474,6 +482,7 @@ function AccountMoreAccountsPane({
   onUse,
   pickerConnection,
   profileApps,
+  providerConfigured,
   selections,
   tenantId,
   visibleConnections,
@@ -481,8 +490,10 @@ function AccountMoreAccountsPane({
 }: {
   appsPending: boolean;
   busy: boolean;
+  canSaveKey: boolean;
   client: TeamHubClient;
   onBackSelection: () => void;
+  onClose: () => void;
   onConnect: (appKey: TeamHubExternalAppKey) => void;
   onContinueAuthorization: (
     connection: TeamHubExternalConnection,
@@ -498,6 +509,7 @@ function AccountMoreAccountsPane({
   onUse: (connection: TeamHubExternalConnection) => void;
   pickerConnection: TeamHubExternalConnection | null;
   profileApps: TeamHubExternalApp[];
+  providerConfigured?: boolean;
   selections: TeamHubPersonalProfileSourceSelection[];
   tenantId: string;
   visibleConnections: TeamHubExternalConnection[];
@@ -530,9 +542,41 @@ function AccountMoreAccountsPane({
             Loading accounts…
           </p>
         ) : profileApps.length === 0 ? (
-          <p className="py-3 text-sm text-muted-foreground">
-            Profile apps are unavailable right now.
-          </p>
+          providerConfigured === false ? (
+            canSaveKey ? (
+              <div className="space-y-4 py-3 text-sm text-app-body">
+                <p className="text-muted-foreground">
+                  Connect accounts through Composio. Add your API key once to
+                  enable connectors, or manage keys in{" "}
+                  <Link
+                    className="font-medium text-app-link hover:underline"
+                    onClick={onClose}
+                    to={`/t/${encodeURIComponent(tenantId)}/settings/security`}
+                  >
+                    Settings › Security
+                  </Link>
+                  .
+                </p>
+                <ComposioKeyGuide />
+                <ComposioKeyForm />
+              </div>
+            ) : (
+              <div className="space-y-3 py-3 text-sm">
+                <ConnectorsNotConfiguredMessage />
+                <Link
+                  className="inline-flex text-xs font-medium text-app-link hover:underline"
+                  onClick={onClose}
+                  to={`/t/${encodeURIComponent(tenantId)}/settings/security`}
+                >
+                  Open Settings › Security
+                </Link>
+              </div>
+            )
+          ) : (
+            <p className="py-3 text-sm text-muted-foreground">
+              Profile connectors are unavailable right now.
+            </p>
+          )
         ) : (
           profileApps.map((app) => (
             <AppConnectRow
@@ -898,7 +942,7 @@ function AppConnectRow({
                 : unavailable
                   ? "Unavailable"
                   : needsAttention
-                    ? "Connection needs attention in Apps"
+                    ? "Connection needs attention in Connectors"
                     : authorizationPending
                       ? "Authorization in progress"
                       : "Not connected"}
@@ -930,7 +974,7 @@ function AppConnectRow({
               className="text-xs font-medium text-app-link hover:underline"
               to={`/t/${tenantId}/apps?app=${app.key}`}
             >
-              Open Apps
+              Open Connectors
             </Link>
           )
         ) : active.length === 0 && needsAttention ? (
@@ -938,7 +982,7 @@ function AppConnectRow({
             className="text-xs font-medium text-app-link hover:underline"
             to={`/t/${tenantId}/apps?app=${app.key}`}
           >
-            Open Apps
+            Open Connectors
           </Link>
         ) : active.length === 0 ? (
           <Button
@@ -990,7 +1034,7 @@ function AppConnectRow({
                 key={connection.id}
               >
                 <span className="min-w-0 truncate text-xs text-muted-foreground">
-                  {`Needs attention in Apps: ${
+                  {`Needs attention in Connectors: ${
                     accountIdentityText(
                       connection.provider,
                       connection.identity_label,
@@ -1001,7 +1045,7 @@ function AppConnectRow({
                   className="text-xs font-medium text-app-link hover:underline"
                   to={`/t/${tenantId}/apps?app=${app.key}`}
                 >
-                  Open Apps
+                  Open Connectors
                 </Link>
               </div>
             ))}

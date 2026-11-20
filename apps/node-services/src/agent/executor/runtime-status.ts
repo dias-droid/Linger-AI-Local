@@ -57,7 +57,8 @@ class TeamHubRuntimeStatusPublisher implements RuntimeStatusPublisher {
   }
 
   async open(input: RuntimeStatusOpenInput): Promise<RuntimeStatusSession> {
-    if (this.#closed) return NOOP_SESSION;
+    // Document Contexts have no Room status surface to publish to.
+    if (this.#closed || input.ref.kind === "document") return NOOP_SESSION;
     if (!input.executionId.trim() || input.sourceInboxIds.length === 0) {
       this.#log("warn", "runtime_status.invalid_open", {
         executionId: input.executionId,

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ModalDialog } from "./modal-dialog";
@@ -60,5 +60,40 @@ describe("ModalDialog initial focus", () => {
     );
 
     expect(screen.getByRole("button", { name: "Close" })).toHaveFocus();
+  });
+
+  it("exposes explicit dialog ARIA attributes and closes on Escape", () => {
+    const onClose = vi.fn();
+    render(
+      <ModalDialog onClose={onClose} title="Confirm">
+        <input aria-label="Confirmation" />
+      </ModalDialog>,
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "Confirm" });
+    expect(dialog).toHaveAttribute("role", "dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+
+    fireEvent.keyDown(screen.getByLabelText("Confirmation"), { key: "Escape" });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("does not close on Escape when an inner control already handled it", () => {
+    const onClose = vi.fn();
+    render(
+      <ModalDialog onClose={onClose} title="Confirm">
+        <input
+          aria-label="Handled input"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") event.preventDefault();
+          }}
+        />
+      </ModalDialog>,
+    );
+
+    fireEvent.keyDown(screen.getByLabelText("Handled input"), {
+      key: "Escape",
+    });
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

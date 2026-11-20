@@ -1568,7 +1568,12 @@ export class RunLoop {
     provenance: Omit<ToolRunContext, "runId">,
     epoch: ProviderRunContext["executionEpoch"],
   ): Promise<RuntimeStatusSession | null> {
-    if (!this.#runtimeStatusPublisher || !this.#executionContextRef || !epoch) {
+    if (
+      !this.#runtimeStatusPublisher ||
+      !this.#executionContextRef ||
+      this.#executionContextRef.kind === "document" ||
+      !epoch
+    ) {
       return null;
     }
     try {

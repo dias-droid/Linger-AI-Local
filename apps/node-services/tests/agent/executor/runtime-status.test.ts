@@ -232,6 +232,31 @@ describe("TeamHub Runtime status publisher", () => {
     });
   });
 
+  it("returns a no-op session without calling TeamHub for Document Contexts", async () => {
+    const fixture = createClientFixture();
+    const log = vi.fn();
+    const publisher = createRuntimeStatusPublisher({
+      client: fixture.client,
+      logger: { log, child: () => ({ log, child: vi.fn() }) },
+    });
+
+    const session = await publisher.open({
+      executionId: "run_doc_1",
+      ref: {
+        kind: "document",
+        agentId: "agent_1",
+        documentId: "document_abc123",
+      },
+      epoch: "agent-epoch-test",
+      sourceInboxIds: ["document:document_abc123"],
+    });
+    await session.publish([{ type: "status.changed", status: "thinking" }]);
+
+    expect(fixture.openStatus).not.toHaveBeenCalled();
+    expect(fixture.offers).toEqual([]);
+    expect(log).not.toHaveBeenCalled();
+  });
+
   it("returns a no-op session for invalid or closed publishers", async () => {
     const fixture = createClientFixture();
     const publisher = createRuntimeStatusPublisher({ client: fixture.client });

@@ -26,18 +26,32 @@ export function PanelRouteErrorSurface() {
 function PanelRouteErrorContent() {
   const content = useRouteErrorContent(false);
   const navigate = useNavigate();
+  const { tenantId } = useParams();
+  const backToRoomsPath = tenantId
+    ? `/t/${encodeURIComponent(tenantId)}/rooms`
+    : "/";
 
   return (
     <main
-      aria-label="TeamHub loading error"
+      aria-label="Linger loading error"
       className="app-work-surface flex min-h-0 flex-1 items-center justify-center bg-app-surface px-6 py-12 text-center"
       role="alert"
     >
       <ErrorMessage
         message={content.message}
         onRetry={() => {
-          void (content.restricted ? navigate("/") : navigate(0));
+          void (content.restricted ? navigate(backToRoomsPath) : navigate(0));
         }}
+        onSecondaryAction={
+          content.restricted
+            ? undefined
+            : () => {
+                void navigate(backToRoomsPath);
+              }
+        }
+        secondaryActionLabel={
+          content.restricted ? undefined : "Back to my Rooms"
+        }
         title={content.title}
         actionLabel={content.restricted ? "Back to my Rooms" : "Try again"}
       />
@@ -48,13 +62,11 @@ function PanelRouteErrorContent() {
 function ApplicationRouteErrorSurface({ tenantId }: { tenantId?: string }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { roomId } = useParams();
   const content = useRouteErrorContent(true);
   const roomsPath = tenantId
-    ? roomId
-      ? `/t/${tenantId}/rooms/${roomId}/chat`
-      : `/t/${tenantId}/rooms`
+    ? `/t/${encodeURIComponent(tenantId)}/rooms`
     : undefined;
+  const backToRoomsPath = roomsPath ?? "/";
   const showRoomList = Boolean(
     tenantId && location.pathname.startsWith(`/t/${tenantId}/rooms`),
   );
@@ -110,15 +122,27 @@ function ApplicationRouteErrorSurface({ tenantId }: { tenantId?: string }) {
           <span className="ml-3 text-sm font-medium">Linger</span>
         </header>
         <main
-          aria-label="TeamHub loading error"
+          aria-label="Linger loading error"
           className="app-work-surface flex min-h-0 flex-1 items-center justify-center bg-app-surface px-6 py-12 text-center"
           role="alert"
         >
           <ErrorMessage
             message={content.message}
             onRetry={() => {
-              void (content.restricted ? navigate("/") : navigate(0));
+              void (content.restricted
+                ? navigate(backToRoomsPath)
+                : navigate(0));
             }}
+            onSecondaryAction={
+              content.restricted
+                ? undefined
+                : () => {
+                    void navigate(backToRoomsPath);
+                  }
+            }
+            secondaryActionLabel={
+              content.restricted ? undefined : "Back to my Rooms"
+            }
             title={content.title}
             actionLabel={content.restricted ? "Back to my Rooms" : "Try again"}
           />
@@ -170,21 +194,32 @@ function ErrorRailLink({
 function ErrorMessage({
   message,
   onRetry,
+  onSecondaryAction,
+  secondaryActionLabel,
   title,
   actionLabel,
 }: {
   actionLabel: string;
   message: string;
   onRetry: () => void;
+  onSecondaryAction?: () => void;
+  secondaryActionLabel?: string;
   title: string;
 }) {
   return (
     <div className="max-w-md">
       <h1 className="text-lg">{title}</h1>
       <p className="mt-2 text-sm leading-6 text-app-muted">{message}</p>
-      <Button className="mt-5" onClick={onRetry}>
-        {actionLabel}
-      </Button>
+      <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+        <Button onClick={onRetry} tone="primary">
+          {actionLabel}
+        </Button>
+        {secondaryActionLabel && onSecondaryAction ? (
+          <Button onClick={onSecondaryAction} tone="secondary">
+            {secondaryActionLabel}
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -210,16 +245,15 @@ function useRouteErrorContent(fullPage: boolean) {
     ? `${error.status} ${error.statusText}`.trim()
     : error instanceof Error
       ? error.message
-      : "The requested TeamHub data could not be loaded.";
+      : "Something went wrong while loading Linger.";
 
   return {
     restricted: false,
     message,
-    title:
-      status === 404
-        ? "Room unavailable"
-        : fullPage
-          ? "TeamHub unavailable"
-          : "This view could not be loaded",
+    title: !fullPage
+      ? "This view could not be loaded"
+      : error instanceof TeamHubError
+        ? "Linger is unavailable"
+        : "Something went wrong",
   };
 }

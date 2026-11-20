@@ -25,7 +25,7 @@ const UNHELD_RECORD_LIMIT = 64;
 /**
  * "work": TeamHub queued work for the Context; "ensure": an explicit request
  * to hold it; "changed": a change hint, which binds an unheld Context only
- * when it is a Room Meta Context that never ran.
+ * when it is a Room Meta Context that never ran or an active Document Context.
  */
 type BindMode = "work" | "ensure" | "changed";
 
@@ -210,7 +210,8 @@ export class TeamHubExecutionContextStore implements ExecutionContextStore {
       const bind =
         this.#held.has(contextKey) ||
         mode !== "changed" ||
-        isUnusedRoomContext(context);
+        isUnusedRoomContext(context) ||
+        isActiveDocumentContext(context);
       if (context.terminal_reason !== undefined || !bind) {
         this.#remember(context, false);
         return null;
@@ -625,6 +626,16 @@ function isUnusedRoomContext(context: RuntimeContext): boolean {
     context.ref.kind === "meta" &&
     context.terminal_reason === undefined &&
     context.next_input_sequence === "0"
+  );
+}
+
+// Document comment Runs wake through context.changed when TeamHub activates the
+// Context, so an unheld active Document Context must bind on that hint.
+function isActiveDocumentContext(context: RuntimeContext): boolean {
+  return (
+    context.ref.kind === "document" &&
+    context.terminal_reason === undefined &&
+    context.target_residency === "active"
   );
 }
 

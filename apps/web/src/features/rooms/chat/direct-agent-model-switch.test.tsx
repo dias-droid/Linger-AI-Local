@@ -170,6 +170,119 @@ describe("Direct Agent runtime settings", () => {
       await screen.findByRole("button", { name: "Qwen3 Coder 30B" }),
     ).toBeVisible();
   });
+
+  it.each([
+    {
+      catalogLabel:
+        "Default (recommended) · Use the default model (currently Opus 5.5)",
+      expectedChip: "Default · Opus 5.5",
+      expectedTitle:
+        "Default (recommended) · Use the default model (currently Opus 5.5)",
+    },
+    {
+      catalogLabel:
+        "Default (recommended) · Use the default model (currently Opus 4.6 (1M context))",
+      expectedChip: "Default · Opus 4.6 (1M context)",
+      expectedTitle:
+        "Default (recommended) · Use the default model (currently Opus 4.6 (1M context))",
+    },
+    {
+      catalogLabel: "Default (recommended) · via magpie",
+      expectedChip: "Default · via magpie",
+      expectedTitle: "Default (recommended) · via magpie",
+    },
+    {
+      catalogLabel: "Opus 5.5",
+      expectedChip: "Opus 5.5",
+      expectedTitle: null,
+    },
+  ])(
+    "formats Composer chip label for $catalogLabel so the active model stays visible",
+    async ({ catalogLabel, expectedChip, expectedTitle }) => {
+      const base = localAgent();
+      const claudeAgent: TeamHubTenantAgent = {
+        ...base,
+        runtime: {
+          model: "default",
+          placement: {
+            computer_id: "computer-1",
+            runtime_type: "claude",
+            type: "local",
+            workspace_grant_id: "grant-1",
+          },
+          reasoning_effort: "low",
+        },
+      };
+      const runtime = createTestTeamHubRuntime();
+      runtime.server.on(
+        "GET",
+        "/v0/tenants/{tenantId}/local-computers",
+        () => ({
+          items: [
+            {
+              computer_id: "computer-1",
+              display_name: "Computer",
+              runtimes: [
+                {
+                  models: [
+                    {
+                      allowed_reasoning_effort: ["low", "high"],
+                      id: "default",
+                      label: catalogLabel,
+                    },
+                  ],
+                  status: "ready",
+                  type: "claude",
+                },
+              ],
+              status: "online",
+              workspace_grants: [
+                {
+                  grant_id: "grant-1",
+                  label: "Workspace",
+                  mode: "workspace-write",
+                },
+              ],
+            },
+          ],
+        }),
+      );
+
+      render(
+        <MemoryRouter>
+          <QueryClientProvider
+            client={
+              new QueryClient({
+                defaultOptions: { queries: { retry: false } },
+              })
+            }
+          >
+            <DirectAgentModelSwitch
+              client={runtime.client}
+              currentActorId="actor-jenny"
+              registration={claudeAgent}
+              tenantId="tenant-northstar"
+            />
+          </QueryClientProvider>
+        </MemoryRouter>,
+      );
+
+      const trigger = await screen.findByRole("button", {
+        name: `${expectedChip} Low`,
+      });
+      if (expectedTitle) {
+        expect(trigger).toHaveAttribute("title", expectedTitle);
+      } else {
+        expect(trigger).not.toHaveAttribute("title");
+      }
+      expect(within(trigger).getByText(expectedChip)).toHaveClass(
+        "agent-model-switch-trigger-label",
+      );
+      expect(within(trigger).getByText("Low")).toHaveClass(
+        "agent-model-switch-trigger-effort",
+      );
+    },
+  );
 });
 
 function renderSwitch({

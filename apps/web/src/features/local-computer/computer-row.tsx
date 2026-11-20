@@ -28,6 +28,20 @@ export function StatusDot({
   );
 }
 
+/** Connecting rule between adjacent steps in the Computer readiness strip. */
+export function ProgressConnector({ dashed = false }: { dashed?: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "w-6 border-t border-border-hover",
+        dashed && "border-dashed",
+      )}
+      data-progress-connector=""
+    />
+  );
+}
+
 /** One step of the summary; only a step the user can act on is a button. */
 export function ProgressChip({
   attentionIcon,

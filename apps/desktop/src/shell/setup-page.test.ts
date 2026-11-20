@@ -678,6 +678,18 @@ describe("setup page Quick Install recommendation", () => {
     );
     expect(key.value).toBe("");
   });
+
+  it("shows a disclosure chevron on the optional app integrations toggle", async () => {
+    await openPage(welcome(capable), "welcome");
+    $("local-customize").click();
+    const summary = document.querySelector<HTMLElement>(
+      "#optional-keys > summary",
+    )!;
+    expect(summary.textContent?.trim()).toBe("App integrations (optional)");
+    const chevron = summary.querySelector("svg.chevron");
+    expect(chevron).not.toBeNull();
+    expect(chevron?.getAttribute("aria-hidden")).toBe("true");
+  });
 });
 
 describe("setup page permissions", () => {

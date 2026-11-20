@@ -38,6 +38,8 @@ describe("Security password through the live HTTP client", () => {
       </QueryClientProvider>,
     );
     const dialog = screen.getByRole("dialog", { name: "Change password" });
+    expect(dialog).toHaveAttribute("role", "dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
     for (const label of [
       "Current password",
       "New password",
@@ -107,6 +109,8 @@ describe("Security password through the live HTTP client", () => {
       await screen.findByRole("button", { name: "Change password" }),
     );
     const dialog = screen.getByRole("dialog", { name: "Change password" });
+    expect(dialog).toHaveAttribute("role", "dialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
     expect(
       within(dialog).getByText(/Other browsers and devices/),
     ).toBeVisible();

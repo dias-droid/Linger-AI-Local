@@ -130,9 +130,9 @@ export function EditAgentRuntimeDialog({
         </>
       }
     >
-      <form id={formId} onSubmit={submit}>
+      <form className="min-w-0" id={formId} onSubmit={submit}>
         <fieldset
-          className="space-y-4 px-5 py-4"
+          className="min-w-0 space-y-4 px-5 py-4"
           disabled={isPending || loading}
         >
           <label className="block">

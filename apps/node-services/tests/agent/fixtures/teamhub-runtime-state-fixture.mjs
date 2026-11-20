@@ -8,13 +8,17 @@ export const createTeamHubRuntimeStateFixture = ({
   const wakeClients = new Set();
   let currentEpoch = null;
   const computers = new Map();
+  const computerConnectionEpochs = new Map();
+  const localModels = new Map();
   const configs = new Map();
+  const revokedConfigs = new Map();
   const contexts = new Map();
   const contextStates = new Map();
   const daemonIdentities = new Map();
   const runtimeRegistrations = new Map();
   const runtimeAssignments = new Map();
   const reconciliations = new Map();
+  const runOperations = new Map();
   const receipts = [];
   let receiptOrder = 0;
   let runSequence = 0;
@@ -91,14 +95,56 @@ export const createTeamHubRuntimeStateFixture = ({
 
   const observeContext = (context) => ({ ...context });
   const workStateOf = (contextKey) => {
-    const runs = [
-      ...requireContextState(contextStates, contextKey).runs.values(),
-    ];
-    const hasQueuedRuns = runs.some((run) => run.status === "queued");
+    const state = requireContextState(contextStates, contextKey);
+    const runs = [...state.runs.values()];
+    const nextQueued = runs.find((run) => run.status === "queued");
+    const hasQueuedRuns = nextQueued !== undefined;
+    const nextRunOrigins = nextQueued
+      ? nextQueued.initial_input_ids.flatMap((inputId) => {
+          const input = state.inputs.get(inputId);
+          if (!input) return [];
+          const accepted = input.payload?.acceptedNotification;
+          if (!accepted) {
+            return [
+              {
+                notification: false,
+                task_inbox: false,
+                author_type: "",
+                message_kind: "",
+                fired_routine: false,
+              },
+            ];
+          }
+          const messages = Array.isArray(accepted.messages)
+            ? accepted.messages
+            : [];
+          const taskInbox =
+            typeof accepted.inboxId === "string" &&
+            accepted.inboxId.startsWith("task:");
+          return messages.length > 0
+            ? messages.map((message) => ({
+                notification: true,
+                task_inbox: taskInbox,
+                author_type: message.authorType ?? "user",
+                message_kind: message.messageKind ?? "message",
+                fired_routine: Boolean(message.firedRoutine),
+              }))
+            : [
+                {
+                  notification: true,
+                  task_inbox: taskInbox,
+                  author_type: "",
+                  message_kind: "",
+                  fired_routine: false,
+                },
+              ];
+        })
+      : [];
     return {
       has_queued_runs: hasQueuedRuns,
       has_pending_work:
         hasQueuedRuns || runs.some((run) => run.status === "running"),
+      next_run_origins: nextRunOrigins,
     };
   };
   // A write naming an epoch other than the current one is fenced, as in TeamHub.
@@ -248,6 +294,7 @@ export const createTeamHubRuntimeStateFixture = ({
         if (!authorize(request, response)) return true;
         const body = await readJson(request);
         const snapshot = configSnapshot(body);
+        revokedConfigs.delete(snapshot.agent_id);
         configs.set(snapshot.agent_id, snapshot);
         const placement = snapshot.runtime.placement;
         const daemonId = `fixture-daemon-${placement.computer_id}`;
@@ -293,7 +340,12 @@ export const createTeamHubRuntimeStateFixture = ({
           : null;
       if (revokedConfig) {
         if (!authorize(request, response)) return true;
-        configs.delete(decodeURIComponent(revokedConfig[1]));
+        const agentId = decodeURIComponent(revokedConfig[1]);
+        const existing = configs.get(agentId);
+        if (existing) {
+          revokedConfigs.set(agentId, existing);
+          configs.delete(agentId);
+        }
         response.writeHead(204).end();
         return true;
       }
@@ -309,7 +361,7 @@ export const createTeamHubRuntimeStateFixture = ({
           computers.set(body.computer_id, {
             computer_id: body.computer_id,
             display_name: body.display_name,
-            owners: [body.owner],
+            owner: body.owner,
             status: "offline",
             credential_generation: "0",
             runtimes: [],
@@ -325,6 +377,14 @@ export const createTeamHubRuntimeStateFixture = ({
         url.pathname === "/__test__/runtime-state"
       ) {
         if (!authorize(request, response)) return true;
+        const recordedOperations = [...runOperations.values()].map(
+          (record) => ({
+            operation_id: record.operation_id,
+            agent_id: record.agent_id,
+            connection_epoch: record.connection_epoch,
+            run_id: record.run_id,
+          }),
+        );
         writeJson(response, 200, {
           runs: [...contextStates.entries()].flatMap(([key, state]) => {
             const context = contexts.get(key);
@@ -337,32 +397,38 @@ export const createTeamHubRuntimeStateFixture = ({
               final_response: run.terminal?.finalResponse ?? null,
             }));
           }),
-          operation_receipts: receipts.flatMap((record) => {
-            const start =
-              record.kind === "operation" ? record.receipt.start : null;
-            if (!start || start.request?.kind !== "run.start") return [];
-            return [
-              {
-                operation_id: start.operation_id,
-                agent_id: start.agent_id,
-                connection_epoch: start.connection_epoch,
-                run_id: start.request.run_context?.execution_run_ref ?? null,
-              },
-            ];
-          }),
-          execution_receipts: receipts.flatMap((record) => {
-            const start =
-              record.kind === "execution" ? record.receipt.start : null;
-            if (start?.request?.kind !== "run.start") return [];
-            return [
-              {
-                operation_id: start.operation_id,
-                agent_id: start.agent_id,
-                connection_epoch: start.connection_epoch,
-                run_id: start.request.run_context?.execution_run_ref ?? null,
-              },
-            ];
-          }),
+          operation_receipts: [
+            ...receipts.flatMap((record) => {
+              const start =
+                record.kind === "operation" ? record.receipt.start : null;
+              if (!start || start.request?.kind !== "run.start") return [];
+              return [
+                {
+                  operation_id: start.operation_id,
+                  agent_id: start.agent_id,
+                  connection_epoch: start.connection_epoch,
+                  run_id: start.request.run_context?.execution_run_ref ?? null,
+                },
+              ];
+            }),
+            ...recordedOperations,
+          ],
+          execution_receipts: [
+            ...receipts.flatMap((record) => {
+              const start =
+                record.kind === "execution" ? record.receipt.start : null;
+              if (start?.request?.kind !== "run.start") return [];
+              return [
+                {
+                  operation_id: start.operation_id,
+                  agent_id: start.agent_id,
+                  connection_epoch: start.connection_epoch,
+                  run_id: start.request.run_context?.execution_run_ref ?? null,
+                },
+              ];
+            }),
+            ...recordedOperations,
+          ],
         });
         return true;
       }
@@ -391,6 +457,12 @@ export const createTeamHubRuntimeStateFixture = ({
       if (request.method === "POST" && route === "epochs") {
         const body = await readJson(request);
         currentEpoch = body.epoch;
+        computerConnectionEpochs.clear();
+        for (const [id, computer] of computers) {
+          if (computer.status !== "removed") {
+            computers.set(id, { ...computer, status: "offline" });
+          }
+        }
         // A new epoch interrupts every running Run; queued Runs stay.
         const interrupted = [];
         for (const state of contextStates.values()) {
@@ -418,12 +490,44 @@ export const createTeamHubRuntimeStateFixture = ({
         );
         return true;
       }
+      if (request.method === "GET" && route === "deletion-snapshot") {
+        const agentId = url.searchParams.get("agent_id");
+        const snapshot = agentId ? revokedConfigs.get(agentId) : undefined;
+        if (!snapshot) {
+          writeJson(response, 404, { error: "not_found" });
+          return true;
+        }
+        writeJson(response, 200, {
+          agent_id: snapshot.agent_id,
+          actor_id: snapshot.actor_id,
+          tenant_id: snapshot.tenant_id,
+          configuration_revision: snapshot.configuration_revision,
+          runtime: snapshot.runtime,
+          contexts: [...contexts.values()]
+            .filter((context) => context.ref.agent_id === agentId)
+            .map(observeContext),
+        });
+        return true;
+      }
+      if (request.method === "GET" && route === "another-me-placements") {
+        writeJson(response, 200, { items: [] });
+        return true;
+      }
       if (request.method === "GET" && route === "contexts") {
         const agentId = url.searchParams.get("agent_id");
         writeJson(response, 200, {
           contexts: [...contexts.values()]
             .filter((context) => !agentId || context.ref.agent_id === agentId)
             .map(observeContext),
+        });
+        return true;
+      }
+      if (request.method === "POST" && route === "contexts/recently-used") {
+        await readJson(request);
+        writeJson(response, 200, {
+          contexts: [...contexts.keys()].map((context_key) => ({
+            context_key,
+          })),
         });
         return true;
       }
@@ -464,6 +568,22 @@ export const createTeamHubRuntimeStateFixture = ({
         };
         contexts.set(body.context_key, updated);
         writeJson(response, 200, observeContext(updated));
+        return true;
+      }
+      if (request.method === "POST" && route === "contexts/delete") {
+        const body = await readJson(request);
+        const context = contexts.get(body.context_key);
+        if (!context) {
+          writeJson(response, 404, { error: "context_not_found" });
+          return true;
+        }
+        if (context.state_revision !== body.expected_revision) {
+          writeJson(response, 409, { error: "revision_conflict" });
+          return true;
+        }
+        contexts.delete(body.context_key);
+        contextStates.delete(body.context_key);
+        writeJson(response, 200, { deleted: true });
         return true;
       }
 
@@ -648,6 +768,59 @@ export const createTeamHubRuntimeStateFixture = ({
         writeJson(response, 200, { status: "cancel_requested" });
         return true;
       }
+      if (request.method === "POST" && route === "runs/requeue") {
+        const body = await readJson(request);
+        if (fenced(body, response)) return true;
+        const context = contexts.get(body.context_key);
+        const state = context ? contextStates.get(body.context_key) : undefined;
+        const run = state?.runs.get(body.run_id);
+        if (!context || !state || !run) {
+          writeJson(response, 404, { error: "run_not_found" });
+          return true;
+        }
+        if (run.status === "running") {
+          run.status = "queued";
+          delete run.epoch;
+          delete run.claim_id;
+          context.state_revision = increment(context.state_revision);
+          emitWake("run.queued", { context_key: body.context_key });
+        }
+        writeJson(response, 200, { success: true });
+        return true;
+      }
+      if (request.method === "POST" && route === "runs/operations") {
+        const body = await readJson(request);
+        if (fenced(body, response)) return true;
+        const context = contexts.get(body.context_key);
+        const state = context ? contextStates.get(body.context_key) : undefined;
+        if (!context || !state || !state.runs.has(body.run_id)) {
+          writeJson(response, 404, { error: "run_not_found" });
+          return true;
+        }
+        const existing = runOperations.get(body.operation_id);
+        if (existing) {
+          if (body.turn_id !== undefined) existing.turn_id = body.turn_id;
+          if (body.usage !== undefined) existing.usage = body.usage;
+        } else {
+          const config =
+            configs.get(context.ref.agent_id) ??
+            revokedConfigs.get(context.ref.agent_id);
+          const computerId = config?.runtime.placement.computer_id;
+          runOperations.set(body.operation_id, {
+            operation_id: body.operation_id,
+            agent_id: context.ref.agent_id,
+            connection_epoch: computerId
+              ? (computerConnectionEpochs.get(computerId) ?? null)
+              : null,
+            run_id: body.run_id,
+            runtime_type: body.runtime_type,
+            ...(body.turn_id === undefined ? {} : { turn_id: body.turn_id }),
+            ...(body.usage === undefined ? {} : { usage: body.usage }),
+          });
+        }
+        writeJson(response, 200, { success: true });
+        return true;
+      }
       if (request.method === "POST" && route === "statuses/open") {
         const body = await readJson(request);
         const context = contexts.get(body.context_key);
@@ -755,8 +928,138 @@ export const createTeamHubRuntimeStateFixture = ({
         return true;
       }
 
+      if (request.method === "GET" && route === "local-computer") {
+        const computerId = url.searchParams.get("computer_id");
+        const computer = computerId ? computers.get(computerId) : undefined;
+        if (!computer || computer.status === "removed") {
+          writeJson(response, 404, {
+            error: {
+              code: "NOT_FOUND",
+              message: "Local Computer not found",
+            },
+          });
+          return true;
+        }
+        writeJson(response, 200, computer);
+        return true;
+      }
       if (request.method === "GET" && route === "local-computers") {
-        writeJson(response, 200, { computers: [...computers.values()] });
+        writeJson(response, 200, {
+          computers: [...computers.values()].filter(
+            (computer) => computer.status !== "removed",
+          ),
+        });
+        return true;
+      }
+      if (request.method === "POST" && route === "local-computers/connect") {
+        const body = await readJson(request);
+        const current = computers.get(body.computer_id);
+        if (
+          !current ||
+          current.status === "removed" ||
+          current.owner?.tenant_id !== body.owner?.tenant_id ||
+          current.owner?.owner_actor_id !== body.owner?.owner_actor_id
+        ) {
+          writeJson(response, 404, {
+            error: {
+              code: "NOT_FOUND",
+              message: "Local Computer not found",
+            },
+          });
+          return true;
+        }
+        if (
+          String(current.credential_generation) !==
+          String(body.credential_generation)
+        ) {
+          writeJson(response, 409, {
+            error: {
+              code: "CONFLICT",
+              message: "Credential generation mismatch",
+            },
+          });
+          return true;
+        }
+        for (const [otherComputerId, identity] of daemonIdentities) {
+          if (otherComputerId === body.computer_id) continue;
+          const other = computers.get(otherComputerId);
+          if (other?.status === "removed") continue;
+          if (identity.daemon_id === body.daemon_id) {
+            writeJson(response, 409, {
+              error: {
+                code: "DAEMON_IDENTITY_IN_USE",
+                message: "Daemon identity is already bound to another Computer",
+              },
+            });
+            return true;
+          }
+        }
+        const currentIdentity = daemonIdentities.get(body.computer_id);
+        if (
+          currentIdentity &&
+          (currentIdentity.daemon_id !== body.daemon_id ||
+            currentIdentity.daemon_public_key !== body.daemon_public_key ||
+            String(currentIdentity.identity_version) !==
+              String(body.identity_version))
+        ) {
+          writeJson(response, 409, {
+            error: {
+              code: "CONFLICT",
+              message: "Daemon identity conflict",
+            },
+          });
+          return true;
+        }
+        daemonIdentities.set(body.computer_id, {
+          daemon_id: body.daemon_id,
+          daemon_public_key: body.daemon_public_key,
+          identity_version: String(body.identity_version),
+        });
+        const computer = {
+          computer_id: body.computer_id,
+          display_name: body.display_name ?? current.display_name,
+          owner: current.owner,
+          status: body.status,
+          credential_generation: String(current.credential_generation),
+          ...(body.seen_at ? { last_seen_at: body.seen_at } : {}),
+          ...(body.platform !== undefined
+            ? { platform: body.platform }
+            : current.platform !== undefined
+              ? { platform: current.platform }
+              : {}),
+          ...(body.capacity !== undefined
+            ? { capacity: body.capacity }
+            : current.capacity !== undefined
+              ? { capacity: current.capacity }
+              : {}),
+          runtimes: body.runtimes ?? [],
+          runtime_diagnostics: body.runtime_diagnostics ?? [],
+          workspace_grants: body.workspace_grants ?? [],
+        };
+        computers.set(computer.computer_id, computer);
+        computerConnectionEpochs.set(
+          computer.computer_id,
+          (computerConnectionEpochs.get(computer.computer_id) ?? 0) + 1,
+        );
+        const placements = [...configs.values()]
+          .filter(
+            (config) =>
+              config.runtime.placement.computer_id === body.computer_id,
+          )
+          .map((config) => ({
+            agent_id: config.agent_id,
+            actor_id: config.actor_id,
+            tenant_id: config.tenant_id,
+            owner_actor_id: config.runtime.placement.owner_actor_id,
+            runtime_type: config.runtime.placement.runtime_type,
+            model: config.runtime.model,
+            ...(config.runtime.reasoning_effort === undefined
+              ? {}
+              : { reasoning_effort: config.runtime.reasoning_effort }),
+            workspace_grant_id: config.runtime.placement.workspace_grant_id,
+            assignment_revision: config.runtime.placement.assignment_revision,
+          }));
+        writeJson(response, 200, { computer, placements });
         return true;
       }
       if (
@@ -764,7 +1067,9 @@ export const createTeamHubRuntimeStateFixture = ({
         route === "local-computers/mark-offline"
       ) {
         for (const [id, computer] of computers) {
-          computers.set(id, { ...computer, status: "offline" });
+          if (computer.status !== "removed") {
+            computers.set(id, { ...computer, status: "offline" });
+          }
         }
         writeJson(response, 200, { success: true });
         return true;
@@ -776,25 +1081,92 @@ export const createTeamHubRuntimeStateFixture = ({
       ) {
         const body = await readJson(request);
         const current = computers.get(body.computer_id);
+        if (!current || current.status === "removed") {
+          writeJson(response, 404, {
+            error: {
+              code: "NOT_FOUND",
+              message: "Local Computer not found",
+            },
+          });
+          return true;
+        }
         const computer = {
           computer_id: body.computer_id,
-          display_name:
-            body.display_name ?? current?.display_name ?? body.computer_id,
-          owners: body.owners ?? current?.owners ?? [],
+          display_name: body.display_name ?? current.display_name,
+          owner: body.owner ?? current.owner,
           status: body.status,
-          credential_generation: current?.credential_generation ?? 0,
-          ...(body.seen_at ? { last_seen_at: body.seen_at } : {}),
-          ...(body.capacity === undefined && current?.capacity === undefined
-            ? {}
-            : { capacity: body.capacity ?? current.capacity }),
-          runtimes: body.runtimes ?? current?.runtimes ?? [],
+          credential_generation: String(current.credential_generation),
+          ...(body.seen_at
+            ? { last_seen_at: body.seen_at }
+            : current.last_seen_at
+              ? { last_seen_at: current.last_seen_at }
+              : {}),
+          ...(body.platform !== undefined
+            ? { platform: body.platform }
+            : current.platform !== undefined
+              ? { platform: current.platform }
+              : {}),
+          ...(body.capacity !== undefined
+            ? { capacity: body.capacity }
+            : current.capacity !== undefined
+              ? { capacity: current.capacity }
+              : {}),
+          runtimes: body.runtimes ?? current.runtimes ?? [],
           runtime_diagnostics:
-            body.runtime_diagnostics ?? current?.runtime_diagnostics ?? [],
+            body.runtime_diagnostics ?? current.runtime_diagnostics ?? [],
           workspace_grants:
-            body.workspace_grants ?? current?.workspace_grants ?? [],
+            body.workspace_grants ?? current.workspace_grants ?? [],
         };
         computers.set(computer.computer_id, computer);
         writeJson(response, 200, computer);
+        return true;
+      }
+      if (
+        request.method === "POST" &&
+        route === "local-computers/local-models"
+      ) {
+        const body = await readJson(request);
+        const current = computers.get(body.computer_id);
+        if (!current || current.status === "removed") {
+          writeJson(response, 404, {
+            error: {
+              code: "NOT_FOUND",
+              message: "Local Computer not found",
+            },
+          });
+          return true;
+        }
+        localModels.set(body.computer_id, body.snapshot);
+        response.writeHead(204).end();
+        return true;
+      }
+      if (request.method === "POST" && route === "local-computers/remove") {
+        const body = await readJson(request);
+        const current = computers.get(body.computer_id);
+        if (
+          !current ||
+          current.owner?.tenant_id !== body.owner?.tenant_id ||
+          current.owner?.owner_actor_id !== body.owner?.owner_actor_id
+        ) {
+          writeJson(response, 200, { status: "not_found" });
+          return true;
+        }
+        if (current.status === "removed") {
+          writeJson(response, 200, { status: "already_removed" });
+          return true;
+        }
+        const hasAgents = [...configs.values()].some(
+          (config) =>
+            config.tenant_id === body.owner.tenant_id &&
+            config.runtime.placement.computer_id === body.computer_id,
+        );
+        if (hasAgents) {
+          writeJson(response, 200, { status: "has_agents" });
+          return true;
+        }
+        localModels.delete(body.computer_id);
+        computers.set(body.computer_id, { ...current, status: "removed" });
+        writeJson(response, 200, { status: "removed" });
         return true;
       }
 
@@ -900,11 +1272,17 @@ const readInboxFixture = async (filename) =>
 const configSnapshot = (body) => {
   const registration = body.registration;
   const placement = registration.runtime.placement;
-  return {
+  const configurationRevision = String(registration.revision);
+  const runtimeConfigurationRevision = String(
+    registration.runtimeRevision ?? registration.revision,
+  );
+  const snapshot = {
     agent_id: registration.agentId,
     actor_id: `actor-${registration.agentId}`,
     tenant_id: registration.tenantId,
-    configuration_revision: registration.revision,
+    configuration_revision: configurationRevision,
+    runtime_configuration_revision: runtimeConfigurationRevision,
+    permission_review: Boolean(registration.permissionReview),
     agent: registration.agent,
     runtime: {
       type: "local",
@@ -918,12 +1296,19 @@ const configSnapshot = (body) => {
         computer_id: placement.computerId,
         runtime_type: placement.runtimeType,
         workspace_grant_id: placement.workspaceGrantId,
+        assignment_revision: String(placement.assignmentRevision ?? "1"),
       },
     },
     resources: {
       skills: registration.resources.skills,
       mcp_servers: registration.resources.mcpServers,
     },
+  };
+  return {
+    ...snapshot,
+    content_hash: createHash("sha256")
+      .update(JSON.stringify(snapshot))
+      .digest("hex"),
   };
 };
 

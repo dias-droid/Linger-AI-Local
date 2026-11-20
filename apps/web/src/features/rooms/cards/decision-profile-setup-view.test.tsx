@@ -340,10 +340,35 @@ describe("AnotherMe apps setup card", () => {
     expect(screen.queryByRole("button", { name: "Connect Gmail" })).toBeNull();
   });
 
+  it("disables Connected when no accounts are connected while keeping Skip for now enabled", async () => {
+    const runtime = createTestTeamHubRuntime();
+    vi.spyOn(runtime.client, "listExternalConnections").mockResolvedValue({
+      connections: [],
+    });
+    const { onDecision } = renderCard(setupCard(appsForm), { runtime });
+
+    const connected = await screen.findByRole("button", { name: "Connected" });
+    const skip = screen.getByRole("button", { name: "Skip for now" });
+    await waitFor(() => expect(connected).toBeDisabled());
+    expect(skip).toBeEnabled();
+
+    fireEvent.click(skip);
+    await waitFor(() =>
+      expect(onDecision).toHaveBeenCalledWith({
+        decision: "skipped",
+        expectedVersion: 3,
+        messageId: "message-setup",
+        requestId: "decision-setup",
+      }),
+    );
+  });
+
   it("submits Connected and Skip for now with the card version", async () => {
     const { onDecision } = renderCard(setupCard(appsForm));
 
-    fireEvent.click(await screen.findByRole("button", { name: "Connected" }));
+    const connected = await screen.findByRole("button", { name: "Connected" });
+    await waitFor(() => expect(connected).toBeEnabled());
+    fireEvent.click(connected);
     await waitFor(() =>
       expect(onDecision).toHaveBeenCalledWith({
         decision: "connected",
@@ -543,14 +568,36 @@ describe("AnotherMe sources setup card", () => {
     );
   });
 
+  it("disables That's all when no links or files have been added while keeping Skip enabled", async () => {
+    const { onDecision } = renderCard(setupCard(sourcesForm));
+    await screen.findByRole("textbox", { name: "Paste a link" });
+
+    expect(screen.getByRole("button", { name: "That's all" })).toBeDisabled();
+    const skip = screen.getByRole("button", { name: "Skip" });
+    expect(skip).toBeEnabled();
+
+    fireEvent.click(skip);
+    await waitFor(() =>
+      expect(onDecision).toHaveBeenCalledWith({
+        decision: "skipped",
+        expectedVersion: 3,
+        messageId: "message-setup",
+        requestId: "decision-setup",
+      }),
+    );
+  });
+
   it("prevents submission until a failed upload is removed", async () => {
     const runtime = createTestTeamHubRuntime();
     vi.spyOn(runtime.client, "uploadMessageAttachment").mockRejectedValue(
       new Error("Upload failed"),
     );
     renderCard(setupCard(sourcesForm), { runtime });
+    await screen.findByRole("textbox", { name: "Paste a link" });
+    addLink("https://jenny.example");
+    expect(screen.getByRole("button", { name: "That's all" })).toBeEnabled();
     fireEvent.change(
-      await screen.findByLabelText("Upload files", { selector: "input" }),
+      screen.getByLabelText("Upload files", { selector: "input" }),
       {
         target: { files: [new File(["a"], "resume.pdf")] },
       },

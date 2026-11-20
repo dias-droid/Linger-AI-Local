@@ -52,3 +52,46 @@ func TestBrowserCommandStopsAtItsExpiry(t *testing.T) {
 		t.Fatalf("another owner reached the browser records: %+v", stream.events)
 	}
 }
+
+func TestBrowserCommandWithoutManagerReportsUnsupportedStatusAndRejectsMutations(t *testing.T) {
+	d := &Daemon{computerID: "computer", owners: []ComputerOwner{{TenantID: "tenant", OwnerActorID: "owner"}}}
+	expires := time.Now().Add(time.Minute).UTC().Truncate(time.Second)
+
+	send := func(action string) (protocol.Event, map[string]any) {
+		t.Helper()
+		payload, _ := json.Marshal(map[string]any{
+			"runner_id": "computer", "tenant_id": "tenant", "owner_actor_id": "owner",
+			"expires_at": expires, "action": action,
+		})
+		stream := &browserEventStream{}
+		if err := d.handleBrowserCommand(t.Context(), stream, protocol.Command{
+			Type: protocol.CommandCapabilityBrowserConnect, RunnerID: "computer", Payload: payload,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if len(stream.events) != 1 {
+			t.Fatalf("action %s events=%+v", action, stream.events)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(stream.events[0].Payload, &body); err != nil {
+			t.Fatal(err)
+		}
+		return stream.events[0], body
+	}
+
+	event, body := send("status")
+	status, _ := body["status"].(map[string]any)
+	if event.Type != protocol.EventCapabilityBrowserConnected || body["outcome"] != "succeeded" ||
+		status["mode"] != "isolated" || status["state"] != "unsupported" {
+		t.Fatalf("status event=%s body=%+v", event.Type, body)
+	}
+
+	for _, action := range []string{"configure", "disconnect"} {
+		event, body := send(action)
+		errBody, _ := body["error"].(map[string]any)
+		if event.Type != protocol.EventCapabilityBrowserFailed || body["outcome"] != "failed" ||
+			errBody["code"] != "BROWSER_CONNECTION_UNSUPPORTED" {
+			t.Fatalf("%s event=%s body=%+v", action, event.Type, body)
+		}
+	}
+}

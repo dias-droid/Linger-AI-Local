@@ -84,6 +84,28 @@ describe("Room Document presence", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("uses singular grammar when one person is viewing with showSelf", () => {
+    const awareness = createAwarenessFake([
+      awarenessState(1, "actor-alice", "#315fb5"),
+    ]);
+
+    render(
+      <RoomDocumentPresence
+        awareness={awareness}
+        currentActor={currentActor}
+        members={members}
+        showSelf
+      />,
+    );
+
+    const status = screen.getByRole("status", {
+      name: "1 person in this document: Alice Chen",
+    });
+    expect(status).toBeVisible();
+    expect(screen.getByText("1 person viewing")).toBeInTheDocument();
+    expect(screen.queryByText(/1 people/i)).toBeNull();
+  });
+
   it("renders nothing when collaboration awareness is unavailable", () => {
     render(
       <RoomDocumentPresence

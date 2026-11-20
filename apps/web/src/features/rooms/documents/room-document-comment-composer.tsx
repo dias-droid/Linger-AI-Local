@@ -1,5 +1,7 @@
 import { CommentsExtension } from "@blocknote/core/comments";
+import { FormattingToolbarExtension } from "@blocknote/core/extensions";
 import { useBlockNoteEditor, useExtension } from "@blocknote/react";
+import { TextSelection } from "@tiptap/pm/state";
 import { useEffect, useRef } from "react";
 
 import type { TeamHubActorRef } from "@/features/teamhub/teamhub-types";
@@ -29,6 +31,9 @@ export function RoomDocumentCommentComposer(
 ) {
   const editor = useBlockNoteEditor();
   const comments = useExtension(CommentsExtension);
+  const dismissFormattingToolbar = () => {
+    editor.getExtension?.(FormattingToolbarExtension)?.store.setState(false);
+  };
   return (
     <DocumentMentionMessageComposer
       {...props}
@@ -40,9 +45,21 @@ export function RoomDocumentCommentComposer(
             body: commentBodyFromComposition(composition),
           },
         });
+        // Collapse the commented selection before returning focus to the
+        // editor so the floating formatting toolbar does not reopen over the
+        // comments sidebar.
+        editor.transact?.((tr) => {
+          if (!tr.selection.empty) {
+            tr.setSelection(TextSelection.create(tr.doc, tr.selection.to));
+          }
+        });
+        dismissFormattingToolbar();
         comments.stopPendingComment();
       }}
-      onSubmitted={() => editor.focus()}
+      onSubmitted={() => {
+        dismissFormattingToolbar();
+        editor.focus();
+      }}
     />
   );
 }

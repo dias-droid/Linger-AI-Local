@@ -112,16 +112,30 @@ export function ModalDialog({
   }, [closeOnBackdrop]);
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-redundant-roles -- Explicit role="dialog" paired with aria-modal="true" ensures assistive tools and DOM queries recognize modal dialogs consistently.
     <dialog
       aria-label={standard ? undefined : ariaLabel}
       aria-labelledby={standard ? headingId : undefined}
+      aria-modal="true"
       className={`app-dialog ${standard ? "app-dialog-standard" : ""} ${className}`}
       data-size={size}
       onCancel={(event) => {
         event.preventDefault();
         onClose();
       }}
+      onKeyDown={(event) => {
+        if (
+          event.key === "Escape" &&
+          !event.defaultPrevented &&
+          !event.nativeEvent.isComposing
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        }
+      }}
       ref={dialogRef}
+      role="dialog"
     >
       {standard ? (
         <>

@@ -296,6 +296,13 @@ describe("Room creation", () => {
     // members can be added later.
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onClose).not.toHaveBeenCalled();
+    const skipNotice = screen.getByRole("region", {
+      name: "Skip adding members",
+    });
+    expect(skipNotice).toHaveTextContent(
+      /from the room header at the top of this room/i,
+    );
+    expect(skipNotice).not.toHaveTextContent(/member avatar list|top right/i);
     fireEvent.click(
       await screen.findByRole("button", { name: "Skip for now" }),
     );

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { documentFileType } from "./document-file-types";
+import {
+  documentFileType,
+  isPersonalWikiIndexableDocument,
+} from "./document-file-types";
 
 describe("Workspace file types", () => {
   it.each([
@@ -29,4 +32,36 @@ describe("Workspace file types", () => {
       }),
     ).toBe("md");
   });
+
+  it.each([
+    ["bundle.zip", "file", "zip", false, false],
+    ["archive.tar", "file", "binary", false, false],
+    ["photo.png", "file", "png", false, false],
+    ["recording.mp3", "file", "mp3", false, false],
+    ["demo.mp4", "file", "mp4", false, false],
+    ["installer.bin", "file", "binary", false, false],
+    ["notes.md", "file", "markdown", false, true],
+    ["spec.pdf", "file", "pdf", false, true],
+    ["report.docx", "file", "docx", false, true],
+    ["diagram.svg", "file", "svg", false, true],
+    ["Untitled", "blocknote", "markdown", true, true],
+  ])(
+    "classifies Personal Wiki indexability for %s (%s / %s) as %s",
+    (
+      title,
+      format,
+      representation_format,
+      can_edit_native_content,
+      expected,
+    ) => {
+      expect(
+        isPersonalWikiIndexableDocument({
+          can_edit_native_content,
+          format,
+          representation_format,
+          title,
+        }),
+      ).toBe(expected);
+    },
+  );
 });

@@ -63,6 +63,13 @@
         height: 190px;
         background: #f4f4f0 url("/welcome-scene.png") center / cover no-repeat;
         -webkit-app-region: drag;
+        transition: height 320ms var(--ease);
+      }
+      body:has(section.active[data-customizing="true"]) .scene {
+        height: 124px;
+        background:
+          linear-gradient(to bottom, transparent 45%, #fff 100%),
+          #f4f4f0 url("/welcome-scene.png") center top / cover no-repeat;
       }
       .topbar {
         position: absolute;
@@ -95,7 +102,7 @@
         min-height: 0;
         width: min(100%, 568px);
         margin: 0 auto;
-        padding: 28px 24px 22px;
+        padding: 20px 24px 16px;
         text-align: center;
       }
       section {
@@ -475,11 +482,21 @@
       section[data-step="ready"] {
         /* A long error scrolls instead of pushing the title into the scene. */
         justify-content: safe center;
+        overflow-x: hidden;
         overflow-y: auto;
+      }
+      /* Leave room for the absolute "Have a team server?" footer on welcome. */
+      section[data-step="welcome"] {
         padding-bottom: 40px;
       }
+      section[data-step="installing"] {
+        padding-bottom: 12px;
+      }
+      section[data-step="ready"] {
+        padding: 6px 0;
+      }
       h1 {
-        margin-bottom: 8px;
+        margin-bottom: 6px;
         font-size: 26px;
         font-weight: 600;
         line-height: 34px;
@@ -494,7 +511,7 @@
       }
       /* Customizing makes room for the options. */
       section[data-customizing="true"] {
-        padding-bottom: 0;
+        padding-bottom: 10px;
       }
       section[data-customizing="true"] .eyebrow,
       section[data-customizing="true"] .plan-line .sep,
@@ -502,7 +519,7 @@
         display: none;
       }
       section[data-customizing="true"] .start {
-        padding-top: 16px;
+        padding-top: 14px;
       }
       section[data-customizing="true"] .plan-line {
         margin-top: 8px;
@@ -605,7 +622,7 @@
       .transfer {
         display: grid;
         gap: 2px;
-        margin: 10px 0 0;
+        margin: 8px 0 0;
         color: var(--faint);
         font-size: 11.5px;
         line-height: 1.45;
@@ -641,9 +658,11 @@
       .fold {
         display: grid;
         grid-template-rows: 0fr;
-        width: min(100%, 440px);
+        grid-template-columns: minmax(0, 1fr);
+        width: min(100%, 480px);
         margin: 0 auto;
         opacity: 0;
+        pointer-events: none;
         transition:
           grid-template-rows 420ms var(--ease),
           opacity 280ms ease,
@@ -651,16 +670,19 @@
       }
       .fold[data-open="true"] {
         grid-template-rows: 1fr;
-        margin: 16px auto 0;
+        margin: 14px auto 0;
         opacity: 1;
+        pointer-events: auto;
       }
       .fold > div {
+        min-width: 0;
         min-height: 0;
         overflow: hidden;
-        padding: 0 4px 10px;
+        padding: 0 4px;
       }
       .fold[data-open="true"] > div {
         overflow: visible;
+        padding-bottom: 10px;
       }
       .choice[hidden],
       .byok-box[hidden],
@@ -670,9 +692,13 @@
       .byok-tip-btn {
         position: relative;
       }
+      .byok-tip-btn:hover,
+      .byok-tip-btn:focus-visible {
+        z-index: 30;
+      }
       .byok-tooltip {
         position: absolute;
-        bottom: calc(100% + 8px);
+        top: calc(100% + 8px);
         right: 0;
         z-index: 30;
         width: 248px;
@@ -688,7 +714,7 @@
         box-shadow: 0 10px 24px -8px rgba(20, 20, 16, 0.45);
         opacity: 0;
         pointer-events: none;
-        transform: translateY(3px);
+        transform: translateY(-3px);
         transition:
           opacity 150ms ease,
           transform 150ms ease;
@@ -708,6 +734,7 @@
         align-items: center;
         justify-content: space-between;
         gap: 10px;
+        min-width: 0;
       }
       .byok-row label {
         color: var(--muted);
@@ -716,6 +743,7 @@
       }
       .byok-grid {
         display: grid;
+        grid-template-columns: minmax(0, 1fr);
         gap: 7px;
       }
       .byok-grid input,
@@ -743,12 +771,15 @@
         align-items: center;
         justify-content: space-between;
         gap: 10px;
+        min-width: 0;
       }
       .byok-status {
         flex: 1;
+        min-width: 0;
         color: var(--faint);
         font-size: 11.5px;
         line-height: 1.35;
+        overflow-wrap: anywhere;
       }
       .byok-status[data-state="ready"] {
         color: #2b7a3d;
@@ -760,18 +791,48 @@
         display: block;
       }
       .choice.optional-keys summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
         cursor: pointer;
         color: var(--muted);
         font-size: 12px;
         font-weight: 500;
         list-style: none;
+        transition: color 140ms ease;
+      }
+      .choice.optional-keys summary:hover {
+        color: var(--ink);
       }
       .choice.optional-keys summary::-webkit-details-marker {
         display: none;
       }
-      .choice.optional-keys[open] summary {
-        margin-bottom: 8px;
+      .choice.optional-keys summary .chevron {
+        flex: none;
+        width: 14px;
+        height: 14px;
+        color: var(--faint);
+        transition:
+          transform 200ms var(--ease),
+          color 140ms ease;
+      }
+      .choice.optional-keys summary:hover .chevron,
+      .choice.optional-keys[open] summary .chevron {
         color: var(--ink);
+      }
+      .choice.optional-keys[open] summary {
+        margin-bottom: 6px;
+        color: var(--ink);
+      }
+      .choice.optional-keys[open] summary .chevron {
+        transform: rotate(180deg);
+      }
+      .choice.optional-keys .keys {
+        margin-top: 8px;
+      }
+      .choice.optional-keys .keys-note {
+        margin-top: 6px;
       }
       .signin-byok {
         display: grid;
@@ -792,12 +853,14 @@
         text-align: left;
       }
       .choices {
-        padding: 4px 18px;
+        min-width: 0;
+        padding: 4px 16px;
       }
       .choice {
         display: flex;
         align-items: center;
-        gap: 16px;
+        gap: 12px;
+        min-width: 0;
         padding: 8px 0;
       }
       .choice + .choice {
@@ -818,7 +881,10 @@
         display: block;
         color: var(--muted);
         font-size: 12px;
-        line-height: 1.45;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+      }
+      #location-sub {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -827,6 +893,7 @@
         position: relative;
         display: flex;
         flex: none;
+        max-width: 100%;
         padding: 2px;
         border-radius: 9px;
         background: #f1f1ee;
@@ -844,6 +911,7 @@
         color: #6b6a60;
         font-size: 12px;
         font-weight: 500;
+        white-space: nowrap;
         transition: color 160ms ease;
       }
       .seg button:hover:not(:disabled) {
@@ -909,14 +977,19 @@
         box-shadow: inset 0 0 0 0.5px var(--ink);
       }
       .pick span {
+        max-width: 100%;
         color: var(--ink);
         font-size: 12px;
         font-weight: 550;
+        overflow-wrap: anywhere;
       }
       .pick small {
+        max-width: 100%;
         color: var(--muted);
         font-size: 11px;
-        white-space: nowrap;
+        line-height: 1.4;
+        white-space: normal;
+        overflow-wrap: break-word;
       }
       /* Opens the system folder picker. */
       .change {
@@ -951,7 +1024,7 @@
       .keys {
         width: 100%;
         display: grid;
-        grid-template-columns: 64px 1fr auto auto;
+        grid-template-columns: 64px minmax(0, 1fr) auto auto;
         align-items: center;
         gap: 6px 8px;
       }
@@ -988,7 +1061,7 @@
         position: absolute;
         left: 0;
         right: 0;
-        bottom: 20px;
+        bottom: 16px;
         margin: 0;
         color: var(--faint);
         font-size: 12px;
@@ -1002,8 +1075,8 @@
       /* Installing: one panel with the bar and a short stepper. */
       .panel {
         width: 380px;
-        margin: 26px auto 0;
-        padding: 20px 22px 18px;
+        margin: 14px auto 0;
+        padding: 16px 22px 14px;
       }
       .now {
         display: flex;
@@ -1023,7 +1096,7 @@
       .track {
         position: relative;
         height: 4px;
-        margin-top: 12px;
+        margin-top: 10px;
         overflow: hidden;
         border-radius: 999px;
         background: #f0f0ec;
@@ -1065,9 +1138,9 @@
       .checks {
         position: relative;
         display: grid;
-        gap: 12px;
-        margin: 18px 0 0;
-        padding: 16px 0 0;
+        gap: 10px;
+        margin: 14px 0 0;
+        padding: 14px 0 0;
         border-top: 1px solid #f1f1ee;
         list-style: none;
         color: var(--faint);
@@ -1087,7 +1160,7 @@
         left: 7.25px;
         bottom: calc(100% + 1px);
         width: 1.5px;
-        height: 10px;
+        height: 8px;
         border-radius: 1px;
         background: #ecece8;
         transition: background-color 240ms ease;
@@ -1373,7 +1446,7 @@
         height: 52px;
         /* A tall receipt overflows the section; the circle must not shrink. */
         flex-shrink: 0;
-        margin: 0 auto 18px;
+        margin: 0 auto 12px;
         border-radius: 50%;
         background: linear-gradient(180deg, #2f2f2c, #1b1b19);
         box-shadow:
@@ -1410,7 +1483,7 @@
         width: max-content;
         align-items: center;
         gap: 8px;
-        margin: 18px auto 0;
+        margin: 12px auto 0;
         padding: 6px 12px;
         border: 1px solid #ecece7;
         border-radius: 999px;
@@ -1433,7 +1506,7 @@
       .account {
         width: 100%;
         max-width: 420px;
-        margin: 18px auto 0;
+        margin: 12px auto 0;
         padding: 12px 14px;
         border: 1px solid var(--line);
         border-radius: 10px;
@@ -1448,7 +1521,7 @@
       }
       .account dl {
         display: grid;
-        grid-template-columns: 64px 1fr auto auto;
+        grid-template-columns: 64px minmax(0, 1fr) auto auto;
         align-items: center;
         gap: 6px 8px;
         margin: 0;
@@ -1513,7 +1586,7 @@
         pointer-events: none;
       }
       section[data-step="ready"] .start {
-        padding-top: 22px;
+        padding-top: 14px;
       }
       @media (prefers-reduced-motion: reduce) {
         *,
@@ -1678,7 +1751,12 @@
                 </div>
               </div>
               <details class="choice optional-keys" id="optional-keys">
-                <summary>App integrations (optional)</summary>
+                <summary>
+                  <span>App integrations (optional)</span
+                  ><svg class="chevron" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </summary>
                 <div class="text">
                   <span class="sub"
                     >Composio connects apps; turn on voice inside the app. Keys

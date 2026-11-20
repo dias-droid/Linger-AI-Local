@@ -65,7 +65,7 @@ server.on("connection", (downstream, request) => {
     downstream.terminate();
     upstream.terminate();
   };
-  const forward = (target, data, binary) => {
+  const forward = (target, data, binary, onSent) => {
     if (
       target.readyState !== WebSocket.OPEN ||
       target.bufferedAmount + data.length > maxBytes
@@ -74,35 +74,81 @@ server.on("connection", (downstream, request) => {
       return;
     }
     target.send(data, { binary }, (error) => {
-      if (error) closePair();
+      if (error) {
+        closePair();
+        return;
+      }
+      onSent?.();
     });
+  };
+  const parseEnvelope = (data, binary) => {
+    if (binary) return null;
+    try {
+      const value = JSON.parse(data.toString());
+      return value && typeof value === "object" ? value : null;
+    } catch {
+      return null;
+    }
   };
   for (const socket of [downstream, upstream]) {
     socket.once("error", closePair);
     socket.once("close", closePair);
   }
-  downstream.on("message", (data, binary) => forward(upstream, data, binary));
-  upstream.on("message", (data, binary) => {
-    if (blockAcknowledgements && !binary) {
-      let envelope;
-      try {
-        envelope = JSON.parse(data.toString());
-      } catch {
-        envelope = null;
-      }
-      if (envelope?.type === "operation.ack") {
-        record({
-          type: "blocked_agent_to_daemon",
-          message_type: "operation.ack",
-          at: Date.now(),
-          bytes: data.length,
-          operation_id: envelope.operation_id,
-          through_seq: envelope.through_seq,
-        });
-        return;
-      }
+  downstream.on("message", (data, binary) => {
+    const envelope = parseEnvelope(data, binary);
+    if (
+      envelope &&
+      (envelope.type === "operation.accepted" ||
+        envelope.type === "operation.event" ||
+        envelope.type === "operation.completed" ||
+        envelope.type === "operation.failed" ||
+        envelope.type === "operation.cancelled")
+    ) {
+      record({
+        type: "operation_daemon_frame",
+        frame_type: envelope.type,
+        operation_id: envelope.operation_id,
+        agent_id: envelope.agent_id,
+        ...(typeof envelope.seq === "number" ? { seq: envelope.seq } : {}),
+        at: Date.now(),
+      });
     }
-    forward(downstream, data, binary);
+    forward(upstream, data, binary);
+  });
+  upstream.on("message", (data, binary) => {
+    const envelope = parseEnvelope(data, binary);
+    if (blockAcknowledgements && envelope?.type === "operation.ack") {
+      record({
+        type: "blocked_agent_to_daemon",
+        message_type: "operation.ack",
+        at: Date.now(),
+        bytes: data.length,
+        operation_id: envelope.operation_id,
+        through_seq: envelope.through_seq,
+      });
+      return;
+    }
+    const onSent =
+      envelope?.type === "operation.start"
+        ? () =>
+            record({
+              type: "operation_start",
+              operation_id: envelope.operation_id,
+              agent_id: envelope.agent_id,
+              connection_epoch: envelope.connection_epoch,
+              operation_kind: envelope.request?.kind ?? null,
+              at: Date.now(),
+            })
+        : envelope?.type === "operation.ack"
+          ? () =>
+              record({
+                type: "operation_ack",
+                operation_id: envelope.operation_id,
+                through_seq: envelope.through_seq,
+                at: Date.now(),
+              })
+          : undefined;
+    forward(downstream, data, binary, onSent);
   });
   upstream.resume();
 });

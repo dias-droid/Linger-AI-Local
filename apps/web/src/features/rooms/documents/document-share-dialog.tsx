@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Alert02Icon,
   ArrowLeft01Icon,
+  Cancel01Icon,
   Copy01Icon,
   RefreshIcon,
   UserAdd01Icon,
@@ -228,6 +229,14 @@ export function DocumentShareDialog({
               </p>
             ) : null}
           </div>
+          <button
+            aria-label="Close"
+            className="app-dialog-close"
+            onClick={onClose}
+            type="button"
+          >
+            <Icon icon={Cancel01Icon} size={16} />
+          </button>
         </header>
 
         <div className="workspace-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
@@ -284,6 +293,10 @@ export function DocumentShareDialog({
               key={documentId}
               client={client}
               documentId={documentId}
+              hasActiveLink={
+                share.data.general_access?.scope === "anyone_with_link"
+              }
+              onPolicyChange={() => void share.refetch()}
             />
           ) : null}
         </div>

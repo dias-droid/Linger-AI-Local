@@ -810,3 +810,24 @@ func TestLiveCallStopsWaitingWithItsCaller(t *testing.T) {
 		t.Fatalf("err=%v, want the caller's deadline", err)
 	}
 }
+
+func TestBrowserConnectionWithoutEverydayChromeReportsUnsupportedStatus(t *testing.T) {
+	m := newConnectionManager(t)
+	m.noEverydayChrome = true
+
+	status, err := m.BrowserConnection(t.Context(), "tenant", "owner", "status", "", "")
+	if err != nil {
+		t.Fatalf("status returned unexpected error: %v", err)
+	}
+	if status.Mode != "isolated" || status.State != browserUnsupported || status.Platform != runtime.GOOS || status.Message == "" {
+		t.Fatalf("status = %+v", status)
+	}
+
+	for _, action := range []string{"configure", "disconnect"} {
+		_, err := m.BrowserConnection(t.Context(), "tenant", "owner", action, "", strings.Repeat("A", 43))
+		var typed *BrowserCommandError
+		if !errors.As(err, &typed) || typed.Code != "BROWSER_CONNECTION_UNSUPPORTED" {
+			t.Fatalf("action %s err = %v", action, err)
+		}
+	}
+}

@@ -3,11 +3,18 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ArrowDown01Icon,
   ArrowRight01Icon,
+  Cancel01Icon,
   CheckListIcon,
 } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
-import { useCallback, useState, type RefCallback } from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useState,
+  type RefCallback,
+} from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import { Select, SelectItem } from "@/components/ui/select";
@@ -17,13 +24,16 @@ import { AuthenticatedRouteLoading } from "@/features/rooms/route-loading-surfac
 import { ActorAvatar } from "@/features/rooms/members/actor-avatar";
 import { TeamHubError } from "@/features/teamhub/teamhub-client";
 import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
-import type { TeamHubWorkItem } from "@/features/teamhub/teamhub-types";
+import type {
+  TeamHubRoom,
+  TeamHubWorkItem,
+} from "@/features/teamhub/teamhub-types";
 
 import {
   tenantWorkItemTargetQueryOptions,
   tenantWorkItemsDashboardQueryOptions,
 } from "./work-item-queries";
-import { dashboardWorkItemPath } from "./work-item-routes";
+import { dashboardPath, dashboardWorkItemPath } from "./work-item-routes";
 import { createWorkItemRoomFilterModel } from "./work-item-room-filter";
 
 interface DashboardColumn {
@@ -47,6 +57,7 @@ const dashboardDateFormatter = dateTimeFormat({
 
 export function WorkItemsPage() {
   const { client } = useTeamHubRuntime();
+  const navigate = useNavigate();
   const params = useParams();
   const tenantId = requireRoomRouteParam(params.tenantId, "Tenant");
   const focusedWorkItemId = params.workItemId;
@@ -57,6 +68,17 @@ export function WorkItemsPage() {
     [focusedWorkItemId],
   );
   const [searchParams, setSearchParams] = useSearchParams();
+  const roomId = searchParams.get("room")?.trim() ?? "";
+  const dashboardSearch = roomId
+    ? new URLSearchParams({ room: roomId }).toString()
+    : "";
+  const closeDetail = () => {
+    void navigate({
+      pathname: dashboardPath(tenantId),
+      search: dashboardSearch,
+    });
+  };
+  const closeDetailOnEscape = useEffectEvent(closeDetail);
   const workItemsQuery = useQuery(
     tenantWorkItemsDashboardQueryOptions(client, tenantId),
   );
@@ -69,6 +91,22 @@ export function WorkItemsPage() {
     enabled: Boolean(focusedWorkItemId),
   });
   const roomsQuery = useQuery(tenantRoomsQueryOptions(client, tenantId));
+
+  useEffect(() => {
+    if (!focusedWorkItemId) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key === "Escape" &&
+        !event.defaultPrevented &&
+        !event.isComposing
+      ) {
+        event.preventDefault();
+        closeDetailOnEscape();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [focusedWorkItemId]);
 
   if (
     workItemsQuery.isPending ||
@@ -101,11 +139,10 @@ export function WorkItemsPage() {
   const rooms = roomsQuery.data;
   if (!data || !rooms) return <WorkItemsLoading />;
   const items = mergeFocusedWorkItem(data.items, focusedWorkItemQuery.data);
+  const selectedItem = focusedWorkItemId
+    ? items.find((item) => item.id === focusedWorkItemId)
+    : undefined;
   const roomFilter = createWorkItemRoomFilterModel(rooms.items, items);
-  const roomId = searchParams.get("room")?.trim() ?? "";
-  const dashboardSearch = roomId
-    ? new URLSearchParams({ room: roomId }).toString()
-    : "";
   const filteredItems = items.filter((item) =>
     roomFilter.matches(item, roomId),
   );
@@ -146,23 +183,34 @@ export function WorkItemsPage() {
       </header>
 
       {items.length ? (
-        <div className="work-items-board workspace-scrollbar min-h-0 flex-1 overflow-x-auto overflow-y-hidden p-4 sm:p-5">
-          <div className="grid h-full min-w-[1180px] grid-cols-5 gap-3">
-            {dashboardColumns.map((column) => (
-              <WorkItemColumn
-                column={column}
-                focusedCardRef={focusedCardRef}
-                focusedWorkItemId={focusedWorkItemId}
-                items={filteredItems.filter(
-                  (item) => dashboardColumnFor(item) === column.id,
-                )}
-                key={column.id}
-                originRoomLabel={roomFilter.originLabel}
-                search={dashboardSearch}
-                tenantId={tenantId}
-              />
-            ))}
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <div className="work-items-board workspace-scrollbar min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-hidden p-4 sm:p-5">
+            <div className="grid h-full min-w-[920px] grid-cols-4 gap-3">
+              {dashboardColumns.map((column) => (
+                <WorkItemColumn
+                  column={column}
+                  focusedCardRef={focusedCardRef}
+                  focusedWorkItemId={focusedWorkItemId}
+                  items={filteredItems.filter(
+                    (item) => dashboardColumnFor(item) === column.id,
+                  )}
+                  key={column.id}
+                  originRoomLabel={roomFilter.originLabel}
+                  search={dashboardSearch}
+                  tenantId={tenantId}
+                />
+              ))}
+            </div>
           </div>
+          {selectedItem ? (
+            <WorkItemDetailDrawer
+              item={selectedItem}
+              onClose={closeDetail}
+              originRoomLabel={roomFilter.originLabel(selectedItem)}
+              rooms={rooms.items}
+              tenantId={tenantId}
+            />
+          ) : null}
         </div>
       ) : (
         <section className="flex min-h-0 flex-1 items-center justify-center px-6 py-12 text-center">
@@ -420,6 +468,221 @@ function WorkItemStatus({
       <span>{column.label}</span>
     </span>
   );
+}
+
+function WorkItemDetailDrawer({
+  item,
+  onClose,
+  originRoomLabel,
+  rooms,
+  tenantId,
+}: {
+  item: TeamHubWorkItem;
+  onClose: () => void;
+  originRoomLabel: string;
+  rooms: readonly TeamHubRoom[];
+  tenantId: string;
+}) {
+  const status = dashboardColumnFor(item);
+  const originRoom = item.origin_room_id
+    ? rooms.find((room) => room.id === item.origin_room_id)
+    : undefined;
+  const workRoom =
+    item.work_room_id && item.work_room_id !== item.origin_room_id
+      ? rooms.find((room) => room.id === item.work_room_id)
+      : undefined;
+  const executionLabel = item.task_execution
+    ? formatExecutionStatus(
+        item.task_execution.status,
+        item.task_execution.reason_code,
+      )
+    : undefined;
+
+  return (
+    <aside
+      aria-label="Work Item details"
+      className="workspace-scrollbar flex min-h-0 w-full max-w-md shrink-0 flex-col overflow-y-auto border-l border-app-border bg-app-surface"
+    >
+      <header className="flex items-start justify-between gap-3 border-b border-app-border px-5 py-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span>
+              {item.kind === "issue" ? "Issue" : "Task"} #{item.number}
+            </span>
+            <WorkItemStatus compact status={status} />
+            {item.archived_at ? (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-2xs font-medium text-muted-foreground">
+                Archived
+              </span>
+            ) : null}
+          </div>
+          <h2 className="mt-1.5 [overflow-wrap:anywhere] text-base font-semibold text-foreground">
+            {item.title}
+          </h2>
+        </div>
+        <Button
+          aria-label="Close detail"
+          onClick={onClose}
+          size="compactIcon"
+          title="Close detail"
+          tone="ghost"
+        >
+          <Icon icon={Cancel01Icon} size={16} />
+        </Button>
+      </header>
+      <div className="space-y-5 px-5 py-4 text-sm">
+        <section aria-label="Description">
+          <h3 className="text-xs font-medium text-muted-foreground">
+            Description
+          </h3>
+          {item.description.trim() ? (
+            <p className="mt-1.5 whitespace-pre-wrap [overflow-wrap:anywhere] leading-6 text-app-body">
+              {item.description}
+            </p>
+          ) : (
+            <p className="mt-1.5 text-muted-foreground">
+              No description provided.
+            </p>
+          )}
+        </section>
+
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-3 border-t border-app-border pt-4 text-xs">
+          <dt className="text-muted-foreground">Priority</dt>
+          <dd className="font-medium text-foreground">
+            {capitalize(item.priority)}
+          </dd>
+
+          {item.resolution ? (
+            <>
+              <dt className="text-muted-foreground">Resolution</dt>
+              <dd className="font-medium text-foreground">
+                {formatResolution(item.resolution)}
+              </dd>
+            </>
+          ) : null}
+
+          {executionLabel ? (
+            <>
+              <dt className="text-muted-foreground">Run activity</dt>
+              <dd className="font-medium text-foreground">{executionLabel}</dd>
+            </>
+          ) : null}
+
+          <dt className="text-muted-foreground">Room</dt>
+          <dd className="min-w-0 [overflow-wrap:anywhere]">
+            {originRoom ? (
+              <Link
+                className="font-medium text-app-link hover:underline"
+                to={`/t/${encodeURIComponent(tenantId)}/rooms/${encodeURIComponent(originRoom.id)}/chat`}
+              >
+                {originRoomLabel}
+              </Link>
+            ) : (
+              <span className="text-foreground">{originRoomLabel}</span>
+            )}
+          </dd>
+
+          {workRoom ? (
+            <>
+              <dt className="text-muted-foreground">Work room</dt>
+              <dd className="min-w-0 [overflow-wrap:anywhere]">
+                <Link
+                  className="font-medium text-app-link hover:underline"
+                  to={`/t/${encodeURIComponent(tenantId)}/rooms/${encodeURIComponent(workRoom.id)}/chat`}
+                >
+                  {workRoom.name}
+                </Link>
+              </dd>
+            </>
+          ) : null}
+
+          <dt className="text-muted-foreground">Created by</dt>
+          <dd className="flex min-w-0 items-center gap-1.5 text-foreground">
+            <ActorAvatar
+              actorId={item.created_by.id}
+              kind={item.created_by.kind}
+              name={item.created_by.display_name}
+              size="micro"
+            />
+            <span className="truncate">{item.created_by.display_name}</span>
+          </dd>
+
+          <dt className="text-muted-foreground">Assignees</dt>
+          <dd className="min-w-0 text-foreground">
+            {item.assignees.length ? (
+              <ul className="space-y-1.5">
+                {item.assignees.map(({ actor }) => (
+                  <li
+                    className="flex min-w-0 items-center gap-1.5"
+                    key={actor.id}
+                  >
+                    <ActorAvatar
+                      actorId={actor.id}
+                      kind={actor.kind}
+                      name={actor.display_name}
+                      size="micro"
+                    />
+                    <span className="truncate">{actor.display_name}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className="text-muted-foreground">Unassigned</span>
+            )}
+          </dd>
+
+          <dt className="text-muted-foreground">Created</dt>
+          <dd className="text-foreground">
+            <time dateTime={item.created_at}>
+              {formatDashboardDate(item.created_at)}
+            </time>
+          </dd>
+
+          <dt className="text-muted-foreground">Updated</dt>
+          <dd className="text-foreground">
+            <time dateTime={item.updated_at}>
+              {formatDashboardDate(item.updated_at)}
+            </time>
+          </dd>
+        </dl>
+      </div>
+    </aside>
+  );
+}
+
+function formatResolution(
+  resolution: NonNullable<TeamHubWorkItem["resolution"]>,
+) {
+  switch (resolution) {
+    case "completed":
+      return "Completed";
+    case "failed":
+      return "Failed";
+    case "not_planned":
+      return "Not planned";
+    case "duplicate":
+      return "Duplicate";
+  }
+}
+
+function formatExecutionStatus(
+  status: NonNullable<TeamHubWorkItem["task_execution"]>["status"],
+  reasonCode?: string,
+) {
+  switch (status) {
+    case "running":
+      return "Running";
+    case "waiting_for_approval":
+      return "Waiting for approval";
+    case "idle":
+      return reasonCode === "run_succeeded"
+        ? "Run finished (awaiting resolution)"
+        : "Idle";
+    case "failed":
+      return "Failed";
+    case "canceled":
+      return "Canceled";
+  }
 }
 
 function dashboardColumnFor(item: TeamHubWorkItem): DashboardColumn["id"] {

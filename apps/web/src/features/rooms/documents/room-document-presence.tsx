@@ -79,18 +79,21 @@ export function RoomDocumentPresence({
 
   const visibleParticipants = participants.slice(0, 5);
   const names = participants.map((participant) => participant.name).join(", ");
+  const personLabel = participants.length === 1 ? "person" : "people";
   const membersByActorId = new Map(
     members?.map((member) => [member.actor.id, member.actor]),
   );
 
   return (
     <span
-      aria-label={`${participants.length} people in this document: ${names}`}
+      aria-label={`${participants.length} ${personLabel} in this document: ${names}`}
       aria-live="polite"
       className="inline-flex min-w-0 shrink-0 items-center"
       role="status"
     >
-      <span className="sr-only">{participants.length} people viewing</span>
+      <span className="sr-only">
+        {participants.length} {personLabel} viewing
+      </span>
       <span className="flex -space-x-[5px] rounded-full p-1">
         {visibleParticipants.map((participant) => (
           <span

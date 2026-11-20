@@ -5,6 +5,60 @@ import {
 } from "./document-display-name";
 import type { TeamHubDocumentTreeSummary } from "@/features/teamhub/teamhub-types";
 
+const personalWikiIndexableFormats = new Set([
+  "blocknote",
+  "c",
+  "cpp",
+  "css",
+  "csv",
+  "doc",
+  "docx",
+  "dotx",
+  "eml",
+  "epub",
+  "go",
+  "h",
+  "hpp",
+  "htm",
+  "html",
+  "java",
+  "js",
+  "json",
+  "jsx",
+  "less",
+  "log",
+  "markdown",
+  "md",
+  "mht",
+  "mhtml",
+  "mmd",
+  "odp",
+  "ods",
+  "odt",
+  "pdf",
+  "plain",
+  "plain_text",
+  "potx",
+  "ppsx",
+  "pptx",
+  "py",
+  "rs",
+  "scss",
+  "sh",
+  "sql",
+  "svg",
+  "toml",
+  "ts",
+  "tsv",
+  "tsx",
+  "txt",
+  "xlsx",
+  "xltx",
+  "xml",
+  "yaml",
+  "yml",
+]);
+
 export const documentFileTypes = [
   { value: "", label: "All types" },
   { value: "md", label: "Markdown" },
@@ -48,4 +102,28 @@ export function matchesDocumentFileType(
   type: string,
 ) {
   return !type || documentFileType(document) === type;
+}
+
+/**
+ * Returns whether a Document's format is indexable by Personal Wiki admission.
+ * Non-indexable binary uploads (such as archives, raster images, audio, and
+ * video) are excluded even when stored under My pages with a wiki_source link.
+ */
+export function isPersonalWikiIndexableDocument(
+  document: Pick<
+    TeamHubDocumentTreeSummary,
+    "can_edit_native_content" | "format" | "representation_format" | "title"
+  >,
+): boolean {
+  if (document.format === "blocknote" || document.can_edit_native_content) {
+    return true;
+  }
+  const format = documentRepresentationFormat(document).trim().toLowerCase();
+  if (format && format !== "binary" && format !== "file") {
+    return personalWikiIndexableFormats.has(format);
+  }
+  const name = documentFileName(document);
+  const dot = name.lastIndexOf(".");
+  const extension = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+  return personalWikiIndexableFormats.has(extension);
 }

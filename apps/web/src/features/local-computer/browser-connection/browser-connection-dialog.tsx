@@ -97,7 +97,7 @@ export function BrowserConnectionDialog({
       );
       setEditing(false);
     } catch (error) {
-      setFailure(browserConnectionErrorMessage(error));
+      setFailure(browserConnectionErrorMessage(error, computer.platform));
     } finally {
       setPending(null);
     }
@@ -211,6 +211,7 @@ export function BrowserConnectionDialog({
               error={status.error}
               loading={online && status.isPending}
               online={online}
+              platform={computer.platform}
             />
 
             {online &&
@@ -330,11 +331,13 @@ function BrowserConnectionStatusSection({
   error,
   loading,
   online,
+  platform,
 }: {
   current: TeamHubBrowserConnectionStatus | undefined;
   error: unknown;
   loading: boolean;
   online: boolean;
+  platform?: string;
 }) {
   if (!online) {
     return (
@@ -353,7 +356,7 @@ function BrowserConnectionStatusSection({
   if (!current) {
     return (
       <FormFeedback tone="danger">
-        {browserConnectionErrorMessage(error)}
+        {browserConnectionErrorMessage(error, platform)}
       </FormFeedback>
     );
   }

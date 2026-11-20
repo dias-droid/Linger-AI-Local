@@ -539,6 +539,145 @@ describe("ComputersPage", () => {
       }),
     );
   });
+
+  it("omits Connect Chrome and its trailing connector when the Computer reports browser connection unsupported", async () => {
+    const fixture = await authenticatedFixture();
+    const inventory = replacementComputerInventory();
+    inventory.items[0]!.display_name = "Linux Desktop";
+    inventory.items[0]!.platform = "linux";
+    fixture.server.on(
+      "GET",
+      "/v0/tenants/{tenantId}/local-computers/{computerId}/browser-connection",
+      () => ({
+        message:
+          "This Computer has no everyday browser to connect; Agents use their own browser without the user's sign-ins.",
+        mode: "isolated",
+        platform: "linux",
+        state: "unsupported",
+      }),
+    );
+    const runtime: TeamHubRuntime = {
+      ...fixture,
+      client: {
+        ...fixture.client,
+        listTenantLocalComputers: vi.fn().mockResolvedValue(inventory),
+      },
+    };
+
+    await renderPage(runtime);
+
+    const detail = await screen.findByRole("region", {
+      name: "Linux Desktop details",
+    });
+    await waitFor(() =>
+      expect(
+        fixture.server.requestsTo(
+          "GET",
+          "/v0/tenants/{tenantId}/local-computers/{computerId}/browser-connection",
+        ),
+      ).toHaveLength(1),
+    );
+    expect(
+      within(detail).queryByRole("button", { name: "Connect Chrome" }),
+    ).toBeNull();
+    expect(within(detail).queryByText("Connect Chrome")).toBeNull();
+    // Only the connector between Connected and Codex renders; no dangling line.
+    expect(detail.querySelectorAll("[data-progress-connector]")).toHaveLength(
+      1,
+    );
+    fireEvent.click(within(detail).getByRole("button", { name: "Access" }));
+    expect(
+      within(detail).getByRole("region", { name: "Access" }),
+    ).not.toHaveTextContent("Chrome");
+  });
+
+  it("never renders a broken Connect Chrome chip or dangling connector when status fails with 409", async () => {
+    const fixture = await authenticatedFixture();
+    const inventory = replacementComputerInventory();
+    inventory.items[0]!.platform = "darwin";
+    fixture.server.on(
+      "GET",
+      "/v0/tenants/{tenantId}/local-computers/{computerId}/browser-connection",
+      () =>
+        Response.json(
+          {
+            error: {
+              code: "BROWSER_CONNECTION_UNSUPPORTED",
+              message:
+                "Upgrade the Local Computer before connecting your browser",
+              request_id: "req-1",
+            },
+          },
+          { status: 409 },
+        ),
+    );
+    const runtime: TeamHubRuntime = {
+      ...fixture,
+      client: {
+        ...fixture.client,
+        listTenantLocalComputers: vi.fn().mockResolvedValue(inventory),
+      },
+    };
+
+    await renderPage(runtime);
+
+    const detail = await screen.findByRole("region", {
+      name: "New Build Mac details",
+    });
+    await waitFor(() =>
+      expect(
+        fixture.server.requestsTo(
+          "GET",
+          "/v0/tenants/{tenantId}/local-computers/{computerId}/browser-connection",
+        ),
+      ).toHaveLength(1),
+    );
+    fireEvent.click(within(detail).getByRole("button", { name: "Access" }));
+    const access = within(detail).getByRole("region", { name: "Access" });
+    expect(
+      await within(access).findByText(
+        "Linger Computer on this Computer is out of date. Update it, then connect your browser.",
+      ),
+    ).toBeVisible();
+    expect(
+      within(detail).queryByRole("button", { name: "Connect Chrome" }),
+    ).toBeNull();
+    expect(detail.querySelectorAll("[data-progress-connector]")).toHaveLength(
+      1,
+    );
+    expect(
+      within(access).queryByRole("button", { name: "Connect" }),
+    ).toBeNull();
+  });
+
+  it("renders Connect Chrome with its connector and opens the dialog when supported", async () => {
+    const fixture = await authenticatedFixture();
+    const inventory = replacementComputerInventory();
+    inventory.items[0]!.platform = "darwin";
+    const runtime: TeamHubRuntime = {
+      ...fixture,
+      client: {
+        ...fixture.client,
+        listTenantLocalComputers: vi.fn().mockResolvedValue(inventory),
+      },
+    };
+
+    await renderPage(runtime);
+
+    const detail = await screen.findByRole("region", {
+      name: "New Build Mac details",
+    });
+    const connectButton = await within(detail).findByRole("button", {
+      name: "Connect Chrome",
+    });
+    expect(detail.querySelectorAll("[data-progress-connector]")).toHaveLength(
+      2,
+    );
+    fireEvent.click(connectButton);
+    expect(
+      await screen.findByRole("dialog", { name: "Connect my browser" }),
+    ).toBeVisible();
+  });
 });
 
 async function authenticatedFixture() {

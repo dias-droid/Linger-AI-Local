@@ -4,9 +4,16 @@ import { lazy, Suspense, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { TeamHubError } from "@/features/teamhub/teamhub-error";
 import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
 
-import { ComputerRow, ProgressChip, RowMark, StatusDot } from "../computer-row";
+import {
+  ComputerRow,
+  ProgressChip,
+  ProgressConnector,
+  RowMark,
+  StatusDot,
+} from "../computer-row";
 import { browserConnectionQueryOptions } from "./browser-connection-api";
 import {
   browserConnectionErrorMessage,
@@ -23,12 +30,16 @@ const BrowserConnectionDialog = lazy(() =>
 /** One Local Computer's browser, as a summary chip or an Access row. */
 export function ComputerBrowserConnection({
   computerId,
+  connectorDashed = false,
   online,
+  platform,
   tenantId,
   variant,
 }: {
   computerId: string;
+  connectorDashed?: boolean;
   online: boolean;
+  platform?: string;
   tenantId: string;
   variant: "chip" | "row";
 }) {
@@ -39,21 +50,15 @@ export function ComputerBrowserConnection({
     enabled: online,
   });
   const state = status.data?.state;
-  // A Personal Cloud Computer has no everyday Chrome to connect, so the chip
-  // waits for the status rather than appearing and then vanishing.
-  if (state === "unsupported") return null;
-  if (variant === "chip" && online && status.isPending) return null;
-  const connected = state === "connected";
-  const copy = status.data
-    ? browserConnectionStateCopy(status.data.state)
-    : null;
-  const explanation = !online
-    ? "Unavailable while this computer is offline."
-    : status.data
-      ? browserExplanation(status.data.state)
-      : status.isError
-        ? browserConnectionErrorMessage(status.error)
-        : "Checking browser status…";
+  const errorCode =
+    status.error instanceof TeamHubError ? status.error.code : undefined;
+  const savedConnectionInvalid = errorCode === "BROWSER_CONNECTION_INVALID";
+  const unsupported =
+    state === "unsupported" ||
+    errorCode === "BROWSER_CONNECTION_NOT_SUPPORTED" ||
+    (errorCode === "BROWSER_CONNECTION_UNSUPPORTED" && platform === "linux");
+  const upgradeRequired =
+    errorCode === "BROWSER_CONNECTION_UNSUPPORTED" && platform !== "linux";
   const dialog = open ? (
     <Suspense fallback={null}>
       <BrowserConnectionDialog
@@ -64,9 +69,28 @@ export function ComputerBrowserConnection({
     </Suspense>
   ) : null;
 
-  if (variant === "chip")
+  // Computers without everyday Chrome omit both the summary chip and the
+  // Access row, keeping an already-open dialog mounted if one exists.
+  if (unsupported) return dialog;
+  const connected = state === "connected";
+  const copy = status.data
+    ? browserConnectionStateCopy(status.data.state)
+    : null;
+  const explanation = !online
+    ? "Unavailable while this computer is offline."
+    : status.data
+      ? browserExplanation(status.data.state)
+      : status.isError
+        ? browserConnectionErrorMessage(status.error, platform)
+        : "Checking browser status…";
+
+  if (variant === "chip") {
+    // Only render the chip and its leading connector once status proves
+    // everyday Chrome is supported here, or a damaged token can be replaced.
+    if (!status.data && !savedConnectionInvalid) return dialog;
     return (
       <>
+        <ProgressConnector dashed={connectorDashed} />
         <ProgressChip
           hint={
             connected
@@ -81,12 +105,13 @@ export function ComputerBrowserConnection({
         {dialog}
       </>
     );
+  }
 
   return (
     <>
       <ComputerRow
         action={
-          online ? (
+          online && !status.isPending && !upgradeRequired ? (
             <Button
               onClick={() => setOpen(true)}
               size="compact"

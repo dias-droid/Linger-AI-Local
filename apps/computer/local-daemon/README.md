@@ -681,10 +681,9 @@ card an Agent posts in a Room chat when it needs that browser. The connection us
 readable only by the current user under `computer-tools/browser-connections/`.
 macOS and Windows support this mode; Linux returns `unsupported`. When the default
 browser is Chrome and it is not connected, the status is `not_connected` and
-browser calls wait for the user to connect rather than use a separate browser. A
-Computer that can connect the everyday browser declares the host capability
-`browser_connection`. A Linux Computer, or one without the local browser tools,
-does not declare it, answers a connection request as unsupported, and does not
+browser calls wait for the user to connect rather than use a separate browser. Every current Computer declares the host capability `browser_connection`. A
+Linux Computer, or one without the local browser tools, answers status reads
+with `unsupported`, rejects connection requests as unsupported, and does not
 tell Agents to post a connection card.
 
 On Linux the managed browser is the first Google Chrome or Chromium found in the

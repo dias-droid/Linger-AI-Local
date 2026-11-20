@@ -255,7 +255,8 @@ export interface ContextAgentManagerApplication {
   refreshRuntimeState(): Promise<void>;
   /**
    * Applies a Context change hint: a held Context refreshes; an unheld one
-   * binds only when it is a Room Meta Context that never ran.
+   * binds only when it is a Room Meta Context that never ran or an active
+   * Document Context.
    */
   refreshRuntimeContext(
     contextKey: string,

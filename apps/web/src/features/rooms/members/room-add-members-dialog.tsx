@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,6 @@ import {
   tenantRoomsQueryOptions,
 } from "../room-queries";
 import { RoomCreateMembers } from "./room-create-members";
-import { RoomMemberAvatars } from "./room-member-avatars";
 
 export function RoomAddMembersDialog({
   onClose,
@@ -28,7 +27,6 @@ export function RoomAddMembersDialog({
   // Closing without adding anyone confirms first, so the Room owner learns where
   // members can be added later instead of losing the step silently.
   const [confirmSkip, setConfirmSkip] = useState(false);
-  const members = useQuery(roomMembersQueryOptions(client, tenantId, roomId));
   const submit = useMutation({
     // Each member is independent: whatever succeeds stays applied and only the
     // failures remain queued for a retry.
@@ -130,18 +128,7 @@ export function RoomAddMembersDialog({
           >
             <p className="text-sm leading-6 text-app-body">
               <strong>Skip adding members?</strong> You can add people and
-              agents later using the member avatar list{" "}
-              <span
-                aria-label="Room member avatar list"
-                className="room-members-trigger mx-1 inline-flex items-center rounded-full border border-border p-1 align-middle"
-              >
-                <RoomMemberAvatars
-                  actors={
-                    members.data?.items.map((member) => member.actor) ?? []
-                  }
-                />
-              </span>{" "}
-              at the top right of this room.
+              agents later from the room header at the top of this room.
             </p>
           </section>
         ) : null}

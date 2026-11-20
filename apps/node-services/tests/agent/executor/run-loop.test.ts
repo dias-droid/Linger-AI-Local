@@ -2171,6 +2171,58 @@ describe("RunLoop", () => {
     harness.state.close();
   });
 
+  it("does not open Room runtime status for Document Context Runs", async () => {
+    const statusPublisher = new OpenFailureRuntimeStatusPublisher();
+    const onRunEvent = vi.fn(() => []);
+    const harness = createHarness(
+      undefined,
+      undefined,
+      statusPublisher,
+      { threadId: "doc-thread-1" },
+      { kind: "document", agentId: "agent-1", documentId: "doc-standalone" },
+      undefined,
+      { onRunEvent },
+    );
+    const succeedingRun = new FakeRun([
+      { type: "status.changed", status: "working" },
+    ]);
+    const failingRun = new FakeRun();
+    harness.provider.runs.push(succeedingRun, failingRun);
+    const firstRunId = enqueue(
+      harness.state,
+      message("comment-1", "document:doc-standalone"),
+    );
+    const secondRunId = enqueue(
+      harness.state,
+      message("comment-2", "document:doc-standalone"),
+    );
+
+    harness.execution.start();
+    await vi.waitFor(() => expect(harness.provider.starts).toHaveLength(1));
+    succeedingRun.complete("replied");
+    await vi.waitFor(() =>
+      expect(harness.state.getLocalRun(firstRunId)?.status).toBe("succeeded"),
+    );
+    await vi.waitFor(() => expect(harness.provider.starts).toHaveLength(2));
+    failingRun.fail(new Error("provider failure"));
+    await vi.waitFor(() =>
+      expect(harness.state.getLocalRun(secondRunId)?.status).toBe("failed"),
+    );
+
+    expect(statusPublisher.opened).toBe(0);
+    expect(onRunEvent).toHaveBeenCalledWith({
+      type: "status.changed",
+      status: "working",
+    });
+    expect(
+      harness.log.mock.calls.filter(
+        (call) => call[1] === "runtime_status.open_failed",
+      ),
+    ).toEqual([]);
+    await harness.execution.drain({ cancelActive: false });
+    harness.state.close();
+  });
+
   it("cancels queued and running Local Runs without re-enqueueing input", async () => {
     const harness = createHarness();
     const queuedRunId = enqueue(harness.state, message("queued"));

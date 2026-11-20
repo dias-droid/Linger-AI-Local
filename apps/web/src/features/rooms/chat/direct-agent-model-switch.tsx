@@ -34,6 +34,25 @@ interface Props {
   busy?: boolean;
 }
 
+/**
+ * Formats verbose default-alias catalog labels (for example
+ * "Default (recommended) · Use the default model (currently Opus 5.5)") into a
+ * compact Composer chip label ("Default · Opus 5.5") so truncation never hides
+ * the active model name. Display only; never selects a model.
+ */
+function formatChipModelLabel(label: string): string {
+  const separatorIndex = label.indexOf(" · ");
+  if (separatorIndex < 0) return label;
+  const head = label.slice(0, separatorIndex).trim();
+  const detail = label.slice(separatorIndex + 3).trim();
+  if (!head || !detail) return label;
+  const shortHead = head.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  if (shortHead !== "Default") return label;
+  const currentMatch = /\(currently\s+(.+)\)\s*$/i.exec(detail);
+  const active = currentMatch?.[1]?.trim() || detail;
+  return `Default · ${active}`;
+}
+
 export function DirectAgentModelSwitch(props: Props) {
   const { currentActorId, registration } = props;
   if (!currentActorId || registration.created_by.id !== currentActorId)
@@ -50,6 +69,7 @@ function RuntimeSettingsEntry({ client, registration, tenantId, busy }: Props) {
     tenantId,
     registration.runtime,
   );
+  const chipLabel = formatChipModelLabel(label);
   const update = useMutation({
     mutationFn: (input: AgentRuntimeUpdateInput) =>
       teamHubData(
@@ -92,6 +112,7 @@ function RuntimeSettingsEntry({ client, registration, tenantId, busy }: Props) {
     <div className="agent-model-switch">
       <button
         className="agent-model-switch-trigger"
+        title={chipLabel !== label ? label : undefined}
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -100,7 +121,7 @@ function RuntimeSettingsEntry({ client, registration, tenantId, busy }: Props) {
           setOpen(true);
         }}
       >
-        <span className="agent-model-switch-trigger-label">{label}</span>
+        <span className="agent-model-switch-trigger-label">{chipLabel}</span>
         {/* A long model label shortens with an ellipsis; the effort stays. */}
         {effort ? (
           <>

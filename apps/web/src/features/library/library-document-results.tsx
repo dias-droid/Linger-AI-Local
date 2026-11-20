@@ -15,6 +15,7 @@ import type {
 import { formatDateTime, formatUpdatedAt } from "@/lib/date-format";
 
 import { documentFileName } from "./document-display-name";
+import { isPersonalWikiIndexableDocument } from "./document-file-types";
 import { type LibraryFolder, LibraryFolderRow } from "./library-folder-browser";
 import type { LibrarySection } from "./library-sidebar";
 import type { PendingDocumentUpload } from "./library-upload-queue";
@@ -104,19 +105,30 @@ export function RecentDocumentCards({
   );
 }
 
+function visibleDocumentSources(document: LibraryRowDocument) {
+  if (!document.from) return undefined;
+  if (isPersonalWikiIndexableDocument(document)) return document.from;
+  return document.from.filter(
+    (source) => source.binding_kind !== "wiki_source",
+  );
+}
+
 /**
  * Where a Document is visible. "No linked context" only says something when
  * some Document beside it does have a source, so a list where none do omits it.
  */
 function documentContext(document: LibraryRowDocument, showUnlinked: boolean) {
-  if (!document.from) return "";
-  if (document.from.length)
-    return `Visible in ${document.from.map((source) => source.label ?? source.binding_kind).join(", ")}`;
+  const sources = visibleDocumentSources(document);
+  if (!sources) return "";
+  if (sources.length)
+    return `Visible in ${sources.map((source) => source.label ?? source.binding_kind).join(", ")}`;
   return showUnlinked ? "No linked context" : "";
 }
 
 function anyLinked(documents: readonly LibraryRowDocument[]) {
-  return documents.some((document) => (document.from?.length ?? 0) > 0);
+  return documents.some(
+    (document) => (visibleDocumentSources(document)?.length ?? 0) > 0,
+  );
 }
 
 export function LibraryDocumentResults({
