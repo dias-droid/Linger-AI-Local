@@ -226,7 +226,9 @@ Gateway and runs Agents. The daemon exits with the app.
   the `daemonId` the active enrollment named, and at start an enrollment that
   named none or another one is renewed once the server lists the capability,
   so a computer an earlier Set Up Again paired anew gets back the Computer
-  that holds its Daemon Identity, with its Agents.
+  that holds its Daemon Identity, with its Agents. TeamHub removes the Computer
+  the renewal named when it never bound a Daemon Identity and has no Agents
+  (the orphan that earlier Set Up Again left), in the same transaction.
   Before installing or resuming it moves the
   `COMPOSIO_API_KEY`, `SONIOX_API_KEY`, `XAI_API_KEY` and `TZ` of an unpacked
   source package's `.env` into `<home>/instances/desktop/user.env` once and
