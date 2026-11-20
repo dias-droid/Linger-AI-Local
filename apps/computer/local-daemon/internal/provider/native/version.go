@@ -23,8 +23,11 @@ var MinimumVersions = map[string]string{
 }
 
 const (
-	codexDirectToolsVersion    = "0.163.0"
-	codexPermissionHookVersion = "0.163.0"
+	codexDirectToolsVersion = "0.163.0"
+	// codexHooksVersion is the first release whose thread hooks the Daemon
+	// configures: the PermissionRequest review and the PreToolUse
+	// shell-text-hook.
+	codexHooksVersion = "0.163.0"
 )
 
 var (
@@ -154,7 +157,7 @@ func CodexSupportsDirectTools(version string) bool {
 }
 
 func CodexSupportsPermissionHook(version string) bool {
-	return stableCodexAtLeast(version, codexPermissionHookVersion)
+	return stableCodexAtLeast(version, codexHooksVersion)
 }
 
 var versionProbePipeBudget = 2 * time.Second

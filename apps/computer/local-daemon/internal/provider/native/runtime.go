@@ -110,6 +110,11 @@ type RunSpec struct {
 	RuntimeHome           string
 	SharedTaskLink        permission.CodexTaskLink
 	ClaudePolicy          *ClaudeToolPolicy
+	// ShellTextHook is the Daemon executable that Codex and the managed Pi
+	// extension run as shell-text-hook before a shell command, to refuse a
+	// TeamHub command whose text the shell would rewrite. Claude checks the
+	// same rule in its own tool policy. Empty runs no hook.
+	ShellTextHook string
 	// ContextWindow is the model's context length in tokens; zero when
 	// unknown.
 	ContextWindow int

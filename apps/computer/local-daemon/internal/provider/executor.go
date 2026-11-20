@@ -114,6 +114,9 @@ type Executor struct {
 	// of a models cache for a Context's new home.
 	CodexModelSessionHome string
 	PiMCPExtension        string
+	// ShellTextHook is the Daemon's own executable, which Runs start as
+	// shell-text-hook before a shell command; empty runs no hook.
+	ShellTextHook string
 }
 
 type Result struct {
@@ -549,6 +552,7 @@ func (e Executor) Start(ctx context.Context, spec OperationSpec, emit EmitFunc) 
 			HumanInteraction:      questions,
 			PermissionReviewer:    reviewer,
 			CodexPermissionHook:   codexHook,
+			ShellTextHook:         e.ShellTextHook,
 			RuntimeHome:           runtimeHomePath,
 			Dir:                   spec.WorkingDirectory,
 			SharedTaskLink:        permission.CodexTaskLink{Path: spec.SharedTask.WritableTaskLink, Target: spec.SharedTask.WritableTaskRoot},

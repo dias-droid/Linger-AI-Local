@@ -77,6 +77,9 @@ func (p *ClaudeToolPolicy) denyReason(tool string, input map[string]any, agentID
 	if (tool == "Agent" || tool == "Bash") && (input["run_in_background"] == true || input["background"] == true) {
 		return "background execution disabled"
 	}
+	if command, _ := input["command"].(string); tool == "Bash" && permission.ShellTextRewritten(command) {
+		return permission.ShellTextMessage
+	}
 	if tool == "Skill" {
 		name, _ := input["skill"].(string)
 		for _, allowed := range p.SkillNames {

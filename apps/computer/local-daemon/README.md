@@ -230,6 +230,30 @@ Computer user's own instruction files:
 The user's own Claude Skills and the Skills of plugins they installed are still
 offered to Agents (`internal/workspace/claude_skills.go`).
 
+## Shell text check
+
+An Agent's shell rewrites text in double quotes, an unquoted heredoc, or a bare
+word before a command reads it: `$1` to `$9` become empty and backquoted text
+runs as a command, so `teamhub message send --content "$180"` sends `80`.
+Before a shell command runs, the Daemon refuses a `teamhub` command whose
+arguments, heredoc or here-string, or a pipeline stage that feeds it, hold such
+text, and the refusal tells the Agent to pass the text on stdin with a quoted
+heredoc (`internal/permission/shell_text.go`). Named variables such as `"$id"`,
+`$(...)`, and the positional parameters of a shell function pass.
+
+- Claude checks it in its tool policy, on both the PreToolUse hook and
+  `can_use_tool`.
+- Codex 0.163.0 and later run `linger-computer-daemon shell-text-hook` as a
+  PreToolUse hook for every shell command. Codex on Windows runs PowerShell,
+  so it gets no hook.
+- Pi loads the managed extension (`extensions/pi-mcp.mjs`) for every Run. It
+  runs the same hook before a `bash` call that names `teamhub` and holds `$` or
+  a backquote.
+- Antigravity is not checked: its permission request can only allow or reject
+  a call, with no reason the Agent would read.
+
+A hook that cannot run lets the command through.
+
 ## Antigravity
 
 The Antigravity CLI (`agy`) runs through its Agent Client Protocol (ACP)

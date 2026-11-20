@@ -206,7 +206,12 @@ func (p *piRuntime) spawn(ctx context.Context, plan piLaunchPlan, lock *os.File)
 	}
 	if mcp.wired() {
 		env[piMCPConfigEnvKey] = mcp.configPath
-		piExtensionNodePath(env, mcp.extension)
+	}
+	if mcp.wired() || p.guardsShellText(spec) {
+		piExtensionNodePath(env, p.profile.ManagedMCPExtension)
+	}
+	if p.guardsShellText(spec) {
+		env[piShellTextHookEnvKey] = spec.ShellTextHook
 	}
 	if p.profile.RetainProcessTemp != nil {
 		if releaseTemp, err = p.profile.RetainProcessTemp(); err != nil {
@@ -264,11 +269,19 @@ func (p *piRuntime) args(plan piLaunchPlan, instructions string, wired bool) []s
 		}
 	}
 	tools := piBaseTools
-	if wired {
+	if wired || p.guardsShellText(spec) {
 		args = append(args, "--extension", p.profile.ManagedMCPExtension)
+	}
+	if wired {
 		tools += ",mcp__*"
 	}
 	return append(args, "--tools", tools)
+}
+
+// guardsShellText reports whether the managed extension runs the
+// shell-text-hook before the Run's bash calls.
+func (p *piRuntime) guardsShellText(spec RunSpec) bool {
+	return spec.ShellTextHook != "" && p.profile.ManagedMCPExtension != ""
 }
 
 // piResolveProgram finds the Pi executable on the Daemon's own search path.

@@ -41,6 +41,11 @@ import (
 )
 
 func main() {
+	// Codex runs this before every shell command, and the managed Pi
+	// extension before a bash call that may need it.
+	if len(os.Args) == 2 && os.Args[1] == "shell-text-hook" {
+		os.Exit(permission.ShellTextHook(os.Stdin, os.Stderr))
+	}
 	// Codex runs this for every PermissionRequest of a reviewed Run; it only
 	// forwards the hook to the running Daemon.
 	if len(os.Args) == 3 && os.Args[1] == "permission-hook" {
@@ -395,6 +400,7 @@ func run(args []string) (resultErr error) {
 			TempBase: operationTempBase, RuntimeHomeRoot: filepath.Join(computer.StateDirectory, "runtime-homes"),
 			CodexModelSessionHome: codexModelSessions.Home(),
 			PiMCPExtension:        piExtension,
+			ShellTextHook:         executable,
 		}, OperationResolver: resolver,
 		Ledger: daemon.NewMemoryLedger(), Registrations: registrationStore, Assignments: assignmentStore, ContextViews: views,
 		LocalSkills: localSkills, LocalTools: toolBinder,

@@ -480,6 +480,19 @@ func TestPiLaunchArguments(t *testing.T) {
 	if nodePath, _ := os.ReadFile(argv + ".node_path"); len(nodePath) != 0 {
 		t.Fatalf("NODE_PATH without an extension = %q", nodePath)
 	}
+
+	// The managed extension runs the shell-text-hook without MCP servers.
+	_, outcome = piCollect(t, h.start(t.Context(), "go", RunSpec{Model: piDefaultModel, ShellTextHook: "/opt/linger/linger-computer-daemon"}))
+	data, _ = os.ReadFile(argv)
+	if outcome.Status != statusCompleted || !strings.HasSuffix(string(data), "--extension\n"+extension+"\n--tools\n"+piBaseTools) {
+		t.Fatalf("shell text argv = %q (%+v)", data, outcome)
+	}
+	if hook, _ := os.ReadFile(argv + ".shell_text_hook"); string(hook) != "/opt/linger/linger-computer-daemon" {
+		t.Fatalf("%s = %q", piShellTextHookEnvKey, hook)
+	}
+	if nodePath, _ := os.ReadFile(argv + ".node_path"); string(nodePath) != filepath.Join(filepath.Dir(filepath.Dir(extension)), "node_modules") {
+		t.Fatalf("NODE_PATH = %q", nodePath)
+	}
 }
 
 func TestPiExtensionNodePath(t *testing.T) {

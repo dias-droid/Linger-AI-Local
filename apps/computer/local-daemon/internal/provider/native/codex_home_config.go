@@ -266,6 +266,7 @@ func codexBindingFingerprint(home, configDigest string, spec RunSpec) string {
 	optional(codexDeveloperInstructions(spec))
 	field(spec.Title)
 	field(fmt.Sprint(spec.CodexPermissionHook != nil))
+	field(spec.ShellTextHook)
 	field(configDigest)
 	return hex.EncodeToString(hash.Sum(nil))
 }
