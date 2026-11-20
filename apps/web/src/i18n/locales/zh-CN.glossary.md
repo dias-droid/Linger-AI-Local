@@ -75,6 +75,7 @@ elsewhere.
 | Meeting summary               | 会议摘要                   |                                                   |
 | Voice Mode                    | 语音模式                   |                                                   |
 | Dictation                     | 听写                       | Speaking text into a note or the composer.        |
+| Voice provider                | 语音服务商                 | Soniox or xAI; the names stay as they are.        |
 | Draft                         | 草稿                       |                                                   |
 | Local model                   | 本地模型                   |                                                   |
 | Subscription                  | 订阅                       | A model source.                                   |

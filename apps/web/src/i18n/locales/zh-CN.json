@@ -2369,5 +2369,28 @@
     "deletePageQuestion": "要删除“{page}”这一页吗？",
     "deleteThisNote": "要删除这篇笔记吗？",
     "couldNotDelete": "无法删除，请再试一次。"
+  },
+  "voiceKey": {
+    "title": "{provider} 密钥",
+    "turnOnVoice": "开启语音",
+    "chooseProvider": "语音需要 Soniox 或 xAI 的密钥。这台服务器上的所有人共用这些密钥。",
+    "voiceProvider": "语音服务商",
+    "sonioxPurpose": "用于会议转写，以及“随手记”和语音模式的听写。",
+    "xaiPurpose": "让语音模式变成与 Grok 的实时对话。",
+    "stepOpen": "打开 {provider} Console，登录或创建账号。",
+    "stepCreate": "创建一个 API 密钥。",
+    "stepPaste": "复制密钥，粘贴到下方，然后选择“保存密钥”。",
+    "apiKey": "{provider} API 密钥",
+    "keyHint": "加密保存，之后不会再显示。",
+    "turningOn": "正在开启语音…",
+    "savedButOff": "密钥已保存，但语音未能开启。请再试一次。",
+    "cannotSaveHere": "这台服务器无法在这里保存 {provider} 密钥。需要由运行它的人设置 <code>{variable}</code>，或者设置 <code>{storageVariable}</code>，这样才能在这里保存密钥。",
+    "invalidKey": "请输入有效的 API 密钥。",
+    "keyRejected": "{provider} 拒绝了这个密钥。请检查后再试一次。",
+    "keyFromEnvironment": "这台服务器通过 {variable} 设置 {provider} 密钥，因此无法在这里修改。",
+    "storageUnavailable": "这台服务器无法保存密钥。需要由运行它的人设置 {storageVariable}。",
+    "providerUnreachable": "无法连接 {provider} 来检查密钥。请稍后再试。",
+    "voiceOff": "这台服务器已关闭语音。",
+    "saveFailed": "无法保存密钥，请再试一次。"
   }
 }
