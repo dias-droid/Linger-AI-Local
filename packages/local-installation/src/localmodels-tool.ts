@@ -118,6 +118,9 @@ async function writeStamps(
     JSON.stringify({ manifestSha256: source.manifestSha256, stamps }),
   ).catch(() => undefined);
 }
+/** Marks a stop that could not verify the pinned localmodels kit. */
+export const LOCALMODELS_KIT_VERIFICATION_FAILED =
+  "LOCALMODELS_KIT_VERIFICATION_FAILED";
 // Assets hashed at once.
 const CONCURRENCY = 16;
 async function verify(
@@ -588,7 +591,20 @@ export async function stopLocalmodels(
     installed?: (home: string) => Promise<boolean>;
   } = {},
 ): Promise<void> {
-  if (!(await (dependencies.installed ?? hasPinnedTool)(home))) return;
+  let installed: boolean;
+  try {
+    installed = await (dependencies.installed ?? hasPinnedTool)(home);
+  } catch (error) {
+    throw Object.assign(
+      new Error(error instanceof Error ? error.message : String(error), {
+        cause: error,
+      }),
+      {
+        code: LOCALMODELS_KIT_VERIFICATION_FAILED,
+      },
+    );
+  }
+  if (!installed) return;
   const run =
     dependencies.run ??
     ((home, args, options = {}) =>

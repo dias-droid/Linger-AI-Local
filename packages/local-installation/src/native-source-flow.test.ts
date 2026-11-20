@@ -51,7 +51,7 @@ import {
   TEAMHUB_COMMANDS,
 } from "./teamhub-binaries.js";
 import { prepareRuntime } from "./managed-runtimes.js";
-import { applyNativeSource } from "./byok-source.js";
+import { applyNativeSource, prepareByokRuntime } from "./byok-source.js";
 import { prepareLocalModels } from "./local-models.js";
 import {
   inspectNativeListeners,
@@ -83,6 +83,7 @@ vi.mock("./native-livekit.js", async (original) => ({
 vi.mock("./byok-source.js", async (original) => ({
   ...(await original<typeof import("./byok-source.js")>()),
   applyNativeSource: vi.fn(async () => undefined),
+  prepareByokRuntime: vi.fn(),
 }));
 // Deploying local models runs the localmodels tool too.
 vi.mock("./local-models.js", async (original) => ({
@@ -1094,6 +1095,82 @@ test("a failed Runtime reports its own outcome while the checkout preparation st
     code: 5,
     message: "codex could not be installed.",
   });
+});
+
+test.each(["returned", "thrown"])(
+  "a %s BYOK failure after PostgreSQL startup fails the runtime stage",
+  async (failure) => {
+    const f = await fixture();
+    let signalPostgresStarted!: () => void;
+    const postgresStarted = new Promise<void>((resolve) => {
+      signalPostgresStarted = resolve;
+    });
+    vi.mocked(prepareNativeDatabase).mockImplementation(async () => {
+      f.running.add("postgres");
+      signalPostgresStarted();
+      return {};
+    });
+    const message = "Could not mount the model endpoint: ConnectionResetError.";
+    vi.mocked(prepareByokRuntime).mockImplementation(async (_byok, options) => {
+      await postgresStarted;
+      options.onEvent({
+        kind: "stage",
+        stage: "runtime",
+        state: "running",
+        message: "Mounting BYOK endpoint on local Bifrost gateway…",
+      });
+      if (failure === "thrown") throw new Error(message);
+      return { code: 1, state: "failed", message };
+    });
+    const events: InstallerEvent[] = [];
+    const result = await installNativeSource({
+      ...f,
+      name: "native-flow",
+      byok: {
+        baseUrl: "https://example.test/v1",
+        modelId: "test",
+        apiKey: "test-key",
+        runtime: "pi",
+      },
+      signal: new AbortController().signal,
+      onEvent: (event) => events.push(event),
+    });
+    expect(result).toMatchObject({
+      state: "failed",
+      message: expect.stringContaining(message),
+      details: { stage: "runtime" },
+    });
+    expect(events.filter((event) => event.state === "failed")).toEqual([
+      { kind: "stage", stage: "runtime", state: "failed", message },
+    ]);
+    expect(f.running.size).toBe(0);
+  },
+);
+
+test("an invalid checkout fails preflight before starting the runtime", async () => {
+  const f = await fixture();
+  const events: InstallerEvent[] = [];
+  const result = await installNativeSource({
+    ...f,
+    name: "native-flow",
+    repo: path.join(f.repo, "missing"),
+    setupChoice: "pi",
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+  });
+  expect(result).toMatchObject({
+    state: "failed",
+    details: { stage: "preflight" },
+  });
+  expect(events.filter((event) => event.state === "failed")).toEqual([
+    {
+      kind: "stage",
+      stage: "preflight",
+      state: "failed",
+      message: expect.any(String),
+    },
+  ]);
+  expect(prepareRuntime).not.toHaveBeenCalled();
 });
 
 test("an installation stopped from outside stays cancelled", async () => {

@@ -71,6 +71,8 @@ export const nativeServices = [
   "livekit",
   "postgres",
 ] as const;
+/** Marks a native service whose stop failed without a more specific code. */
+export const NATIVE_SERVICE_STOP_FAILED = "NATIVE_SERVICE_STOP_FAILED";
 function requireNative(instance: Instance) {
   if (instance.mode !== "source-native" || !instance.source)
     throw new Error("This operation requires a native source instance.");
@@ -382,9 +384,6 @@ export async function installNativeSource(
   const timings = timer.finish();
   options.onEvent({
     kind: "log",
-    stage:
-      (outcome.details as { stage?: InstallStage } | undefined)?.stage ??
-      "preflight",
     message: `Native install timings (s): ${Object.entries(timings)
       .map(([stage, seconds]) => `${stage} ${seconds}`)
       .join(", ")}\n`,
@@ -1096,6 +1095,7 @@ async function runNativeSource(
         }
         options.signal.throwIfAborted();
         if (runtimeFailedFirst) {
+          stage = "runtime";
           // eslint-disable-next-line @typescript-eslint/only-throw-error -- rethrows the first failure unchanged
           if (runtimeError) throw runtimeError;
           if (
@@ -1103,8 +1103,24 @@ async function runNativeSource(
             runtimeOutcome.code !== 0 &&
             (runtimeOutcome.details as { code?: string } | undefined)?.code !==
               "RUNTIME_AUTH_REQUIRED"
-          )
-            return runtimeOutcome;
+          ) {
+            const message = safe(runtimeOutcome.message);
+            if (
+              runtimeOutcome.state === "failed" ||
+              runtimeOutcome.state === "prerequisite_unavailable"
+            )
+              emit({ kind: "stage", stage, state: "failed", message });
+            return {
+              ...runtimeOutcome,
+              message,
+              details: {
+                ...(typeof runtimeOutcome.details === "object"
+                  ? runtimeOutcome.details
+                  : {}),
+                stage,
+              },
+            };
+          }
         }
         throw error;
       } finally {
@@ -1186,7 +1202,18 @@ export async function stopNativeSource(
     await stopComputer(instance, { signal });
     for (const name of nativeServices) {
       signal?.throwIfAborted();
-      await stopNativeProcess(instance.root, name);
+      try {
+        await stopNativeProcess(instance.root, name);
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException | null)?.code;
+        throw Object.assign(
+          new Error(
+            error instanceof Error ? error.message : `Could not stop ${name}.`,
+            { cause: error },
+          ),
+          { code: code ?? NATIVE_SERVICE_STOP_FAILED, nativeService: name },
+        );
+      }
     }
     await reclaimEarlierProcesses(
       instance,

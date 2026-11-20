@@ -347,6 +347,10 @@ Gateway and runs Agents. The daemon exits with the app.
   left alone and it gives up after about two minutes. When the stop fails,
   the uninstaller offers Retry; Cancel (the default when silent) ends it with
   exit code 1 before anything is removed, so the uninstall can be run again.
+  The stop helper records its latest outcome in `<home>/installer/stop-latest.json`
+  and retains the first failure in `stop-first-failure.json`. These bounded
+  records contain only allowlisted failure stages, codes and service names,
+  never error text or paths; a successful retry keeps the first failure.
   It keeps `%APPDATA%\Linger` and the Linger home with all their data; a
   later install starts the services again (resume, or setup's Install).
   Setup over an installed release stops it the same way before it replaces

@@ -54,6 +54,9 @@ whose Computer still uses the local model source (`model-source.json` says
 (`restoreLocalModels`), since a quit stops the models but not the services: a
 stack that is not ready gets the same restore, then becomes the model source
 again. A source switched to a subscription or BYOK leaves the stack stopped.
+A failed installation records the stage that caused it, even when native
+checkout preparation and runtime setup ran in parallel. A BYOK mount failure
+belongs to runtime and keeps the redacted provider error in the job.
 A failed job's `errorCode` is the runtime's cause when it
 has one (`RUNTIME_PLAN_REFUSED`, a harness plan refused before anything
 changed, such as an unusable `SIMPLEX_PI_PATH` or a Windows runtime root too

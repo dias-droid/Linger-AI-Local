@@ -471,6 +471,8 @@ async function endUnreapedGroup(child: ChildProcess): Promise<void> {
  * program: none of the service's own processes are left.
  */
 export const NATIVE_PROCESS_REPLACED = "NATIVE_PROCESS_REPLACED";
+export const NATIVE_PROCESS_IDENTITY_UNVERIFIED =
+  "NATIVE_PROCESS_IDENTITY_UNVERIFIED";
 export async function stopNativeProcess(
   root: string,
   name: NativeService,
@@ -603,8 +605,11 @@ async function windowsStopSnapshot(
   // A fresh snapshot distinguishes that from a live, unverifiable process.
   if (current.unverified?.command === "") current = await read();
   if (current.unverified) {
-    throw new Error(
-      `Native ${name} process identity cannot be verified; identity record retained.`,
+    throw Object.assign(
+      new Error(
+        `Native ${name} process identity cannot be verified; identity record retained.`,
+      ),
+      { code: NATIVE_PROCESS_IDENTITY_UNVERIFIED },
     );
   }
   return current;

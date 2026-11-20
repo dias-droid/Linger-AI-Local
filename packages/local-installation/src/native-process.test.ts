@@ -21,6 +21,8 @@ vi.mock("./instance.js", async (original) => {
 });
 import { test as base, vi, type TestContext } from "vitest";
 import {
+  NATIVE_PROCESS_IDENTITY_UNVERIFIED,
+  NATIVE_PROCESS_REPLACED,
   nativeConfigurationChanged,
   startNativeProcess,
   inspectNativeProcess,
@@ -119,7 +121,12 @@ test("refuses to signal a PID whose recorded lease differs", async (context) => 
   altered.lease = "0".repeat(64);
   await writeFile(file, JSON.stringify(altered), { mode: 0o600 });
   expect((await inspectNativeProcess(root, "web")).running).toBe(false);
-  await expect(stopNativeProcess(root, "web")).rejects.toThrow(/identity/i);
+  await expect(stopNativeProcess(root, "web")).rejects.toMatchObject({
+    code:
+      process.platform === "win32"
+        ? NATIVE_PROCESS_IDENTITY_UNVERIFIED
+        : NATIVE_PROCESS_REPLACED,
+  });
   await expect(startNativeProcess(options)).rejects.toThrow(/identity/i);
   expect(() => process.kill(processState.pid!, 0)).not.toThrow();
   await writeFile(file, original, { mode: 0o600 });
