@@ -11,7 +11,8 @@ import { useLocation, useSearchParams } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import { Select, SelectItem } from "@/components/ui/select";
-import { LOGOUT_ERROR_MESSAGE, useLogout } from "@/features/auth/use-logout";
+import { authMessages } from "@/features/auth/auth.messages";
+import { useLogout } from "@/features/auth/use-logout";
 import {
   teamHubSessionQueryOptions,
   teamHubTenantsQueryOptions,
@@ -255,7 +256,7 @@ export function ConnectComputerPage({
 
           {switchAccount.error ? (
             <p className="text-sm text-app-danger" role="alert">
-              {LOGOUT_ERROR_MESSAGE}
+              {t(authMessages.logoutUnconfirmed)}
             </p>
           ) : null}
         </div>

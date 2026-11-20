@@ -20,7 +20,8 @@ import {
 import { DesktopBarSlot } from "@/app/desktop-frame";
 import { isDesktopShell } from "@/app/desktop-shell";
 import { AccountMenu } from "@/features/auth/account-menu";
-import { LOGOUT_ERROR_MESSAGE, useLogout } from "@/features/auth/use-logout";
+import { authMessages } from "@/features/auth/auth.messages";
+import { useLogout } from "@/features/auth/use-logout";
 
 import { Button } from "@/components/ui/button";
 import { useGlobalSearchShortcut } from "@/features/search/search-shortcut";
@@ -391,7 +392,7 @@ function RoomShellContent({
                 className="flex shrink-0 items-center gap-3 border-b border-border/60 px-4 py-3 text-sm text-app-danger"
                 role="alert"
               >
-                <span>{LOGOUT_ERROR_MESSAGE}</span>
+                <span>{t(authMessages.logoutUnconfirmed)}</span>
                 <Button
                   data-voice-risk="never"
                   loading={logout.isPending}

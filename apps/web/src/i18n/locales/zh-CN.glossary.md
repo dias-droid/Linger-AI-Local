@@ -164,6 +164,7 @@ elsewhere.
 | Highlights / Next             | 要点 / 接下来              | Sections of a report card.                        |
 | Email (an address)            | 邮箱                       | `邮件` is a message that is sent.                 |
 | Keep (a Wiki page)            | 保留                       | The opposite of Delete in the Wiki directory.     |
+| Session (a sign-in)           | 登录 / 浏览器会话          | `会话` only for the browser session.              |
 
 ## Style
 

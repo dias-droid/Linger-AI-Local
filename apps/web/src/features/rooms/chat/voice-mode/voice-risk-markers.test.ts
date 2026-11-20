@@ -33,6 +33,8 @@ for (const exports of Object.values(messageModules))
  * `file: namespace.name`, with the reason.
  */
 const notActions: Record<string, string> = {
+  "/src/features/auth/teamhub-login-page.tsx: auth.hidePassword":
+    "shows or hides the password in place; it closes nothing",
   "/src/features/rooms/chat/room-notice-row.tsx: chat.hideChanges":
     "folds the change list in place; it closes nothing",
   "/src/features/rooms/room-secondary-navigation.tsx: roomList.deletedChat":

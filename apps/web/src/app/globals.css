@@ -128,6 +128,11 @@
 
 :root[data-han-font="sc"] {
   --app-font-han: "PingFang SC", "Noto Sans SC Variable";
+  /* No Chinese slab face pairs with Roboto Slab, and Songti reads as a
+     different voice next to the sans interface, so Han text in slab headings
+     uses the same sans Han font as the rest of the interface. */
+  --app-font-slab:
+    "Roboto Slab Variable", Georgia, var(--app-font-han), sans-serif;
 }
 
 :root {
