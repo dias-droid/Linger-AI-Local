@@ -27,7 +27,7 @@ export function CardNoticeRows({
   const translation = useTranslation();
   return (
     <div
-      className="room-notice-row flex flex-col items-center gap-1.5 py-1"
+      className="room-notice-row flex flex-col items-center gap-1.5 py-1 [text-autospace:normal]"
       data-message-kind="card_notice"
       role="note"
     >
