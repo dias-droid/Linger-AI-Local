@@ -41,6 +41,8 @@ const notActions: Record<string, string> = {
     "says the Agent of a direct chat was deleted; the link only opens the chat",
   "/src/features/rooms/chat/voice-mode/voice-mode-controls.tsx: voiceMode.dictationHint":
     "describes the button that starts Voice Mode, which sends nothing itself",
+  "/src/features/local-computer/remove-computer-agent-row.tsx: computers.deleteAgentInstead":
+    "chooses what removing the computer does; the marked Remove button does it",
 };
 
 type Need = "confirm" | "never" | "close";

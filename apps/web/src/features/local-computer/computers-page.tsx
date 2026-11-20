@@ -17,6 +17,7 @@ import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
 import { Add01Icon, ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { useT } from "@/i18n/use-translation";
 
 import { ComputerBrowserConnection } from "./browser-connection/computer-browser-connection";
 import { ComputerDetail } from "./computer-detail";
@@ -27,6 +28,8 @@ import {
   NoComputers,
   UnavailableComputer,
 } from "./computer-empty-states";
+import { computerSetupMessages } from "./computer-setup.messages";
+import { computersMessages } from "./computers.messages";
 import {
   localComputersQueryKey,
   localComputersQueryOptions,
@@ -35,6 +38,7 @@ import { subscribeLocalComputerEnrollment } from "./local-computer-enrollment-ev
 import { RemoveComputerDialog } from "./remove-computer-dialog";
 
 export function ComputersPage() {
+  const t = useT();
   const { client } = useTeamHubRuntime();
   const queryClient = useQueryClient();
   const tenantId = requireRoomRouteParam(useParams().tenantId, "Tenant");
@@ -192,7 +196,7 @@ export function ComputersPage() {
           <h1 className="flex items-center gap-1 text-2xl text-foreground">
             {requestedComputerId && inventory.items.length > 1 ? (
               <Button
-                aria-label="All computers"
+                aria-label={t(computersMessages.allComputers)}
                 onClick={showDirectory}
                 size="icon"
                 tone="ghost"
@@ -200,16 +204,16 @@ export function ComputersPage() {
                 <Icon icon={ArrowLeft01Icon} size={16} />
               </Button>
             ) : null}
-            Computers
+            {t(computersMessages.pageTitle)}
           </h1>
           {inventory.items.length ? (
             <Button
-              aria-label="Connect a Local Computer"
+              aria-label={t(computerSetupMessages.label)}
               onClick={openSetup}
               size="compact"
             >
               <Icon icon={Add01Icon} size={14} />
-              Connect
+              {t(computersMessages.connect)}
             </Button>
           ) : null}
         </header>

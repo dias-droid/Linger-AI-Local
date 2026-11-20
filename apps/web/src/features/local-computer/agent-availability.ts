@@ -7,6 +7,9 @@ import type {
   TeamHubTenantAgent,
   TeamHubTenantAgentAvailabilitySnapshot,
 } from "@/features/teamhub/teamhub-types";
+import type { Translate } from "@/i18n/language";
+
+import { computersMessages } from "./computers.messages";
 
 export interface AgentAvailability {
   readonly available: boolean;
@@ -52,29 +55,36 @@ export function projectAgentAvailabilitySnapshots(
 export function agentStatusSummary(
   agentAvailabilities: ReadonlyMap<string, AgentAvailability>,
   agents: TeamHubTenantAgent[],
+  t: Translate,
 ): string | undefined {
   const counts = { error: 0, offline: 0, online: 0, unknown: 0 };
   for (const agent of agents)
-    counts[availabilityOf(agentAvailabilities, agent).status] += 1;
+    counts[availabilityOf(agentAvailabilities, agent, t).status] += 1;
   const parts = [
     counts.error
-      ? `${counts.error} need${counts.error === 1 ? "s" : ""} attention`
+      ? t(computersMessages.agentsNeedAttention, { count: counts.error })
       : null,
-    counts.offline ? `${counts.offline} offline` : null,
-    counts.unknown ? `${counts.unknown} status unavailable` : null,
+    counts.offline
+      ? t(computersMessages.agentsOffline, { count: counts.offline })
+      : null,
+    counts.unknown
+      ? t(computersMessages.agentsStatusUnavailable, { count: counts.unknown })
+      : null,
   ].filter(Boolean);
   return parts.length ? parts.join(" · ") : undefined;
 }
 
+/** An Agent TeamHub has not reported yet reads as "Status unavailable". */
 export function availabilityOf(
   agentAvailabilities: ReadonlyMap<string, AgentAvailability>,
   agent: TeamHubTenantAgent,
+  t: Translate,
 ): AgentAvailability {
   return (
     agentAvailabilities.get(agent.actor.id) ?? {
       activeTaskCount: 0,
       available: false,
-      label: "Status unavailable",
+      label: t(computersMessages.statusUnavailable),
       status: "unknown",
     }
   );

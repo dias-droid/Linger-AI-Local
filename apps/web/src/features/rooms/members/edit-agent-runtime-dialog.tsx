@@ -173,7 +173,7 @@ export function EditAgentRuntimeDialog({
                   {runtimeLabels[item.type]}
                   {item.status === "ready"
                     ? ""
-                    : ` · ${runtimeStatusLabels[item.status]}`}
+                    : ` · ${runtimeStatusLabels[item.status].source}`}
                 </SelectItem>
               ))}
             </Select>

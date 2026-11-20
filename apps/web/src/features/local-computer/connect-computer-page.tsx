@@ -19,7 +19,10 @@ import {
 import { teamHubData } from "@/features/teamhub/teamhub-api";
 import { TeamHubError } from "@/features/teamhub/teamhub-error";
 import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
+import { RichMessage, useT } from "@/i18n/use-translation";
 
+import { computerSetupMessages } from "./computer-setup.messages";
+import { computersMessages } from "./computers.messages";
 import { publishLocalComputerEnrollment } from "./local-computer-enrollment-events";
 
 const PKCE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
@@ -37,6 +40,7 @@ export function ConnectComputerPage({
 }: {
   navigateToCallback?: (url: string) => void;
 }) {
+  const t = useT();
   const [searchParams] = useSearchParams();
   const request = useMemo(
     () => parseConnectRequest(searchParams),
@@ -134,8 +138,12 @@ export function ConnectComputerPage({
               Linger Computer
             </p>
             <h1 className="truncate text-lg">
-              {request.existingComputerId ? "Reconnect" : "Connect"}{" "}
-              {request.displayName}
+              {t(
+                request.existingComputerId
+                  ? computersMessages.reconnectName
+                  : computersMessages.connectName,
+                { computer: request.displayName },
+              )}
             </h1>
           </div>
         </header>
@@ -148,31 +156,34 @@ export function ConnectComputerPage({
               size={20}
             />
             <div>
-              <p className="text-sm font-medium">Local runtime access</p>
+              <p className="text-sm font-medium">
+                {t(computersMessages.localRuntimeAccess)}
+              </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                The Computer will appear as an available runtime for your
-                account.
+                {t(computersMessages.localRuntimeAccessBody)}
               </p>
             </div>
           </div>
 
           {tenants.isPending ? (
             <p className="text-sm text-muted-foreground" role="status">
-              Loading spaces...
+              {t(computersMessages.loadingSpaces)}
             </p>
           ) : tenants.error ? (
             <p className="text-sm text-app-danger" role="alert">
-              Spaces are unavailable.
+              {t(computersMessages.spacesUnavailable)}
             </p>
           ) : tenants.data.items.length === 0 ? (
             <p className="text-sm text-muted-foreground" role="status">
-              No space is available for this account.
+              {t(computersMessages.noSpace)}
             </p>
           ) : (
             <label className="block">
-              <span className="mb-1.5 block text-sm font-medium">Space</span>
+              <span className="mb-1.5 block text-sm font-medium">
+                {t(computersMessages.space)}
+              </span>
               <Select
-                aria-label="Space"
+                aria-label={t(computersMessages.space)}
                 className="ui-field-control w-full text-sm"
                 onValueChange={setRequestedTenantId}
                 value={selectedTenant?.id ?? ""}
@@ -188,10 +199,15 @@ export function ConnectComputerPage({
 
           {session.data ? (
             <p className="text-sm text-muted-foreground">
-              Signed in as{" "}
-              <span className="font-medium text-foreground">
-                {session.data.identity.account.email}
-              </span>
+              <RichMessage
+                message={computersMessages.signedInAs}
+                tags={{
+                  email: (text) => (
+                    <span className="font-medium text-foreground">{text}</span>
+                  ),
+                }}
+                values={{ email: session.data.identity.account.email }}
+              />
             </p>
           ) : null}
 
@@ -208,22 +224,23 @@ export function ConnectComputerPage({
                 />
                 <div>
                   <p className="text-sm font-medium text-foreground">
-                    Confirm Local Computer replacement
+                    {t(computersMessages.confirmReplacement)}
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {replacementReason === "removed"
-                      ? "This Computer was removed from the signed-in account."
-                      : "This Computer cannot be renewed by the signed-in account."}{" "}
-                    Continuing stops the old local daemon and connects this
-                    machine as a new Computer for the account shown above. The
-                    old Computer and its Agents are not deleted from the server.
+                    {t(
+                      replacementReason === "removed"
+                        ? computersMessages.replacementRemoved
+                        : computersMessages.replacementWrongAccount,
+                    )}
                   </p>
                 </div>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
-                <Button onClick={cancelReplacement}>Keep current setup</Button>
+                <Button onClick={cancelReplacement}>
+                  {t(computersMessages.keepCurrentSetup)}
+                </Button>
                 <Button onClick={confirmReplacement} tone="danger">
-                  Replace local identity
+                  {t(computersMessages.replaceLocalIdentity)}
                 </Button>
               </div>
             </div>
@@ -232,7 +249,7 @@ export function ConnectComputerPage({
               className="rounded-lg border border-[var(--app-status-danger-border)] bg-[var(--app-status-danger-surface)] px-3 py-2.5 text-sm text-app-danger"
               role="alert"
             >
-              The Computer could not be connected. Run setup again.
+              {t(computersMessages.connectFailed)}
             </p>
           ) : null}
 
@@ -252,7 +269,9 @@ export function ConnectComputerPage({
             tone="ghost"
           >
             <Icon icon={Logout01Icon} size={16} />
-            {switchAccount.isPending ? "Signing out..." : "Use another account"}
+            {switchAccount.isPending
+              ? t(computersMessages.signingOut)
+              : t(computersMessages.useAnotherAccount)}
           </Button>
           <Button
             disabled={
@@ -265,10 +284,10 @@ export function ConnectComputerPage({
             tone="primary"
           >
             {enrollment.isPending
-              ? "Connecting..."
+              ? t(computersMessages.connectingRequest)
               : request.existingComputerId
-                ? "Reconnect computer"
-                : "Connect computer"}
+                ? t(computersMessages.reconnectComputer)
+                : t(computerSetupMessages.connectComputer)}
           </Button>
         </footer>
       </section>
@@ -282,12 +301,13 @@ const requiresLocalIdentityReplacement = (error: unknown): boolean =>
     (error.status === 404 && error.code === "INVALID_ENROLLMENT"));
 
 function InvalidConnectionRequest() {
+  const t = useT();
   return (
     <main className="flex min-h-dvh items-center justify-center bg-background px-6 text-center text-foreground">
       <div className="max-w-sm">
-        <h1 className="text-lg">Connection request is invalid</h1>
+        <h1 className="text-lg">{t(computersMessages.invalidRequestTitle)}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Return to the terminal and run setup again.
+          {t(computersMessages.invalidRequestBody)}
         </p>
       </div>
     </main>
