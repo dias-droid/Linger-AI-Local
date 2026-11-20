@@ -45,6 +45,8 @@ elsewhere.
 | Pin                           | 置顶                       |                                                   |
 | Log out                       | 退出登录                   |                                                   |
 | Thinking effort               | 思考强度                   |                                                   |
+| Reasoning (an Agent setting)  | 思考强度                   | The same setting as Thinking effort.              |
+| Move (an Agent)               | 移动                       |                                                   |
 | Token                         | 令牌                       |                                                   |
 | Workspace                     | 工作区                     |                                                   |
 | Server                        | 服务器                     |                                                   |

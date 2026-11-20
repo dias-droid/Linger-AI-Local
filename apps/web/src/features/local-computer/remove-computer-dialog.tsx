@@ -87,6 +87,7 @@ export function RemoveComputerDialog({
           computers.find(
             (item) => item.computer_id === option.target.computerId,
           ),
+          t,
         )
       : plan?.action === "delete"
         ? t(computersMessages.deleteAgentHint)
@@ -94,7 +95,7 @@ export function RemoveComputerDialog({
           ? agent.agent_type === "anotherme"
             ? t(computersMessages.anotherMeNeedsComputer)
             : t(computersMessages.agentNeedsComputer)
-          : describeMissingDefault(row, candidates);
+          : describeMissingDefault(row, candidates, t);
     return { candidates, hint, options, plan, row };
   });
   const remaining = plans.filter(({ row }) => !move.isFinished(row.actor.id));
