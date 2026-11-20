@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -35,18 +36,21 @@ type uiDispatchReceipt struct {
 
 // uiExecution keeps script state for one Operation and execution lease.
 type uiExecution struct {
-	cancel      context.CancelFunc
-	set         *mcpproxy.Set
-	endpoints   map[string]mcpproxy.ToolEndpoint
-	catalogs    map[string][]tool
-	engine      *uiruntime.Runtime
-	server      *toolServer
-	slot        chan struct{}
-	closeOnce   sync.Once
-	closeErr    error
-	sequence    uint64
-	blocked     map[string]bool
-	receipts    []uiDispatchReceipt
+	cancel    context.CancelFunc
+	set       *mcpproxy.Set
+	endpoints map[string]mcpproxy.ToolEndpoint
+	catalogs  map[string][]tool
+	engine    *uiruntime.Runtime
+	server    *toolServer
+	slot      chan struct{}
+	closeOnce sync.Once
+	closeErr  error
+	sequence  uint64
+	blocked   map[string]bool
+	receipts  []uiDispatchReceipt
+	// unknown keeps every unknown-outcome receipt for the Operation; a lost
+	// response or a reset must not hide which action may have applied.
+	unknown     []uiDispatchReceipt
 	lastResults map[string]json.RawMessage
 	images      map[string]json.RawMessage
 	imageBytes  int
@@ -117,13 +121,13 @@ func unifiedUITools() []tool {
 
 func (u *uiExecution) call(ctx context.Context, name string, args json.RawMessage) (json.RawMessage, error) {
 	if !u.set.ToolReviewerReady() {
-		return nil, errors.New("UI action reviewer is not ready for this Operation")
+		return nil, fmt.Errorf("UI action reviewer is not ready for this Operation: %w", errNotSent)
 	}
 	select {
 	case u.slot <- struct{}{}:
 		defer func() { <-u.slot }()
 	default:
-		return nil, errors.New("UI execution is busy; await the current call")
+		return nil, fmt.Errorf("UI execution is busy; await the current call: %w", errNotSent)
 	}
 	if err := schedulingError(ctx); err != nil {
 		return nil, err
@@ -138,7 +142,7 @@ func (u *uiExecution) call(ctx context.Context, name string, args json.RawMessag
 		}
 		u.images = map[string]json.RawMessage{}
 		u.imageBytes = 0
-		return uiTextResult(map[string]any{"reset": true, "generation": u.engine.Generation(), "unknown_actions_preserved": true}), nil
+		return uiTextResult(map[string]any{"reset": true, "generation": u.engine.Generation(), "unknown_actions": u.unknown}), nil
 	}
 	if name != "ui_exec" {
 		return nil, errors.New("unknown UI entry")
@@ -170,6 +174,9 @@ func (u *uiExecution) call(ctx context.Context, name string, args json.RawMessag
 	result, err := u.engine.Exec(ctx, scheduling, input.Code)
 	defer func() { u.syncImageGeneration(u.engine.Generation()) }()
 	summary := map[string]any{"generation": result.Generation, "value": result.Value, "receipts": u.receipts}
+	if len(u.unknown) > 0 {
+		summary["unknown_actions"] = u.unknown
+	}
 	if current := u.engine.Generation(); current != result.Generation {
 		summary["state_reset"] = true
 		summary["current_generation"] = current
@@ -283,10 +290,7 @@ func (u *uiExecution) dispatch(ctx context.Context, call uiruntime.Call) (json.R
 			u.receipts[index].Status = "not_dispatched"
 			return nil, err
 		}
-		u.receipts[index].Status = "unknown"
-		if write {
-			u.blocked[endpoint.Name] = true
-		}
+		u.markUnknown(index, write)
 		return nil, fmt.Errorf("UI tool outcome is unknown; do not replay: %w", err)
 	}
 	var envelope struct {
@@ -297,10 +301,7 @@ func (u *uiExecution) dispatch(ctx context.Context, call uiruntime.Call) (json.R
 		Structured json.RawMessage `json:"structuredContent"`
 	}
 	if json.Unmarshal(result, &envelope) != nil || envelope.Content == nil {
-		u.receipts[index].Status = "unknown"
-		if write {
-			u.blocked[endpoint.Name] = true
-		}
+		u.markUnknown(index, write)
 		return nil, errors.New("UI tool returned an invalid result; outcome unknown")
 	}
 	var structured struct {
@@ -308,10 +309,7 @@ func (u *uiExecution) dispatch(ctx context.Context, call uiruntime.Call) (json.R
 	}
 	_ = json.Unmarshal(envelope.Structured, &structured)
 	if structured.Outcome == "unknown" {
-		u.receipts[index].Status = "unknown"
-		if write {
-			u.blocked[endpoint.Name] = true
-		}
+		u.markUnknown(index, write)
 		return nil, errors.New("UI tool outcome is unknown; inspect the current state")
 	}
 	if envelope.IsError {
@@ -337,6 +335,14 @@ func (u *uiExecution) dispatch(ctx context.Context, call uiruntime.Call) (json.R
 		u.lastResults[endpoint.Name] = retained
 	}
 	return retained, err
+}
+
+func (u *uiExecution) markUnknown(index int, write bool) {
+	u.receipts[index].Status = "unknown"
+	u.unknown = append(u.unknown, u.receipts[index])
+	if write {
+		u.blocked[u.receipts[index].Server] = true
+	}
 }
 
 func (u *uiExecution) syncImageGeneration(generation uint64) {
@@ -422,6 +428,9 @@ func (u *uiExecution) rpc(ctx context.Context, endpoint mcpproxy.ToolEndpoint, m
 	}
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
+		if opErr := (*net.OpError)(nil); errors.As(err, &opErr) && opErr.Op == "dial" {
+			return nil, fmt.Errorf("local UI server is unreachable: %w: %w", err, errNotSent)
+		}
 		return nil, err
 	}
 	defer response.Body.Close()
@@ -470,7 +479,9 @@ func (u *uiExecution) retainImages(raw json.RawMessage) (json.RawMessage, error)
 			continue
 		}
 		if u.imageBytes+len(part) > uiImageBudget {
-			return nil, errors.New("UI image budget exhausted; emit required images and reset state")
+			// The action already completed, so an error here would invite a replay.
+			content[i], _ = json.Marshal(map[string]string{"type": "text", "text": "Image omitted: the UI image budget is exhausted. Call ui_reset to capture more images."})
+			continue
 		}
 		id := rand.Text()
 		u.images[id] = part

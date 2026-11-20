@@ -30,6 +30,7 @@ var (
 	ErrClosed = errors.New("UI runtime is closed")
 	// ErrCleanupUnconfirmed prevents replacing a child whose cleanup is unknown.
 	ErrCleanupUnconfirmed = errors.New("UI runtime child cleanup is unconfirmed")
+	errFrameTooLarge      = errors.New("UI protocol frame exceeds byte limit")
 )
 
 // Limits bound execution and protocol resources. RSSMiB is a supervised
@@ -253,6 +254,11 @@ func (r *Runtime) Exec(hardCtx, schedulingCtx context.Context, code string) (res
 					return result, errors.New("UI dispatcher returned invalid JSON")
 				}
 				err = c.send(hard, map[string]any{"type": "reply", "execution": execution, "id": msg.ID, "value": value}, r.opts.Limits.MaxProtocolBytes)
+				if errors.Is(err, errFrameTooLarge) {
+					// The action has completed; reject only this call so the
+					// script keeps its state and can read a smaller result.
+					err = c.send(hard, map[string]any{"type": "reply", "execution": execution, "id": msg.ID, "error": "UI call result exceeds byte limit"}, r.opts.Limits.MaxProtocolBytes)
+				}
 			}
 			if err != nil {
 				return result, err
@@ -411,16 +417,21 @@ func (c *child) stop() {
 func (r *Runtime) ensureChild(hard, scheduling context.Context) (*child, error) {
 	r.mu.Lock()
 	c := r.child
+	// A cancellation can invalidate the child after its last Exec returned.
+	usable := c != nil && !c.invalid
 	r.mu.Unlock()
 	if c != nil {
 		select {
 		case <-c.exited:
-			r.invalidate(c)
-			if err := r.reap(c); err != nil {
-				return nil, err
-			}
+			usable = false
 		default:
+		}
+		if usable {
 			return c, nil
+		}
+		r.invalidate(c)
+		if err := r.reap(c); err != nil {
+			return nil, err
 		}
 	}
 	engineDir, err := filepath.EvalSymlinks(r.opts.QuickJSDirectory)
@@ -496,7 +507,7 @@ func (c *child) send(ctx context.Context, value any, limit int) error {
 		return err
 	}
 	if len(data) >= limit {
-		return errors.New("UI protocol frame exceeds byte limit")
+		return errFrameTooLarge
 	}
 	done := make(chan error, 1)
 	go func() { _, err := c.stdin.Write(append(data, '\n')); done <- err }()

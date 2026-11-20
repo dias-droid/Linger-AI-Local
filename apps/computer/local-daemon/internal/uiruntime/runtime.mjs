@@ -26,13 +26,14 @@ const options = {
   interruptHandler: () => performance.now() >= deadline,
 };
 const compiler = await QuickJS.create(options);
-const unhandled = new Set();
+// QuickJS reports a promise as handled only after reporting it unhandled, and
+// its promise handle is not a stable identity, so a count tracks the balance.
+let unhandled = 0;
 const guest = await QuickJS.create({
   ...options,
   intrinsics: Intrinsics.ALL & ~Intrinsics.EVAL,
-  onUnhandledRejection(promise, _reason, handled) {
-    if (handled) unhandled.delete(promise.ptr);
-    else unhandled.add(promise.ptr);
+  onUnhandledRejection(_promise, _reason, handled) {
+    unhandled += handled ? -1 : 1;
   },
 });
 const drain = compiler.compile("__uiBridge.drain()");
@@ -64,7 +65,7 @@ function evaluate(source) {
       source === drain ? drain : compiler.compile(source),
     );
     guest.executePendingJobs();
-    if (unhandled.size) throw new Error("UI unhandled asynchronous rejection");
+    if (unhandled > 0) throw new Error("UI unhandled asynchronous rejection");
     return value.typeof === "string" ? value.toString() : undefined;
   } finally {
     deadline = Infinity;
@@ -92,12 +93,15 @@ evaluate(`(() => {
   const revisions = {browser:0, computer:0};
   const call = (owner, namespace, method, args) => {
     if (owner !== epoch || !active || completed) return Promise.reject(new Error('UI execution is not active'));
+    // Serialize before taking an ID: a thrown argument must not leave a gap
+    // in the call sequence that the Daemon validates.
+    const argumentsValue = clone(args === undefined ? {} : args);
     if (++next > maxCalls) {
       failure = 'UI call limit exceeded';
       return Promise.reject(new Error(failure));
     }
     if (namespace === 'browser' || namespace === 'computer') ++revisions[namespace];
-    const argumentsValue = clone(args === undefined ? {} : args), id = next;
+    const id = next;
     const promise = new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
     queue.push({ type: 'call', id, namespace, method, arguments: argumentsValue });
     return promise;
@@ -310,8 +314,8 @@ process.stdin.on("data", (chunk) => {
     }
     if (input.length >= limits.maxProtocolBytes)
       throw new Error("UI protocol frame exceeds byte limit");
-  } catch {
-    fail("UI protocol or execution failed");
+  } catch (error) {
+    fail(`UI protocol or execution failed: ${error?.message ?? error}`);
   }
 });
 process.stdin.on("end", () => {

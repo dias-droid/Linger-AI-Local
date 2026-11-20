@@ -330,7 +330,10 @@ rejects dynamic code evaluation. The Daemon limits memory, runtime, call count
 and output. Only the explicit `state` object is intended to persist between
 calls within one Operation. `ui_reset` discards this state and image handles.
 Applications and action records survive a reset. An unknown write outcome
-blocks further writes to its driver in this Operation.
+blocks further writes to its driver in this Operation. Every `ui_exec` and
+`ui_reset` result lists the Operation's unknown actions. Retained images share
+a 12 MiB budget; once it is spent, an action returns a text note in place of
+its image until `ui_reset`, so a completed action never reports an error.
 
 Use `await ui.page(url)` for a managed browser and `ui.window(pid, window_id)`
 for a macOS window. Use `ui.computer.list_windows({app: appName})` to discover

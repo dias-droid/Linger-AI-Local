@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"os/exec"
 	"path/filepath"
@@ -215,9 +216,12 @@ func TestUnifiedUIResetDoesNotClearUnknownWrites(t *testing.T) {
 	if !strings.Contains(string(first), `"status":"unknown"`) {
 		t.Fatalf("unknown not retained: %s", first)
 	}
-	f.rpc(t, t.Context(), "tools/call", map[string]any{"name": "ui_reset", "arguments": map[string]any{}})
+	reset := f.rpc(t, t.Context(), "tools/call", map[string]any{"name": "ui_reset", "arguments": map[string]any{}})
+	if !strings.Contains(string(reset), `\"unknown_actions\":[{\"server\":\"browser\",\"method\":\"browser_click\",\"status\":\"unknown\"}]`) {
+		t.Fatalf("reset hid the unknown action: %s", reset)
+	}
 	second := f.execute(t, `await ui.browser.click({});`)
-	if !strings.Contains(string(second), "cannot send further writes") || writes.Load() != 1 {
+	if !strings.Contains(string(second), "cannot send further writes") || !strings.Contains(string(second), `"unknown_actions"`) || writes.Load() != 1 {
 		t.Fatalf("unknown replayed: %s %d", second, writes.Load())
 	}
 	read := f.execute(t, `return await ui.browser.snapshot({});`)
@@ -367,5 +371,27 @@ func TestUnifiedUIExpandedImagesStayBounded(t *testing.T) {
 	nested := f.execute(t, `ui.emit({content:[{content:[{type:'text',text:'nested'}]}]});`)
 	if !strings.Contains(string(nested), "cannot be nested") {
 		t.Fatal(string(nested))
+	}
+}
+
+func TestUIImageBudgetNeverFailsACompletedAction(t *testing.T) {
+	u := &uiExecution{images: map[string]json.RawMessage{}, imageBytes: uiImageBudget}
+	got, err := u.retainImages(json.RawMessage(`{"content":[{"type":"image","data":"AAAA","mimeType":"image/png"},{"type":"text","text":"clicked"}]}`))
+	if err != nil || len(u.images) != 0 || !strings.Contains(string(got), "Image omitted") || !strings.Contains(string(got), "clicked") {
+		t.Fatalf("got=%s err=%v", got, err)
+	}
+}
+
+func TestUIUnreachableDriverIsNotDispatched(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := listener.Addr().String()
+	_ = listener.Close()
+	u := &uiExecution{}
+	_, err = u.rpc(t.Context(), mcpproxy.ToolEndpoint{Name: "browser", URL: "http://" + address + "/mcp"}, "tools/call", map[string]any{})
+	if !errors.Is(err, errNotSent) {
+		t.Fatalf("err=%v", err)
 	}
 }

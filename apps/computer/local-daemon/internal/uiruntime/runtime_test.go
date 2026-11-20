@@ -511,3 +511,42 @@ return after.text.includes("Route");`)
 		t.Fatalf("batch count=%d result=%+v", fills, result)
 	}
 }
+func TestLateHandledRejectionKeepsState(t *testing.T) {
+	r := nodeRuntime(t, noCalls(t), Limits{})
+	first := execute(t, r, `state.kept = 1; const p = Promise.reject(new Error("x")); await null; try { await p } catch {} return "caught";`)
+	second := execute(t, r, `return state.kept;`)
+	if string(first.Value) != `"caught"` || string(second.Value) != "1" || second.Generation != first.Generation {
+		t.Fatalf("first=%+v second=%+v", first, second)
+	}
+}
+func TestUnserializableArgumentsDoNotConsumeCallID(t *testing.T) {
+	r := nodeRuntime(t, func(_ context.Context, c Call) (json.RawMessage, error) { return c.Arguments, nil }, Limits{})
+	result := execute(t, r, `const cyclic = {}; cyclic.self = cyclic;
+for (const bad of [{n: 1n}, cyclic]) { try { await ui.browser.click(bad); return "sent"; } catch {} }
+return await ui.browser.click({ok: true});`)
+	if string(result.Value) != `{"ok":true}` {
+		t.Fatalf("result=%+v", result)
+	}
+}
+func TestOversizedDispatchResultRejectsOnlyTheCall(t *testing.T) {
+	large := json.RawMessage(`"` + strings.Repeat("a", 4096) + `"`)
+	r := nodeRuntime(t, func(context.Context, Call) (json.RawMessage, error) { return large, nil }, Limits{MaxProtocolBytes: 2048, MaxOutputBytes: 1024})
+	first := execute(t, r, `state.kept = 1; try { await ui.browser.snapshot({}); return "delivered"; } catch (error) { return error.message; }`)
+	second := execute(t, r, `return state.kept;`)
+	if !strings.Contains(string(first.Value), "byte limit") || string(second.Value) != "1" || second.Generation != first.Generation {
+		t.Fatalf("first=%+v second=%+v", first, second)
+	}
+}
+func TestInvalidatedIdleChildIsReplaced(t *testing.T) {
+	r := nodeRuntime(t, noCalls(t), Limits{})
+	first := execute(t, r, `return 1;`)
+	r.mu.Lock()
+	c := r.child
+	r.mu.Unlock()
+	// Models a cancellation that lands after Exec has already returned.
+	r.invalidate(c)
+	second := execute(t, r, `return 2;`)
+	if string(second.Value) != "2" || second.Generation <= first.Generation {
+		t.Fatalf("second=%+v", second)
+	}
+}
