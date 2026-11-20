@@ -79,18 +79,30 @@ test("native checkout identities are stable", async () => {
   expect(first.env.TEAMHUB_DATABASE_URL).toContain(
     `:${first.instance.source!.ports.postgres}/simplexai`,
   );
-  const text = await readFile(
-    path.join(first.instance.root, "native.env"),
-    "utf8",
-  );
+  const nativeFile = path.join(first.instance.root, "native.env");
+  const previous = parseEnv(await readFile(nativeFile, "utf8"));
   const second = await prepareNativeConfiguration(f.repo, {
     home: f.home,
     name: "native-test",
   });
   expect(second.instance).toEqual(first.instance);
-  expect(
-    await readFile(path.join(first.instance.root, "native.env"), "utf8"),
-  ).toBe(text);
+
+  // LiveKit is stopped in this fixture. Its unbound port can be taken between
+  // preparations without changing the instance's identity or credentials.
+  const liveKit = (await readLiveKitSettings(second.instance.root))!;
+  const expected: Record<string, string> = {
+    ...previous,
+    LIVEKIT_URL: `ws://127.0.0.1:${liveKit.httpPort}`,
+    LIVEKIT_API_URL: `http://127.0.0.1:${liveKit.httpPort}`,
+  };
+  if (expected.LIVEKIT_URL !== previous.LIVEKIT_URL)
+    expect(second.warnings).toContain(
+      `Port ${new URL(previous.LIVEKIT_URL!).port} is in use by another program; Linger's livekit uses port ${liveKit.httpPort} instead.\n`,
+    );
+  const current = parseEnv(await readFile(nativeFile, "utf8"));
+  const keys = new Set([...Object.keys(expected), ...Object.keys(current)]);
+  // Only name changed fields on failure; native.env also contains secrets.
+  expect([...keys].filter((key) => current[key] !== expected[key])).toEqual([]);
 });
 
 test.each(["O'Neil", "O'Neil`files"])(

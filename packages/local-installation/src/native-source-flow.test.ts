@@ -1245,6 +1245,66 @@ async function bundledRuntime(repo: string) {
   return directory;
 }
 
+test("native timings count only Runtime work that outlasts PostgreSQL", async () => {
+  const f = await fixture();
+  let clock = 0;
+  let startRuntime!: () => void;
+  let finishRuntime!: () => void;
+  const runtimeStarted = new Promise<void>((resolve) => {
+    startRuntime = resolve;
+  });
+  const runtimeFinished = new Promise<void>((resolve) => {
+    finishRuntime = resolve;
+  });
+  vi.mocked(prepareRuntime).mockImplementation(async (_runtime, options) => {
+    options.onEvent?.({
+      kind: "stage",
+      stage: "runtime",
+      state: "running",
+      message: "Preparing Pi…",
+    });
+    startRuntime();
+    await runtimeFinished;
+    return { code: 0, state: "ready", message: "ready" };
+  });
+  vi.mocked(prepareNativeDatabase).mockImplementation(async () => {
+    await runtimeStarted;
+    clock += 3000;
+    f.running.add("postgres");
+    // Let the install reach its Runtime wait before completing the probe.
+    setImmediate(() => {
+      clock += 7000;
+      finishRuntime();
+    });
+    return {};
+  });
+  const run = vi.mocked(runProcess).getMockImplementation()!;
+  vi.mocked(runProcess).mockImplementation(async (command, args, options) => {
+    if (args.includes("migrate")) clock += 2000;
+    return run(command, args, options);
+  });
+  const runtimeStages: InstallerEvent["state"][] = [];
+  const result = await installNativeSource(
+    {
+      ...f,
+      name: "native-timings",
+      setupChoice: "pi",
+      externalComputer: true,
+      signal: new AbortController().signal,
+      onEvent: (event) => {
+        if (event.kind === "stage" && event.stage === "runtime")
+          runtimeStages.push(event.state);
+      },
+    },
+    () => clock,
+  );
+  expect(result).toMatchObject({
+    code: 0,
+    details: { timings: { services: 5, runtime: 7 } },
+  });
+  expect(runtimeStages).toEqual(["running", "succeeded"]);
+});
+
 test("bundled services that verify install no packages and record stage times", async () => {
   const f = await fixture();
   await bundledRuntime(f.repo);
@@ -1295,6 +1355,7 @@ test("bundled services that verify install no packages and record stage times", 
     expect.arrayContaining(["preflight", "release", "images", "services"]),
   );
   expect(Object.values(timings).every((seconds) => seconds > 0)).toBe(true);
+  expect(timings).not.toHaveProperty("runtime");
   expect(
     logs.some((line) => line.startsWith("Native install timings (s): ")),
   ).toBe(true);

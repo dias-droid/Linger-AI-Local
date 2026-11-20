@@ -162,8 +162,14 @@ supervisor whose job file is in this instance's process directory under a
 lease no serving record holds, and a process on one of this instance's
 ports whose command line runs from this installation's folders but belongs
 to no recorded service, with its wrappers up to its supervisor. Never by a
-program name alone, and never the installer or what started it. Readiness on
-Windows also needs each port's listener inside that service's tree: an
+program name alone, and never the installer or what started it. If the
+recorded PID and creation time still exist but the command line is missing,
+stop checks a fresh process listing: CIM can report that incomplete row once
+for an exiting process. If the same process remains without a matching lease,
+stop fails without signalling it and keeps the record. A start cannot replace
+it, and a PID reused by another process does not prevent discarding a stale
+record. Readiness on Windows also needs each
+port's listener inside that service's tree: an
 earlier release's TeamHub or web still on the port would otherwise pass the
 health check for a service that could not bind, and a port held by another
 program fails the start after 15 seconds instead of at the deadline. The

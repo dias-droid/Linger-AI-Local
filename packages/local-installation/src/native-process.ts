@@ -580,6 +580,36 @@ function terminate(pid: number) {
 export function windowsTerminationOrder(tree: WindowsProcess[]): number[] {
   return tree.map((candidate) => candidate.pid).reverse();
 }
+async function windowsStopSnapshot(
+  name: NativeService,
+  lease: string,
+  record?: Pick<Lease, "pid" | "birth">,
+): Promise<{ snapshot: WindowsProcess[]; tree: WindowsProcess[] }> {
+  const read = async () => {
+    const snapshot = await windowsProcesses();
+    const tree = windowsLeaseTree(snapshot, lease);
+    const unverified =
+      record && tree[0]?.pid !== record.pid
+        ? snapshot.find(
+            ({ pid, created }) =>
+              pid === record.pid && `win32:${pid}:${created}` === record.birth,
+          )
+        : undefined;
+    return { snapshot, tree, unverified };
+  };
+  let current = await read();
+  // If a process exits during CIM enumeration, its PID and birth can still
+  // appear in that snapshot even though its command line could not be read.
+  // A fresh snapshot distinguishes that from a live, unverifiable process.
+  if (current.unverified?.command === "") current = await read();
+  if (current.unverified) {
+    throw new Error(
+      `Native ${name} process identity cannot be verified; identity record retained.`,
+    );
+  }
+  return current;
+}
+
 /**
  * Ends the supervisor holding the lease and everything under it. Windows
  * links a child only through its parent's PID, so ending a parent first
@@ -596,11 +626,10 @@ async function stopWindowsTree(
 ) {
   const deadline = Date.now() + 12_000;
   for (;;) {
-    const snapshot = (await windowsSnapshot()).processes;
-    const tree = windowsLeaseTree(snapshot, lease);
+    const { snapshot, tree } = await windowsStopSnapshot(name, lease, record);
     if (!tree.length) return;
     if (Date.now() >= deadline) {
-      if (record && (await endRecordedTree(record, snapshot))) return;
+      if (record && (await endRecordedTree(name, record, snapshot))) return;
       throw new Error(`Native ${name} did not stop; identity record retained.`);
     }
     const order = windowsTerminationOrder(tree);
@@ -618,6 +647,7 @@ async function stopWindowsTree(
  * nothing under the lease is left afterwards.
  */
 async function endRecordedTree(
+  name: NativeService,
   record: Pick<Lease, "pid" | "birth" | "lease">,
   snapshot: WindowsProcess[],
 ): Promise<boolean> {
@@ -634,10 +664,7 @@ async function endRecordedTree(
   }).catch(() => undefined);
   const deadline = Date.now() + 3_000;
   for (;;) {
-    const tree = windowsLeaseTree(
-      (await windowsSnapshot()).processes,
-      record.lease,
-    );
+    const { tree } = await windowsStopSnapshot(name, record.lease, record);
     if (!tree.length) return true;
     if (Date.now() >= deadline) return false;
     await delay(100);

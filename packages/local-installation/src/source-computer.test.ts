@@ -6,6 +6,18 @@ import type { Instance } from "./instance.js";
 import { runProcess } from "./process.js";
 import { prepareSourceComputer } from "./source-computer.js";
 vi.mock("./process.js", () => ({ runProcess: vi.fn() }));
+// Fake the Computer CLI and its installer, not Windows' private-path probe.
+vi.mock("./windows-private.js", async (original) => {
+  const actual = await original<typeof import("./windows-private.js")>();
+  const { runProcess } =
+    await vi.importActual<typeof import("./process.js")>("./process.js");
+  const windowsPrivatePath: typeof actual.windowsPrivatePath = (
+    file,
+    kind,
+    repair,
+  ) => actual.windowsPrivatePath(file, kind, repair, runProcess);
+  return { ...actual, windowsPrivatePath };
+});
 const roots: string[] = [];
 afterEach(async () => {
   vi.resetAllMocks();

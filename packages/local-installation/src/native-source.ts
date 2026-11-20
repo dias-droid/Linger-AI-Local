@@ -479,6 +479,7 @@ async function runNativeSource(
       const started: NativeService[] = [];
       let runtimeOutcome: InstallOutcome | undefined;
       let runtimeError: unknown;
+      let runtimePending = true;
       const runtime = (async () => {
         try {
           if (options.byok) {
@@ -549,6 +550,8 @@ async function runNativeSource(
         } catch (error) {
           runtimeError = error;
           controller.abort();
+        } finally {
+          runtimePending = false;
         }
       })();
       try {
@@ -856,8 +859,11 @@ async function runNativeSource(
           });
         // The runtime is ready before the checkout's migrations run: when it is
         // not, services still running from an earlier checkout keep the
-        // schema they know.
+        // schema they know. Count only the wait beyond the parallel work and
+        // keep the progress events that the runtime itself reports.
+        if (runtimePending) timer.enter("runtime");
         await runtime;
+        timer.enter("services");
         signal.throwIfAborted();
         await command("migrate");
         step("services", "Starting native collaboration services…");

@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import * as processes from "./process.js";
+import * as windowsPrivacy from "./windows-private.js";
 import { writeSetupChoice } from "./setup-selection.js";
 import { initializeInstance } from "./instance.js";
 import {
@@ -382,18 +383,19 @@ it("waits through two connecting observations after one start without repeating 
 });
 
 it("preserves cancellation while waiting for the started Computer Gateway", async () => {
-  const f = await connectingFixture(() => "connecting");
   const controller = new AbortController();
-  const connecting = connectComputer(f.instance, {
-    interactive: false,
-    signal: controller.signal,
+  const f = await connectingFixture((call) => {
+    // The first observation precedes daemon start. Abort during the next one.
+    if (call === 2) controller.abort();
+    return "connecting";
   });
-  const assertion = expect(connecting).rejects.toMatchObject({
-    name: "AbortError",
-  });
-  await vi.waitFor(() => expect(f.statuses()).toBeGreaterThanOrEqual(2));
-  controller.abort();
-  await assertion;
+  await expect(
+    connectComputer(f.instance, {
+      interactive: false,
+      signal: controller.signal,
+    }),
+  ).rejects.toMatchObject({ name: "AbortError" });
+  expect(f.statuses()).toBe(2);
   expect(
     f.process.mock.calls.filter(
       ([, args]) => args.slice(0, 2).join(" ") === "daemon start",
@@ -516,6 +518,10 @@ it("reports the actual Gateway connection separately when disconnected", async (
 });
 
 it("refreshes an idle instance after a private runtime is installed and preserves its identity", async () => {
+  // This test exercises the refresh and credential-binding logic through a
+  // mocked CLI. Keep real ACL coverage in the Windows private-state tests.
+  if (process.platform === "win32")
+    vi.spyOn(windowsPrivacy, "windowsPrivatePath").mockResolvedValue();
   const f = await fixture();
   const personalAuth = path.join(f.instance.root, "personal-auth.json");
   await writeFile(personalAuth, "unchanged-personal-credentials", {
