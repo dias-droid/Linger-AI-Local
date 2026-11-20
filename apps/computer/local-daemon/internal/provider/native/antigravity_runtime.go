@@ -397,13 +397,9 @@ func (t *antigravityTurn) update(params json.RawMessage, observed time.Time) {
 		t.output.Reset()
 		t.tools[update.ToolCallID] = true
 		t.mu.Unlock()
-		var input map[string]any
-		if json.Unmarshal(update.RawInput, &input) != nil {
-			input = nil
-		}
 		t.emit(Event{
 			Kind: EventToolCall, ObservedAt: observed, ToolName: antigravityToolName(update), InvocationID: antigravityInvocationID(update.ToolCallID),
-			Input: input, ActivityKind: antigravityActivity(update.Kind), ActivityTitle: update.Title,
+			Input: antigravityInput(update.RawInput), ActivityKind: antigravityActivity(update.Kind), ActivityTitle: update.Title,
 		})
 		t.toolResult(update, observed)
 	case "tool_call_update":
@@ -442,7 +438,36 @@ func (t *antigravityTurn) toolResult(update acpUpdate, observed time.Time) {
 	if output == "" && len(update.RawOutput) > 0 && string(update.RawOutput) != "null" {
 		output = piText(update.RawOutput)
 	}
-	t.emit(Event{Kind: EventToolOutput, ObservedAt: observed, Status: update.Status, InvocationID: antigravityInvocationID(update.ToolCallID), Output: output})
+	t.emit(Event{Kind: EventToolOutput, ObservedAt: observed, Status: antigravityToolStatus(update), InvocationID: antigravityInvocationID(update.ToolCallID), Output: output})
+}
+
+// antigravityInput is a tool call's input with its shell command under
+// "command", where every Runtime's command reads it; run_command names it
+// "CommandLine".
+func antigravityInput(raw json.RawMessage) map[string]any {
+	var input map[string]any
+	if json.Unmarshal(raw, &input) != nil {
+		return nil
+	}
+	if command, ok := input["CommandLine"].(string); ok {
+		if _, named := input["command"]; !named {
+			input["command"] = command
+		}
+	}
+	return input
+}
+
+// antigravityToolStatus is a tool call's terminal status. run_command reports
+// a command that exits non-zero as completed, with its exit code in the raw
+// output.
+func antigravityToolStatus(update acpUpdate) string {
+	var output struct {
+		ExitCode *int `json:"exit_code"`
+	}
+	if update.Status == "completed" && json.Unmarshal(update.RawOutput, &output) == nil && output.ExitCode != nil && *output.ExitCode != 0 {
+		return "failed"
+	}
+	return update.Status
 }
 
 // permission answers session/request_permission: through the Run's
@@ -482,8 +507,7 @@ func (t *antigravityTurn) permission(frame acpFrame) {
 // antigravityReview builds the permission review of one tool call. A
 // command is reviewed as a shell command so the shared shell rules apply.
 func antigravityReview(call acpUpdate, workspace string) permission.Request {
-	var input map[string]any
-	_ = json.Unmarshal(call.RawInput, &input)
+	input := antigravityInput(call.RawInput)
 	encoded, _ := json.Marshal(input)
 	tool := antigravityToolName(call)
 	command := ""

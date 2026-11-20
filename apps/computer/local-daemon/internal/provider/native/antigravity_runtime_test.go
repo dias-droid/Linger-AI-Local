@@ -357,3 +357,26 @@ func TestAntigravityReportsTheSessionItStartsAsTheTurnCheckpoint(t *testing.T) {
 		t.Fatal("Start accepted an assigned session id")
 	}
 }
+
+func TestAntigravityRunCommandMapsToSharedCommandShape(t *testing.T) {
+	input := antigravityInput(json.RawMessage(`{"CommandLine":"teamhub message send --content hi","WaitMsBeforeAsync":5000}`))
+	if input["command"] != "teamhub message send --content hi" {
+		t.Fatalf("input = %#v", input)
+	}
+	review := antigravityReview(acpUpdate{Kind: "execute", RawInput: json.RawMessage(`{"CommandLine":"rm -rf build"}`)}, t.TempDir())
+	if review.Action.Command != "rm -rf build" || review.Action.Tool != "Bash" {
+		t.Fatalf("review = %#v", review.Action)
+	}
+	for _, test := range []struct {
+		status, output, want string
+	}{
+		{"completed", `{"output":"","exit_code":1}`, "failed"},
+		{"completed", `{"output":"","exit_code":0}`, "completed"},
+		{"completed", ``, "completed"},
+		{"failed", `{"exit_code":0}`, "failed"},
+	} {
+		if got := antigravityToolStatus(acpUpdate{Status: test.status, RawOutput: json.RawMessage(test.output)}); got != test.want {
+			t.Fatalf("status %s with %s = %s, want %s", test.status, test.output, got, test.want)
+		}
+	}
+}

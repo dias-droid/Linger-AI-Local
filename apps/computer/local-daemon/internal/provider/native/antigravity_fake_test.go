@@ -154,7 +154,7 @@ func (f *agyFakeProcess) prompt(id json.RawMessage, sessionID string) {
 		map[string]any{"content": "List files", "status": "in_progress", "priority": "high"},
 		map[string]any{"content": "Report", "status": "pending", "priority": "low"},
 	}})
-	f.update(sessionID, map[string]any{"sessionUpdate": "tool_call", "toolCallId": "call-1", "title": "ls", "kind": "execute", "status": "pending", "rawInput": map[string]any{"command": "ls"}})
+	f.update(sessionID, map[string]any{"sessionUpdate": "tool_call", "toolCallId": "call-1", "title": "ls", "kind": "execute", "status": "pending", "rawInput": map[string]any{"CommandLine": "ls", "WaitMsBeforeAsync": 5000}})
 	if f.mode == "permission" || f.mode == "permission-no-reject" {
 		command := os.Getenv(agyFakeCommandEnv)
 		if command == "" {
@@ -166,7 +166,7 @@ func (f *agyFakeProcess) prompt(id json.RawMessage, sessionID string) {
 		}
 		f.send(map[string]any{"jsonrpc": "2.0", "id": 900, "method": "session/request_permission", "params": map[string]any{
 			"sessionId": sessionID,
-			"toolCall":  map[string]any{"toolCallId": "call-1", "title": command, "kind": "execute", "rawInput": map[string]any{"command": command}},
+			"toolCall":  map[string]any{"toolCallId": "call-1", "title": command, "kind": "execute", "rawInput": map[string]any{"CommandLine": command}},
 			"options":   options,
 		}})
 		<-f.answers
