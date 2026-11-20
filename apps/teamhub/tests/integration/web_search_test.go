@@ -122,6 +122,10 @@ func TestWebSearchAsksForAKeyAndReplaysTheSearchWithIt(t *testing.T) {
 		list.Backends[3].ID != websearch.You || list.Backends[3].Tier != websearch.TierFreeTrial {
 		t.Fatalf("backends: %d %s", code, listed)
 	}
+	code, _, listed = env.request(alice, http.MethodGet, "/v0/web-search/backends?include_quota=false", nil, "")
+	if code != http.StatusOK || strings.Contains(string(listed), `"quota"`) || !strings.Contains(string(listed), `"free_trial"`) {
+		t.Fatalf("backends without quota: %d %s", code, listed)
+	}
 
 	saveKey := func(backend, key, decisionID string) (int, []byte) {
 		t.Helper()

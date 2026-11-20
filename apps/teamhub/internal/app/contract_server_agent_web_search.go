@@ -221,7 +221,7 @@ func (a *App) listAgentWebBackends(c *gin.Context) {
 	if _, ok := a.authorizeWebSearch(c, &input, true); !ok {
 		return
 	}
-	list, err := a.webSearch.List(c.Request.Context())
+	list, err := a.webSearch.List(c.Request.Context(), true)
 	if err != nil {
 		a.logger.Error("web_search.list_failed", "request_id", c.GetString("request_id"), "error_type", fmt.Sprintf("%T", err))
 		a.writeAgentAPIError(c, http.StatusInternalServerError, api.AgentApiErrorCodeInternalError, "Web search backends could not be listed")

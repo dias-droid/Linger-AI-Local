@@ -9619,8 +9619,8 @@ type WebSearchBackend struct {
 	// OfficialKeyCheck Whether the provider has an official endpoint TeamHub checks a key with before saving it. Without one the key is saved unverified and proven by its first call.
 	OfficialKeyCheck bool `json:"official_key_check"`
 
-	// Quota What is left on the backend's account. from says where the numbers came from: provider is the provider's official usage endpoint read for this response; last_response is the rate-limit headers of the last call (Brave), as of observed_at; unavailable carries no numbers and reason says why.
-	Quota  WebSearchQuota         `json:"quota"`
+	// Quota Left out when the caller asked for the list without quota.
+	Quota  *WebSearchQuota        `json:"quota,omitempty"`
 	Status WebSearchBackendStatus `json:"status"`
 
 	// Tier How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free_trial: You.com without a key, a limited trial with lower quality results that TeamHub does not count; none: direct, which needs no account.
@@ -10416,6 +10416,12 @@ type StreamVoiceEventsParams struct {
 type ListVoiceTranscriptEventsParams struct {
 	AfterUpdatedAt *Timestamp `form:"after_updated_at,omitempty" json:"after_updated_at,omitempty"`
 	AfterId        *Id        `form:"after_id,omitempty" json:"after_id,omitempty"`
+}
+
+// ListWebSearchBackendsParams defines parameters for ListWebSearchBackends.
+type ListWebSearchBackendsParams struct {
+	// IncludeQuota Read each backend's live quota from its provider.
+	IncludeQuota *bool `form:"include_quota,omitempty" json:"include_quota,omitempty"`
 }
 
 // UpdateWorkItemParams defines parameters for UpdateWorkItem.

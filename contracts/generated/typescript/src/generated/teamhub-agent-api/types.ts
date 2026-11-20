@@ -2811,7 +2811,8 @@ export interface components {
       status: "ready" | "key_required" | "key_rejected";
       /** @enum {string} */
       key_state: "none" | "verified" | "unverified" | "rejected";
-      quota: components["schemas"]["WebSearchQuota"];
+      /** @description Left out when the caller asked for the list without quota. */
+      quota?: components["schemas"]["WebSearchQuota"];
     };
     /** @description Every backend in TeamHub's default order. default_search is the backend a search without one uses now: the default a Human saved (chosen_default_search) even when its key stopped working, else the first ready backend in that order. */
     WebSearchBackendList: {

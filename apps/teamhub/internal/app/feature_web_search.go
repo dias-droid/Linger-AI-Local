@@ -29,7 +29,8 @@ func (a *App) registerWebSearch(cfg config.Config, deps Deps) error {
 }
 
 func (a *App) listWebSearchBackends(c *gin.Context) {
-	list, err := a.webSearch.List(c.Request.Context())
+	params := contractParams[httpapi.ListWebSearchBackendsParams](c)
+	list, err := a.webSearch.List(c.Request.Context(), params.IncludeQuota == nil || *params.IncludeQuota)
 	if err != nil {
 		a.internalError(c, "list web search backends", err)
 		return

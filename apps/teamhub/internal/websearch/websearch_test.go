@@ -464,7 +464,7 @@ func TestDefaultSearchUsesTheChosenDefaultWithoutFallingBack(t *testing.T) {
 		failure.Backend != Firecrawl || failure.Suggested {
 		t.Fatalf("Run with a rejected chosen default = %#v", err)
 	}
-	if list, err := s.List(t.Context()); err != nil || list.DefaultSearch != Firecrawl || list.ChosenDefault != Firecrawl {
+	if list, err := s.List(t.Context(), false); err != nil || list.DefaultSearch != Firecrawl || list.ChosenDefault != Firecrawl {
 		t.Fatalf("List with a rejected chosen default = %+v, %v", list, err)
 	}
 	if err := s.RemoveKey(t.Context(), Firecrawl); err != nil {
@@ -638,7 +638,7 @@ func TestListReportsTiersStatesAndLiveQuota(t *testing.T) {
 	saveRaw(t, s, keys, Firecrawl, "provider-secret", "verified")
 	saveRaw(t, s, keys, Tavily, "provider-secret", "rejected")
 	saveRaw(t, s, keys, Brave, "provider-secret", "unverified")
-	list, err := s.List(t.Context())
+	list, err := s.List(t.Context(), true)
 	if err != nil || list.DefaultSearch != Brave || list.DefaultOpen != Direct || !list.CanSaveKeys || len(list.Backends) != 5 {
 		t.Fatalf("List = %+v, %v", list, err)
 	}
@@ -661,7 +661,7 @@ func TestListReportsTiersStatesAndLiveQuota(t *testing.T) {
 	}
 	saveRaw(t, s, keys, You, "provider-secret", "verified")
 	start := time.Now()
-	list, err = s.List(t.Context())
+	list, err = s.List(t.Context(), true)
 	if err != nil || time.Since(start) > quotaTimeout+500*time.Millisecond {
 		t.Fatalf("List took %s, %v", time.Since(start), err)
 	}
@@ -669,5 +669,37 @@ func TestListReportsTiersStatesAndLiveQuota(t *testing.T) {
 		if view.ID == You && (view.Tier != TierKey || view.Quota.Reason != "provider_unavailable") {
 			t.Fatalf("you with a slow usage endpoint = %+v", view)
 		}
+	}
+}
+
+func TestListWithoutQuotaCallsNoProvider(t *testing.T) {
+	fake := newFakeProviders(t, func(w http.ResponseWriter, r seen) {
+		t.Errorf("unexpected %s", r.path)
+	})
+	s, keys := newTestService(t, fake)
+	saveRaw(t, s, keys, Firecrawl, "provider-secret", "verified")
+	saveRaw(t, s, keys, You, "provider-secret", "verified")
+	saveRaw(t, s, keys, Tavily, "provider-secret", "verified")
+	list, err := s.List(t.Context(), false)
+	if err != nil || len(list.Backends) != 5 || len(fake.seen()) != 0 {
+		t.Fatalf("List = %+v, %v, calls %d", list, err, len(fake.seen()))
+	}
+	for _, view := range list.Backends {
+		raw, err := json.Marshal(view)
+		if err != nil || view.Name == "" || view.Status == "" || strings.Contains(string(raw), `"quota"`) {
+			t.Fatalf("backend without quota = %s, %v", raw, err)
+		}
+	}
+}
+
+func TestBackendReadsItsStatusWithoutCallingAProvider(t *testing.T) {
+	fake := newFakeProviders(t, func(w http.ResponseWriter, r seen) {
+		t.Errorf("unexpected %s", r.path)
+	})
+	s, keys := newTestService(t, fake)
+	saveRaw(t, s, keys, Tavily, "provider-secret", "verified")
+	view, err := s.Backend(t.Context(), Tavily)
+	if err != nil || view.ID != Tavily || view.Status != "ready" || len(fake.seen()) != 0 {
+		t.Fatalf("Backend = %+v, %v, calls %d", view, err, len(fake.seen()))
 	}
 }

@@ -8,7 +8,15 @@ backends:
       render one row each: name, commands, filters, free tier text, where to
       get a key, the key state and live quota. Quota is read from each
       provider's official usage endpoint for this request, in parallel and
-      briefly.
+      briefly; with include_quota=false TeamHub calls no provider and leaves
+      quota out of every backend.
+    parameters:
+      - name: include_quota
+        in: query
+        description: Read each backend's live quota from its provider.
+        schema:
+          type: boolean
+          default: true
     responses:
       "200":
         description: The backends.

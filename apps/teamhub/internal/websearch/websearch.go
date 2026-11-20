@@ -225,7 +225,7 @@ type BackendView struct {
 	KeyURL           string   `json:"key_url,omitempty"`
 	Status           string   `json:"status"`
 	KeyState         string   `json:"key_state"`
-	Quota            Quota    `json:"quota"`
+	Quota            Quota    `json:"quota,omitzero"`
 }
 
 // List is every backend as the contract's WebSearchBackendList.
@@ -374,8 +374,9 @@ func defaultSearch(ring keyring, chosen Backend) Backend {
 	return You
 }
 
-// List returns every backend with its live quota.
-func (s *Service) List(ctx context.Context) (List, error) {
+// List returns every backend, with its live quota when withQuota is set;
+// without it no provider is called and every quota is left out.
+func (s *Service) List(ctx context.Context, withQuota bool) (List, error) {
 	ring, err := s.keys(ctx)
 	if err != nil {
 		return List{}, err
@@ -391,6 +392,10 @@ func (s *Service) List(ctx context.Context) (List, error) {
 	defer cancel()
 	for i, b := range order {
 		views[i] = s.view(ring, b)
+		if !withQuota {
+			views[i].Quota = Quota{}
+			continue
+		}
 		if !ring.usable(b) || b == Brave {
 			continue
 		}
@@ -456,12 +461,13 @@ func braveStoredQuota(row store.ListWebSearchKeysRow) Quota {
 	return quota
 }
 
-// Backend returns one backend with its live quota.
+// Backend returns one backend's state without asking any provider for its
+// quota.
 func (s *Service) Backend(ctx context.Context, b Backend) (BackendView, error) {
 	if _, ok := definitions[b]; !ok {
 		return BackendView{}, ErrInvalid
 	}
-	list, err := s.List(ctx)
+	list, err := s.List(ctx, false)
 	if err != nil {
 		return BackendView{}, err
 	}
