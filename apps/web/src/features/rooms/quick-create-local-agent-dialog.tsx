@@ -21,13 +21,15 @@ import type {
   TeamHubLocalComputerPage,
   TeamHubLocalRuntimeType,
 } from "@/features/teamhub/teamhub-types";
+import type { Message } from "@/i18n/messages";
+import { RichMessage, useT } from "@/i18n/use-translation";
 
 import {
   QuickCreateGeneralAgent,
   type LocalAgentTarget,
 } from "./quick-create-general-agent-page";
 import { AgentCreationProgress } from "./agent-creation-progress";
-import { OFFLINE_COMPUTER_HINT } from "./members/agent-move-target";
+import { createAgentMessages } from "./create-agent.messages";
 
 const localRuntimeLabels: Record<TeamHubLocalRuntimeType, string> = {
   claude: "Claude Code",
@@ -36,14 +38,14 @@ const localRuntimeLabels: Record<TeamHubLocalRuntimeType, string> = {
   antigravity: "Antigravity",
 };
 
-const effortLabels: Record<TeamHubAgentReasoningEffort, string> = {
-  none: "None",
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  xhigh: "Extra high",
-  max: "Maximum",
-  ultra: "Ultra",
+const effortLabels: Record<TeamHubAgentReasoningEffort, Message<string>> = {
+  none: createAgentMessages.effortNone,
+  low: createAgentMessages.effortLow,
+  medium: createAgentMessages.effortMedium,
+  high: createAgentMessages.effortHigh,
+  xhigh: createAgentMessages.effortExtraHigh,
+  max: createAgentMessages.effortMaximum,
+  ultra: createAgentMessages.effortUltra,
 };
 
 export function QuickCreateLocalAgentDialog({
@@ -54,6 +56,7 @@ export function QuickCreateLocalAgentDialog({
   onClose: () => void;
 }) {
   const { client } = useTeamHubRuntime();
+  const t = useT();
   const [computerId, setComputerId] = useState("");
   const [runtimeType, setRuntimeType] = useState<TeamHubLocalRuntimeType>();
   const [modelId, setModelId] = useState("");
@@ -172,9 +175,24 @@ export function QuickCreateLocalAgentDialog({
     setEffort(undefined);
   }
 
+  // Where the downloaded models of the selected Computer are managed.
+  const modelsLink = (text: string) => (
+    <Link
+      className="font-medium text-foreground underline underline-offset-2"
+      onClick={onClose}
+      to={`/t/${encodeURIComponent(tenantId)}/settings/models?computer=${encodeURIComponent(selectedComputerId)}`}
+    >
+      {text}
+    </Link>
+  );
+
   if (target)
     return (
-      <ModalDialog onClose={onClose} size="md" title="Create local agent">
+      <ModalDialog
+        onClose={onClose}
+        size="md"
+        title={t(createAgentMessages.title)}
+      >
         <div className="px-5 py-4">
           <QuickCreateGeneralAgent
             tenantId={tenantId}
@@ -189,19 +207,23 @@ export function QuickCreateLocalAgentDialog({
     <ModalDialog
       onClose={onClose}
       size="md"
-      title="Create local agent"
-      description={
+      title={t(createAgentMessages.title)}
+      description={t(
         setupOpen
-          ? "Connect a computer, then choose your runtime and model."
-          : "Choose a computer, runtime and model for your Agent."
-      }
+          ? createAgentMessages.connectDescription
+          : createAgentMessages.chooseDescription,
+      )}
       footer={
         !pending ? (
           <>
             <Button
               onClick={connection ? () => setConnection(undefined) : onClose}
             >
-              {connection ? "Back" : "Cancel"}
+              {t(
+                connection
+                  ? createAgentMessages.back
+                  : createAgentMessages.cancel,
+              )}
             </Button>
             {connection ? (
               <Button
@@ -213,7 +235,7 @@ export function QuickCreateLocalAgentDialog({
                   setConnection(undefined);
                 }}
               >
-                Use this computer
+                {t(createAgentMessages.useThisComputer)}
               </Button>
             ) : !setupOpen ? (
               <Button
@@ -234,7 +256,7 @@ export function QuickCreateLocalAgentDialog({
                   });
                 }}
               >
-                Create
+                {t(createAgentMessages.create)}
               </Button>
             ) : null}
           </>
@@ -251,9 +273,9 @@ export function QuickCreateLocalAgentDialog({
             role="alert"
             className="flex items-center justify-between gap-3 text-sm text-app-danger"
           >
-            Local Computers are unavailable.
+            {t(createAgentMessages.computersUnavailable)}
             <Button onClick={() => void computers.refetch()} size="compact">
-              Retry
+              {t(createAgentMessages.retry)}
             </Button>
           </div>
         ) : desktop && desktopSetupOpen ? (
@@ -266,8 +288,8 @@ export function QuickCreateLocalAgentDialog({
                 tone="ghost"
                 onClick={() => setConnection(undefined)}
               >
-                <Icon icon={ArrowLeft01Icon} size={14} /> Back to computer
-                selection
+                <Icon icon={ArrowLeft01Icon} size={14} />{" "}
+                {t(createAgentMessages.backToComputers)}
               </Button>
             ) : null}
             <ComputerSetupInstructions
@@ -276,12 +298,14 @@ export function QuickCreateLocalAgentDialog({
             />
             {connectedComputer ? (
               <p className="text-sm" role="status">
-                Connected: {connectedComputer.display_name}
+                {t(createAgentMessages.connected, {
+                  name: connectedComputer.display_name,
+                })}
               </p>
             ) : null}
             {connectedComputer && !connectedComputer.workspace_grants.length ? (
               <p className="text-xs text-app-muted" role="status">
-                Authorize workspace access on this computer before continuing.
+                {t(createAgentMessages.authorizeWorkspace)}
               </p>
             ) : null}
             <ServerConnection tenantId={tenantId} />
@@ -294,7 +318,7 @@ export function QuickCreateLocalAgentDialog({
                   className="text-sm font-medium"
                   htmlFor="local-agent-computer"
                 >
-                  Local Computer
+                  {t(createAgentMessages.computer)}
                 </label>
                 <Button
                   size="compact"
@@ -310,16 +334,17 @@ export function QuickCreateLocalAgentDialog({
                   }
                 >
                   <span className="inline-flex items-center gap-1.5 text-app-info">
-                    <Icon icon={Add01Icon} size={14} /> Connect new computer
+                    <Icon icon={Add01Icon} size={14} />{" "}
+                    {t(createAgentMessages.connectNewComputer)}
                   </span>
                 </Button>
               </div>
               <Select
                 id="local-agent-computer"
-                aria-label="Local Computer"
+                aria-label={t(createAgentMessages.computer)}
                 className="min-w-0 w-full"
                 onValueChange={selectComputer}
-                placeholder="Select a Local Computer"
+                placeholder={t(createAgentMessages.selectComputer)}
                 value={selectedComputerId}
               >
                 {selectableComputers.map((computer) => (
@@ -327,14 +352,17 @@ export function QuickCreateLocalAgentDialog({
                     key={computer.computer_id}
                     value={computer.computer_id}
                   >
-                    {computer.display_name}
-                    {computer.status === "online" ? "" : " · Offline"}
+                    {computer.status === "online"
+                      ? computer.display_name
+                      : t(createAgentMessages.offlineComputer, {
+                          name: computer.display_name,
+                        })}
                   </SelectItem>
                 ))}
               </Select>
               {selectedComputer?.status === "offline" ? (
                 <p className="mt-1.5 text-xs text-app-muted" role="status">
-                  {OFFLINE_COMPUTER_HINT}
+                  {t(createAgentMessages.offlineComputerHint)}
                 </p>
               ) : null}
             </div>
@@ -342,13 +370,13 @@ export function QuickCreateLocalAgentDialog({
               <>
                 <label className="block">
                   <span className="mb-1.5 block text-sm font-medium">
-                    Runtime
+                    {t(createAgentMessages.runtime)}
                   </span>
                   <Select
-                    aria-label="Runtime"
+                    aria-label={t(createAgentMessages.runtime)}
                     className="min-w-0 w-full"
                     disabled={!selectedComputer.runtimes.length}
-                    placeholder="No runtimes available"
+                    placeholder={t(createAgentMessages.noRuntimes)}
                     value={selectedRuntime?.type ?? ""}
                     onValueChange={(value) => {
                       setRuntimeType(value as TeamHubLocalRuntimeType);
@@ -366,13 +394,13 @@ export function QuickCreateLocalAgentDialog({
                 <div className="space-y-1.5">
                   <label className="block">
                     <span className="mb-1.5 block text-sm font-medium">
-                      Model
+                      {t(createAgentMessages.model)}
                     </span>
                     <Select
-                      aria-label="Model"
+                      aria-label={t(createAgentMessages.model)}
                       className="min-w-0 w-full"
                       disabled={!modelOptions.length}
-                      placeholder="No models available"
+                      placeholder={t(createAgentMessages.noModels)}
                       value={selectedModel?.id ?? ""}
                       onValueChange={(value) => {
                         setModelId(value);
@@ -388,27 +416,22 @@ export function QuickCreateLocalAgentDialog({
                   </label>
                   {selectedRuntime?.type === "pi" && modelOptions.length > 0 ? (
                     <p className="text-xs text-muted-foreground">
-                      Manage downloaded models in{" "}
-                      <Link
-                        className="font-medium text-foreground underline underline-offset-2"
-                        onClick={onClose}
-                        to={`/t/${encodeURIComponent(tenantId)}/settings/models?computer=${encodeURIComponent(selectedComputer.computer_id)}`}
-                      >
-                        Settings › Models
-                      </Link>
-                      .
+                      <RichMessage
+                        message={createAgentMessages.manageModels}
+                        tags={{ link: modelsLink }}
+                      />
                     </p>
                   ) : null}
                 </div>
                 <label className="block">
                   <span className="mb-1.5 block text-sm font-medium">
-                    Thinking effort
+                    {t(createAgentMessages.thinkingEffort)}
                   </span>
                   <Select
-                    aria-label="Thinking effort"
+                    aria-label={t(createAgentMessages.thinkingEffort)}
                     className="min-w-0 w-full"
                     disabled={!allowedEfforts.length}
-                    placeholder="Not supported"
+                    placeholder={t(createAgentMessages.effortNotSupported)}
                     value={selectedEffort ?? ""}
                     onValueChange={(value) =>
                       setEffort(value as TeamHubAgentReasoningEffort)
@@ -416,7 +439,7 @@ export function QuickCreateLocalAgentDialog({
                   >
                     {allowedEfforts.map((value) => (
                       <SelectItem key={value} value={value}>
-                        {effortLabels[value]}
+                        {t(effortLabels[value])}
                       </SelectItem>
                     ))}
                   </Select>
@@ -424,15 +447,10 @@ export function QuickCreateLocalAgentDialog({
                 {!selectedModel && !loginRuntime ? (
                   selectedRuntime?.type === "pi" ? (
                     <p className="text-xs text-muted-foreground" role="status">
-                      Download and load a local model in{" "}
-                      <Link
-                        className="font-medium text-foreground underline underline-offset-2"
-                        onClick={onClose}
-                        to={`/t/${encodeURIComponent(tenantId)}/settings/models?computer=${encodeURIComponent(selectedComputer.computer_id)}`}
-                      >
-                        Settings › Models
-                      </Link>{" "}
-                      to run Agents with Pi on this computer.
+                      <RichMessage
+                        message={createAgentMessages.downloadModel}
+                        tags={{ link: modelsLink }}
+                      />
                     </p>
                   ) : selectedComputer &&
                     selectedRuntime?.status === "not_installed" ? (
@@ -445,8 +463,7 @@ export function QuickCreateLocalAgentDialog({
                     </div>
                   ) : (
                     <p className="text-xs text-app-muted" role="status">
-                      No models are available on this Runtime. Check its status
-                      and workspace access.
+                      {t(createAgentMessages.noRuntimeModels)}
                     </p>
                   )
                 ) : null}

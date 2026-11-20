@@ -342,8 +342,8 @@ describe("Voice Mode screen actions", () => {
   });
   it("offers visible clickable elements by area and clicks the one chosen", () => {
     document.body.innerHTML = `
-      <nav aria-label="Primary navigation"><a href="/workspace">Workspace</a></nav>
-      <nav aria-label="Room navigation"><button aria-label="Pocket notes"></button></nav>
+      <nav aria-label="Primary navigation" data-voice-area="navigation"><a href="/workspace">Workspace</a></nav>
+      <nav aria-label="Room navigation" data-voice-area="sidebar"><button aria-label="Pocket notes"></button></nav>
       <main>
         <a href="/doc/1">Q3 Budget.xlsx</a>
         <button>Delete room</button>
@@ -474,7 +474,7 @@ describe("Voice Mode screen actions", () => {
 
   it("offers the live model risky, hover-only and switch targets, main area first", () => {
     document.body.innerHTML = `
-      <nav aria-label="Primary navigation"><a href="/workspace">Workspace</a></nav>
+      <nav aria-label="Primary navigation" data-voice-area="navigation"><a href="/workspace">Workspace</a></nav>
       <main>
         <button>Delete room</button>
         <div class="hover"><button>Reply</button></div>
@@ -528,7 +528,7 @@ describe("Voice Mode screen actions", () => {
 
   it('marks the open item and the one voice clicked last, for "the next one"', () => {
     document.body.innerHTML = `
-      <nav aria-label="Room navigation">
+      <nav aria-label="Room navigation" data-voice-area="sidebar">
         <a href="/a">Alpha</a>
         <a href="/b" aria-current="page">Beta</a>
         <a href="/c">Gamma</a>

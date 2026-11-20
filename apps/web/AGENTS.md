@@ -262,7 +262,11 @@ build:assets` to check the initial JS budget.
   - Dates and numbers inside translated text take `formatLocale(language)`.
     `lib/date-format.ts` stays on `APP_LOCALE` for surfaces that are still
     English, so one screen does not mix an English sentence with a Chinese
-    date.
+    date; a translated surface passes its locale or translation to those
+    helpers.
+  - A label on a translated surface follows the language, so CSS and DOM
+    queries never select by its text. Use a class or a `data-*` marker such as
+    `data-voice-area`, not `[aria-label="…"]`.
   - A translated control tells Voice Mode what clicking it does with a
     marker, never with words in its label: `data-voice-risk="never"` for
     deleting, removing, sending, leaving, signing out, paying, archiving or

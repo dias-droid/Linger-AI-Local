@@ -32,7 +32,12 @@ for (const exports of Object.values(messageModules))
  * Controls named by a risky-sounding message that are not that action, by
  * `file: namespace.name`, with the reason.
  */
-const notActions: Record<string, string> = {};
+const notActions: Record<string, string> = {
+  "/src/features/rooms/room-secondary-navigation.tsx: roomList.deletedChat":
+    "says the Agent of a direct chat was deleted; the link only opens the chat",
+  "/src/features/rooms/room-secondary-navigation.tsx: roomList.deleted":
+    "says the Agent of a direct chat was deleted; the link only opens the chat",
+};
 
 type Need = "confirm" | "never" | "close";
 

@@ -2389,8 +2389,8 @@ a[href][aria-disabled="true"],
 
 /* A small gap sets the pinned rows apart from the rest, without a divider. */
 .room-secondary-navigation-list
-  .group:has([aria-label="Pinned"])
-  + .group:not(:has([aria-label="Pinned"])) {
+  .group:has(.room-pin-badge)
+  + .group:not(:has(.room-pin-badge)) {
   margin-top: 6px;
 }
 

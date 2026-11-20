@@ -21,7 +21,7 @@ beforeEach(() => {
   });
   document.title = "Apollo launch";
   document.body.innerHTML = `
-    <nav aria-label="Primary navigation"><a href="/m">Message</a></nav>
+    <nav aria-label="Primary navigation" data-voice-area="navigation"><a href="/m">Message</a></nav>
     <main>
       <h1>Apollo launch</h1>
       <ul>

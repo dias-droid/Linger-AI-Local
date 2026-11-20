@@ -5,7 +5,7 @@
  */
 
 const voiceWindow = '[aria-label="Voice Mode window"]';
-const outsideContent = `${voiceWindow}, nav[aria-label="Primary navigation"], nav[aria-label="Room navigation"], aside[aria-label$=" sidebar"], [aria-hidden="true"], [inert]`;
+const outsideContent = `${voiceWindow}, [data-voice-area], aside[aria-label$=" sidebar"], [aria-hidden="true"], [inert]`;
 // The Human's unsent draft and secrets are never read.
 const privateInput = `input, textarea, select, [aria-label="Message Room"]`;
 // A chat message row is one block, read with its author and time.

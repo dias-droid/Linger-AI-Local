@@ -284,13 +284,12 @@ const clean = (text: string) => text.replace(/\s+/g, " ").trim().slice(0, 120);
 
 function elementArea(element: HTMLElement, rect: DOMRect): VoiceElementArea {
   if (element.closest('[role="dialog"], dialog[open]')) return "dialog";
-  if (element.closest('nav[aria-label="Primary navigation"]'))
-    return "navigation";
-  if (
-    element.closest(
-      'nav[aria-label="Room navigation"], aside[aria-label$=" sidebar"]',
-    )
-  )
+  // The translated regions carry a marker, because their labels follow the
+  // language; the closest one wins, so the rail inside the sidebar stays
+  // "navigation".
+  const marked = element.closest<HTMLElement>("[data-voice-area]");
+  if (marked?.dataset.voiceArea === "navigation") return "navigation";
+  if (marked || element.closest('aside[aria-label$=" sidebar"]'))
     return "sidebar";
   return rect.left > window.innerWidth * 0.72 ? "panel" : "main";
 }

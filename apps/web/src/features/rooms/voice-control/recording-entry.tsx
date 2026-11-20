@@ -4,7 +4,9 @@ import {
 } from "@hugeicons/core-free-icons";
 import { use, useEffect, useEffectEvent, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
+import { useT } from "@/i18n/use-translation";
 
+import { roomListMessages } from "../room-list.messages";
 import { useOptionalVoiceModeSession } from "../chat/voice-mode/voice-mode-session";
 import { LazyVoiceKeyDialog } from "./lazy-voice-key-dialog";
 import { openRecordingWindow } from "./recording-window-store";
@@ -27,6 +29,7 @@ export function RecordingEntry({
   anotherMeRoomId?: string;
   tenantId: string;
 }) {
+  const t = useT();
   const livekit = useOptionalVoiceControl();
   const voice = livekit;
   const voiceMode = useOptionalVoiceModeSession();
@@ -51,27 +54,29 @@ export function RecordingEntry({
   const standby = voice?.listenerStatus === "standby";
   // Until voice connects, including while it reconnects, the icon spins.
   const connecting = !voice && !connectionFailed && !needsKey;
-  const label = recording
-    ? "Return to recording"
-    : saving && switchFromLive
-      ? "Start a new Meeting"
-      : saving
-        ? "View save progress"
-        : connectionFailed
-          ? "Retry voice connection"
-          : "Meetings";
+  const label = t(
+    recording
+      ? roomListMessages.returnToRecording
+      : saving && switchFromLive
+        ? roomListMessages.startNewMeeting
+        : saving
+          ? roomListMessages.viewSaveProgress
+          : connectionFailed
+            ? roomListMessages.retryVoiceConnection
+            : roomListMessages.meetings,
+  );
   const hint =
     error ??
     (connectionFailed
-      ? "Voice connection is unavailable. Click to retry."
+      ? t(roomListMessages.voiceUnavailable)
       : needsKey
         ? label
         : !voice || !anotherMeRoomId
-          ? "Meeting is loading"
+          ? t(roomListMessages.meetingLoading)
           : voiceInputBusy
-            ? "Finish voice input first"
+            ? t(roomListMessages.finishVoiceInput)
             : standby
-              ? "Recording is active in another tab"
+              ? t(roomListMessages.recordingElsewhere)
               : label);
   function start() {
     if (retryConnection) {
@@ -110,7 +115,9 @@ export function RecordingEntry({
     void (voiceMode ? voiceMode.startMeeting(startRecording) : startRecording())
       .catch((cause: unknown) => {
         setError(
-          cause instanceof Error ? cause.message : "Unable to open recording",
+          cause instanceof Error
+            ? cause.message
+            : t(roomListMessages.recordingFailed),
         );
       })
       .finally(() => setPending(false));
@@ -150,7 +157,11 @@ export function RecordingEntry({
           <Icon icon={AiTranscribeAudioIcon} size={16} />
         )}
         <span className="xs-nav-btn-label">
-          {saving && switchFromLive ? "New Meeting" : "Meetings"}
+          {t(
+            saving && switchFromLive
+              ? roomListMessages.newMeeting
+              : roomListMessages.meetings,
+          )}
         </span>
         {recording || connectionFailed ? (
           <span
