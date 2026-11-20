@@ -1,4 +1,5 @@
 import {
+  mkdir,
   mkdtemp,
   readFile,
   writeFile,
@@ -180,10 +181,20 @@ it("does not create an owner on an unexpected login error or leak server respons
 it("rejects nonprivate or linked credential files before network activity", async () => {
   const f = await fixture();
   const target = path.join(f.instance.root, "target");
-  await writeFile(target, "{}", { mode: 0o600 });
-  await symlink(target, f.file);
+  const instance = { ...f.instance };
+  if (process.platform === "win32") {
+    // A junction exercises reparse-point rejection without needing permission
+    // to create a Windows file symlink.
+    await mkdir(target);
+    await writeFile(path.join(target, path.basename(f.file)), "{}");
+    instance.root = path.join(f.instance.root, "junction");
+    await symlink(target, instance.root, "junction");
+  } else {
+    await writeFile(target, "{}", { mode: 0o600 });
+    await symlink(target, f.file);
+  }
   vi.stubGlobal("fetch", vi.fn());
-  await expect(ensureLocalAccount(f.instance, f.signal, owner)).rejects.toThrow(
+  await expect(ensureLocalAccount(instance, f.signal, owner)).rejects.toThrow(
     /private/,
   );
   expect(fetch).not.toHaveBeenCalled();

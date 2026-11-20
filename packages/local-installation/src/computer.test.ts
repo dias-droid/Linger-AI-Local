@@ -1,5 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
+import {
+  copyFile,
+  mkdtemp,
+  mkdir,
+  writeFile,
+  readFile,
+  rm,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
@@ -13,6 +20,23 @@ import {
   stopComputer,
   stopIdleComputer,
 } from "./computer.js";
+vi.mock("./process.js", async (original) => {
+  const actual = await original<typeof import("./process.js")>();
+  const { withComputerFixture } = await import("./test-support/computer.js");
+  return { ...actual, runProcess: withComputerFixture(actual.runProcess) };
+});
+// CLI mocks must not intercept the real ACL probe used by private state.
+vi.mock("./windows-private.js", async (original) => {
+  const actual = await original<typeof import("./windows-private.js")>();
+  const { runProcess } =
+    await vi.importActual<typeof import("./process.js")>("./process.js");
+  const windowsPrivatePath: typeof actual.windowsPrivatePath = (
+    file,
+    kind,
+    repair,
+  ) => actual.windowsPrivatePath(file, kind, repair, runProcess);
+  return { ...actual, windowsPrivatePath };
+});
 const roots: string[] = [];
 function managedNativeRuntimePath(
   home: string,
@@ -746,11 +770,14 @@ it("provides private Node to every Computer child without relying on the host PA
     "bin",
   );
   await mkdir(bundleBin, { recursive: true });
-  await writeFile(
-    path.join(bundleBin, "node"),
-    `#!${process.execPath}\nprocess.stdout.write(process.version)`,
-    { mode: 0o700 },
-  );
+  if (process.platform === "win32")
+    await copyFile(process.execPath, path.join(bundleBin, "node.exe"));
+  else
+    await writeFile(
+      path.join(bundleBin, "node"),
+      `#!${process.execPath}\nprocess.stdout.write(process.version)`,
+      { mode: 0o700 },
+    );
   const previousPath = process.env.PATH;
   process.env.PATH = "/missing-host-node";
   try {
@@ -829,6 +856,7 @@ it("binds approved Pi and follows upstream revisions while preserving Codex cred
   const home = path.resolve(f.instance.root, "../..");
   const modelRoot = path.join(home, "runtime", "localmodels");
   const piDir = path.join(home, "pi-profile");
+  const piExecutable = path.join(home, "approved-pi");
   await privateDirectory(modelRoot);
   await privateDirectory(piDir);
   await atomicPrivate(
@@ -838,7 +866,7 @@ it("binds approved Pi and follows upstream revisions while preserving Codex cred
       ready: true,
       planId: "a".repeat(64),
       pi: {
-        executable: "/owned/pi",
+        executable: piExecutable,
         environment: { PI_CODING_AGENT_DIR: piDir },
         configFingerprint: "b".repeat(64),
       },
@@ -855,7 +883,7 @@ it("binds approved Pi and follows upstream revisions while preserving Codex cred
   const run = vi
     .spyOn(processes, "runProcess")
     .mockImplementation(async (_exe, args, options) => {
-      expect(options?.env?.LINGER_PI_PATH).toBe("/owned/pi");
+      expect(options?.env?.LINGER_PI_PATH).toBe(piExecutable);
       expect(options?.env?.PI_CODING_AGENT_DIR).toBe(piDir);
       return {
         code: 0,
@@ -880,7 +908,7 @@ it("binds approved Pi and follows upstream revisions while preserving Codex cred
   ).toMatchObject({
     runner_id: "same",
     codex: { auth_file: "/personal/codex" },
-    runtime_paths: { pi: "/owned/pi" },
+    runtime_paths: { pi: piExecutable },
   });
   await connectComputer(f.instance, { interactive: false });
   expect(
@@ -895,7 +923,7 @@ it("binds approved Pi and follows upstream revisions while preserving Codex cred
       ready: true,
       planId: "a".repeat(64),
       pi: {
-        executable: "/owned/pi",
+        executable: piExecutable,
         environment: { PI_CODING_AGENT_DIR: piDir },
         configFingerprint: "c".repeat(64),
       },

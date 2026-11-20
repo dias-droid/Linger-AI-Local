@@ -14,6 +14,7 @@ import {
   nativeProcessIdentity as observed,
   nativeLeaseProcesses,
   windowsLeaseTree,
+  windowsProcesses,
   windowsSnapshot,
   type WindowsProcess,
   type WindowsSnapshot,
@@ -162,7 +163,7 @@ function recordedTree(
 async function serving(record: Lease): Promise<boolean> {
   if (process.platform !== "win32")
     return (await observed(record.pid, record.lease)) === record.birth;
-  return recordedTree((await windowsSnapshot()).processes, record).length > 1;
+  return recordedTree(await windowsProcesses(), record).length > 1;
 }
 export async function inspectNativeProcess(
   root: string,
@@ -196,7 +197,9 @@ export async function inspectNativeListeners(
         running: (await inspectNativeProcess(root, name)).running,
       })),
     );
-  const snapshot = await windowsSnapshot();
+  const snapshot = await windowsSnapshot(
+    process.env.SystemRoot ?? "C:\\Windows",
+  );
   return Promise.all(
     listeners.map(async ({ name, port }) => {
       const record = await stored(root, name);
@@ -751,11 +754,15 @@ export async function reclaimNativeOrphans(
   const ended: number[] = [];
   const deadline = Date.now() + 12_000;
   for (;;) {
-    const orphans = windowsOrphans(await windowsSnapshot(), records, {
-      root,
-      ...options,
-      self: process.pid,
-    });
+    const orphans = windowsOrphans(
+      await windowsSnapshot(process.env.SystemRoot ?? "C:\\Windows"),
+      records,
+      {
+        root,
+        ...options,
+        self: process.pid,
+      },
+    );
     if (!orphans.length) return ended;
     if (Date.now() >= deadline)
       throw new Error(

@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { chmodSync, renameSync } from "node:fs";
 import {
   chmod,
   mkdtemp,
@@ -35,6 +36,7 @@ async function reopenDirectories(directory: string): Promise<void> {
 }
 afterEach(async () => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
   await Promise.all(
     roots.splice(0).map(async (p) => {
       // Verified kits are sealed read-only; reopen them before cleanup.
@@ -192,6 +194,36 @@ test.skipIf(process.platform === "win32")(
     expect(await mode("python/python")).toBe(0o500);
     expect(await mode("modules/localmodels/__init__.py")).toBe(0o400);
   },
+);
+test.skipIf(process.platform !== "win32")(
+  "seals verified Windows files against bytecode replacement and republishes a damaged kit",
+  async () => {
+    const f = await fixture();
+    await chmod(path.join(f.directory, "tool.json"), 0o400);
+    const bytes = await packed(f);
+    const source = { ...f.source, sha256: hash(bytes), bytes: bytes.length };
+    const fetcher = vi.fn(async () => new Response(bytes));
+    const tool = await ensureLocalmodelsTool(f.home, {}, { source, fetcher });
+    const manifest = path.join(tool.moduleDir, "..", "tool.json");
+    expect((await stat(manifest)).mode & 0o200).toBe(0);
+    const file = path.join(tool.moduleDir, "localmodels/__init__.py");
+    const replacement = path.join(path.dirname(file), "__init__.py.tmp");
+    await writeFile(replacement, "changed bytecode");
+    await expect(rename(replacement, file)).rejects.toHaveProperty(
+      "code",
+      "EPERM",
+    );
+    await expect(readFile(file, "utf8")).resolves.toBe("package");
+
+    await chmod(file, 0o600);
+    await writeFile(file, "damaged");
+    await ensureLocalmodelsTool(f.home, {}, { source, fetcher });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    await expect(readFile(file, "utf8")).resolves.toBe("package");
+    expect((await stat(file)).mode & 0o200).toBe(0);
+    expect(await readdir(path.dirname(file))).toEqual(["__init__.py"]);
+  },
+  60_000,
 );
 test.skipIf(process.platform === "win32")(
   "repairs a kit altered after verification by fetching the same pinned archive",
@@ -562,6 +594,50 @@ test("a home without the pinned kit has nothing to stop and downloads nothing", 
     f.source.sha256,
   ]);
 });
+test.for([false, true])(
+  "reports a corrupt installed kit as a stop failure (keepController=%s)",
+  { timeout: 15_000 },
+  async (keepController) => {
+    const f = await fixture();
+    const file = path.join(f.directory, "modules/localmodels/__init__.py");
+    await writeFile(file, "corrupt");
+    vi.stubEnv("LINGER_LOCALMODELS_TOOL_JSON", JSON.stringify(f.source));
+    const fetcher = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetcher);
+    const run = vi.fn<typeof runLocalmodels>();
+    await expect(
+      stopLocalmodels(
+        f.home,
+        { signal: AbortSignal.timeout(5000), keepController },
+        { run },
+      ),
+    ).rejects.toThrow("the installed tool kit could not be verified");
+    expect(run).not.toHaveBeenCalled();
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(await readFile(file, "utf8")).toBe("corrupt");
+  },
+);
+
+test("a kit disappearing after verification is not downloaded during stop", async () => {
+  const f = await fixture();
+  vi.stubEnv("LINGER_LOCALMODELS_TOOL_JSON", JSON.stringify(f.source));
+  const fetcher = vi.fn<typeof fetch>();
+  vi.stubGlobal("fetch", fetcher);
+  await expect(
+    stopLocalmodels(f.home, {
+      signal: AbortSignal.timeout(10_000),
+      keepController: true,
+      log: (message) => {
+        if (message.includes("library status")) {
+          if (process.platform !== "win32") chmodSync(f.directory, 0o700);
+          renameSync(f.directory, f.directory + ".moved");
+        }
+      },
+    }),
+  ).rejects.toThrow("The installed localmodels tool kit is missing");
+  expect(fetcher).not.toHaveBeenCalled();
+}, 15_000);
+
 test("stops the stack even when the controller did not stop, and names the failure", async () => {
   const run = vi.fn<typeof runLocalmodels>(async (_home, args) =>
     args[0] === "foundations"

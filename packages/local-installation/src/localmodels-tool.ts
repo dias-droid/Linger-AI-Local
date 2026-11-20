@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { lstat, readdir, readFile, rename, rm, chmod } from "node:fs/promises";
+import { lstat, readdir, readFile, rm, chmod } from "node:fs/promises";
 import path from "node:path";
 import { x as extract } from "tar";
 import { downloadInRegion, resolveRegion } from "./region.js";
@@ -143,6 +143,9 @@ async function verify(
       "Upstream tool distribution target or source does not match.",
     );
   const assets = Object.entries(m.assets);
+  const writable: string[] = [];
+  if (process.platform === "win32" && (await lstat(manifestFile)).mode & 0o200)
+    writable.push(manifestFile);
   const stamps: Stamps = {};
   let hashed = 0;
   let next = 0;
@@ -153,6 +156,8 @@ async function verify(
         throw new Error("Upstream tool payload checksum mismatch.");
       const file = await regular(directory, name);
       const info = await lstat(file);
+      if (process.platform === "win32" && info.mode & 0o200)
+        writable.push(file);
       const stamp: [number, number] = [info.size, info.mtimeMs];
       const seen = known[name];
       if (!seen || seen[0] !== stamp[0] || seen[1] !== stamp[1]) {
@@ -181,6 +186,7 @@ async function verify(
     sourceCommit: m.sourceCommit,
     stamps,
     hashed,
+    writable,
   };
 }
 const location = (tool: Awaited<ReturnType<typeof verify>>) => ({
@@ -243,6 +249,15 @@ async function setKitMode(directory: string, sealed: boolean) {
   }
   await chmod(directory, sealed ? 0o500 : 0o700);
 }
+/** The Windows read-only attribute prevents CPython from replacing a verified cache file. */
+async function sealWindowsFiles(writable: string[]) {
+  for (let offset = 0; offset < writable.length; offset += CONCURRENCY)
+    await Promise.all(
+      writable
+        .slice(offset, offset + CONCURRENCY)
+        .map((file) => chmod(file, 0o400)),
+    );
+}
 async function installedKit(directory: string, source: LocalmodelsToolSource) {
   let info;
   try {
@@ -265,6 +280,7 @@ async function installedKit(directory: string, source: LocalmodelsToolSource) {
   );
   if (process.platform !== "win32" && (info.mode & 0o777) !== 0o500)
     await setKitMode(directory, true);
+  await sealWindowsFiles(tool.writable);
   if (tool.hashed > 0) await writeStamps(directory, source, tool.stamps);
   return location(tool);
 }
@@ -311,7 +327,7 @@ async function prepareLocalmodelsTool(
       // a sealed directory. Ownership was checked above; reopen only its root
       // before quarantine, then reopen descendants at the quarantined path.
       if (process.platform !== "win32") await chmod(directory, 0o700);
-      await rename(directory, invalid);
+      await renameRetrying(directory, invalid, { signal });
       await setKitMode(invalid, false);
       await rm(invalid, { recursive: true, force: true });
     }
@@ -354,8 +370,16 @@ async function prepareLocalmodelsTool(
       const tool = await verify(kit, source);
       if (process.platform !== "win32") await chmod(tool.python, 0o700);
       // The kit manifest is private state; publisher bytes stay unchanged for digest checks.
-      const body = await readFile(path.join(kit, "tool.json"), "utf8");
-      await atomicPrivate(path.join(kit, "tool.json"), body);
+      const manifest = path.join(kit, "tool.json");
+      const body = await readFile(manifest, "utf8");
+      // A read-only archive manifest cannot be replaced on Windows until
+      // it is writable. Seal the replacement as well as the verified assets.
+      if (process.platform === "win32" && !tool.writable.includes(manifest)) {
+        await chmod(manifest, 0o600);
+        tool.writable.push(manifest);
+      }
+      await atomicPrivate(manifest, body);
+      await sealWindowsFiles(tool.writable);
       signal.throwIfAborted();
       await renameRetrying(kit, directory, { signal });
       // The rename keeps every stamp, so this checks the published kit
@@ -424,8 +448,24 @@ export async function runLocalmodels(
   options: Options = {},
   dependencies: { run?: typeof runProcess } = {},
 ) {
+  return runLocalmodelsCommand(
+    home,
+    args,
+    options,
+    () => ensureLocalmodelsTool(home, options),
+    dependencies.run,
+  );
+}
+async function runLocalmodelsCommand(
+  home: string,
+  args: string[],
+  options: Options,
+  loadTool: () => Promise<ToolLocation | undefined>,
+  run: typeof runProcess = runProcess,
+) {
   const startedAt = Date.now();
-  const tool = await ensureLocalmodelsTool(home, options);
+  const tool = await loadTool();
+  if (!tool) throw new Error("The installed localmodels tool kit is missing.");
   const checkedAt = Date.now();
   const state = localmodelsStateDirectory(home);
   await privateDirectory(state);
@@ -511,7 +551,7 @@ export async function runLocalmodels(
       });
     }
   };
-  const result = await (dependencies.run ?? runProcess)(
+  const result = await run(
     tool.python,
     ["-P", "-s", "-m", "localmodels", ...args],
     { ...options, cwd: tool.moduleDir, env, onOutput },
@@ -531,9 +571,10 @@ export async function runLocalmodels(
  * the gateway the tool started (`stack down`), the library's Bifrost
  * included. An uninstall or an install over this release stops all of it; a
  * quit keeps the controller, which belongs to the services that keep
- * running. Nothing is downloaded: a home without that kit has nothing it
- * started. Every step runs even when an earlier one fails; the error names
- * each that did not stop.
+ * running. Nothing is downloaded. An absent pinned kit is skipped; a pinned
+ * kit that is present but fails verification is reported as a stop failure.
+ * Every stop command runs even when an earlier command fails; the error
+ * names each that did not stop.
  */
 export async function stopLocalmodels(
   home: string,
@@ -548,7 +589,12 @@ export async function stopLocalmodels(
   } = {},
 ): Promise<void> {
   if (!(await (dependencies.installed ?? hasPinnedTool)(home))) return;
-  const run = dependencies.run ?? runLocalmodels;
+  const run =
+    dependencies.run ??
+    ((home, args, options = {}) =>
+      runLocalmodelsCommand(home, args, options, () =>
+        installedPinnedTool(home),
+      ));
   const base = localmodelsBaseDirectory(home);
   const failed: string[] = [];
   const step = async (args: string[], name = args.slice(0, 2).join(" ")) => {
@@ -559,7 +605,13 @@ export async function stopLocalmodels(
       timeoutMs: 30_000,
     }).catch((error: unknown) => {
       options.signal.throwIfAborted();
-      return { code: 1, stdout: "", stderr: String(error) };
+      return {
+        code: 1,
+        stdout: JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+        }),
+        stderr: "",
+      };
     });
     if (result.code !== 0)
       failed.push(`localmodels ${name}: ${stopFailure(result)}`);
@@ -629,12 +681,23 @@ function stopFailure(result: { code: number; stdout: string }): string {
   return `exit ${result.code}`;
 }
 async function hasPinnedTool(home: string): Promise<boolean> {
-  if (configuredDevTool()) return true;
+  return (await installedPinnedTool(home)) !== undefined;
+}
+async function installedPinnedTool(
+  home: string,
+): Promise<ToolLocation | undefined> {
+  const devTool = configuredDevTool();
+  if (devTool) return devTool;
   const source = pinnedToolSource();
-  if (!source) return false;
-  return !!(await installedKit(kitDirectory(home, source), source).catch(
-    () => undefined,
-  ));
+  if (!source) return;
+  return installedKit(kitDirectory(home, source), source).catch(
+    (cause: unknown) => {
+      throw new Error(
+        "Cannot stop local models: the installed tool kit could not be verified. Start Linger to repair the kit, then try again.",
+        { cause },
+      );
+    },
+  );
 }
 /**
  * The kit this release pins, from the installer's published metadata

@@ -78,7 +78,13 @@ loaded models and stops the stack with the gateway the localmodels tool
 started, and keeps the services and the model controller running. It
 holds each home's local model lock (`withLocalModelsLock`) while it stops,
 so the next launch's restore waits for it; a home whose lock a deployment
-holds is skipped with a log line. It prints one JSON line with what failed.
+holds is skipped with a log line. A kit that is present but fails verification
+is a stop failure, so the helper logs the repair guidance, prints a JSON
+failure and exits nonzero without running or downloading that tool. This
+helper is detached: Linger quits and its log records that the models may
+still be running. The full `--stop` command reports the same failure. Windows
+uninstall aborts on that failure; replacement setup reports it and proceeds.
+A missing pinned kit has nothing to stop.
 
 Every other mode first converts an install from before the rename to Linger
 (`migrateLegacyInstallation`); `--migrate` does only that and exits, for the

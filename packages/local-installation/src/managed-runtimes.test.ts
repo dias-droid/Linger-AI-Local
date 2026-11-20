@@ -57,7 +57,10 @@ it("uses upstream status and OAuth descriptors without provider-specific probes"
     installed: true,
     ready: false,
     executable: "/upstream/runtime",
-    loginCommand: "'/upstream/runtime' 'upstream-login'",
+    loginCommand:
+      process.platform === "win32"
+        ? "& '/upstream/runtime' 'upstream-login'"
+        : "'/upstream/runtime' 'upstream-login'",
   });
   expect(localmodels.mock.calls[0]?.slice(0, 2)).toEqual([
     options.home,

@@ -2,7 +2,9 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   chmodSync,
+  copyFileSync,
   existsSync,
+  linkSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -15,7 +17,15 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { zstdCompressSync } from "node:zlib";
 
-import { describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from "vitest";
 
 import { NODE_RUNTIME_VERSION } from "../../../../scripts/local-computer-node-distributions.mjs";
 import { rename } from "node:fs/promises";
@@ -45,6 +55,7 @@ import {
   type LocalServerOptions,
 } from "./local-server.js";
 import { localIdentityProof } from "@linger/local-installation/account";
+import * as windowsPrivate from "@linger/local-installation/windows-private";
 import type { DesktopConfig } from "./config.js";
 import { EventBus, type ModuleContext } from "./modules.js";
 import {
@@ -53,6 +64,13 @@ import {
   tempDirectory,
   testHost,
 } from "./test-support.js";
+
+// These tests run the installer stub in real subprocesses.
+// Windows test hosts can take longer to launch them under load.
+const isWindowsHost = process.platform === "win32";
+if (isWindowsHost) vi.setConfig({ testTimeout: 20_000 });
+const waitForInstaller = (check: () => unknown) =>
+  vi.waitFor(check, { timeout: isWindowsHost ? 10_000 : 1_000 });
 
 // Prints what the real installer prints and writes its private launcher.
 const FAKE_INSTALLER = String.raw`
@@ -338,6 +356,24 @@ const server = (origin: string): LocalServerIdentity => ({
   key: KEY,
 });
 
+// The simulated runtime keeps its target layout, but the installer stub runs on
+// the host. Windows can hardlink without Developer Mode and spawns the .exe.
+const fixtureNode = (binary: string): void => {
+  if (process.platform !== "win32") {
+    symlinkSync(process.execPath, binary);
+    return;
+  }
+  const put = (file: string) => {
+    try {
+      linkSync(process.execPath, file);
+    } catch {
+      copyFileSync(process.execPath, file);
+    }
+  };
+  put(binary);
+  if (path.extname(binary) !== ".exe") put(binary + ".exe");
+};
+
 const fixture = (
   overrides:
     | Partial<LocalServerOptions>
@@ -370,7 +406,7 @@ const fixture = (
   );
   const node = path.join(home, "desktop", "node", `v${NODE_RUNTIME_VERSION}`);
   mkdirSync(path.join(node, "bin"), { recursive: true });
-  symlinkSync(process.execPath, path.join(node, "bin", "node"));
+  fixtureNode(path.join(node, "bin", "node"));
   prepare(home);
   const setServer = vi.fn(() => true);
   const showUpdating = vi.fn();
@@ -719,7 +755,7 @@ describe("LocalServerModule", () => {
     );
     await f.host.start();
     const done = f.module.begin();
-    await vi.waitFor(() => expect(f.module.status().step).toBe("signin"));
+    await waitForInstaller(() => expect(f.module.status().step).toBe("signin"));
     expect(f.module.status()).toMatchObject({
       phase: "installing",
       message: "Sign in to Codex",
@@ -742,7 +778,7 @@ describe("LocalServerModule", () => {
       url: "https://auth.openai.com/codex/device",
       deviceCode: "ABCD-1234",
     });
-    await vi.waitFor(() => expect(openExternal).toHaveBeenCalledTimes(1));
+    await waitForInstaller(() => expect(openExternal).toHaveBeenCalledTimes(1));
     expect(openExternal).toHaveBeenCalledWith(
       "https://auth.openai.com/codex/device",
     );
@@ -787,7 +823,7 @@ describe("LocalServerModule", () => {
     );
     await f.host.start();
     const done = f.module.begin();
-    await vi.waitFor(() =>
+    await waitForInstaller(() =>
       expect(f.module.status().signIn).toEqual({
         runtime: "claude",
         state: "required",
@@ -865,7 +901,7 @@ describe("LocalServerModule", () => {
     );
     await f.host.start();
     const done = f.module.begin();
-    await vi.waitFor(() =>
+    await waitForInstaller(() =>
       expect(f.module.status().signIn).toEqual({
         runtime: "pi",
         state: "failed",
@@ -1107,7 +1143,7 @@ describe("LocalServerModule", () => {
     );
     await f.host.start();
     const setup = f.module.begin();
-    await vi.waitFor(() => expect(polls.anotherMe).toBeGreaterThan(0));
+    await waitForInstaller(() => expect(polls.anotherMe).toBeGreaterThan(0));
     f.host.ctx.bus.emit(
       "computer.failed",
       "read Computer config: private path grants access to another user (S-1-5-11)",
@@ -1143,7 +1179,7 @@ describe("LocalServerModule", () => {
     );
     await f.host.start();
     const setup = f.module.begin();
-    await vi.waitFor(() => expect(polls.anotherMe).toBeGreaterThan(0));
+    await waitForInstaller(() => expect(polls.anotherMe).toBeGreaterThan(0));
     f.host.ctx.bus.emit("computer.connection", "identity_conflict");
     await expect(setup).rejects.toThrow(
       /already connected to another Computer registration/,
@@ -1476,7 +1512,7 @@ describe("LocalServerModule", () => {
     writeFileSync(path.join(bundle, "runtime", "files.json"), files);
     writeFileSync(path.join(bundle, "runtime", "web", "static-host.mjs"), "");
     // The signed binary; here the Node.js running the tests.
-    symlinkSync(process.execPath, path.join(bundle, "node", "bin", "node"));
+    fixtureNode(path.join(bundle, "node", "bin", "node"));
     const sha256 = (data: string | Buffer) =>
       createHash("sha256").update(data).digest("hex");
     writeFileSync(
@@ -1505,8 +1541,8 @@ describe("LocalServerModule", () => {
     })
       .begin()
       .catch(() => undefined);
-    expect(realpathSync(path.join(node(f.home), "bin", "node"))).toBe(
-      realpathSync(process.execPath),
+    expect(sha256(readFileSync(path.join(node(f.home), "bin", "node")))).toBe(
+      sha256(readFileSync(process.execPath)),
     );
     const args = installerArgs(f.home);
     const offline = path.join(
@@ -1531,7 +1567,7 @@ describe("LocalServerModule", () => {
     f.module.inspect();
     expect(f.module.status().localModels).toEqual({ state: "checking" });
     f.module.inspect();
-    await vi.waitFor(() =>
+    await waitForInstaller(() =>
       expect(f.module.status().localModels).toEqual({
         state: "checked",
         eligible: true,
@@ -1564,7 +1600,7 @@ describe("LocalServerModule", () => {
     });
     await f.host.start();
     f.module.inspect();
-    await vi.waitFor(() =>
+    await waitForInstaller(() =>
       expect(f.module.status().localModels).toEqual({ state: "unavailable" }),
     );
     expect(warn).toHaveBeenCalledWith(
@@ -1587,14 +1623,14 @@ describe("LocalServerModule", () => {
     });
     await f.host.start();
     f.module.inspect();
-    await vi.waitFor(() =>
+    await waitForInstaller(() =>
       expect(f.module.status().localModels).toEqual({
         state: "checking",
         download: { completed: 5, total: 10 },
       }),
     );
     writeFileSync(path.join(f.home, "tool-ready"), "");
-    await vi.waitFor(() =>
+    await waitForInstaller(() =>
       expect(f.module.status().localModels).toMatchObject({
         state: "checked",
         recommendation: "local-models",
@@ -1609,7 +1645,7 @@ describe("LocalServerModule", () => {
     });
     await f.host.start();
     f.module.inspect();
-    await vi.waitFor(() =>
+    await waitForInstaller(() =>
       expect(f.module.status().localModels).toMatchObject({
         state: "checked",
         eligible: false,
@@ -1626,7 +1662,7 @@ describe("LocalServerModule", () => {
     });
     await f.host.start();
     f.module.inspect();
-    await vi.waitFor(() =>
+    await waitForInstaller(() =>
       expect(f.module.status().localModels).toMatchObject({
         state: "checked",
         eligible: false,
@@ -1655,7 +1691,7 @@ describe("LocalServerModule", () => {
     });
     await f.host.start();
     f.module.inspect();
-    await vi.waitFor(() =>
+    await waitForInstaller(() =>
       expect(f.module.status().localModels).toMatchObject({
         state: "checked",
         eligible: false,
@@ -1683,7 +1719,7 @@ describe("LocalServerModule", () => {
     rmSync(path.join(f.home, "low-memory"));
     f.module.recheck();
     expect(f.module.status().localModels).toEqual({ state: "checking" });
-    await vi.waitFor(() =>
+    await waitForInstaller(() =>
       expect(f.module.status().localModels).toMatchObject({
         state: "checked",
         eligible: true,
@@ -2275,7 +2311,7 @@ describe("LocalServerModule install location", () => {
     await f.host.stop("quit");
   });
 
-  it("keeps the default when the picked folder cannot be used", async () => {
+  it("creates the picked folder and can restore the default", async () => {
     const f = fixture({ checkout: "/src" });
     await f.host.start();
     await f.module.chooseLocation(path.join(f.root, "missing", "deeper"));
@@ -2289,18 +2325,29 @@ describe("LocalServerModule install location", () => {
       path: f.home,
       custom: false,
     });
-    if (process.getuid?.() === 0) return;
-    const locked = path.join(f.root, "locked");
-    mkdirSync(locked, { mode: 0o500 });
-    await f.module.chooseLocation(locked);
-    expect(f.module.status().location).toEqual({
-      path: f.home,
-      custom: false,
-      error: "Linger can't write to this folder. Choose another one.",
-    });
-    chmodSync(locked, 0o700);
     await f.host.stop("quit");
   });
+
+  it.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+    "rejects a folder without POSIX write permission",
+    async () => {
+      const f = fixture({ checkout: "/src" });
+      const locked = path.join(f.root, "locked");
+      mkdirSync(locked, { mode: 0o500 });
+      await f.host.start();
+      try {
+        await f.module.chooseLocation(locked);
+        expect(f.module.status().location).toEqual({
+          path: f.home,
+          custom: false,
+          error: "Linger can't write to this folder. Choose another one.",
+        });
+      } finally {
+        chmodSync(locked, 0o700);
+        await f.host.stop("quit");
+      }
+    },
+  );
 
   it("installs into an empty folder or one that holds Linger", async () => {
     const root = tempDirectory();
@@ -2344,7 +2391,7 @@ describe("LocalServerModule after a restart", () => {
   it("starts the installed services again for the local server", async () => {
     const f = fixture({}, enrolled, record);
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     expect(f.setServer).toHaveBeenCalledWith(
       "http://localhost:3000",
       "http://localhost:3000",
@@ -2369,7 +2416,7 @@ describe("LocalServerModule after a restart", () => {
       writeFileSync(path.join(home, "resume-origin"), "http://localhost:3001");
     });
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     // The same server at a new origin: the window follows it as a move,
     // which keeps this computer's enrollment.
     expect(f.setServer).toHaveBeenCalledWith(
@@ -2392,10 +2439,10 @@ describe("LocalServerModule after a restart", () => {
     const stopped = (home: string) => path.join(home, "stop-local-models.json");
     const f = fixture({}, enrolled, record);
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     await f.host.stop("quit");
     // It runs on after the app is gone; its outcome goes to the log.
-    await vi.waitFor(() =>
+    await waitForInstaller(() =>
       expect(
         readFileSync(
           path.join(f.home, "installer", "local-models-stop.log"),
@@ -2412,7 +2459,9 @@ describe("LocalServerModule after a restart", () => {
   it("leaves the local models running for an update, and stops none without an installation", async () => {
     const update = fixture({}, enrolled, record);
     await update.host.start();
-    await vi.waitFor(() => expect(update.module.status().phase).toBe("ready"));
+    await waitForInstaller(() =>
+      expect(update.module.status().phase).toBe("ready"),
+    );
     await update.host.stop("update");
     const none = fixture();
     await none.host.start();
@@ -2436,7 +2485,7 @@ describe("LocalServerModule after a restart", () => {
       );
     });
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     const source = path.join(f.home, "desktop", "source", "previous");
     expect(existsSync(path.join(source, ".env"))).toBe(false);
     const user = readFileSync(
@@ -2469,7 +2518,7 @@ describe("LocalServerModule after a restart", () => {
       );
     });
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     expect(existsSync(path.join(f.home, "src", ".env"))).toBe(true);
     expect(
       existsSync(path.join(f.home, "instances", LOCAL_INSTANCE, "user.env")),
@@ -2511,7 +2560,7 @@ describe("LocalServerModule after a restart", () => {
     const restarts = vi.fn();
     f.bus.on("computer.runtime", restarts);
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     expect(f.host.ctx.config.get().runtimeEnvironment).toEqual(environment);
     expect(restarts).toHaveBeenCalledTimes(1);
     await f.host.stop("quit");
@@ -2531,7 +2580,7 @@ describe("LocalServerModule after a restart", () => {
       );
     });
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     const args = installerArgs(elsewhere);
     expect(args[args.indexOf("--home") + 1]).toBe(elsewhere);
     expect(args).toContain("--resume");
@@ -2574,7 +2623,7 @@ describe("LocalServerModule after a restart", () => {
     const archive = sourceArchive(root);
     const f = installedBy(archive);
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     const sources = path.join(f.home, "desktop", "source");
     const current = path.join(sources, archive.sha256.slice(0, 16));
     const args = installerArgs(f.home);
@@ -2606,12 +2655,14 @@ describe("LocalServerModule after a restart", () => {
     const f = installedBy(archive);
     writeFileSync(path.join(f.home, "resume-fails"), "");
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("failed"));
+    await waitForInstaller(() =>
+      expect(f.module.status().phase).toBe("failed"),
+    );
     expect(f.showStartFailed).toHaveBeenCalledWith("Native teamhub stopped");
     // Try Again moves them once more.
     rmSync(path.join(f.home, "resume-fails"));
     f.bus.emit("local-server.retry");
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     const args = installerArgs(f.home);
     expect(args[args.indexOf("--source-repo") + 1]).toBe(
       path.join(f.home, "desktop", "source", archive.sha256.slice(0, 16)),
@@ -2629,13 +2680,17 @@ describe("LocalServerModule after a restart", () => {
     // The move stopped before the restart (the local model was not ready).
     writeFileSync(path.join(f.home, "resume-fails"), "");
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("failed"));
+    await waitForInstaller(() =>
+      expect(f.module.status().phase).toBe("failed"),
+    );
     // Try Again: the installer answers but the services still run from the
     // older folder.
     rmSync(path.join(f.home, "resume-fails"));
     writeFileSync(path.join(f.home, "resume-serving"), previous);
     f.bus.emit("local-server.retry");
-    await vi.waitFor(() => expect(f.showStartFailed).toHaveBeenCalledTimes(2));
+    await waitForInstaller(() =>
+      expect(f.showStartFailed).toHaveBeenCalledTimes(2),
+    );
     expect(f.module.status().phase).toBe("failed");
     expect(f.setServer).not.toHaveBeenCalled();
     expect(
@@ -2650,7 +2705,7 @@ describe("LocalServerModule after a restart", () => {
     // one goes.
     rmSync(path.join(f.home, "resume-serving"));
     f.bus.emit("local-server.retry");
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     expect(
       JSON.parse(
         readFileSync(path.join(f.home, "desktop", "local-server.json"), "utf8"),
@@ -2692,7 +2747,7 @@ describe("LocalServerModule after a restart", () => {
       },
     );
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     const args = installerArgs(f.home);
     expect(args[args.indexOf("--source-repo") + 1]).toBe(repo(f.home));
     expect(f.showUpdating).not.toHaveBeenCalled();
@@ -2732,7 +2787,7 @@ describe("LocalServerModule after a restart", () => {
       },
     );
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     const newer = path.join(f.home, "desktop", "source", "newer");
     const args = installerArgs(f.home);
     expect(args[args.indexOf("--source-repo") + 1]).toBe(newer);
@@ -2759,7 +2814,9 @@ describe("LocalServerModule after a restart", () => {
       writeFileSync(path.join(home, "resume-fails"), "");
     });
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("failed"));
+    await waitForInstaller(() =>
+      expect(f.module.status().phase).toBe("failed"),
+    );
     expect(f.module.status().message).toBe("Native teamhub stopped");
     expect(f.setServer).not.toHaveBeenCalled();
     expect(f.showStartFailed).toHaveBeenCalledWith("Native teamhub stopped");
@@ -2789,7 +2846,9 @@ describe("LocalServerModule after a restart", () => {
         );
       });
       await f.host.start();
-      await vi.waitFor(() => expect(f.module.status().phase).toBe("failed"));
+      await waitForInstaller(() =>
+        expect(f.module.status().phase).toBe("failed"),
+      );
       expect(f.showStartFailed).toHaveBeenCalledWith(
         `The local model stack is not ready. ${action}`,
       );
@@ -2813,7 +2872,9 @@ describe("LocalServerModule after a restart", () => {
       );
     });
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("failed"));
+    await waitForInstaller(() =>
+      expect(f.module.status().phase).toBe("failed"),
+    );
     expect(f.showStartFailed).toHaveBeenCalledWith(
       "The local model's Pi can't load extensions, which every Linger run needs. The upstream tool could not verify the local stack binding. Try Again to apply the approved local model plan again, or Set Up Again to review a new plan or choose another AI runtime.",
     );
@@ -2826,10 +2887,12 @@ describe("LocalServerModule after a restart", () => {
       writeFileSync(path.join(home, "resume-fails"), "");
     });
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("failed"));
+    await waitForInstaller(() =>
+      expect(f.module.status().phase).toBe("failed"),
+    );
     rmSync(path.join(f.home, "resume-fails"));
     f.bus.emit("local-server.retry");
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     expect(f.setServer).toHaveBeenCalledWith(
       "http://localhost:3000",
       "http://localhost:3000",
@@ -2847,7 +2910,7 @@ describe("LocalServerModule after a restart", () => {
       record,
     );
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     expect(f.showStarting).not.toHaveBeenCalled();
     await f.host.stop("quit");
   });
@@ -2911,7 +2974,7 @@ describe("LocalServerModule after a restart", () => {
       },
     );
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     const args = installerArgs(f.home);
     expect(args[args.indexOf("--source-repo") + 1]).toBe(repo(f.home));
     expect(
@@ -2950,7 +3013,7 @@ describe("LocalServerModule after a restart", () => {
       },
     );
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     const args = installerArgs(f.home);
     expect(args[args.indexOf("--source-repo") + 1]).toBe(repo(f.home));
     expect(
@@ -2986,7 +3049,7 @@ describe("LocalServerModule after a restart", () => {
       },
     );
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     const sources = path.join(f.home, "desktop", "source");
     const current = path.join(sources, archive.sha256.slice(0, 16));
     const args = installerArgs(f.home);
@@ -3032,7 +3095,7 @@ describe("LocalServerModule after a restart", () => {
       },
     );
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     expect(instanceProject(f.home)).toBe("linger-desktop-1");
     expect(instanceProject(chosen)).toBe("linger-desktop-1");
     const current = path.join(
@@ -3083,14 +3146,18 @@ describe("LocalServerModule after a restart", () => {
     };
     const unused = fixture({}, enrolled, setup("default"));
     await unused.host.start();
-    await vi.waitFor(() => expect(unused.module.status().phase).toBe("ready"));
+    await waitForInstaller(() =>
+      expect(unused.module.status().phase).toBe("ready"),
+    );
     expect(instanceProject(unused.home)).toBe("simplex-desktop-1");
     await unused.host.stop("quit");
 
     rmSync(chosen, { recursive: true });
     const used = fixture({}, enrolled, setup("chosen"));
     await used.host.start();
-    await vi.waitFor(() => expect(used.module.status().phase).toBe("failed"));
+    await waitForInstaller(() =>
+      expect(used.module.status().phase).toBe("failed"),
+    );
     expect(used.module.status().message).toMatch(
       /could not convert this computer's installation.*running 1 task/,
     );
@@ -3107,9 +3174,11 @@ describe("LocalServerModule after a restart", () => {
     const opened = vi.fn();
     f.bus.on("setup.open", opened);
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("failed"));
+    await waitForInstaller(() =>
+      expect(f.module.status().phase).toBe("failed"),
+    );
     f.bus.emit("local-server.reset");
-    await vi.waitFor(() => expect(opened).toHaveBeenCalledOnce());
+    await waitForInstaller(() => expect(opened).toHaveBeenCalledOnce());
     expect(f.module.status().phase).toBe("idle");
     expect(existsSync(path.join(f.home, "desktop", "local-server.json"))).toBe(
       false,
@@ -3148,7 +3217,7 @@ describe("LocalServerModule after a restart", () => {
     );
     const node = path.join(home, "desktop", "node", `v${NODE_RUNTIME_VERSION}`);
     mkdirSync(path.join(node, "bin"), { recursive: true });
-    symlinkSync(process.execPath, path.join(node, "bin", "node"));
+    fixtureNode(path.join(node, "bin", "node"));
     checkout(home);
 
     const daemonIdentityFile = path.join(root, "state", "daemon-identity.json");
@@ -3324,7 +3393,7 @@ describe("LocalServerModule after a restart", () => {
 
     resetOccurred = true;
     bus.emit("local-server.reset");
-    await vi.waitFor(() => expect(opened).toHaveBeenCalledOnce());
+    await waitForInstaller(() => expect(opened).toHaveBeenCalledOnce());
     expect(host.ctx.config.get().computerId).toBeUndefined();
     expect(host.ctx.config.get().serverUrl).toBeUndefined();
     expect(host.ctx.config.get().savedEnrollments).toEqual({
@@ -3685,8 +3754,7 @@ describe("LocalServerModule on Windows", () => {
     });
   // Windows' Node runtime is node.exe at the top of its folder.
   const windowsNode = (home: string) =>
-    symlinkSync(
-      process.execPath,
+    fixtureNode(
       path.join(
         home,
         "desktop",
@@ -3776,6 +3844,17 @@ describe("LocalServerModule on Windows", () => {
 });
 
 describe("LocalServerModule owner account", () => {
+  // The installer tests verify the actual Windows ACL policy. Here the
+  // account reader still uses a real file, and we control the ACL decision.
+  let acl: MockInstance<typeof windowsPrivate.windowsPrivatePath> | undefined;
+  beforeEach(() => {
+    if (process.platform === "win32")
+      acl = vi
+        .spyOn(windowsPrivate, "windowsPrivatePath")
+        .mockResolvedValue(undefined);
+  });
+  afterEach(() => acl?.mockRestore());
+
   const ORIGIN = "http://localhost:3000";
   const enrolled = { serverUrl: ORIGIN, computerId: "cmp_1" };
   const installed =
@@ -3802,7 +3881,7 @@ describe("LocalServerModule owner account", () => {
   it("signs the window in to the installed server with the account file", async () => {
     const f = fixture({}, enrolled, installed(OWNER));
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     expect(await f.module.servesWindow()).toBe(true);
     expect(await f.module.account()).toEqual({
       email: OWNER.email,
@@ -3831,7 +3910,9 @@ describe("LocalServerModule owner account", () => {
     // Not started yet: nothing is serving the window.
     expect(await f.module.servesWindow()).toBe(false);
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("failed"));
+    await waitForInstaller(() =>
+      expect(f.module.status().phase).toBe("failed"),
+    );
     expect(await f.module.servesWindow()).toBe(false);
     await expect(f.module.signInWithAccount()).rejects.toThrow(
       "This window is not showing the Linger on this computer.",
@@ -3857,7 +3938,7 @@ describe("LocalServerModule owner account", () => {
     const f = fixture({}, enrolled, installed(OWNER));
     f.signIn.mockRejectedValueOnce(error);
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     await expect(f.module.signInWithAccount()).rejects.toThrow(message);
     await f.host.stop("quit");
   });
@@ -3868,7 +3949,9 @@ describe("LocalServerModule owner account", () => {
     try {
       const f = fixture({}, enrolled, installed(OWNER));
       await f.host.start();
-      await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+      await waitForInstaller(() =>
+        expect(f.module.status().phase).toBe("ready"),
+      );
       expect(await f.module.servesWindow()).toBe(true);
       expect(f.proveServer).toHaveBeenLastCalledWith(server(ORIGIN));
       // The services stopped, or another program took the port.
@@ -3904,7 +3987,7 @@ describe("LocalServerModule owner account", () => {
       installed(OWNER),
     );
     await f.host.start();
-    await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
     expect(await f.module.servesWindow()).toBe(false);
     await expect(f.module.signInWithAccount()).rejects.toThrow(
       "Linger on this computer is not responding.",
@@ -3945,11 +4028,6 @@ describe("LocalServerModule owner account", () => {
       /^The account file of Linger on this computer is missing \(.*local-account\.json\)\.$/,
     ],
     [
-      "readable by others",
-      installed(OWNER, 0o644),
-      "The local account file must be private and owned by the current user (chmod 600).",
-    ],
-    [
       "not provisioned",
       installed({ ...OWNER, provisioned: false }),
       "The local account file is invalid or the account has not been created.",
@@ -3959,7 +4037,9 @@ describe("LocalServerModule owner account", () => {
     async (_case, prepare, message) => {
       const f = fixture({}, enrolled, prepare);
       await f.host.start();
-      await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+      await waitForInstaller(() =>
+        expect(f.module.status().phase).toBe("ready"),
+      );
       const failure = f.module.signInWithAccount();
       await expect(failure).rejects.toThrow(message);
       await expect(failure).rejects.not.toThrow(OWNER.password);
@@ -3967,6 +4047,27 @@ describe("LocalServerModule owner account", () => {
       await f.host.stop("quit");
     },
   );
+
+  it("rejects an account file readable by others", async () => {
+    const message =
+      process.platform === "win32"
+        ? "Windows private path validation failed: the account file is shared with other accounts."
+        : "The local account file must be private and owned by the current user (chmod 600).";
+    acl?.mockRejectedValueOnce(new Error(message));
+    const f = fixture({}, enrolled, installed(OWNER, 0o644));
+    await f.host.start();
+    try {
+      await waitForInstaller(() =>
+        expect(f.module.status().phase).toBe("ready"),
+      );
+      const failure = f.module.signInWithAccount();
+      await expect(failure).rejects.toThrow(message);
+      await expect(failure).rejects.not.toThrow(OWNER.password);
+      expect(f.signIn).not.toHaveBeenCalled();
+    } finally {
+      await f.host.stop("quit");
+    }
+  });
 });
 
 describe("legacyMigrationResult", () => {

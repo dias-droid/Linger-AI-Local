@@ -166,7 +166,9 @@ program name alone, and never the installer or what started it. Readiness on
 Windows also needs each port's listener inside that service's tree: an
 earlier release's TeamHub or web still on the port would otherwise pass the
 health check for a service that could not bind, and a port held by another
-program fails the start after 15 seconds instead of at the deadline.
+program fails the start after 15 seconds instead of at the deadline. The
+listener lookup streams IPv4 TCP rows from the Windows system netstat in
+parallel with the process listing; process-only inspections need no port lookup.
 
 On POSIX, a start that finds the recorded supervisor gone but processes
 still carrying its lease (the app was killed with it) ends them as a stop
@@ -218,6 +220,12 @@ Move a freshly downloaded or unpacked file or folder into place with
 new files for a moment, and a plain rename then fails with EPERM.
 Cancellation is checked before every rename attempt, including after a
 retry wait, so a cancelled installation cannot publish the waiting file.
+
+Verified Windows kit files carry the read-only attribute before publication or
+reuse so Python children cannot replace their checked bytecode. The separate
+model data and tool state remain writable. Setup can replace a damaged kit
+from its pinned archive; quit and uninstall do not download or execute a kit
+that fails verification.
 
 Setting `LINGER_LOCALMODELS_DEV_PYTHON` and `LINGER_LOCALMODELS_DEV_MODULE_DIR`
 to absolute paths runs a local `localmodels` checkout instead of fetching the
