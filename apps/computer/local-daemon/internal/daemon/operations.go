@@ -147,6 +147,12 @@ func (d *Daemon) handleOperationCancel(command protocol.Command) error {
 		if payload.Reason == "" {
 			payload.Reason = "Operation cancelled"
 		}
+		if payload.Reason == schedulerYield && active.sessionMoved.Load() {
+			// The Run finishes instead; Agent Service accepts a natural
+			// terminal after it asked for a yield.
+			slog.Info("runner.operation.yield_declined", "operation_id", command.OperationID, "reason", "session_moved")
+			return nil
+		}
 		active.reason = payload.Reason
 		active.cancel()
 	}

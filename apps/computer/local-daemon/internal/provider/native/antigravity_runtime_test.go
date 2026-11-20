@@ -404,7 +404,8 @@ func TestAntigravityStartsAResumedRunBeforeTheSessionLoads(t *testing.T) {
 
 func TestAntigravityContinuesAnEarlyStartedRunInANewSession(t *testing.T) {
 	h := newAgyHarness(t, "unknown-session", nil)
-	run, err := h.runtime.Start(t.Context(), "again", RunSpec{Dir: h.dir, ResumeID: "moved-session", ExposeTurnStarted: true, FreshSessionOnRefusal: true})
+	moved := 0
+	run, err := h.runtime.Start(t.Context(), "again", RunSpec{Dir: h.dir, ResumeID: "moved-session", ExposeTurnStarted: true, FreshSession: func() { moved++ }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -418,8 +419,8 @@ func TestAntigravityContinuesAnEarlyStartedRunInANewSession(t *testing.T) {
 			starts = append(starts, event)
 		}
 	}
-	if len(starts) != 1 || starts[0].SessionID != "moved-session" {
-		t.Fatalf("turn-started events=%+v", starts)
+	if len(starts) != 1 || starts[0].SessionID != "moved-session" || moved != 1 {
+		t.Fatalf("turn-started events=%+v, moved %d times", starts, moved)
 	}
 	if requests := h.requests(t); len(requests["session/new"]) != 1 || len(requests["session/prompt"]) != 1 {
 		t.Fatalf("requests=%v", requests)

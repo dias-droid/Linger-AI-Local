@@ -78,28 +78,6 @@ func (t *piTurn) review(payload string) piVerdict {
 	if json.Unmarshal([]byte(payload), &call) != nil || call.ToolName == "" {
 		return piVerdict{Message: "The tool call could not be read for permission review"}
 	}
-	verdict := t.reviewer.Review(t.runCtx, piReview(call.ToolName, call.Input, t.dir))
+	verdict := t.reviewer.Review(t.runCtx, toolReview("pi", call.ToolName, call.ToolName == "bash", call.Input, t.dir))
 	return piVerdict{Allow: verdict.Decision == permission.Allow, Message: verdict.Message}
-}
-
-// piReview builds the permission review of one call. A bash call is
-// reviewed as a shell command so the shared shell rules apply.
-func piReview(tool string, input map[string]any, workspace string) permission.Request {
-	if input == nil {
-		input = map[string]any{}
-	}
-	encoded, _ := json.Marshal(input)
-	command := ""
-	if tool == "bash" {
-		command, _ = input["command"].(string)
-		tool = "Bash"
-	}
-	request := permission.Request{Action: permission.Action{
-		Runtime: "pi", Surface: permission.Surface(tool, command), Tool: tool,
-		Command: command, Input: string(encoded),
-	}}
-	if tool == "Bash" {
-		request.Evidence = permission.ScriptEvidence(command, workspace)
-	}
-	return request
 }

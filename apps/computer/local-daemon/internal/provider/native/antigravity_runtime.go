@@ -216,9 +216,10 @@ func (t *antigravityTurn) exchange(prompt string, servers []any) Outcome {
 		// The Run already started on the retained session, so the executor
 		// can no longer continue it in a new one; this process does, and the
 		// terminal result carries the new session.
-		if !startedEarly || !spec.FreshSessionOnRefusal {
+		if !startedEarly || spec.FreshSession == nil {
 			return t.resumeRefused(failed("session_not_found", refusal))
 		}
+		spec.FreshSession()
 		if t.profile.Logger != nil {
 			t.profile.Logger.Warn("runtime.session.fresh_start", "provider", "antigravity", "reason", "session_not_found")
 		}
@@ -545,22 +546,29 @@ func (t *antigravityTurn) permission(frame acpFrame) {
 	_ = t.proc.conn.respond(frame.ID, map[string]any{"outcome": map[string]any{"outcome": "cancelled"}})
 }
 
-// antigravityReview builds the permission review of one tool call. A
-// command is reviewed as a shell command so the shared shell rules apply.
+// antigravityReview builds the permission review of one tool call.
 func antigravityReview(call acpUpdate, workspace string) permission.Request {
-	input := antigravityInput(call.RawInput)
+	return toolReview("antigravity", antigravityToolName(call), call.Kind == "execute", antigravityInput(call.RawInput), workspace)
+}
+
+// toolReview builds the permission review of one call of a Runtime that
+// hands the Daemon its tool calls. A command call is reviewed as a shell
+// command, from its input's "command", so the shared shell rules apply.
+func toolReview(runtime, tool string, isCommand bool, input map[string]any, workspace string) permission.Request {
+	if input == nil {
+		input = map[string]any{}
+	}
 	encoded, _ := json.Marshal(input)
-	tool := antigravityToolName(call)
 	command := ""
-	if call.Kind == "execute" {
+	if isCommand {
 		command, _ = input["command"].(string)
 		tool = "Bash"
 	}
 	request := permission.Request{Action: permission.Action{
-		Runtime: "antigravity", Surface: permission.Surface(tool, command), Tool: tool,
+		Runtime: runtime, Surface: permission.Surface(tool, command), Tool: tool,
 		Command: command, Input: string(encoded),
 	}}
-	if tool == "Bash" {
+	if isCommand {
 		request.Evidence = permission.ScriptEvidence(command, workspace)
 	}
 	return request

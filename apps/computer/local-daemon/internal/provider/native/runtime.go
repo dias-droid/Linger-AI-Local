@@ -93,10 +93,11 @@ type RunSpec struct {
 	ResumeID        string
 	AssignSessionID string
 	ResumeRequired  bool
-	// FreshSessionOnRefusal lets a Runtime that reported its turn started
+	// FreshSession, when set, lets a Runtime that reported its turn started
 	// before its retained session loaded continue in a new session when the
 	// session is gone, as the executor does for one that reported nothing.
-	FreshSessionOnRefusal bool
+	// The Runtime calls it before it opens the new session.
+	FreshSession          func()
 	PrepareOnly           bool
 	WarmMCP               bool
 	MCPReady              func(context.Context) error

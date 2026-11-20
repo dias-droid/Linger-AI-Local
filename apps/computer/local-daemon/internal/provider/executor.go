@@ -32,7 +32,11 @@ const operationProviderPrepareKind = "internal.provider.prepare"
 
 type OperationSpec struct {
 	// A continuation prompt requires the exact native history of the interrupted Task.
-	ResumeAfterYield  bool
+	ResumeAfterYield bool
+	// SessionMoved is called when a started Run continues in a new native
+	// session because its retained one is gone. The Run announced the old
+	// session, so it must not yield to it.
+	SessionMoved      func()
 	HumanInteractions bool
 	// PermissionReview sends the Runtime's own permission prompts to the
 	// Runtime permission review (Agent Service declares it per Run).
@@ -566,7 +570,7 @@ func (e Executor) Start(ctx context.Context, spec OperationSpec, emit EmitFunc) 
 			AssignSessionID:       spec.CreateProviderSessionID,
 			ResumeID:              spec.ResumeSessionID,
 			ResumeRequired:        spec.ResumeSessionID != "",
-			FreshSessionOnRefusal: !spec.ResumeAfterYield,
+			FreshSession:          freshSession(spec),
 			Budget:                spec.Timeout,
 			ComputerArgs:          append([]string(nil), spec.ExtraArgs...),
 			AgentArgs:             append([]string(nil), spec.CustomArgs...),
@@ -858,6 +862,19 @@ func prepareCodexPermissionReview(codexHome string, teamhubCommands []permission
 // declares it per Run; session and preparation Operations never prompt.
 func (spec OperationSpec) ReviewsPermissions() bool {
 	return spec.PermissionReview && spec.OperationKind == "run.start"
+}
+
+// freshSession lets a started Run continue in a new native session, except
+// one resuming after a yield, whose prompt continues the old session.
+func freshSession(spec OperationSpec) func() {
+	if spec.ResumeAfterYield {
+		return nil
+	}
+	return func() {
+		if spec.SessionMoved != nil {
+			spec.SessionMoved()
+		}
+	}
 }
 
 // startsFreshSession reports whether a Run whose retained native session the
