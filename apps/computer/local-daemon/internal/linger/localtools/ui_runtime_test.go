@@ -48,7 +48,7 @@ func newUIRuntimeFixture(t *testing.T, required bool, callback func(context.Cont
 		{Name: "browser_click", InputSchema: schema(map[string]any{})},
 		{Name: "browser_take_screenshot", InputSchema: schema(map[string]any{})},
 	}
-	original, err := openToolServer(t.Context(), identity, methods, callback)
+	original, err := openToolServer(t.Context(), identity, methods, callback, mcpproxy.LocalToolTimeout)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -294,7 +294,7 @@ func (m *Manager) Bind(ctx context.Context, spec provider.OperationSpec, identit
 	}{
 		{"computer", computerTools, computerCall, op.computerEvidence, nil}, {"browser", browserTools, browserCall, op.browserEvidence, op.browserAllowed},
 	} {
-		server, err := openToolServer(opCtx, identity, binding.tools, op.wrap(binding.call))
+		server, err := openToolServer(opCtx, identity, binding.tools, op.wrap(binding.call), mcpproxy.LocalToolTimeout)
 		if err != nil {
 			return errors.Join(err, op.close())
 		}

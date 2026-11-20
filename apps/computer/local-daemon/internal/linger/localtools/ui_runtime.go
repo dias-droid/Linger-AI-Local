@@ -102,7 +102,7 @@ func unifiedUITools() []tool {
 		{
 			Name: "ui_exec",
 			Description: "Execute one async JavaScript body for the longest sequence you can determine from current UI evidence. Await each action, inspect its result, branch or loop in this same body, then return the verified outcome. " +
-				"Return to the model for ambiguous choices, visual interpretation or missing information. Only state persists across executions. When the user specifies the next control, resolve it from the fresh observation and act immediately in this script. " +
+				"Return to the model for ambiguous choices, visual interpretation or missing information. Only state persists across executions; an uncaught script error resets it, so catch expected failures in the script. When the user specifies the next control, resolve it from the fresh observation and act immediately in this script. " +
 				"For repeated stages, read changing values from each observation in JavaScript and continue in a bounded loop. Never paste a value from the last model turn when the current UI supplies it. On an unrecognized stage return its observation before writing. " +
 				"Browser: const page=await ui.page(url); let v=await page.observe(); on resume omit the URL. Read v.text. Use v=await v.click(role,name), v=await v.type(role,name,text) or v=await v.select(role,name,[value]). " +
 				"Fill several named controls from one observation with v=await v.fill([{type,name,value},...]); type is the control role, e.g. textbox or combobox. " +

@@ -617,7 +617,7 @@ func TestLocalToolServerPreparationRevocationAndImage(t *testing.T) {
 	}}, []tool{{Name: "screenshot", InputSchema: json.RawMessage(`{"type":"object"}`)}}, func(context.Context, string, json.RawMessage) (json.RawMessage, error) {
 		calls++
 		return json.RawMessage(`{"content":[{"type":"image","mimeType":"image/png","data":"` + strings.Repeat("A", 2*1024*1024) + `"}]}`), nil
-	})
+	}, mcpproxy.LocalToolTimeout)
 	if err != nil {
 		t.Fatal(err)
 	}

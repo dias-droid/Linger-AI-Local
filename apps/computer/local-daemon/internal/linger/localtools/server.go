@@ -33,16 +33,12 @@ type toolServer struct {
 	timeout   time.Duration
 }
 
-func openToolServer(ctx context.Context, identity mcpproxy.OperationIdentity, tools []tool, call func(context.Context, string, json.RawMessage) (json.RawMessage, error), timeouts ...time.Duration) (*toolServer, error) {
+func openToolServer(ctx context.Context, identity mcpproxy.OperationIdentity, tools []tool, call func(context.Context, string, json.RawMessage) (json.RawMessage, error), timeout time.Duration) (*toolServer, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, err
 	}
-	s := &toolServer{path: "/mcp/" + rand.Text(), tools: tools, identity: identity, ctx: ctx, call: call, ready: make(chan struct{}), slots: make(chan struct{}, 16), calls: make(map[string]context.CancelFunc)}
-	s.timeout = mcpproxy.LocalToolTimeout
-	if len(timeouts) == 1 && timeouts[0] > 0 {
-		s.timeout = timeouts[0]
-	}
+	s := &toolServer{path: "/mcp/" + rand.Text(), tools: tools, identity: identity, ctx: ctx, call: call, ready: make(chan struct{}), slots: make(chan struct{}, 16), calls: make(map[string]context.CancelFunc), timeout: timeout}
 	s.url = "http://" + listener.Addr().String() + s.path
 	s.server = &http.Server{Handler: http.HandlerFunc(s.handle), ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = s.server.Serve(listener) }()
@@ -256,11 +252,7 @@ func schedulingError(ctx context.Context) error {
 	return nil
 }
 
-func toolCallBudget(request *http.Request, maximum ...time.Duration) (time.Duration, error) {
-	budget := mcpproxy.LocalToolTimeout
-	if len(maximum) == 1 && maximum[0] > 0 {
-		budget = maximum[0]
-	}
+func toolCallBudget(request *http.Request, budget time.Duration) (time.Duration, error) {
 	if values := request.Header.Values("X-Linger-Tool-Budget-Ms"); len(values) > 0 {
 		if len(values) != 1 {
 			return 0, errors.New("Invalid local tool time budget")

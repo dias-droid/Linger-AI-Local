@@ -10,13 +10,11 @@ import (
 	"strings"
 )
 
+// quickJSAssets are the engine files the UI runtime loads directly. The
+// bundler owns the engine's complete file list.
 var quickJSAssets = []string{
-	"node_modules/quickjs-wasi/package.json",
 	"node_modules/quickjs-wasi/quickjs.wasm",
 	"node_modules/quickjs-wasi/dist/index.js",
-	"node_modules/quickjs-wasi/dist/extensions.js",
-	"node_modules/quickjs-wasi/dist/version.js",
-	"node_modules/quickjs-wasi/dist/wasi-shim.js",
 }
 
 type Installation struct{ NodePath, PlaywrightEntry, PiExtension, CuaPath string }

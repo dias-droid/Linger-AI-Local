@@ -15,7 +15,7 @@ import (
 
 func cancellationServer(t *testing.T, ctx context.Context, identity mcpproxy.OperationIdentity, call func(context.Context, string, json.RawMessage) (json.RawMessage, error)) *toolServer {
 	t.Helper()
-	s, err := openToolServer(ctx, identity, []tool{{Name: "test", InputSchema: json.RawMessage(`{"type":"object"}`)}}, call)
+	s, err := openToolServer(ctx, identity, []tool{{Name: "test", InputSchema: json.RawMessage(`{"type":"object"}`)}}, call, mcpproxy.LocalToolTimeout)
 	if err != nil {
 		t.Fatal(err)
 	}

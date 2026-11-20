@@ -21,6 +21,10 @@ import (
 
 type localToolBinderFunc func(context.Context, provider.OperationSpec, mcpproxy.OperationIdentity, *mcpproxy.Set) error
 
+func (localToolBinderFunc) BindUI(context.Context, provider.OperationSpec, mcpproxy.OperationIdentity, *mcpproxy.Set) error {
+	return nil
+}
+
 func (f localToolBinderFunc) Bind(ctx context.Context, spec provider.OperationSpec, identity mcpproxy.OperationIdentity, set *mcpproxy.Set) error {
 	return f(ctx, spec, identity, set)
 }
@@ -68,6 +72,10 @@ func TestManagedToolCleanupCannotBecomeSuccessfulOrCancelledTerminal(t *testing.
 type prewarmingLocalTools struct {
 	prewarms atomic.Int32
 	ctxs     chan context.Context
+}
+
+func (*prewarmingLocalTools) BindUI(context.Context, provider.OperationSpec, mcpproxy.OperationIdentity, *mcpproxy.Set) error {
+	return nil
 }
 
 func (p *prewarmingLocalTools) Bind(context.Context, provider.OperationSpec, mcpproxy.OperationIdentity, *mcpproxy.Set) error {

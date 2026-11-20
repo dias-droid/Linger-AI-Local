@@ -328,7 +328,8 @@ QuickJS compiled to WebAssembly. A separate engine compiles the script. The
 execution engine has no filesystem, network, process or module loader, and it
 rejects dynamic code evaluation. The Daemon limits memory, runtime, call count
 and output. Only the explicit `state` object is intended to persist between
-calls within one Operation. `ui_reset` discards this state and image handles.
+calls within one Operation. An uncaught script error resets `state`, so a
+script catches the failures it expects. `ui_reset` discards this state and image handles.
 Applications and action records survive a reset. An unknown write outcome
 blocks further writes to its driver in this Operation. Every `ui_exec` and
 `ui_reset` result lists the Operation's unknown actions. Retained images share

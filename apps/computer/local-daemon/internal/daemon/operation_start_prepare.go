@@ -40,12 +40,8 @@ func (d *Daemon) openOperationMCP(ctx context.Context, spec provider.OperationSp
 		if err := d.localTools.Bind(ctx, spec, identity, proxies); err != nil {
 			return nil, errors.Join(err, proxies.Close())
 		}
-		if unified, ok := d.localTools.(interface {
-			BindUI(context.Context, provider.OperationSpec, mcpproxy.OperationIdentity, *mcpproxy.Set) error
-		}); ok {
-			if err := unified.BindUI(ctx, spec, identity, proxies); err != nil {
-				return nil, errors.Join(err, proxies.Close())
-			}
+		if err := d.localTools.BindUI(ctx, spec, identity, proxies); err != nil {
+			return nil, errors.Join(err, proxies.Close())
 		}
 	}
 	return proxies, nil

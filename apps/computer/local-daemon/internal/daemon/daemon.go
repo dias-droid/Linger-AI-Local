@@ -81,6 +81,8 @@ type LocalSkillCatalog interface {
 
 type LocalToolBinder interface {
 	Bind(context.Context, provider.OperationSpec, mcpproxy.OperationIdentity, *mcpproxy.Set) error
+	// BindUI runs after Bind and publishes the script entry over its drivers.
+	BindUI(context.Context, provider.OperationSpec, mcpproxy.OperationIdentity, *mcpproxy.Set) error
 }
 
 // localToolPrewarmer is optional: a LocalToolBinder that can discover its tool
