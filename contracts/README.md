@@ -138,6 +138,16 @@ Web → TeamHub → Agent Service → Computer → `localmodels source`:
    API key travels in the request and the envelope only, reaches `localmodels`
    on stdin, and is kept on the Computer in an owner-only file.
 
+A BYOK input names its address as `base_url`, `path` and `endpoint`, with the
+`protocol` the owner's client derived from the address's ending (else the
+Runtime's own format). Requests go to `base_url + path + endpoint`, models are
+listed at `base_url + path + /models`, and nothing is probed. Agent Service
+sends a BYOK input only to Computer 0.56.0 or later
+(`FIRST_BYOK_ENDPOINT_COMPUTER_VERSION`), and declares `byok_endpoint` in
+`runner.welcome`'s `service_features` to the same releases; the Computer's BYOK
+summary carries `path` and `endpoint` only after that declaration, because an
+older Agent Service rejects unknown summary keys.
+
 A switch runs `apply` on the Computer first, then moves the owner's Agents on it
 to the Runtime and model it now serves, in one TeamHub transaction. An Agent
 with running work stays where it is unless the owner chose to end that work:

@@ -138,7 +138,10 @@ take precedence.
   (`FIRST_MODEL_SOURCE_COMPUTER_VERSION`), because an older one closes the
   connection on a kind it cannot decode, and maps the Computer's refusals in
   `executor/http/local-computer-http.ts`. A BYOK key stays inside the request
-  and the envelope; it is never logged, stored or returned.
+  and the envelope; it is never logged, stored or returned. A command with a
+  BYOK input goes only to Computer 0.56.0 or later
+  (`FIRST_BYOK_ENDPOINT_COMPUTER_VERSION`), whose welcome also names the
+  `byok_endpoint` service feature.
 - Default unit, integration, and fixture smoke tests use deterministic adapters
   and do not call a live model provider. Explicitly named live suites such as
   `smoke:local-runner:live` may use an authenticated provider and must remain

@@ -180,7 +180,11 @@ model.
 `internal/localmodels/source.go` runs `localmodels source status|check|models|apply`
 for `execute` commands of kind `model_source`, on their own goroutine so they
 never block Operation commands; `apply` is serialized. A BYOK key reaches the
-tool on stdin, never in argv or logs. `localmodels` writes
+tool on stdin, never in argv or logs, together with the address as base URL,
+path and endpoint and the protocol the owner's client chose; `check` sends one
+request there and `models` lists base URL + path + `/models`. The BYOK summary
+carries `path` and `endpoint` only after a `runner.welcome` that names the
+`byok_endpoint` service feature. `localmodels` writes
 `<state>/model-source.json`; the Daemon only adds the `runtime_paths` that the
 same `apply` reported. It re-reads the file on every discovery tick to overlay
 the Runtimes' environment (`OverlayEnvironment`) and executable paths
