@@ -57,8 +57,10 @@ function fail(message) {
     process.stdin.destroy();
   }
 }
-function evaluate(source) {
-  deadline = performance.now() + limits.pumpMs;
+// The CPU budget bounds guest work. The trusted bridge setup runs unbounded,
+// so a slow host cannot fail the runtime before it is ready.
+function evaluate(source, budgetMs = limits.pumpMs) {
+  deadline = performance.now() + budgetMs;
   try {
     // Only bytecode produced by our own compiler enters the guest.
     using value = guest.evalBytecode(
@@ -73,7 +75,8 @@ function evaluate(source) {
 }
 // Functions, Promises and errors below originate inside the context. Go treats
 // every bridge request as untrusted and applies its own limits and validation.
-evaluate(`(() => {
+evaluate(
+  `(() => {
   'use strict';
   const stringify = JSON.stringify, parse = JSON.parse;
   const pending = new Map();
@@ -250,7 +253,9 @@ evaluate(`(() => {
       return '';
     }
   }) });
-})()`);
+})()`,
+  Infinity,
+);
 function pump() {
   if (dead || !active || waiting) return;
   if (process.memoryUsage().rss > limits.rssBytes)

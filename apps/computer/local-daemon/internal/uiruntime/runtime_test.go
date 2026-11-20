@@ -550,3 +550,10 @@ func TestInvalidatedIdleChildIsReplaced(t *testing.T) {
 		t.Fatalf("second=%+v", second)
 	}
 }
+func TestBridgeSetupIgnoresGuestCPUBudget(t *testing.T) {
+	// The smallest budget is shorter than the trusted bridge setup.
+	r := nodeRuntime(t, noCalls(t), Limits{PumpTimeout: time.Millisecond})
+	if got := execute(t, r, `return 1;`); string(got.Value) != "1" {
+		t.Fatalf("result=%+v", got)
+	}
+}
