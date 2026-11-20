@@ -56,6 +56,9 @@ export const FIRST_STOP_HOOK_COMPUTER_VERSION = "0.57.0";
 // feature and gates extended local-model availability reasons, refusal codes,
 // and debug-mode metadata behind it.
 export const FIRST_LOCAL_MODELS_DIAGNOSTICS_COMPUTER_VERSION = "0.58.0";
+// The first release that decodes `no_autoload` on `execute` `local_models`.
+// An older Computer rejects the unknown key and closes the connection.
+export const FIRST_LOCAL_MODEL_DOWNLOAD_ONLY_COMPUTER_VERSION = "0.60.0";
 
 const COMPUTER_RELEASE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
