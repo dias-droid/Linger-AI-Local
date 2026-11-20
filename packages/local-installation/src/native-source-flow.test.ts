@@ -35,7 +35,7 @@ import {
   installAppleDeveloperTools,
   needsAppleDeveloperTools,
 } from "./apple-developer-tools.js";
-import type { InstallerEvent } from "./events.js";
+import type { InstallOutcome, InstallerEvent } from "./events.js";
 import {
   prepareNativeDependencies,
   prepareNativeVoiceTools,
@@ -50,7 +50,8 @@ import {
   TEAMHUB_BINARY_DIRECTORY,
   TEAMHUB_COMMANDS,
 } from "./teamhub-binaries.js";
-import { prepareRuntime } from "./managed-runtimes.js";
+import { prepareRuntime, type RuntimeDescriptor } from "./managed-runtimes.js";
+import { managedRuntimeEnvironment } from "./managed-codex.js";
 import { applyNativeSource, prepareByokRuntime } from "./byok-source.js";
 import { prepareLocalModels } from "./local-models.js";
 import {
@@ -1324,6 +1325,9 @@ async function bundledRuntime(repo: string) {
 
 test("native timings count only Runtime work that outlasts PostgreSQL", async () => {
   const f = await fixture();
+  // A service still running keeps the install sequential, where the Runtime
+  // wait sits on the critical path between PostgreSQL and the migrations.
+  f.running.add("web");
   let clock = 0;
   let startRuntime!: () => void;
   let finishRuntime!: () => void;
@@ -1380,6 +1384,56 @@ test("native timings count only Runtime work that outlasts PostgreSQL", async ()
     details: { timings: { services: 5, runtime: 7 } },
   });
   expect(runtimeStages).toEqual(["running", "succeeded"]);
+});
+
+test("overlapped timings count Runtime only for the wait beyond services and account", async () => {
+  const f = await fixture();
+  let clock = 0;
+  let ownerRan = false;
+  let timerMoved!: () => void;
+  const runtimeEntered = new Promise<void>((resolve) => {
+    timerMoved = resolve;
+  });
+  // Only the stage timer reads this clock. After the owner command, its next
+  // read is the move to "runtime" once the account branch has settled.
+  const now = () => {
+    if (ownerRan) timerMoved();
+    return clock;
+  };
+  vi.mocked(prepareRuntime).mockImplementation(async () => {
+    await runtimeEntered;
+    clock += 4000;
+    return { code: 0, state: "ready", message: "ready" };
+  });
+  const run = vi.mocked(runProcess).getMockImplementation()!;
+  vi.mocked(runProcess).mockImplementation(async (command, args, options) => {
+    if (args.includes("migrate")) clock += 2000;
+    if (args.includes("owner")) {
+      clock += 1000;
+      const result = await run(command, args, options);
+      ownerRan = true;
+      return result;
+    }
+    return run(command, args, options);
+  });
+  // A fresh setup with no services running takes the overlapped path.
+  const result = await installNativeSource(
+    {
+      ...f,
+      name: "native-timings-overlap",
+      setupChoice: "pi",
+      externalComputer: true,
+      signal: new AbortController().signal,
+      onEvent: () => {},
+    },
+    now,
+  );
+  expect(result.code, result.message).toBe(0);
+  const timings = (result.details as { timings: Record<string, number> })
+    .timings;
+  expect(timings).toMatchObject({ services: 2, account: 1, runtime: 4 });
+  const total = Object.values(timings).reduce((sum, value) => sum + value, 0);
+  expect(total).toBeCloseTo(clock / 1000, 1);
 });
 
 test("bundled services that verify install no packages and record stage times", async () => {
@@ -1615,6 +1669,52 @@ test("LiveKit holds its port before the model controller chooses one", async () 
   }
 });
 
+test("an overlapped setup binds LiveKit before the runtime branch prepares foundation services", async () => {
+  const f = await fixture();
+  const actual = await vi.importActual<typeof import("./native-livekit.js")>(
+    "./native-livekit.js",
+  );
+  vi.mocked(readLiveKitSettings).mockImplementation(actual.readLiveKitSettings);
+  vi.mocked(prepareNativeVoiceTools).mockResolvedValue({
+    bin: path.join(f.home, "voice"),
+    livekit: path.join(f.home, "voice", "livekit-server"),
+  });
+  const order: string[] = [];
+  // A slow bind gives a racing runtime branch time to reach the controller.
+  vi.mocked(startNativeLiveKit).mockImplementation(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    f.running.add("livekit");
+    order.push("livekit bound");
+  });
+  vi.mocked(prepareFoundationServices).mockImplementation(async () => {
+    order.push("foundations ensure");
+  });
+  const events: InstallerEvent[] = [];
+  vi.mocked(prepareRuntime).mockResolvedValue({
+    code: 0,
+    state: "ready",
+    message: "ready",
+  });
+  // A fresh setup with no services running takes the overlapped path.
+  const result = await installNativeSource({
+    ...f,
+    name: "native-flow-overlap-livekit",
+    setupChoice: "pi",
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+  });
+  expect(result.code, result.message).toBe(0);
+  expect(order).toEqual(["livekit bound", "foundations ensure"]);
+  const servicesRunning = events.findIndex(
+    (event) =>
+      event.kind === "stage" &&
+      event.stage === "services" &&
+      event.state === "running" &&
+      event.message === "Starting native collaboration services…",
+  );
+  expect(servicesRunning).toBeGreaterThanOrEqual(0);
+});
+
 for (const tools of ["absent", "failed"] as const)
   test(`voice stays off and the install continues when voice tools are ${tools}`, async () => {
     const { events, services, env } = await installVoice(tools, {
@@ -1643,4 +1743,626 @@ test("a changed voice key leaves the voice setting alone", async () => {
     run.services.map((options) => JSON.parse(options.settings!).voice);
   expect(voice(second)).toEqual(voice(first));
   expect(second.env("node-services").XAI_API_KEY).toBe("xai-2");
+});
+
+test("fresh install overlaps migrate, services, and account with pending runtime while holding succeeded until both finish", async () => {
+  const f = await fixture();
+  let resolveRuntime!: (outcome: InstallOutcome) => void;
+  vi.mocked(prepareRuntime).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolveRuntime = resolve;
+      }),
+  );
+  const baseRun = vi.mocked(runProcess).getMockImplementation()!;
+  let resolveOwner!: () => void;
+  const ownerCalled = new Promise<void>((resolve) => {
+    resolveOwner = resolve;
+  });
+  vi.mocked(runProcess).mockImplementation(async (command, args, options) => {
+    const result = await baseRun(command, args, options);
+    if (args.includes("owner")) resolveOwner();
+    return result;
+  });
+  const events: InstallerEvent[] = [];
+  const runPromise = installNativeSource({
+    ...f,
+    name: "native-flow-overlap",
+    setupChoice: "pi",
+    externalComputer: true,
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+  });
+  // migrate, services, and account owner provisioning complete while runtime is still pending.
+  await ownerCalled;
+  expect(
+    events.some(
+      (event) =>
+        event.kind === "stage" &&
+        (event.stage === "services" || event.stage === "account") &&
+        event.state === "succeeded",
+    ),
+  ).toBe(false);
+  resolveRuntime({ code: 0, state: "ready", message: "ready" });
+  const outcome = await runPromise;
+  expect(outcome.code).toBe(0);
+  expect(events).toContainEqual(
+    expect.objectContaining({
+      kind: "stage",
+      stage: "services",
+      state: "succeeded",
+    }),
+  );
+  expect(events).toContainEqual(
+    expect.objectContaining({
+      kind: "stage",
+      stage: "account",
+      state: "succeeded",
+    }),
+  );
+});
+
+test("upgrade keeps migrate sequential after runtime when account is already provisioned", async () => {
+  const f = await fixture();
+  vi.mocked(prepareRuntime).mockResolvedValue({
+    code: 0,
+    state: "ready",
+    message: "ready",
+  });
+  const firstOutcome = await installNativeSource({
+    ...f,
+    name: "native-flow-upgrade",
+    setupChoice: "pi",
+    externalComputer: true,
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+  expect(firstOutcome.code).toBe(0);
+
+  let runtimeResolved = false;
+  let resolveRuntime!: (outcome: InstallOutcome) => void;
+  vi.mocked(prepareRuntime).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolveRuntime = (outcome) => {
+          runtimeResolved = true;
+          resolve(outcome);
+        };
+      }),
+  );
+  const baseRun = vi.mocked(runProcess).getMockImplementation()!;
+  let migrateSawRuntimeResolved = false;
+  let resolveMigrateReached!: () => void;
+  const migrateReached = new Promise<void>((resolve) => {
+    resolveMigrateReached = resolve;
+  });
+  vi.mocked(runProcess).mockImplementation(async (command, args, options) => {
+    if (args.includes("migrate")) {
+      migrateSawRuntimeResolved = runtimeResolved;
+      resolveMigrateReached();
+    }
+    return baseRun(command, args, options);
+  });
+  const runPromise = installNativeSource({
+    ...f,
+    name: "native-flow-upgrade",
+    setupChoice: "pi",
+    externalComputer: true,
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+  await vi.waitFor(() => expect(resolveRuntime).toBeTypeOf("function"));
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  resolveRuntime({ code: 0, state: "ready", message: "ready" });
+  await migrateReached;
+  const outcome = await runPromise;
+  expect(outcome.code).toBe(0);
+  expect(migrateSawRuntimeResolved).toBe(true);
+});
+
+test("mid-flight migrate failure aborts runtime and drains both branches before rollback", async () => {
+  const f = await fixture();
+  let runtimeAborted = false;
+  let runtimeSettled = false;
+  vi.mocked(prepareRuntime).mockImplementation(
+    (_choice, options) =>
+      new Promise((_resolve, reject) => {
+        options.signal.addEventListener("abort", () => {
+          runtimeAborted = true;
+          setTimeout(() => {
+            runtimeSettled = true;
+            reject(new Error("aborted"));
+          }, 15);
+        });
+      }),
+  );
+  let settledBeforeStop = false;
+  vi.mocked(stopNativeProcess).mockImplementation(async () => {
+    settledBeforeStop = runtimeSettled;
+  });
+  const baseRun = vi.mocked(runProcess).getMockImplementation()!;
+  vi.mocked(runProcess).mockImplementation(async (command, args, options) => {
+    if (args.includes("migrate")) return { code: 1, stdout: "", stderr: "" };
+    return baseRun(command, args, options);
+  });
+  const failed = await installNativeSource({
+    ...f,
+    name: "native-flow-fail-drain",
+    setupChoice: "pi",
+    externalComputer: true,
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+  expect(failed).toMatchObject({ code: 1, state: "failed" });
+  expect(failed.message).toContain("Native source migrate failed (exit 1).");
+  expect(runtimeAborted).toBe(true);
+  expect(settledBeforeStop).toBe(true);
+});
+
+test("fresh-install overlap preserves RUNTIME_AUTH_REQUIRED without aborting services", async () => {
+  const f = await fixture();
+  vi.mocked(prepareRuntime).mockResolvedValue({
+    code: 4,
+    state: "action_required",
+    message: "auth required",
+    details: {
+      code: "RUNTIME_AUTH_REQUIRED",
+      runtime: "pi",
+      executable: "/pi",
+      loginCommand: "pi login",
+    },
+  });
+  const events: InstallerEvent[] = [];
+  const authOutcome = await installNativeSource({
+    ...f,
+    name: "native-flow-auth-pending",
+    setupChoice: "pi",
+    externalComputer: true,
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+  });
+  expect(authOutcome.code).toBe(0);
+  expect(events).toContainEqual(
+    expect.objectContaining({
+      kind: "stage",
+      stage: "runtime",
+      state: "waiting_user",
+    }),
+  );
+});
+
+for (const failingStep of [
+  "prepareFoundationServices",
+  "prepareModelGateway",
+] as const)
+  test(`fresh-install overlap reports runtime when ${failingStep} fails after account starts`, async () => {
+    const f = await fixture();
+    vi.mocked(prepareRuntime).mockResolvedValue({
+      code: 0,
+      state: "ready",
+      message: "ready",
+    });
+    let resolveOwnerStarted!: () => void;
+    const ownerStarted = new Promise<void>((resolve) => {
+      resolveOwnerStarted = resolve;
+    });
+    const baseRun = vi.mocked(runProcess).getMockImplementation()!;
+    vi.mocked(runProcess).mockImplementation(async (command, args, options) => {
+      if (args.includes("owner")) {
+        resolveOwnerStarted();
+        return new Promise((_resolve, reject) => {
+          const abort = () => {
+            try {
+              options?.signal?.throwIfAborted();
+            } catch (error) {
+              reject(error);
+            }
+          };
+          if (options?.signal?.aborted) abort();
+          else options?.signal?.addEventListener("abort", abort);
+        });
+      }
+      return baseRun(command, args, options);
+    });
+    if (failingStep === "prepareFoundationServices") {
+      vi.mocked(prepareFoundationServices).mockImplementation(async () => {
+        await ownerStarted;
+        throw new Error("foundation services failed");
+      });
+    } else {
+      vi.mocked(prepareFoundationServices).mockImplementation(async () => {
+        await ownerStarted;
+      });
+      vi.mocked(prepareModelGateway).mockImplementation(async () => {
+        throw new Error("model gateway failed");
+      });
+    }
+    const events: InstallerEvent[] = [];
+    const failed = await installNativeSource({
+      ...f,
+      name:
+        failingStep === "prepareFoundationServices"
+          ? "native-flow-overlap-foundation"
+          : "native-flow-overlap-gateway",
+      setupChoice: "pi",
+      externalComputer: true,
+      signal: new AbortController().signal,
+      onEvent: (event) => events.push(event),
+    });
+    expect(failed).toMatchObject({
+      code: 1,
+      state: "failed",
+      details: { stage: "runtime" },
+    });
+    expect(failed.message).toContain(
+      failingStep === "prepareFoundationServices"
+        ? "foundation services failed"
+        : "model gateway failed",
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        kind: "stage",
+        stage: "runtime",
+        state: "failed",
+      }),
+    );
+    expect(events).not.toContainEqual(
+      expect.objectContaining({
+        kind: "stage",
+        stage: "account",
+        state: "failed",
+      }),
+    );
+    if (failingStep === "prepareModelGateway") {
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          kind: "log",
+          stage: "runtime",
+          message: expect.stringContaining(
+            "Preparing foundation services took",
+          ),
+        }),
+      );
+    }
+  });
+
+test("fresh-install overlap reports account when account provisioning fails", async () => {
+  const f = await fixture();
+  vi.mocked(prepareRuntime).mockImplementation(
+    (_choice, options) =>
+      new Promise((_resolve, reject) => {
+        const abort = () => {
+          try {
+            options.signal.throwIfAborted();
+          } catch (error) {
+            reject(error);
+          }
+        };
+        if (options.signal.aborted) abort();
+        else options.signal.addEventListener("abort", abort);
+      }),
+  );
+  const baseRun = vi.mocked(runProcess).getMockImplementation()!;
+  vi.mocked(runProcess).mockImplementation(async (command, args, options) => {
+    if (args.includes("owner")) return { code: 1, stdout: "", stderr: "" };
+    return baseRun(command, args, options);
+  });
+  const events: InstallerEvent[] = [];
+  const failed = await installNativeSource({
+    ...f,
+    name: "native-flow-overlap-account-fail",
+    setupChoice: "pi",
+    externalComputer: true,
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+  });
+  expect(failed).toMatchObject({
+    code: 1,
+    state: "failed",
+    details: { stage: "account" },
+  });
+  expect(failed.message).toContain(
+    "Local account sign-in failed after creation (HTTP 401).",
+  );
+  expect(events).toContainEqual(
+    expect.objectContaining({
+      kind: "stage",
+      stage: "account",
+      state: "failed",
+    }),
+  );
+});
+
+test("cold resume skips pre-inspection env probe, reuses installed runtime, forwards descriptors, and overlaps services", async () => {
+  const f = await fixture();
+  // First install provisions the instance and saved account.
+  vi.mocked(prepareRuntime).mockResolvedValue({
+    code: 0,
+    state: "ready",
+    message: "ready",
+  });
+  const initial = await installNativeSource({
+    ...f,
+    name: "native-flow-cold-resume",
+    setupChoice: "pi",
+    externalComputer: true,
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+  expect(initial.code).toBe(0);
+  const saved = await loadInstance({
+    name: "native-flow-cold-resume",
+    home: f.home,
+  });
+  await stopNativeSource(saved!, new AbortController().signal);
+
+  vi.mocked(managedRuntimeEnvironment).mockClear();
+  let releaseRuntime!: () => void;
+  let migrateStartedBeforeRuntimeDone = false;
+  let runtimeDone = false;
+  const descriptor: RuntimeDescriptor = {
+    runtime: "pi",
+    executable: "/mock/pi",
+    argvPrefix: [],
+    installed: true,
+    authenticated: true,
+    authMode: "api_key",
+    loginCommand: null,
+  };
+  vi.mocked(prepareRuntime).mockImplementationOnce(async (_choice, options) => {
+    expect(options.reuseInstalled).toBe(true);
+    expect(options.env).toBeUndefined();
+    await new Promise<void>((resolve) => {
+      releaseRuntime = resolve;
+    });
+    runtimeDone = true;
+    options.onDescriptor?.(descriptor);
+    return { code: 0, state: "ready", message: "ready" };
+  });
+  const baseRun = vi.mocked(runProcess).getMockImplementation()!;
+  vi.mocked(runProcess).mockImplementation(async (command, args, options) => {
+    if (args.includes("migrate")) {
+      migrateStartedBeforeRuntimeDone = !runtimeDone;
+      releaseRuntime();
+    }
+    return baseRun(command, args, options);
+  });
+
+  const forwarded: RuntimeDescriptor[][] = [];
+  const resumed = await installNativeSource({
+    ...f,
+    name: "native-flow-cold-resume",
+    externalComputer: true,
+    resume: true,
+    onRuntimeDescriptors: (descriptors) => forwarded.push(descriptors),
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+  expect(resumed.code).toBe(0);
+  expect(vi.mocked(managedRuntimeEnvironment)).not.toHaveBeenCalled();
+  expect(migrateStartedBeforeRuntimeDone).toBe(true);
+  expect(forwarded).toEqual([[descriptor]]);
+});
+
+test("resume stays sequential when services are already running", async () => {
+  const f = await fixture();
+  vi.mocked(prepareRuntime).mockResolvedValue({
+    code: 0,
+    state: "ready",
+    message: "ready",
+  });
+  const initial = await installNativeSource({
+    ...f,
+    name: "native-flow-resume-seq",
+    setupChoice: "pi",
+    externalComputer: true,
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+  expect(initial.code).toBe(0);
+
+  // Services from the initial install are still running, so resume stays sequential.
+  let runtimeDone = false;
+  let migrateSawRuntimeDone = false;
+  vi.mocked(prepareRuntime).mockImplementationOnce(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    runtimeDone = true;
+    return { code: 0, state: "ready", message: "ready" };
+  });
+  const baseRun = vi.mocked(runProcess).getMockImplementation()!;
+  vi.mocked(runProcess).mockImplementation(async (command, args, options) => {
+    if (args.includes("migrate")) {
+      migrateSawRuntimeDone = runtimeDone;
+    }
+    return baseRun(command, args, options);
+  });
+
+  const resumed = await installNativeSource({
+    ...f,
+    name: "native-flow-resume-seq",
+    externalComputer: true,
+    resume: true,
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+  expect(resumed.code).toBe(0);
+  expect(migrateSawRuntimeDone).toBe(true);
+});
+
+test("overlap runtime failure returns the runtime outcome and stops started services in reverse order", async () => {
+  const f = await fixture();
+  let failRuntime!: () => void;
+  vi.mocked(prepareRuntime).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        failRuntime = () =>
+          resolve({ code: 1, state: "failed", message: "runtime failed" });
+      }),
+  );
+  const baseStart = vi.mocked(startNativeProcess).getMockImplementation()!;
+  const started: string[] = [];
+  vi.mocked(startNativeProcess).mockImplementation(async (options) => {
+    started.push(options.name);
+    return baseStart(options);
+  });
+  const stopped: string[] = [];
+  vi.mocked(stopNativeProcess).mockImplementation(async (_root, name) => {
+    stopped.push(name);
+  });
+  const baseRun = vi.mocked(runProcess).getMockImplementation()!;
+  vi.mocked(runProcess).mockImplementation(async (command, args, options) => {
+    if (args.includes("owner")) failRuntime();
+    return baseRun(command, args, options);
+  });
+  const events: InstallerEvent[] = [];
+  const failed = await installNativeSource({
+    ...f,
+    name: "native-flow-overlap-runtime-fail",
+    setupChoice: "pi",
+    externalComputer: true,
+    signal: new AbortController().signal,
+    onEvent: (event) => events.push(event),
+  });
+  // The Runtime's own outcome is the cause, not the aborted services branch.
+  expect(failed).toMatchObject({
+    code: 1,
+    state: "failed",
+    message: "runtime failed",
+  });
+  expect(events).not.toContainEqual(
+    expect.objectContaining({ stage: "account", state: "failed" }),
+  );
+  expect(started.length).toBeGreaterThan(0);
+  // PostgreSQL starts first through its own path, so it stops last.
+  expect(stopped).toEqual([...started].reverse().concat("postgres"));
+});
+
+test("a service start that fails at once waits for the other starts before rollback", async () => {
+  const f = await fixture();
+  vi.mocked(prepareRuntime).mockResolvedValue({
+    code: 0,
+    state: "ready",
+    message: "ready",
+  });
+  const baseStart = vi.mocked(startNativeProcess).getMockImplementation()!;
+  const settled = new Set<string>();
+  vi.mocked(startNativeProcess).mockImplementation(async (options) => {
+    if (options.name === "teamhub")
+      throw new Error("teamhub identity cannot be verified");
+    if (options.name === "web" || options.name === "node-services") {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      const result = await baseStart(options);
+      settled.add(options.name);
+      return result;
+    }
+    return baseStart(options);
+  });
+  const stopsBeforeSettled: string[] = [];
+  const stopped: string[] = [];
+  vi.mocked(stopNativeProcess).mockImplementation(async (_root, name) => {
+    if (settled.size < 2) stopsBeforeSettled.push(name);
+    stopped.push(name);
+    f.running.delete(name);
+  });
+  const failed = await installNativeSource({
+    ...f,
+    name: "native-flow-start-settle",
+    setupChoice: "pi",
+    externalComputer: true,
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  });
+  expect(failed.code).not.toBe(0);
+  expect(settled).toEqual(new Set(["web", "node-services"]));
+  expect(stopsBeforeSettled).toEqual([]);
+  expect(stopped).toEqual(
+    expect.arrayContaining(["teamhub", "node-services", "web"]),
+  );
+});
+
+for (const variant of ["resume", "setup choice"] as const)
+  test(`a ${variant} onto another checkout keeps migrate after the runtime`, async () => {
+    const f = await fixture();
+    const name = `native-flow-switch-${variant.replace(" ", "-")}`;
+    vi.mocked(prepareRuntime).mockResolvedValue({
+      code: 0,
+      state: "ready",
+      message: "ready",
+    });
+    const initial = await installNativeSource({
+      ...f,
+      name,
+      setupChoice: "pi",
+      externalComputer: true,
+      signal: new AbortController().signal,
+      onEvent: () => {},
+    });
+    expect(initial.code).toBe(0);
+    const saved = await loadInstance({ name, home: f.home });
+    await stopNativeSource(saved!, new AbortController().signal);
+    // Without a provisioned account a setup choice would overlap too, so
+    // only the checkout switch keeps it sequential.
+    if (variant === "setup choice")
+      await rm(path.join(saved!.root, "local-account.json"));
+    const next = path.join(f.home, "next");
+    await cp(f.repo, next, { recursive: true });
+
+    let runtimeDone = false;
+    let releaseRuntime!: () => void;
+    vi.mocked(prepareRuntime).mockImplementationOnce(async () => {
+      await new Promise<void>((resolve) => {
+        releaseRuntime = resolve;
+      });
+      runtimeDone = true;
+      return { code: 0, state: "ready", message: "ready" };
+    });
+    const baseRun = vi.mocked(runProcess).getMockImplementation()!;
+    let migrateSawRuntimeDone: boolean | undefined;
+    vi.mocked(runProcess).mockImplementation(async (command, args, options) => {
+      if (args.includes("migrate")) migrateSawRuntimeDone = runtimeDone;
+      return baseRun(command, args, options);
+    });
+    const runPromise = installNativeSource({
+      ...f,
+      repo: next,
+      name,
+      externalComputer: true,
+      ...(variant === "resume" ? { resume: true } : { setupChoice: "pi" }),
+      signal: new AbortController().signal,
+      onEvent: () => {},
+    });
+    await vi.waitFor(() => expect(releaseRuntime).toBeTypeOf("function"));
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(migrateSawRuntimeDone).toBeUndefined();
+    releaseRuntime();
+    expect((await runPromise).code).toBe(0);
+    expect(migrateSawRuntimeDone).toBe(true);
+  });
+
+test("a repeated resume after a successful resume succeeds without provisioning the owner again", async () => {
+  const f = await fixture();
+  vi.mocked(prepareRuntime).mockResolvedValue({
+    code: 0,
+    state: "ready",
+    message: "ready",
+  });
+  const input = {
+    ...f,
+    name: "native-flow-resume-twice",
+    externalComputer: true,
+    signal: new AbortController().signal,
+    onEvent: () => {},
+  };
+  expect(
+    (await installNativeSource({ ...input, setupChoice: "pi" })).code,
+  ).toBe(0);
+  const saved = await loadInstance({ name: input.name, home: f.home });
+  await stopNativeSource(saved!, new AbortController().signal);
+  const owners = () =>
+    vi.mocked(runProcess).mock.calls.filter((row) => row[1].includes("owner"))
+      .length;
+  expect((await installNativeSource({ ...input, resume: true })).code).toBe(0);
+  const afterFirstResume = owners();
+  expect((await installNativeSource({ ...input, resume: true })).code).toBe(0);
+  expect(owners()).toBe(afterFirstResume);
 });

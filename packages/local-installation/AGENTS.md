@@ -238,6 +238,71 @@ to absolute paths runs a local `localmodels` checkout instead of fetching the
 published kit, and `LOCALMODELS_DEBUG` (`simulate` or `tiny`, or
 `~/.config/localmodels/debug.json`) passes straight through to `localmodels`.
 
+`installNativeSource` records wall-clock stage seconds (`timings`) in the job's
+`details` and logs `Native install timings (s): ...` in the installer event log
+without adding contract fields. Each wall-clock second counts toward exactly one
+stage on the critical path, so stage durations sum to the total job duration:
+`runtime` runs alongside `release`, `images`, and (on overlapped installs)
+`migrate`, `services`, and `account`, and counts only the wait beyond that
+parallel work, appearing only when the runtime finishes last. LiveKit binds its
+saved port before `prepareFoundationServices` on both paths (before the fork
+when overlapped), because the model controller asks the OS for a free port. On
+fresh installs (`!switchingCheckout`, no
+provisioned account unless a legacy backup was set aside, and no running
+services) and cold resumes (`resume: true`, `!switchingCheckout`, and no running
+services), `migrate`, `services`, and `account` run concurrently with `runtime`,
+`prepareFoundationServices`, and `prepareModelGateway`, holding
+`services`/`account` `succeeded` events and `saveSourceBinding` until both
+branches succeed and aborting and draining both before rollback on failure;
+upgrades and live re-runs keep `migrate` sequential after `runtime`. When
+`resume: true`, `prepareRuntime` inspects the selected runtime once and skips
+`harness plan` and `harness apply` when it is already installed (falling back to
+a full install if missing or unreadable), and passes the inspected descriptor
+through `onRuntimeDescriptors` so callers avoid a second status probe. Within
+`release`, binary and native-runtime bundle checks run in parallel, while
+dependency and voice tool preparations stay sequential on the shared
+native-tools lock; collaboration services start concurrently when `node-services`
+is not pre-stopped for a TeamHub config restart. `runLocalmodels`
+forwards `harness apply` `download:retrying` and `total: null` byte progress
+(without a total), and `prepareByokRuntime` logs elapsed time every 10 s while mounting
+the BYOK gateway (a log line, since the job appends and persists every stage
+event).
+
 Run `pnpm --filter @linger/local-installation check` (`make check-packages`
 runs it too); `make check-installer` runs its consumer, the installer, and
 applies to changes that affect its public behavior.
+
+## Local acceptance
+
+Unit tests mock every process, so a change to install ordering, concurrency,
+rollback, resume, or checkout switching also gets one real run on a
+developer machine. Never touch the machine's own install (`~/.simplexai`,
+`~/Library/Application Support/Linger`) or stop processes the run did not
+start.
+
+- Isolate everything a run writes. `LINGER_HOME` alone is not enough: the
+  localmodels kit defaults to `~/.local/share/localmodels` and Pi to the one
+  on `PATH`, so also set `HOME` to a scratch directory and
+  `PATH=/usr/bin:/bin:/usr/sbin:/sbin`, plus `LINGER_DESKTOP_USER_DATA` and
+  `LINGER_BRIDGE_STATE_DIR` (otherwise the desktop removes the real bridge
+  state). Use real paths: on macOS `/tmp` is a symlink and localmodels
+  refuses it (`Unsafe runtime root`), so use `/private/tmp/...`.
+- Run the desktop from source with `LINGER_CHECKOUT` naming the checkout under
+  test (`apps/desktop/AGENTS.md`); add `--remote-debugging-port` to Electron to
+  drive `app://setup/` over CDP. From source there are no bundled TeamHub
+  binaries, so the installer prepares Go and compiles TeamHub, and its
+  timings are not comparable with a packaged build.
+- `LOCALMODELS_DEBUG=simulate:vram_gb=24` simulates the hardware, but a
+  simulated local model echoes the prompt and fails `stack apply`'s answer
+  check. Exercise a full install through BYOK instead, against the kit's
+  stub endpoint once the installer has unpacked the kit:
+  `PYTHONPATH=$K/modules $K/python/bin/python3.12 -P -s -m localmodels.debug_stub_server --bind 127.0.0.1 --port 18950 --model stub-model`
+  with `K=$LINGER_HOME/tools/localmodels/<kit hash>`, then enter
+  `http://127.0.0.1:18950/v1` and any key in setup. `--stop` leaves the
+  simulated stub servers running; stop them yourself.
+- Scenarios: a fresh install (runtime overlaps services and account in the
+  job's stage timings); `--stop` then `--resume` on the same checkout (logs
+  `Reusing the installed <runtime> runtime.` and overlaps); `--resume` while
+  services run (returns `Services are already running.` with unchanged
+  process IDs); and `--resume --source-repo` on another checkout (full
+  `harness plan`/`apply`, migrations only after runtime preparation).

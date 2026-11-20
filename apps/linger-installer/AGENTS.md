@@ -31,8 +31,13 @@ starting sign-in for the new runtime stops the previous runtime's pending login.
 
 `--resume` (native source with `--instance`) starts an installed instance's
 stopped services headless, reusing its saved choices; the desktop client runs it
-after a reboot and reads the outcome from the single JSON line on stdout. It
-also restarts running services when the instance's `user.env` no longer
+after a reboot and reads the outcome from the single JSON line on stdout. Cold
+resumes on the same checkout pass `resume: true` (a resume onto another
+checkout omits it and prepares the runtime in full, sequentially) so an already-installed runtime
+is reused after one status check, runtime/foundation preparation overlaps
+service startup, and inspected runtime descriptors are passed directly to
+`instanceRuntime` without a second status probe. It also restarts running
+services when the instance's `user.env` no longer
 matches the configuration they started with, or when `--source-repo` names
 another checkout than the instance's. An instance follows a new checkout only
 once its services are ready on it: until then `instance.json` keeps naming the
@@ -96,7 +101,10 @@ installer, and the next start tries again. Only `--migrate` reports them: a
 warning naming each and why on stderr, and one JSON line
 `{"skipped":[{instance,reason}]}` on stdout. Other modes stay silent, so a
 warning is never taken for the reason a start failed, and refuse a skipped
-instance when they open it.
+instance when they open it. Fresh native installs overlap `migrate`,
+`services`, and `account` with `runtime` while holding `services`/`account`
+completion until both branches succeed; upgrades and live re-runs keep `migrate`
+sequential after `runtime`.
 
 Run `make check-installer`; verify UI process behavior with an isolated
 browser context and retain masked evidence. Never stop a user's existing stack

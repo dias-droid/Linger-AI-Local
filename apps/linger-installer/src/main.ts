@@ -1,6 +1,7 @@
 import path from "node:path";
 import { lingerHome } from "@linger/local-installation/home";
 import type { LegacyInstanceSkipped } from "@linger/local-installation/legacy-migration";
+import type { RuntimeDescriptor } from "@linger/local-installation/managed-runtimes";
 import { fileURLToPath } from "node:url";
 import { launchInstaller } from "./server/launch.js";
 export { startInstallerServer } from "./server/server.js";
@@ -125,11 +126,15 @@ async function resume(options: ReturnType<typeof parseInstallerArguments>) {
   const { resumeSourceInstance } = await import("./server/resume.js");
   const controller = new AbortController();
   process.once("SIGTERM", () => controller.abort());
+  let runtimeDescriptors: RuntimeDescriptor[] | undefined;
   const outcome = await resumeSourceInstance({
     home: options.home,
     sourceRepo: options.sourceRepo!,
     instanceName: options.instanceName!,
     externalComputer: options.externalComputer,
+    onRuntimeDescriptors: (descriptors) => {
+      runtimeDescriptors = descriptors;
+    },
     signal: controller.signal,
     log: (message) => process.stderr.write(message.replace(/\n?$/, "\n")),
   }).catch((error: unknown) => ({
@@ -144,7 +149,9 @@ async function resume(options: ReturnType<typeof parseInstallerArguments>) {
     outcome.code === 0 && options.externalComputer
       ? await import("./server/instance-runtime.js")
           .then(({ instanceRuntime }) =>
-            instanceRuntime(options.home, options.instanceName!),
+            instanceRuntime(options.home, options.instanceName!, {
+              runtimeDescriptors,
+            }),
           )
           .catch(() => undefined)
       : undefined;
