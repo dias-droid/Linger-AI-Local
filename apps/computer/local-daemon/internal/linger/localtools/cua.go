@@ -133,6 +133,9 @@ func (m *Manager) openCua(ctx context.Context, op *operation) (*cuaSession, []to
 		if !cuaTools[item.Name] && (item.Name != "run_script" || runtime.GOOS != "darwin") {
 			continue
 		}
+		if runtime.GOOS == "windows" && windowsHiddenTools[item.Name] {
+			continue
+		}
 		var input map[string]any
 		if json.Unmarshal(item.InputSchema, &input) != nil {
 			return session, nil, errors.New("invalid Cua tool schema")
@@ -149,7 +152,13 @@ func (m *Manager) openCua(ctx context.Context, op *operation) (*cuaSession, []to
 			}
 			input["required"] = kept
 		}
+		if runtime.GOOS == "windows" && inputTools[item.Name] {
+			windowsSchema(input)
+		}
 		item.InputSchema, _ = json.Marshal(input)
+		if item.Name == "scroll" && runtime.GOOS == "windows" {
+			item.Description = windowsScrollDescription
+		}
 		if inputTools[item.Name] {
 			if runtime.GOOS == "darwin" {
 				item.Description += macInputResult
@@ -356,6 +365,11 @@ func (c *cuaSession) call(ctx context.Context, name string, args json.RawMessage
 	if err != nil {
 		return nil, err
 	}
+	if runtime.GOOS == "windows" {
+		if err := windowsInputRefusal(name, arguments, func() bool { return c.chromiumTarget(arguments) }); err != nil {
+			return nil, err
+		}
+	}
 	namedWindow := arguments["window_id"] != nil
 	if inputTools[name] && ctx.Value(cuaInternalInput{}) == nil {
 		if err := c.checkWindowToken(arguments); err != nil {
@@ -538,6 +552,9 @@ func (c *cuaSession) call(ctx context.Context, name string, args json.RawMessage
 		}
 	}
 	driverMs = time.Since(driverStarted).Milliseconds()
+	if err == nil && runtime.GOOS == "windows" {
+		result = windowsRefusedResult(name, result)
+	}
 	if err == nil {
 		result = c.annotateInputResult(name, result)
 	}

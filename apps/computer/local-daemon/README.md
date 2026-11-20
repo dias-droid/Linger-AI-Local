@@ -649,6 +649,22 @@ unavailable UI Automation returns `COMPUTER_PERMISSION_REQUIRED` without
 elevating. Whole-screen read-only tools use a separate desktop session, which
 does not affect the window tools. Browser and file tools do not depend on Cua.
 
+Windows input stays in the background, because Cua's foreground and desktop
+routes send real input through the system queue, where it reaches whichever
+window is in front or under the pointer when it arrives. The Daemon hides
+`delivery_mode` and `scope` from the Windows input tools and refuses them with
+`COMPUTER_INPUT_NOT_SENT` before anything is sent. It also leaves out
+`bring_to_front`, which keeps another app in front of the user, and
+`move_cursor`, which moves the user's pointer. `double_click` and
+`right_click` are refused in a Chromium window (class `Chrome_WidgetWin_*` or
+`CefBrowser*`: Chrome, Edge and Electron apps), where Cua sends them as real
+mouse events. Cua's background refusals, which recommend a foreground retry or
+`bring_to_front`, reach the Agent as `COMPUTER_INPUT_NOT_SENT` with the
+background route instead. Cua 0.35.4 refuses a background scroll in a
+Chromium window, so the Agent reads such a page with a `get_window_state`
+query instead; elsewhere a list or pane scrolls by its own `element_token`
+through UI Automation. Windows Operations get `WindowsToolGuide`.
+
 Linux controls the signed-in user's X11 desktop. The driver `local_linux.py` is
 embedded in the Go binary; it reads windows through AT-SPI and sends input with
 `xdotool`. The host needs `python3-pyatspi`, `xdotool`, ImageMagick, `xclip` and a

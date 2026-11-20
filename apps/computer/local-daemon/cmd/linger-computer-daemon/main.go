@@ -287,6 +287,8 @@ func run(args []string) (resultErr error) {
 			resolver.ToolGuide = localtools.MacToolGuide
 		} else if runtime.GOOS == "linux" {
 			resolver.ToolGuide = localtools.NativeLinuxToolGuide
+		} else if runtime.GOOS == "windows" {
+			resolver.ToolGuide = localtools.WindowsToolGuide
 		}
 		if toolManager.ConnectsEverydayBrowser() {
 			browserConnections = toolManager
