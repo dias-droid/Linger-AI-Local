@@ -147,6 +147,46 @@ export const connectorMessages = defineMessages("connectors", {
   authorizationComplete: "Authorization complete",
   canCloseWindow: "You can close this window.",
 
+  // Web search backends, beside the app groups. Backend names, descriptions
+  // and free tier text come from TeamHub.
+  filterWebSearch: "Web search",
+  loadingWebSearch: "Loading web search...",
+  defaultBackend: "Default",
+  searchKeyRejected: "Key rejected",
+  // {usage} is what is left on the account, such as "1,000 credits left".
+  connectedWithUsage: "Connected · {usage}",
+  freeLimited: "Free, limited",
+  factDoes: "Does",
+  searchesAndReads: "Searches the web and reads pages",
+  searches: "Searches the web",
+  factFreeTier: "Free tier",
+  factFreeUse: "Free use",
+  factUsage: "Usage",
+  apiKey: "API key",
+  replaceKey: "Replace key",
+  removeKey: "Remove key",
+  savedKeyRefused: "{backend} refused the saved key. Paste a new one.",
+  savedKeyUnverified:
+    "A key is saved. {backend} has no key check, so the first search proves it.",
+  keySaved: "A key is saved.",
+  defaultSearchBackend: "Default search backend",
+  defaultChosen: "Your Agents search with {backend} when they name no backend.",
+  defaultFirstReady:
+    "Your Agents search with {backend} when they name no backend, because it is the first ready one in the default order.",
+  defaultOffer:
+    "Make {backend} the backend your Agents search with when they name none.",
+  defaultNeedsKey: "Add a key to make {backend} the default.",
+  clearDefault: "Clear default",
+  makeDefault: "Make default",
+  usageAfterFirstSearch: "Usage shows after the first search",
+  usageUnavailable: "Usage unavailable right now",
+  // {amount} is a number or "remaining / limit", such as "40 / 1,000".
+  usageLeft: "{amount} left",
+  usageCreditsLeft: "{amount} credits left",
+  usageRequestsLeft: "{amount} requests left",
+  // {when} is relative, such as "2 hours ago".
+  usageAsOf: "{left}, as of the last search {when}",
+
   // An Agent's connector access
   agentAccounts: "Accounts this Agent can use",
   noConnectedAccounts: "No connected accounts yet.",

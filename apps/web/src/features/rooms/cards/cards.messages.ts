@@ -205,6 +205,24 @@ export const cardsMessages = defineMessages("cards", {
   noKeyAdded: "No key added",
   notCompleted: "Not completed",
 
+  // A web search API key request. Backend names and descriptions come from
+  // TeamHub. Requested: the Agent named the backend; Suggested: TeamHub
+  // picked it.
+  labelSearchKey: "Web search key requested",
+  requested: "Requested",
+  suggested: "Suggested",
+  searchKeyNoLongerAccepted:
+    "{backend} no longer accepts the saved key. Paste a new one.",
+  freeSearchesUsedUp:
+    "The free {backend} searches are used up. Add a key to keep searching.",
+  otherProviders: "Other providers",
+  otherProvidersCount: "Other providers ({count})",
+  hideOtherProviders: "Hide other providers",
+  freeLimited: "Free, limited",
+  searchKeyAdded: "{backend} key added. Your Agent is continuing.",
+  searchKeyAddedInstead:
+    "{backend} key added instead of {requested}. Your Agent continues with {backend}.",
+
   // A browser connection.
   labelBrowserConnection: "Browser connection requested",
   everydayChrome: "Everyday Chrome",

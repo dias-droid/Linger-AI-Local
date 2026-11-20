@@ -84,6 +84,8 @@ elsewhere.
 | Topics (of a meeting)         | 议题                       | Wiki Topics are 主题.                             |
 | Table of contents             | 目录                       |                                                   |
 | Voice provider                | 语音服务商                 | Soniox or xAI; the names stay as they are.        |
+| Web search                    | 网页搜索                   |                                                   |
+| Search backend                | 搜索服务                   | Tavily or Exa; the names stay as they are.        |
 | Draft                         | 草稿                       |                                                   |
 | Local model                   | 本地模型                   |                                                   |
 | Subscription                  | 订阅                       | A model source.                                   |

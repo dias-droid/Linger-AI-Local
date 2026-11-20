@@ -24,11 +24,15 @@ import {
 import { WebSearchKeyForm } from "@/features/web-search/web-search-key-form";
 import { WebSearchKeysUnavailable } from "@/features/web-search/web-search-keys-unavailable";
 import { webSearchBackendLogo } from "@/features/web-search/web-search-logos";
+import { commonMessages } from "@/i18n/common.messages";
+import { formatLocale, type Translation } from "@/i18n/language";
+import { useT, useTranslation } from "@/i18n/use-translation";
 import { formatUpdatedAt } from "@/lib/date-format";
 import { cn } from "@/lib/cn";
 
 import { WEB_SEARCH_FILTER } from "./app-groups";
 import { AppLogo } from "./app-logo";
+import { connectorMessages as m } from "./connectors.messages";
 
 /**
  * The web search backends as Connectors cards. They need no Composio key:
@@ -47,12 +51,13 @@ export function WebSearchSection({
   heading: boolean;
   list: UseQueryResult<TeamHubWebSearchBackendList>;
 }) {
+  const t = useT();
   const [openID, setOpenID] = useState<string | null>(null);
   const opened = backends.find((backend) => backend.id === openID);
   const headingId = "connector-group-web-search";
   return (
     <section
-      aria-label={heading ? undefined : WEB_SEARCH_FILTER.label}
+      aria-label={heading ? undefined : t(WEB_SEARCH_FILTER.label)}
       aria-labelledby={heading ? headingId : undefined}
       className={className}
     >
@@ -61,18 +66,18 @@ export function WebSearchSection({
           className="mb-2.5 text-[14px] font-medium text-muted-foreground"
           id={headingId}
         >
-          {WEB_SEARCH_FILTER.label}
+          {t(WEB_SEARCH_FILTER.label)}
         </h2>
       ) : null}
       {list.isPending ? (
         <p className="py-3 text-sm text-muted-foreground" role="status">
-          Loading web search...
+          {t(m.loadingWebSearch)}
         </p>
       ) : list.error ? (
         <div className="flex items-center gap-3 py-3" role="alert">
           <p className="text-sm text-app-danger">{list.error.message}</p>
           <Button onClick={() => void list.refetch()} size="compact">
-            Retry
+            {t(commonMessages.retry)}
           </Button>
         </div>
       ) : (
@@ -112,7 +117,9 @@ function WebSearchBackendCard({
   isDefault: boolean;
   onOpen: () => void;
 }) {
-  const state = connectionState(backend);
+  const translation = useTranslation();
+  const { t } = translation;
+  const state = connectionState(backend, translation);
   const line = state?.label ?? backend.description;
   const canConnect =
     isWebSearchKeyBackend(backend) &&
@@ -133,7 +140,7 @@ function WebSearchBackendCard({
             </span>
             {isDefault ? (
               <span className="shrink-0 text-xs text-muted-foreground">
-                Default
+                {t(m.defaultBackend)}
               </span>
             ) : null}
           </span>
@@ -157,13 +164,13 @@ function WebSearchBackendCard({
       </button>
       {canConnect ? (
         <Button
-          aria-label={`Connect ${backend.name}`}
+          aria-label={t(m.connectApp, { app: backend.name })}
           className="px-2.5"
           onClick={onOpen}
           size="compact"
           tone="secondary"
         >
-          Connect
+          {t(m.connect)}
         </Button>
       ) : null}
     </article>
@@ -179,7 +186,9 @@ function WebSearchBackendDialog({
   list: TeamHubWebSearchBackendList;
   onClose: () => void;
 }) {
-  const usage = usageLine(backend);
+  const translation = useTranslation();
+  const { t } = translation;
+  const usage = usageLine(backend, translation);
   return (
     <ModalDialog
       className="app-key-dialog"
@@ -191,18 +200,18 @@ function WebSearchBackendDialog({
     >
       <div className="space-y-5 px-5 py-5 text-sm text-app-body">
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
-          <Fact label="Does">
+          <Fact label={t(m.factDoes)}>
             {backend.commands.includes("open")
-              ? "Searches the web and reads pages"
-              : "Searches the web"}
+              ? t(m.searchesAndReads)
+              : t(m.searches)}
           </Fact>
           {backend.free_tier ? (
-            <Fact label="Free tier">{backend.free_tier}</Fact>
+            <Fact label={t(m.factFreeTier)}>{backend.free_tier}</Fact>
           ) : null}
           {backend.tier_text ? (
-            <Fact label="Free use">{backend.tier_text}</Fact>
+            <Fact label={t(m.factFreeUse)}>{backend.tier_text}</Fact>
           ) : null}
-          {usage ? <Fact label="Usage">{usage}</Fact> : null}
+          {usage ? <Fact label={t(m.factUsage)}>{usage}</Fact> : null}
         </dl>
         {isWebSearchKeyBackend(backend) ? (
           <KeySection backend={backend} canSave={list.can_save_keys} />
@@ -220,6 +229,7 @@ function KeySection({
   backend: TeamHubWebSearchBackend & { id: TeamHubWebSearchKeyBackend };
   canSave: boolean;
 }) {
+  const t = useT();
   const { client } = useTeamHubRuntime();
   const queryClient = useQueryClient();
   const saved = backend.key_state !== "none";
@@ -234,12 +244,12 @@ function KeySection({
       queryClient.invalidateQueries({ queryKey: webSearchQueryKey }),
   });
   return (
-    <section aria-label="API key" className="space-y-3">
-      {saved ? <p>{savedKeyText(backend)}</p> : null}
+    <section aria-label={t(m.apiKey)} className="space-y-3">
+      {saved ? <p>{savedKeyText(backend, t)}</p> : null}
       {canSave ? (
         <WebSearchKeyForm
           backend={backend}
-          submitLabel={saved ? "Replace key" : "Save key"}
+          submitLabel={saved ? t(m.replaceKey) : t(m.saveKey)}
         />
       ) : (
         <WebSearchKeysUnavailable />
@@ -247,11 +257,12 @@ function KeySection({
       {saved ? (
         <div className="space-y-1.5">
           <Button
+            data-voice-risk="never"
             loading={remove.isPending}
             onClick={() => remove.mutate()}
             tone="danger"
           >
-            Remove key
+            {t(m.removeKey)}
           </Button>
           {remove.error ? (
             <p className="text-xs text-app-danger" role="alert">
@@ -271,6 +282,7 @@ function DefaultSection({
   backend: ShownWebSearchBackend;
   list: TeamHubWebSearchBackendList;
 }) {
+  const t = useT();
   const { client } = useTeamHubRuntime();
   const queryClient = useQueryClient();
   const chosen = list.chosen_default_search === backend.id;
@@ -286,15 +298,18 @@ function DefaultSection({
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: webSearchQueryKey }),
   });
-  const text = chosen
-    ? `Your Agents search with ${backend.name} when they name no backend.`
-    : list.default_search === backend.id
-      ? `Your Agents search with ${backend.name} when they name no backend, because it is the first ready one in the default order.`
-      : backend.status === "ready"
-        ? `Make ${backend.name} the backend your Agents search with when they name none.`
-        : `Add a key to make ${backend.name} the default.`;
+  const text = t(
+    chosen
+      ? m.defaultChosen
+      : list.default_search === backend.id
+        ? m.defaultFirstReady
+        : backend.status === "ready"
+          ? m.defaultOffer
+          : m.defaultNeedsKey,
+    { backend: backend.name },
+  );
   return (
-    <section aria-label="Default search backend" className="space-y-2">
+    <section aria-label={t(m.defaultSearchBackend)} className="space-y-2">
       <p className="text-muted-foreground">{text}</p>
       {chosen ? (
         <Button
@@ -302,7 +317,7 @@ function DefaultSection({
           onClick={() => change.mutate(false)}
           tone="secondary"
         >
-          Clear default
+          {t(m.clearDefault)}
         </Button>
       ) : backend.status === "ready" ? (
         <Button
@@ -310,7 +325,7 @@ function DefaultSection({
           onClick={() => change.mutate(true)}
           tone="secondary"
         >
-          Make default
+          {t(m.makeDefault)}
         </Button>
       ) : null}
       {change.error ? (
@@ -356,67 +371,75 @@ function BackendLogoTile({ backend }: { backend: TeamHubWebSearchBackend }) {
  */
 function connectionState(
   backend: TeamHubWebSearchBackend,
+  translation: Translation,
 ): { label: string; tone: "danger" | "success" } | null {
+  const { t } = translation;
   if (backend.key_state === "rejected" || backend.status === "key_rejected")
-    return { label: "Key rejected", tone: "danger" };
+    return { label: t(m.searchKeyRejected), tone: "danger" };
   if (backend.key_state !== "none") {
-    const usage = usageLine(backend);
+    const usage = usageLine(backend, translation);
     return {
-      label: usage ? `Connected · ${usage}` : "Connected",
+      label: usage ? t(m.connectedWithUsage, { usage }) : t(m.connected),
       tone: "success",
     };
   }
   if (backend.tier === "free")
-    return { label: "Free, limited", tone: "success" };
+    return { label: t(m.freeLimited), tone: "success" };
   return null;
 }
 
-function savedKeyText(backend: TeamHubWebSearchBackend): string {
+function savedKeyText(
+  backend: TeamHubWebSearchBackend,
+  t: Translation["t"],
+): string {
   if (backend.key_state === "rejected")
-    return `${backend.name} refused the saved key. Paste a new one.`;
+    return t(m.savedKeyRefused, { backend: backend.name });
   if (backend.key_state === "unverified")
-    return `A key is saved. ${backend.name} has no key check, so the first search proves it.`;
-  return "A key is saved.";
+    return t(m.savedKeyUnverified, { backend: backend.name });
+  return t(m.keySaved);
 }
-
-const numberFormat = new Intl.NumberFormat("en-US");
-const dollarFormat = new Intl.NumberFormat("en-US", {
-  currency: "USD",
-  style: "currency",
-});
 
 /**
  * What is left on the account, from the live quota; null when the provider
- * reported no numbers worth a line.
+ * reported no numbers worth a line. Amounts are in USD whatever the language.
  */
-function usageLine(backend: TeamHubWebSearchBackend): string | null {
+function usageLine(
+  backend: TeamHubWebSearchBackend,
+  translation: Translation,
+): string | null {
+  const { t } = translation;
   const quota = backend.quota;
   if (!quota) return null;
   if (quota.from === "unavailable") {
     switch (quota.reason) {
       case "not_observed":
-        return "Usage shows after the first search";
+        return t(m.usageAfterFirstSearch);
       case "provider_unavailable":
-        return "Usage unavailable right now";
+        return t(m.usageUnavailable);
       default:
         return null;
     }
   }
   if (quota.remaining === undefined) return null;
-  const amount = (value: number) =>
-    quota.unit === "usd"
-      ? dollarFormat.format(value)
-      : numberFormat.format(value);
-  const unit =
+  const format = new Intl.NumberFormat(
+    formatLocale(translation.language),
+    quota.unit === "usd" ? { currency: "USD", style: "currency" } : {},
+  );
+  const amount = `${format.format(quota.remaining)}${
+    quota.limit === undefined ? "" : ` / ${format.format(quota.limit)}`
+  }`;
+  const left = t(
     quota.unit === "credits"
-      ? " credits"
+      ? m.usageCreditsLeft
       : quota.unit === "requests"
-        ? " requests"
-        : "";
-  const left = `${amount(quota.remaining)}${
-    quota.limit === undefined ? "" : ` / ${amount(quota.limit)}`
-  }${unit} left`;
+        ? m.usageRequestsLeft
+        : m.usageLeft,
+    { amount },
+  );
   return quota.from === "last_response" && quota.observed_at
-    ? `${left}, as of the last search ${formatUpdatedAt(quota.observed_at)}`
+    ? t(m.usageAsOf, {
+        left,
+        when: formatUpdatedAt(quota.observed_at, undefined, translation),
+      })
     : left;
 }

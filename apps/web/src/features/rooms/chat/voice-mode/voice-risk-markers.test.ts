@@ -47,6 +47,10 @@ const notActions: Record<string, string> = {
     "describes the button that starts Voice Mode, which sends nothing itself",
   "/src/features/local-computer/remove-computer-agent-row.tsx: computers.deleteAgentInstead":
     "chooses what removing the computer does; the marked Remove button does it",
+  "/src/features/apps/web-search-connectors.tsx: connectors.searchKeyRejected":
+    "the status line of a backend card, which is not a control",
+  "/src/features/rooms/cards/decision-search-key-view.tsx: cards.hideOtherProviders":
+    "folds the other providers' key fields in place; it closes nothing",
 };
 
 type Need = "confirm" | "never" | "close";

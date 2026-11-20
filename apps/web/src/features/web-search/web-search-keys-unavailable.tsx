@@ -1,10 +1,16 @@
+import { RichMessage } from "@/i18n/use-translation";
+
+import { webSearchMessages as m } from "./web-search.messages";
+
+const CODE_TAGS = {
+  code: (text: string) => <code className="font-mono">{text}</code>,
+};
+
 /** Why no key field shows: the server has nothing to seal keys with. */
 export function WebSearchKeysUnavailable() {
   return (
     <p className="text-app-muted">
-      This server cannot store web search keys. Set{" "}
-      <code className="font-mono">TEAMHUB_SECRET_ENCRYPTION_KEY</code> where it
-      runs, then add the key here.
+      <RichMessage message={m.keysUnavailable} tags={CODE_TAGS} />
     </p>
   );
 }

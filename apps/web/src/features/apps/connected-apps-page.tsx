@@ -80,7 +80,7 @@ export function ConnectedAppsPage() {
   const filters = [
     { id: "all", label: t(m.filterAll) },
     ...groups.map(({ group }) => ({ id: group.id, label: t(group.title) })),
-    WEB_SEARCH_FILTER,
+    { id: WEB_SEARCH_FILTER.id, label: t(WEB_SEARCH_FILTER.label) },
   ];
   const groupApps = groups.find((entry) => entry.group.id === filter)?.apps;
   // Connected only narrows whichever view is open; with All it is one grid.

@@ -7,9 +7,12 @@ import { teamHubData } from "@/features/teamhub/teamhub-api";
 import { TeamHubError } from "@/features/teamhub/teamhub-error";
 import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
 import type { TeamHubWebSearchKeyBackend } from "@/features/teamhub/teamhub-types";
+import type { Translate } from "@/i18n/language";
+import { RichMessage, useT } from "@/i18n/use-translation";
 import { cn } from "@/lib/cn";
 
 import { webSearchKeySite, webSearchQueryKey } from "./web-search-backends";
+import { webSearchMessages as m } from "./web-search.messages";
 
 export interface WebSearchKeyTarget {
   id: TeamHubWebSearchKeyBackend;
@@ -28,7 +31,7 @@ export function WebSearchKeyForm({
   compact = false,
   decisionId,
   onSaved,
-  submitLabel = "Save key",
+  submitLabel,
   tone = "primary",
 }: {
   backend: WebSearchKeyTarget;
@@ -39,6 +42,7 @@ export function WebSearchKeyForm({
   submitLabel?: string;
   tone?: "primary" | "secondary";
 }) {
+  const t = useT();
   const { client } = useTeamHubRuntime();
   const queryClient = useQueryClient();
   const [apiKey, setApiKey] = useState("");
@@ -59,9 +63,9 @@ export function WebSearchKeyForm({
       onSaved?.();
     },
   });
-  const label = `${backend.name} API key`;
+  const label = t(m.apiKey, { backend: backend.name });
   const error = mutation.error
-    ? describeKeyError(mutation.error, backend)
+    ? describeKeyError(mutation.error, backend, t)
     : null;
   const hasHint = !compact || Boolean(backend.key_url);
   const hintId = `${inputId}-hint`;
@@ -104,7 +108,9 @@ export function WebSearchKeyForm({
           tone={tone}
           type="submit"
         >
-          {mutation.isPending ? "Checking key..." : submitLabel}
+          {mutation.isPending
+            ? t(m.checkingKey)
+            : (submitLabel ?? t(m.saveKey))}
         </Button>
       </div>
       {error ? (
@@ -119,31 +125,42 @@ export function WebSearchKeyForm({
       {hasHint ? (
         <p className="text-xs text-app-muted" id={hintId}>
           {backend.key_url ? (
-            <>
-              Get a key at{" "}
-              <a
-                className="text-app-link hover:underline"
-                href={backend.key_url}
-                rel="noopener noreferrer"
-                target="_blank"
-              >
-                {webSearchKeySite(backend.key_url)}{" "}
-                <span aria-hidden="true">↗</span>
-              </a>
-              {compact ? null : ". "}
-            </>
-          ) : null}
-          {compact ? null : "Stored encrypted and never shown again."}
+            <RichMessage
+              message={compact ? m.getKeyAt : m.getKeyAtStored}
+              tags={{
+                link: (site) => (
+                  <a
+                    className="text-app-link hover:underline"
+                    href={backend.key_url}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    {site} <span aria-hidden="true">↗</span>
+                  </a>
+                ),
+              }}
+              values={{ site: webSearchKeySite(backend.key_url) }}
+            />
+          ) : compact ? null : (
+            t(m.storedEncrypted)
+          )}
         </p>
       ) : null}
     </form>
   );
 }
 
-function describeKeyError(error: Error, backend: WebSearchKeyTarget): string {
+function describeKeyError(
+  error: Error,
+  backend: WebSearchKeyTarget,
+  t: Translate,
+): string {
   if (error instanceof TeamHubError && error.code === "WEB_SEARCH_KEY_REJECTED")
     return backend.key_url
-      ? `${backend.name} rejected this key. Check it at ${webSearchKeySite(backend.key_url)} and paste it again.`
-      : `${backend.name} rejected this key. Check it and paste it again.`;
+      ? t(m.keyRejectedAt, {
+          backend: backend.name,
+          site: webSearchKeySite(backend.key_url),
+        })
+      : t(m.keyRejected, { backend: backend.name });
   return error.message;
 }

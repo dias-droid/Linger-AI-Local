@@ -18,7 +18,10 @@ export interface AppGroup {
  * product nouns such as Profile, Chats, Docs, Projects and Sources.
  */
 /** The Connectors tab for web search, beside the Composio app groups. */
-export const WEB_SEARCH_FILTER = { id: "web-search", label: "Web search" };
+export const WEB_SEARCH_FILTER = {
+  id: "web-search",
+  label: m.filterWebSearch,
+};
 
 export const APP_GROUPS: readonly AppGroup[] = [
   {

@@ -27,6 +27,8 @@ import {
 } from "@/features/web-search/web-search-key-form";
 import { WebSearchKeysUnavailable } from "@/features/web-search/web-search-keys-unavailable";
 import { webSearchBackendLogo } from "@/features/web-search/web-search-logos";
+import type { Translate } from "@/i18n/language";
+import { useT } from "@/i18n/use-translation";
 import { cn } from "@/lib/cn";
 
 import {
@@ -36,10 +38,9 @@ import {
   CardRowDetails,
 } from "./approval-card-parts";
 import { CardBox, CardDone, type ReceiptTone } from "./card-shell";
+import { cardsMessages as m } from "./cards.messages";
 import type { DecisionMessageCard } from "./decision-card";
 import type { RoomCardDecision } from "./room-message-card-contract";
-
-const label = "Web search key requested";
 
 type KeyBackend = TeamHubWebSearchBackend & { id: TeamHubWebSearchKeyBackend };
 
@@ -62,6 +63,7 @@ export function SearchKeyDecision({
   messageId: string;
   onDecision: (decision: RoomCardDecision) => Promise<void> | void;
 }) {
+  const t = useT();
   const { client } = useTeamHubRuntime();
   const list = useQuery(webSearchBackendInfoQueryOptions(client));
   const [othersOpen, setOthersOpen] = useState(false);
@@ -92,20 +94,16 @@ export function SearchKeyDecision({
         requestId: card.decision_id,
       });
     } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "The card could not be updated.",
-      );
+      setError(cause instanceof Error ? cause.message : t(m.cardUpdateFailed));
     } finally {
       setBusy(false);
     }
   }
 
-  const result = pending ? null : keyResult(card, view.backend);
+  const result = pending ? null : keyResult(card, view.backend, t);
   const canSave = list.data?.can_save_keys !== false;
   return (
-    <CardBox heading={card.title} label={label}>
+    <CardBox heading={card.title} label={t(m.labelSearchKey)}>
       <CardRow
         detail={shown?.description}
         icon={
@@ -116,9 +114,9 @@ export function SearchKeyDecision({
             {target.name}{" "}
             {pending ? (
               view.origin === "requested" ? (
-                <StatusPill tone="info">Requested</StatusPill>
+                <StatusPill tone="info">{t(m.requested)}</StatusPill>
               ) : (
-                <StatusPill>Suggested</StatusPill>
+                <StatusPill>{t(m.suggested)}</StatusPill>
               )
             ) : null}
           </>
@@ -130,9 +128,12 @@ export function SearchKeyDecision({
         <>
           {view.reason === "missing" ? null : (
             <p className="px-2 pb-2 text-xs text-app-muted">
-              {view.reason === "rejected"
-                ? `${target.name} no longer accepts the saved key. Paste a new one.`
-                : `The free ${target.name} searches are used up. Add a key to keep searching.`}
+              {t(
+                view.reason === "rejected"
+                  ? m.searchKeyNoLongerAccepted
+                  : m.freeSearchesUsedUp,
+                { backend: target.name },
+              )}
             </p>
           )}
           {canSave ? (
@@ -164,7 +165,7 @@ export function SearchKeyDecision({
               size="large"
               tone="subtle"
             >
-              Not now
+              {t(m.notNow)}
             </Button>
           </CardActions>
         </>
@@ -186,6 +187,7 @@ function OtherProviders({
   onToggle: () => void;
   open: boolean;
 }) {
+  const t = useT();
   return (
     <>
       <button
@@ -194,7 +196,9 @@ function OtherProviders({
         onClick={onToggle}
         type="button"
       >
-        {open ? "Hide other providers" : `Other providers (${backends.length})`}
+        {open
+          ? t(m.hideOtherProviders)
+          : t(m.otherProvidersCount, { count: backends.length })}
         <Icon
           className={cn(
             "shrink-0 text-app-muted transition-transform duration-(--chat-resize-duration) ease-(--app-out-quint) motion-reduce:transition-none",
@@ -206,7 +210,7 @@ function OtherProviders({
       </button>
       <CardRowDetails open={open}>
         <ul
-          aria-label="Other providers"
+          aria-label={t(m.otherProviders)}
           className="max-h-62 divide-y divide-app-border overflow-y-auto overscroll-contain border-t border-app-border px-2"
         >
           {backends.map((backend) => (
@@ -221,7 +225,7 @@ function OtherProviders({
                   <p className="flex min-w-0 items-center gap-1.5 text-sm text-app-ink">
                     <span className="truncate">{backend.name}</span>
                     {backend.tier === "free" ? (
-                      <StatusPill tone="success">Free, limited</StatusPill>
+                      <StatusPill tone="success">{t(m.freeLimited)}</StatusPill>
                     ) : null}
                   </p>
                   <p className="truncate text-xs text-app-muted">
@@ -249,20 +253,24 @@ function OtherProviders({
 function keyResult(
   card: DecisionMessageCard,
   shown: TeamHubWebSearchKeyBackend,
+  t: Translate,
 ): { icon: IconSvgElement; text: string; tone: ReceiptTone } {
   if (card.answer?.decision === "configured") {
     const saved = card.answer.backend ?? shown;
-    const name = webSearchBackendName(saved);
+    const backend = webSearchBackendName(saved);
     return {
       icon: Tick02Icon,
       text:
         saved === shown
-          ? `${name} key added. Your Agent is continuing.`
-          : `${name} key added instead of ${webSearchBackendName(shown)}. Your Agent continues with ${name}.`,
+          ? t(m.searchKeyAdded, { backend })
+          : t(m.searchKeyAddedInstead, {
+              backend,
+              requested: webSearchBackendName(shown),
+            }),
       tone: "success",
     };
   }
   if (card.status === "denied")
-    return { icon: Cancel01Icon, text: "No key added", tone: "muted" };
-  return { icon: AlertCircleIcon, text: "Not completed", tone: "danger" };
+    return { icon: Cancel01Icon, text: t(m.noKeyAdded), tone: "muted" };
+  return { icon: AlertCircleIcon, text: t(m.notCompleted), tone: "danger" };
 }
