@@ -214,6 +214,7 @@ export async function parseDomainCommand(
   args: readonly string[],
   dependencies: {
     cwd: string;
+    localPath?: (source: string) => string;
     readInput?: (source: string) => Promise<string>;
     beforeNormalize?: (target?: CommandTarget) => void;
     syntaxOnly?: boolean;

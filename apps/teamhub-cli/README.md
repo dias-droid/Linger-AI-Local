@@ -54,6 +54,12 @@ teamhub agent create --name 'Reviewer' --description 'Checks patches' --prompt-f
 teamhub agent update --agent-id <actor-id> --prompt-file ./reviewer.md --json
 ```
 
+## Windows Subsystem for Linux
+
+When Pi runs the Desktop TeamHub CLI from WSL, use Linux paths directly for Room message attachments (`--attach` and JSON `content-path`), command input files (`--file`, `--prompt-file`), and `docs` file and image arguments. Quote paths with spaces. Message text is passed through as text.
+
+Connected application commands may have their own file options. For those options, convert an absolute Linux path explicitly, for example `gdrive download ... --output "$(wslpath -w /home/me/report.pdf)"`.
+
 ## Connected applications
 
 Eight applications have dedicated commands: Gmail, Outlook, Slack, Google Calendar, Notion, Google Drive, Figma and GitHub, with 50 Connector leaf commands. `teamhub gmail --help` and `teamhub gdrive --help` discover them offline, and each command keeps its own help, examples and Composio support boundary.

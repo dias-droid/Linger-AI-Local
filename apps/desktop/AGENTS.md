@@ -433,9 +433,10 @@ home> --stop-local-models` under `ELECTRON_RUN_AS_NODE`, detached, with
    `node` in PATH from source. The Desktop TeamHub shell launcher uses
    `wslpath` and `WSLENV` when WSL starts the Windows executable, so the
    script path and `ELECTRON_RUN_AS_NODE` reach that process correctly.
-   Arguments are forwarded unchanged: for a file flag like `--attach`,
-   convert the Linux path explicitly with `wslpath -w` before passing it
-   to Windows Node. Other arguments may be message text or remote paths.
+   The CLI translates absolute Linux paths for local attachments, input files
+   and Document file outputs using the invoking WSL distribution. Message text
+   and remote paths stay unchanged. The same local file checks apply to the
+   translated path.
 
 ## Source Package and Release
 

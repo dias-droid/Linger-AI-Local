@@ -12,7 +12,7 @@ case "$app" in
     # explicitly listed Linux environment variables to Windows executables.
     if command -v wslpath >/dev/null 2>&1; then
       script=$(wslpath -w "$script") || exit 1
-      WSLENV="${WSLENV:+$WSLENV:}ELECTRON_RUN_AS_NODE"
+      WSLENV="${WSLENV:+$WSLENV:}ELECTRON_RUN_AS_NODE:WSL_DISTRO_NAME"
       export WSLENV
     fi
     ;;
