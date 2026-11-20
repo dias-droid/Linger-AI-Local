@@ -156,6 +156,14 @@ elsewhere.
 | Popup (authorization)         | 弹窗                       | `拦截` for a popup the browser blocked.           |
 | Back / Forward / Reload       | 返回 / 前进 / 重新加载     | Buttons of the URL preview panel.                 |
 | Tab (in a browser)            | 标签页                     |                                                   |
+| Sources (of the Profile)      | 来源                       | What Another Me reads to write the Profile.       |
+| Timeline                      | 时间线                     | A Wiki collection, and a list of periods.         |
+| Projects / Topics             | 项目 / 主题                | Wiki collections.                                 |
+| People / Companies            | 人物 / 公司                | Wiki collections.                                 |
+| Daily / Weekly report         | 日报 / 周报                |                                                   |
+| Highlights / Next             | 要点 / 接下来              | Sections of a report card.                        |
+| Email (an address)            | 邮箱                       | `邮件` is a message that is sent.                 |
+| Keep (a Wiki page)            | 保留                       | The opposite of Delete in the Wiki directory.     |
 
 ## Style
 
