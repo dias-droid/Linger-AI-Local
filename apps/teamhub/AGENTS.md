@@ -240,9 +240,11 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
   `web_search_keys` (sealed with `TEAMHUB_SECRET_ENCRYPTION_KEY`, read at each
   call) and the chosen default in `web_search_settings`. TeamHub calls only the
   providers' fixed API hosts; the CLI reads `direct` pages itself. A search
-  without a backend uses the chosen default, else the first backend with a
-  usable key, else You.com's keyless MCP trial, which TeamHub does not count;
-  a failed call never falls back to another backend. A missing or refused key,
+  without a backend runs the chosen default as if it were named, even when its
+  key stopped working; without one it uses the first backend with a usable key,
+  else You.com's keyless MCP trial, which TeamHub does not count. A failed call
+  never falls back to another backend. `include_quota=false` lists the
+  backends without calling any provider. A missing or refused key,
   or the end of the trial, posts a `search_key` card that stores the request.
   A key added from that card replays the request first: a provider 401/403
   leaves the key unsaved and the card open; any other outcome saves it and
