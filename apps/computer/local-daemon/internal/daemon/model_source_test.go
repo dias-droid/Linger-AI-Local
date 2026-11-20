@@ -14,6 +14,7 @@ import (
 type fakeModelSourceManager struct {
 	deadline  time.Time
 	lastApply localmodels.ModelSourceApply
+	calls     int
 }
 
 func (f *fakeModelSourceManager) Status(ctx context.Context) (wire.ModelSourceStatus, error) {
@@ -27,6 +28,7 @@ func (f *fakeModelSourceManager) Status(ctx context.Context) (wire.ModelSourceSt
 }
 
 func (f *fakeModelSourceManager) TestByok(ctx context.Context, input wire.ByokConfigInput) (wire.ByokTestResult, error) {
+	f.calls++
 	f.deadline, _ = ctx.Deadline()
 	return wire.ByokTestResult{
 		Ok:            true,
@@ -38,11 +40,13 @@ func (f *fakeModelSourceManager) TestByok(ctx context.Context, input wire.ByokCo
 }
 
 func (f *fakeModelSourceManager) ListByokModels(ctx context.Context, input wire.ByokConfigInput) (wire.ByokModelList, error) {
+	f.calls++
 	f.deadline, _ = ctx.Deadline()
 	return wire.ByokModelList{URL: input.BaseURL + input.Path + "/models", Models: []wire.ByokModelListModelsItem{{ID: "vendor/model"}}}, nil
 }
 
 func (f *fakeModelSourceManager) Apply(ctx context.Context, apply localmodels.ModelSourceApply) (wire.ModelSourceStatus, error) {
+	f.calls++
 	f.deadline, _ = ctx.Deadline()
 	f.lastApply = apply
 	return wire.ModelSourceStatus{
@@ -172,5 +176,96 @@ func TestHandleModelSourceCommandValidatesOwnerExpiryAndActions(t *testing.T) {
 	}
 	if len(stream.events) != 3 || stream.events[2].Type != protocol.EventCapabilityModelSourceFailed {
 		t.Fatalf("expected failed event for intruder, got %+v", stream.events)
+	}
+}
+
+func TestHandleModelSourceCommandRejectsMissingOrUnknownByokProtocol(t *testing.T) {
+	manager := &fakeModelSourceManager{}
+	d := &Daemon{
+		computerID:      "comp-1",
+		protocolVersion: protocol.Version,
+		modelSource:     manager,
+		owners:          []ComputerOwner{{TenantID: "tenant-1", OwnerActorID: "owner-1"}},
+	}
+	expires := time.Now().Add(time.Minute).UTC().Truncate(time.Millisecond)
+
+	cases := []struct {
+		name     string
+		action   string
+		mode     string
+		protocol string
+	}{
+		{name: "test empty protocol", action: "test", protocol: ""},
+		{name: "test unknown protocol", action: "test", protocol: "gemini"},
+		{name: "models empty protocol", action: "models", protocol: ""},
+		{name: "models unknown protocol", action: "models", protocol: "gemini"},
+		{name: "apply empty protocol", action: "apply", mode: "byok", protocol: ""},
+		{name: "apply unknown protocol", action: "apply", mode: "byok", protocol: "gemini"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stream := &browserEventStream{}
+			payload, _ := json.Marshal(wire.CapabilityModelSource{
+				ProtocolVersion: protocol.Version,
+				CommandID:       "cmd-" + tc.action,
+				RunnerID:        "comp-1",
+				TenantID:        "tenant-1",
+				OwnerActorID:    "owner-1",
+				ConnectionEpoch: 1,
+				ExpiresAt:       expires.Format(time.RFC3339Nano),
+				Type:            wire.TypeExecute,
+				Kind:            wire.KindModelSource,
+				Action:          tc.action,
+				Mode:            tc.mode,
+				Byok: &wire.ByokConfigInput{
+					BaseURL:  "https://api.example.com",
+					ModelID:  "gpt-5.4",
+					Protocol: tc.protocol,
+				},
+			})
+			if err := d.handleModelSourceCommand(t.Context(), stream, protocol.Command{
+				Type: protocol.CommandCapabilityModelSource, CommandID: "cmd-" + tc.action, RunnerID: "comp-1", ConnectionEpoch: 1, Payload: payload,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if len(stream.events) != 1 || stream.events[0].Type != protocol.EventCapabilityModelSourceFailed {
+				t.Fatalf("expected failed event, got %+v", stream.events)
+			}
+			var failed wire.CapabilityModelSourceFailed
+			if err := json.Unmarshal(stream.events[0].Payload, &failed); err != nil {
+				t.Fatal(err)
+			}
+			if failed.Error.Code != "BYOK_INVALID_CONFIG" {
+				t.Fatalf("expected BYOK_INVALID_CONFIG, got %q", failed.Error.Code)
+			}
+		})
+	}
+	if manager.calls != 0 {
+		t.Fatalf("expected invalid protocol commands not to reach localmodels, got %d calls", manager.calls)
+	}
+
+	// Switching back to the saved BYOK config omits request.Byok and still succeeds.
+	stream := &browserEventStream{}
+	reuseCmd, _ := json.Marshal(wire.CapabilityModelSource{
+		ProtocolVersion: protocol.Version,
+		CommandID:       "cmd-apply-saved",
+		RunnerID:        "comp-1",
+		TenantID:        "tenant-1",
+		OwnerActorID:    "owner-1",
+		ConnectionEpoch: 1,
+		ExpiresAt:       expires.Format(time.RFC3339Nano),
+		Type:            wire.TypeExecute,
+		Kind:            wire.KindModelSource,
+		Action:          "apply",
+		Mode:            "byok",
+	})
+	if err := d.handleModelSourceCommand(t.Context(), stream, protocol.Command{
+		Type: protocol.CommandCapabilityModelSource, CommandID: "cmd-apply-saved", RunnerID: "comp-1", ConnectionEpoch: 1, Payload: reuseCmd,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(stream.events) != 1 || stream.events[0].Type != protocol.EventCapabilityModelSourceSucceeded || manager.calls != 1 {
+		t.Fatalf("expected saved-BYOK apply to succeed once, events=%+v calls=%d", stream.events, manager.calls)
 	}
 }
