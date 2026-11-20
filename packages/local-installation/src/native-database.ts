@@ -51,6 +51,7 @@ export async function windowsElevated(
 export async function prepareNativeDatabase(options: {
   instance: Instance;
   postgresBin: string;
+  postgresConfigurationExecutable?: string;
   env: NodeJS.ProcessEnv;
   signal: AbortSignal;
   onOutput: (chunk: string) => void;
@@ -149,6 +150,7 @@ export async function prepareNativeDatabase(options: {
       root: instance.root,
       name: "postgres",
       executable: postgresProgram(postgresBin, "postgres"),
+      configurationExecutable: options.postgresConfigurationExecutable,
       args: [
         "-D",
         data,

@@ -206,6 +206,46 @@ describe("verified extraction", () => {
       ),
     ).rejects.toThrow(/cache/);
   });
+  it("publishes verified Windows PostgreSQL manifests separately from the original cache", async () => {
+    const { home, artifact, fetcher } = await fixture();
+    const signal = new AbortController().signal;
+    const load = (windowsPostgres: boolean) =>
+      acquireNativeArtifact(
+        home,
+        { ...artifact, windowsPostgres },
+        signal,
+        undefined,
+        fetcher,
+      );
+    const original = await load(false);
+    const prepared = await load(true);
+    expect(original).toBe(path.join(home, artifact.digest));
+    expect(prepared).toBe(original + "-utf8");
+
+    const tree = JSON.parse(
+      await readFile(path.join(prepared, ".simplex-files.json"), "utf8"),
+    );
+    for (const program of [
+      "postgres",
+      "initdb",
+      "pg_ctl",
+      "pg_isready",
+      "psql",
+      "createdb",
+    ]) {
+      const name = `bin/${program}.exe.manifest`;
+      const manifest = await readFile(path.join(prepared, name), "utf8");
+      expect(manifest).toContain(
+        '<activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>',
+      );
+      expect(tree[name]).toBe(
+        createHash("sha256").update(manifest).digest("hex"),
+      );
+    }
+    expect(await load(true)).toBe(prepared);
+    expect(await readdir(path.join(original, "bin"))).toEqual(["tool"]);
+    expect(await load(false)).toBe(original);
+  });
   it("checksum failure leaves no promoted component and permits clean retry", async () => {
     const f = await fixture();
     await expect(
@@ -509,10 +549,12 @@ it("prepares real executable launchers and reuses verified warm dependencies ent
   await archive(
     "postgres",
     Object.fromEntries(
-      ["postgres", "initdb", "pg_ctl", "psql", "createdb"].map((name) => [
-        `bin/${name}`,
-        "#!/bin/sh\nprintf 'postgres (PostgreSQL) 17.10\\n'\n",
-      ]),
+      ["postgres", "initdb", "pg_ctl", "pg_isready", "psql", "createdb"].map(
+        (name) => [
+          `bin/${name}`,
+          "#!/bin/sh\nprintf 'postgres (PostgreSQL) 17.10\\n'\n",
+        ],
+      ),
     ),
   );
   const fetcher = vi

@@ -524,6 +524,32 @@ posix.for([false, true])(
     }
   },
 );
+test("adopts a running service across executable cache layouts for the same archive", async (context) => {
+  const { expect } = context;
+  const root = await fixture(context);
+  const original = {
+    root,
+    name: "teamhub" as const,
+    executable: process.execPath,
+    args: ["-e", "setInterval(()=>{},1000)"],
+    cwd: root,
+    env: process.env,
+  };
+  const running = await startNativeProcess(original);
+  const upgraded = {
+    ...original,
+    executable: path.join(root, "new-cache", path.basename(process.execPath)),
+    configurationExecutable: original.executable,
+  };
+  expect(await nativeConfigurationChanged(upgraded)).toBe(false);
+  expect((await startNativeProcess(upgraded)).pid).toBe(running.pid);
+  expect(
+    await nativeConfigurationChanged({
+      ...upgraded,
+      configurationExecutable: "another-archive",
+    }),
+  ).toBe(true);
+});
 test("reports a configuration change only for a running recorded process", async (context) => {
   const { expect } = context;
   const root = await fixture(context);

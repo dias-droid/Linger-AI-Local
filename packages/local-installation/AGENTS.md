@@ -97,6 +97,15 @@ never leaves a directory that later attempts treat as initialized. A `postgres-d
 `PG_VERSION` but no `postmaster.opts` (which only a started server writes)
 never served a connection, holds no data, and is initialized again.
 
+On Windows the installer stages UTF-8 application manifests beside the bundled
+PostgreSQL tools before recording their file hashes. This lets `initdb`
+relaunch itself and start `postgres` when the profile path contains characters
+outside the system code page. This copy uses the `<archive digest>-utf8`
+component directory so older installers can still verify their own cache.
+Both copies use the same instance data directory and the same executable path
+in the supervisor's configuration hash. A matching live server keeps its
+connections during the upgrade. Its next start uses the UTF-8 copy.
+
 The desktop's bundled TeamHub binaries (`teamhub-binaries.ts`) count as current
 only when their files still match the manifest's sizes and hashes. A missing
 or damaged installed file is copied again from the bundle, so Native can use
