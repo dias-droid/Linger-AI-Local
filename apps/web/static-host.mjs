@@ -33,12 +33,7 @@ export function createStaticHost({ root } = {}) {
       if (pathname.startsWith("/assets/")) {
         response.setHeader("access-control-allow-origin", "*");
       }
-      response.setHeader(
-        "cache-control",
-        pathname.startsWith("/assets/")
-          ? "public, max-age=31536000, immutable"
-          : "no-cache",
-      );
+      response.setHeader("cache-control", cacheControlFor(pathname));
     },
   });
 
@@ -49,15 +44,13 @@ export function createStaticHost({ root } = {}) {
         new URL(request.url ?? "/", "http://localhost").pathname,
       );
     } catch {
-      response.statusCode = 404;
-      response.end();
+      respondNotFound(response);
       return;
     }
     setBrowserSecurityHeaders(response, pathname);
 
     if (request.method !== "GET" && request.method !== "HEAD") {
-      response.statusCode = 404;
-      response.end();
+      respondNotFound(response);
       return;
     }
 
@@ -77,20 +70,36 @@ export function createStaticHost({ root } = {}) {
     serveNegotiatedFile(serveFiles, request, response, () => {
       const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
       if (!isBrowserNavigation(request, pathname)) {
-        response.statusCode = 404;
-        response.end();
+        respondNotFound(response);
         return;
       }
 
       const requestUrl = request.url;
       request.url = "/index.html";
       serveNegotiatedFile(serveFiles, request, response, () => {
-        response.statusCode = 404;
-        response.end();
+        respondNotFound(response);
       });
       request.url = requestUrl;
     });
   };
+}
+
+// A release ships only its own fingerprinted assets, so a page from another
+// release asks for files this one lacks. The page must never be replayed from
+// the HTTP cache (history navigation and restored tabs skip no-cache
+// revalidation), and a miss must not be cached either: without an explicit
+// policy the CDN adds its browser TTL and the 404 outlives the rollout.
+function cacheControlFor(pathname) {
+  if (pathname.startsWith("/assets/")) {
+    return "public, max-age=31536000, immutable";
+  }
+  return extname(pathname) === ".html" ? "no-store" : "no-cache";
+}
+
+function respondNotFound(response) {
+  response.statusCode = 404;
+  response.setHeader("cache-control", "no-store");
+  response.end();
 }
 
 function serveNegotiatedFile(serveFiles, request, response, onNoMatch) {
