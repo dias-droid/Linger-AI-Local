@@ -376,6 +376,8 @@ func runToolFixture(mode string) {
 						result = map[string]any{"content": []any{}, "structuredContent": map[string]string{"degraded_reason": "ax_window_unresolved"}}
 					case a["since"] == "latest" && a["include_screenshot"] == false && (mode == "window-view" || mode == "window-view-sheet" || mode == "window-view-closed" || mode == "window-view-closed-text"):
 						result = map[string]any{"content": []any{map[string]string{"type": "text", "text": "+ [3] AXButton Save"}}, "structuredContent": map[string]string{"snapshot_id": "s00000002"}}
+					case a["since"] == nil && a["include_screenshot"] == false && mode == "window-view":
+						result = map[string]any{"content": []any{map[string]string{"type": "text", "text": "[3] AXButton Save"}}, "structuredContent": map[string]string{"snapshot_id": "s00000002"}}
 					case a["since"] == "latest", a["include_screenshot"] == false:
 						result = map[string]any{"content": []any{}, "structuredContent": map[string]string{"degraded_reason": "ax_window_unresolved"}}
 					case a["display_only"] == true && a["include_accessibility_tree"] == false:
@@ -769,7 +771,7 @@ func TestLocalToolCuaMacKeysFollowTheFrontAppFocus(t *testing.T) {
 		t.Fatal(err)
 	}
 	calls = fixtureCalls(t, marker)
-	if len(calls) != 1 || calls[0].Name != "press_key" || calls[0].Arguments["window_id"] != float64(9) || calls[0].Arguments["delivery_mode"] != "foreground" || calls[0].Arguments["session"] != "owned-session" {
+	if len(calls) != 2 || calls[1].Name != "get_window_state" || calls[1].Arguments["window_id"] != float64(9) || calls[0].Name != "press_key" || calls[0].Arguments["window_id"] != float64(9) || calls[0].Arguments["delivery_mode"] != "foreground" || calls[0].Arguments["session"] != "owned-session" {
 		t.Fatalf("driver calls=%v", calls)
 	}
 	if err := c.drain(); err != nil {
@@ -1142,8 +1144,7 @@ func TestLocalToolCuaMacAgentChromeKeepsTabsItsOwnInputChangesLate(t *testing.T)
 	c.op.manager.agentChromeOwner = c.op
 	c.holdAgentChromeWindow(42, 9, 1, "")
 	// The click below presses a row of page text, which lists no press.
-	c.snapshots = newSnapshotRows()
-	c.snapshots.record(windowRead{Snapshot: "s1", PID: 42, Window: 9, Tree: `- [1] AXStaticText = "Sort by time"`})
+	c.snapshots = newSnapshotRows(&c.op.manager.cuaInputGeneration)
 	// A tab the task's own input opens or closes may show only after the
 	// input returns; the task keeps the count the strip settles on.
 	// The input's result says what it changed in the window, and nothing
@@ -1162,6 +1163,7 @@ func TestLocalToolCuaMacAgentChromeKeepsTabsItsOwnInputChangesLate(t *testing.T)
 		if !strings.Contains(string(result), step.note) {
 			t.Fatalf("result after the task's own %s=%s, want note %s", step.keys, result, step.note)
 		}
+		c.snapshots.record(windowRead{Snapshot: "s1", PID: 42, Window: 9, Tree: `- [1] AXStaticText = "Sort by time"`})
 		result, err = c.call(t.Context(), "click", json.RawMessage(`{"pid":42,"window_id":9,"element_token":"s1:1"}`))
 		if err != nil {
 			t.Fatalf("input after the task's own %s: %v", step.keys, err)
@@ -1208,8 +1210,8 @@ func TestLocalToolCuaMacAgentChromeReadsTheTabStripOnlyAsFarAsItNeeds(t *testing
 	if _, err := c.call(t.Context(), "click", json.RawMessage(`{"pid":42,"window_id":9,"element_token":"s1:1"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if got, want := reads(), []string{"click", "6", "6"}; !slices.Equal(got, want) {
-		t.Fatalf("calls=%v, want the click alone, then two bounded reads", got)
+	if got, want := reads(), []string{"click", "6", "6", "0"}; !slices.Equal(got, want) {
+		t.Fatalf("calls=%v, want click, two bounded tab checks and window readback", got)
 	}
 	// After a script that returned reads, the reads after it are whole.
 	if note := c.recordAgentChromeTabs(t.Context(), float64(42), float64(9), true); note != "" {
@@ -1244,7 +1246,7 @@ func TestLocalToolCuaMacAgentChromeReadsTheTabStripOnlyAsFarAsItNeeds(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := reads()[before:]; !slices.Equal(got, []string{"click", "6", "0", "0"}) {
+	if got := reads()[before:]; !slices.Equal(got, []string{"click", "6", "0", "0", "0"}) {
 		t.Fatalf("calls for fewer tabs=%v, want a bounded read, then whole reads", got)
 	}
 	if note := `The window now has 1 tab(s), 2 before this input; the tab in front still shows \"Tab 0\".`; !strings.Contains(string(result), note) || strings.Contains(string(result), "This input closed") {
@@ -1255,7 +1257,7 @@ func TestLocalToolCuaMacAgentChromeReadsTheTabStripOnlyAsFarAsItNeeds(t *testing
 	if _, err := c.call(t.Context(), "click", json.RawMessage(`{"pid":42,"window_id":9,"element_token":"s1:1"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if got := reads(); !slices.Equal(got[len(got)-4:], []string{"0", "click", "6", "6"}) {
+	if got := reads(); !slices.Equal(got[len(got)-5:], []string{"0", "click", "6", "6", "0"}) {
 		t.Fatalf("calls=%v, want a whole read before the click", got)
 	}
 	if err := c.drain(); err != nil {
@@ -1396,7 +1398,7 @@ func TestLocalToolCuaMacKeysFollowAWindowRaisedInsideTheApp(t *testing.T) {
 	for _, call := range fixtureCalls(t, marker) {
 		got = append(got, fmt.Sprint(call.Name, " ", call.Arguments["window_id"]))
 	}
-	if want := []string{"bring_to_front 7", "hotkey 7", "press_key <nil>", "get_window_state 7"}; !slices.Equal(got, want) {
+	if want := []string{"bring_to_front 7", "hotkey 7", "get_window_state 7", "press_key <nil>", "get_window_state 7"}; !slices.Equal(got, want) {
 		t.Fatalf("driver calls=%v, want %v", got, want)
 	}
 	if err := c.drain(); err != nil {
@@ -1469,13 +1471,14 @@ func TestLocalToolCuaMacKeysNeverReachAnotherWindow(t *testing.T) {
 }
 
 func TestLocalToolCuaInputReturnsWindowChangesAsText(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip("macOS inputs report delivery only")
-	}
 	windowViewDelay = 0
 	t.Cleanup(func() { windowViewDelay = 100 * time.Millisecond })
+	expectedTree := "+ [3] AXButton Save"
+	if runtime.GOOS == "darwin" {
+		expectedTree = "[3] AXButton Save"
+	}
 	for _, test := range []struct{ mode, args, want string }{
-		{"window-view", `{"pid":42,"window_id":7,"direction":"down"}`, "+ [3] AXButton Save"},
+		{"window-view", `{"pid":42,"window_id":7,"direction":"down"}`, expectedTree},
 		{"window-view-degraded", `{"pid":42,"window_id":7,"direction":"down"}`, "after"},
 		{"window-view", `{"pid":42,"direction":"down"}`, ""},
 	} {

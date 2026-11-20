@@ -26,9 +26,9 @@ HOST_FIXTURE_TARGET = "win32-x64" if os.name == "nt" else "linux-x64"
 # The pins the shared validator holds the manifest to.
 FROZEN = json.loads(subprocess.check_output([
     "node", "--input-type=module", "-e",
-    "import { COMPUTER_TOOL_VERSIONS as versions, CUA_ARCHIVES as cua } from "
+    "import { COMPUTER_TOOL_VERSIONS as versions, CUA_ARCHIVES as cua, QUICKJS_TOOL_ASSETS as quickjs } from "
     + json.dumps("file://" + os.path.join(HERE, "..", "..", "..", "scripts", "computer-tool-bundle.mjs"))
-    + "; console.log(JSON.stringify({ versions, cua }))",
+    + "; console.log(JSON.stringify({ versions, cua, quickjs }))",
 ]))
 
 
@@ -46,6 +46,8 @@ def stage(root, target):
         "node_modules/native/prebuilt.node": MACHO,
     }
     cua = FROZEN["cua"].get(target, {})
+    for relative in FROZEN["quickjs"]:
+        files[relative] = b"engine"
     for relative in cua.get("required", []):
         files[relative] = MACHO + relative.encode()
     assets = []
@@ -159,7 +161,8 @@ class ComputerToolsTest(unittest.TestCase):
         archive = os.path.join(self.root, "Linger.tar.gz")
         with tarfile.open(archive, "w:gz") as out:
             out.add(app, arcname="Linger")
-        self.assertEqual(computer_tools.verify_archive(archive, "Linger/resources/", "linux-x64"), 3)
+        self.assertEqual(computer_tools.verify_archive(archive, "Linger/resources/", "linux-x64"),
+                         3 + len(FROZEN["quickjs"]))
 
         resources, _ = self.resources("win32-x64")
         archive = os.path.join(self.root, "Linger.zip")
@@ -168,7 +171,8 @@ class ComputerToolsTest(unittest.TestCase):
                 for name in files:
                     path = os.path.join(root, name)
                     out.write(path, "Linger/resources/" + os.path.relpath(path, resources))
-        self.assertEqual(computer_tools.verify_archive(archive, "Linger/resources/", "win32-x64"), 4)
+        self.assertEqual(computer_tools.verify_archive(archive, "Linger/resources/", "win32-x64"),
+                         4 + len(FROZEN["quickjs"]))
 
         bare = os.path.join(self.root, "bare.tar.gz")
         with tarfile.open(bare, "w:gz") as out:

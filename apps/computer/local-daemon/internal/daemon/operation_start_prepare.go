@@ -40,6 +40,13 @@ func (d *Daemon) openOperationMCP(ctx context.Context, spec provider.OperationSp
 		if err := d.localTools.Bind(ctx, spec, identity, proxies); err != nil {
 			return nil, errors.Join(err, proxies.Close())
 		}
+		if unified, ok := d.localTools.(interface {
+			BindUI(context.Context, provider.OperationSpec, mcpproxy.OperationIdentity, *mcpproxy.Set) error
+		}); ok {
+			if err := unified.BindUI(ctx, spec, identity, proxies); err != nil {
+				return nil, errors.Join(err, proxies.Close())
+			}
+		}
 	}
 	return proxies, nil
 }
@@ -117,6 +124,7 @@ func (d *Daemon) startAcceptedOperation(ctx context.Context, command protocol.Co
 			spec.TrustedLocalMCPTools = proxies.LocalToolNames()
 			spec.LocalEvidence = proxies.LocalEvidence
 			spec.LocalAllowed = proxies.LocalAllowed
+			spec.RegisterToolReviewer = proxies.RegisterToolReviewer
 			startedAt := time.Now()
 			execution, err = d.executor.Start(ctx, spec, emit)
 			startMs = time.Since(startedAt).Milliseconds()

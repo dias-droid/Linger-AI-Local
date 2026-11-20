@@ -61,8 +61,9 @@ type OperationSpec struct {
 	LocalEvidence func(ctx context.Context, tool, input string) *permission.Evidence
 	// LocalAllowed reports whether a local browser or desktop call runs
 	// without review.
-	LocalAllowed     func(tool, input string) bool
-	ClaudeSkillNames []string
+	LocalAllowed         func(tool, input string) bool
+	RegisterToolReviewer func(*permission.Reviewer) (func(), error)
+	ClaudeSkillNames     []string
 	// ContextSkillDigest identifies the Skill packages of the Context View
 	// the Daemon published into the workspace.
 	ContextSkillDigest      string
@@ -166,6 +167,7 @@ func (e Executor) PrepareProvider(ctx context.Context, spec OperationSpec) (Resu
 	spec.TrustedLocalMCPTools = nil
 	spec.LocalEvidence = nil
 	spec.LocalAllowed = nil
+	spec.RegisterToolReviewer = nil
 	execution, err := e.Start(ctx, spec, func(context.Context, protocol.Event) error { return nil })
 	if err != nil {
 		return Result{}, err
@@ -531,6 +533,14 @@ func (e Executor) Start(ctx context.Context, spec OperationSpec, emit EmitFunc) 
 				RuntimeVersion: spec.CodexVersion, Platform: runtime.GOOS, Workspace: spec.WorkingDirectory,
 			}}
 		}
+		if spec.RegisterToolReviewer != nil {
+			release, err := spec.RegisterToolReviewer(reviewer)
+			if err != nil {
+				finish(Result{Status: "failed", Error: err.Error()})
+				return
+			}
+			defer release()
+		}
 		runtimeHomePath := ""
 		if runtimeHome != nil {
 			runtimeHomePath = runtimeHome.Path
@@ -795,8 +805,7 @@ var codexBatchedInputs = []any{"click", "double_click", "right_click", "drag", "
 // tools as plain function tools, as Codex's computer-use plugin does with its
 // REPL: outside code mode and never deferred. A call is then a JSON function
 // call, not a script that wraps each tool in text(await tools.mcp__...).
-// Desktop inputs go only through run_actions, Codex's one-script-per-call
-// shape, so the model plans several steps in one call.
+// An older binding with direct desktop inputs uses run_actions for batches.
 func codexDirectLocalTools(mcpConfig json.RawMessage, localTools []string) (json.RawMessage, error) {
 	if len(mcpConfig) == 0 || len(localTools) == 0 {
 		return mcpConfig, nil
@@ -806,12 +815,15 @@ func codexDirectLocalTools(mcpConfig json.RawMessage, localTools []string) (json
 		return nil, fmt.Errorf("Codex MCP configuration is invalid: %w", err)
 	}
 	servers, _ := parsed["mcpServers"].(map[string]any)
+	unified := slices.Contains(localTools, "mcp__computer__ui_exec")
 	for _, tool := range localTools {
 		name, _, ok := strings.Cut(strings.TrimPrefix(tool, "mcp__"), "__")
 		if settings, found := servers[name].(map[string]any); ok && found {
 			settings["omit_tools_from"] = []any{"code_mode", "deferred"}
-			if name == "computer" {
+			if name == "computer" && !unified {
 				settings["disabled_tools"] = codexBatchedInputs
+			} else if name == "computer" {
+				delete(settings, "disabled_tools")
 			}
 		}
 	}

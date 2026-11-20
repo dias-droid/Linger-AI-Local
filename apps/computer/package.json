@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "1.2.0",
-    "@playwright/mcp": "0.0.83"
+    "@playwright/mcp": "0.0.83",
+    "quickjs-wasi": "3.6.2"
   },
   "devDependencies": {
     "@types/node": "26.0.1",

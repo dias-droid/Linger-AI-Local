@@ -122,6 +122,9 @@ importers:
       '@playwright/mcp':
         specifier: 0.0.83
         version: 0.0.83
+      quickjs-wasi:
+        specifier: 3.6.2
+        version: 3.6.2
     devDependencies:
       '@types/node':
         specifier: 26.0.1
