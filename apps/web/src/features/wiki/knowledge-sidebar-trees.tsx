@@ -404,7 +404,7 @@ function MeetingLink({
     >
       <span className="min-w-0 flex-1 truncate">
         {t(m.meetingWhen, {
-          when: formatMeetingWhen(meeting.date, meeting.time),
+          when: formatMeetingWhen(meeting.date, meeting.time, t),
         })}
       </span>
     </Link>

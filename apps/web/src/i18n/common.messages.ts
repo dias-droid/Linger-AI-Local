@@ -25,4 +25,9 @@ export const commonMessages = defineMessages("common", {
   you: "You",
   justNow: "just now",
   loading: "Loading…",
+  tableOfContents: "Table of contents",
+  closeTableOfContents: "Close table of contents",
+  documentTableOfContents: "Document table of contents",
+  noHeadings: "No headings",
+  sectionUnavailable: "This section is unavailable in the current document.",
 });
