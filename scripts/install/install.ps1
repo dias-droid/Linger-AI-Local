@@ -333,7 +333,6 @@ function Show-Usage {
         ""
         "Options:"
         "  --web-url <url>     Linger server URL (default: http://localhost:3000)"
-        "  --with-search       Include the local web search helper during planning"
         "  --update            Replan and update an already configured local model setup"
         "  --connect           Connect this computer to Linger without changing models"
         "  --up                Start already configured local models"
@@ -1480,7 +1479,7 @@ function Resolve-ExistingStack([bool]$ForceUpdate, [bool]$AssumeYes) {
     Exit-Fail "Invalid choice: $choice"
 }
 
-function Invoke-StepHardwareAndPlan([bool]$UpdateMode, [bool]$WithSearch, [bool]$AssumeYes) {
+function Invoke-StepHardwareAndPlan([bool]$UpdateMode, [bool]$AssumeYes) {
     Write-OutLine ""
     Write-OutLine "[2/4] Checking hardware and model options"
     Write-OutLine "  Preparing local model installer..."
@@ -1588,7 +1587,6 @@ function Invoke-StepHardwareAndPlan([bool]$UpdateMode, [bool]$WithSearch, [bool]
     $null = $planArgs.Add('--out')
     $null = $planArgs.Add($planFile)
     if ($UpdateMode) { $null = $planArgs.Add('--update') }
-    if (-not $WithSearch) { $null = $planArgs.Add('--no-search') }
     $null = $planArgs.Add('--prefer')
     $null = $planArgs.Add([string](Get-ObjProp $selectedPick 'role' 'smartest'))
     if ($hasGpu) {
@@ -1945,7 +1943,6 @@ $mode = 'guide'
 $modeFlag = ''
 $explicitOrigin = ''
 $assumeYes = $false
-$withSearch = $false
 $forceUpdate = $false
 $purge = $false
 
@@ -1958,8 +1955,6 @@ while ($i -lt $script:CliArgs.Count) {
         '-?'     { Show-Usage; exit 0 }
         '--yes'  { $assumeYes = $true }
         '-y'     { $assumeYes = $true }
-        '--with-search' { $withSearch = $true }
-        '--no-search'   { $withSearch = $false }
         '--update'      { $forceUpdate = $true }
         '--purge'       { $purge = $true }
         '--web-url' {
@@ -2056,7 +2051,7 @@ try {
 
             $existing = Resolve-ExistingStack $forceUpdate $assumeYes
             if (-not $existing.Reuse) {
-                Invoke-StepHardwareAndPlan ([bool]$existing.Update) $withSearch $assumeYes
+                Invoke-StepHardwareAndPlan ([bool]$existing.Update) $assumeYes
             }
 
             if ($localOnly) {

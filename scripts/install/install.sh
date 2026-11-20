@@ -33,7 +33,6 @@ MODE="guide"
 EXPLICIT_WEB_URL=""
 WEB_URL=""
 CONNECT_LINGER=1
-WITH_SEARCH=0
 PURGE=0
 YES=0
 
@@ -55,7 +54,6 @@ Guided setup for Linger local models and connecting this computer to Linger.
 Options:
   --web-url <origin>   Linger server URL (default: http://localhost:3000)
   --connect            Install and connect linger-computer only
-  --with-search        Also install the local DuckDuckGo web-search helper
   --up                 Start installed local models and refresh linger-computer
   --status             Show local model and linger-computer status
   --remove             Uninstall local model services (keeps downloaded files)
@@ -1033,9 +1031,6 @@ step_check_hardware_and_options() {
   HAS_ACCEPTED_STACK=0
   SHARED_GPU_APPROVED=0
   PLAN_ARGS=()
-  if (( WITH_SEARCH == 0 )); then
-    PLAN_ARGS+=("--no-search")
-  fi
 
   set +e
   sh "$STACK_SCRIPT" status --json > "$WORK_DIR/status.json" 2>"$WORK_DIR/status.err"
@@ -1509,10 +1504,6 @@ while (( $# > 0 )); do
       ;;
     --connect)
       set_mode "connect"
-      shift
-      ;;
-    --with-search)
-      WITH_SEARCH=1
       shift
       ;;
     --up)
