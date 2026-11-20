@@ -109,9 +109,52 @@ const mcpExtension = createMcpExtension({
   },
 });
 
-// The Daemon loads this extension for the shell text check, and for the
-// Operation's MCP servers when it has any.
+// PERMISSION_REVIEW names the Daemon's review dialog. Pi forwards the dialog
+// over RPC; the Daemon answers with a JSON verdict, {"allow", "message"}.
+export const PERMISSION_REVIEW = "linger.permission_review";
+
+// reviewedTool reports whether a call goes to the Daemon's permission review:
+// commands and MCP tools.
+export function reviewedTool(toolName) {
+  return toolName === "bash" || toolName.startsWith("mcp__");
+}
+
+// reviewToolCall asks the Daemon about one call and blocks it unless the
+// verdict allows it. A missing or unreadable answer blocks the call.
+// The Daemon allows every call of a Run without permission review.
+export async function reviewToolCall(event, ui, signal) {
+  if (!reviewedTool(event.toolName)) return undefined;
+  const answer = await ui.input(
+    PERMISSION_REVIEW,
+    JSON.stringify({ toolName: event.toolName, input: event.input ?? {} }),
+    signal ? { signal } : undefined,
+  );
+  let verdict;
+  try {
+    verdict = JSON.parse(answer ?? "");
+  } catch {
+    verdict = undefined;
+  }
+  if (verdict?.allow === true) return undefined;
+  return {
+    block: true,
+    reason:
+      typeof verdict?.message === "string" && verdict.message
+        ? verdict.message
+        : `${event.toolName} was not approved`,
+  };
+}
+
+// The Daemon loads this extension for the shell text check, permission
+// review, MCP servers, or any of them. The review hook is always on, because
+// a resident Pi process may serve a reviewed Run after one without review.
+// A call the shell text check refuses never reaches review.
 export default async function managedExtension(pi) {
-  pi.on("tool_call", (event) => refuseRewrittenShellText(event));
+  pi.on(
+    "tool_call",
+    async (event, ctx) =>
+      (await refuseRewrittenShellText(event)) ??
+      reviewToolCall(event, ctx.ui, ctx.signal),
+  );
   if (process.env.LINGER_PI_MANAGED_MCP_CONFIG) await mcpExtension(pi);
 }

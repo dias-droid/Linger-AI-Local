@@ -1324,6 +1324,7 @@ const (
 	RuntimePermissionActionRuntimeAntigravity RuntimePermissionActionRuntime = "antigravity"
 	RuntimePermissionActionRuntimeClaude      RuntimePermissionActionRuntime = "claude"
 	RuntimePermissionActionRuntimeCodex       RuntimePermissionActionRuntime = "codex"
+	RuntimePermissionActionRuntimePi          RuntimePermissionActionRuntime = "pi"
 )
 
 // Valid indicates whether the value is a known member of the RuntimePermissionActionRuntime enum.
@@ -1334,6 +1335,8 @@ func (e RuntimePermissionActionRuntime) Valid() bool {
 	case RuntimePermissionActionRuntimeClaude:
 		return true
 	case RuntimePermissionActionRuntimeCodex:
+		return true
+	case RuntimePermissionActionRuntimePi:
 		return true
 	default:
 		return false

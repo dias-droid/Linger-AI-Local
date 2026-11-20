@@ -837,6 +837,15 @@ with its dependencies resolves its own jiti first. Node reads `NODE_PATH` at
 startup, so the extension then restores the value Pi inherited, and the
 commands Pi starts never resolve a package from the bundle.
 
+The same extension carries Pi's permission review, so the Daemon loads it for a
+Run with permission review even without MCP servers. Its `tool_call` hook opens
+an RPC `input` dialog titled `linger.permission_review` for each `bash` and
+`mcp__*` call, with the call as JSON. The Daemon answers it with a JSON verdict
+from the Run's permission review, with `bash` reviewed as a shell command. A
+Run without review gets an allow verdict, because a resident Pi process may
+serve both kinds of Run. A missing or unreadable verdict blocks the call. The
+Daemon cancels any other extension dialog.
+
 The compatibility probe of the pinned Playwright catalog is
 `TestPinnedPlaywrightCatalog`; it needs `LINGER_PLAYWRIGHT_COMPAT_ENTRY` and
 `LINGER_PLAYWRIGHT_COMPAT_NODE`. The macOS read-only probe is

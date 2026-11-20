@@ -107,3 +107,41 @@ process.stdin.on("end", () => {
   },
   30_000,
 );
+
+it("asks the Daemon about Pi commands and MCP calls and blocks unless allowed", async () => {
+  const entry = new URL("../tools/pi-mcp.mjs", import.meta.url).href;
+  const { PERMISSION_REVIEW, reviewToolCall } = (await import(entry)) as {
+    PERMISSION_REVIEW: string;
+    reviewToolCall: (
+      event: { toolName: string; input: Record<string, unknown> },
+      ui: { input: (title: string, placeholder: string) => Promise<unknown> },
+    ) => Promise<unknown>;
+  };
+  const asked: Array<{ title: string; call: unknown }> = [];
+  const ui = (answer: string | undefined) => ({
+    input: async (title: string, placeholder: string) => {
+      asked.push({ title, call: JSON.parse(placeholder) });
+      return answer;
+    },
+  });
+  const bash = { toolName: "bash", input: { command: "git push" } };
+
+  expect(
+    await reviewToolCall({ toolName: "read", input: {} }, ui("")),
+  ).toBeUndefined();
+  expect(asked).toEqual([]);
+  expect(
+    await reviewToolCall(bash, ui(JSON.stringify({ allow: true }))),
+  ).toBeUndefined();
+  expect(asked).toEqual([{ title: PERMISSION_REVIEW, call: bash }]);
+  expect(
+    await reviewToolCall(
+      { toolName: "mcp__computer__click", input: {} },
+      ui(JSON.stringify({ allow: false, message: "not now" })),
+    ),
+  ).toEqual({ block: true, reason: "not now" });
+  expect(await reviewToolCall(bash, ui(undefined))).toEqual({
+    block: true,
+    reason: "bash was not approved",
+  });
+});

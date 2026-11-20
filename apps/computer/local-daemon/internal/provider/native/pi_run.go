@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/simplexai-labs/linger/apps/computer/local-daemon/internal/permission"
 )
 
 const piEventBuffer = 256
@@ -38,6 +40,10 @@ type piTurn struct {
 
 	requests  *modelRequestClock
 	readiness *ReadinessCounters
+	// reviewer judges the calls the managed extension asks about; nil
+	// allows them all. dir is the workspace commands are judged in.
+	reviewer *permission.Reviewer
+	dir      string
 
 	// steering is the steer waiting for Pi to show its user message; at most
 	// one, as steerMu serializes steers.

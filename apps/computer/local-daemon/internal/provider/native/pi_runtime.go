@@ -145,6 +145,7 @@ func (p *piRuntime) reuse(ctx context.Context, proc *piProcess, plan piLaunchPla
 	}
 	turn := newPiTurn(runCtx, cancel, proc, true, plan.fence, p.profile.Logger)
 	turn.readiness = plan.spec.Readiness
+	turn.reviewer, turn.dir = plan.spec.PermissionReviewer, plan.spec.Dir
 	if err := proc.bind(turn); err != nil {
 		return fail(err)
 	}
@@ -197,6 +198,11 @@ func (p *piRuntime) spawn(ctx context.Context, plan piLaunchPlan, lock *os.File)
 	if mcp, err = piPrepareMCP(config, p.profile.ManagedMCPExtension, plan.sessionDir); err != nil {
 		return nil, err
 	}
+	if spec.PermissionReviewer != nil {
+		if err := piCheckExtension(p.profile.ManagedMCPExtension); err != nil {
+			return nil, err
+		}
+	}
 	// The session flags sit right after "--mode rpc".
 	tail := p.args(plan, instructions, mcp.wired())
 	args := append([]string{tail[0], tail[1], "--session-dir", plan.sessionDir, "--session-id", plan.sessionID}, tail[2:]...)
@@ -207,7 +213,7 @@ func (p *piRuntime) spawn(ctx context.Context, plan piLaunchPlan, lock *os.File)
 	if mcp.wired() {
 		env[piMCPConfigEnvKey] = mcp.configPath
 	}
-	if mcp.wired() || p.guardsShellText(spec) {
+	if mcp.wired() || spec.PermissionReviewer != nil || p.guardsShellText(spec) {
 		piExtensionNodePath(env, p.profile.ManagedMCPExtension)
 	}
 	if p.guardsShellText(spec) {
@@ -236,6 +242,7 @@ func (p *piRuntime) spawn(ctx context.Context, plan piLaunchPlan, lock *os.File)
 	runCtx, cancel := budgetContext(ctx, spec.Budget)
 	turn := newPiTurn(runCtx, cancel, proc, false, plan.fence, p.profile.Logger)
 	turn.readiness = plan.spec.Readiness
+	turn.reviewer, turn.dir = spec.PermissionReviewer, spec.Dir
 	spec.Readiness.spawned()
 	spec.Readiness.session(spec.ResumeID != "")
 	_ = proc.bind(turn)
@@ -268,8 +275,10 @@ func (p *piRuntime) args(plan piLaunchPlan, instructions string, wired bool) []s
 			args = append(args, "--skill", skills)
 		}
 	}
+	// The managed extension also carries permission review: its tool_call
+	// hook asks the Daemon over RPC (piProcess.answerDialog).
 	tools := piBaseTools
-	if wired || p.guardsShellText(spec) {
+	if wired || spec.PermissionReviewer != nil || p.guardsShellText(spec) {
 		args = append(args, "--extension", p.profile.ManagedMCPExtension)
 	}
 	if wired {
