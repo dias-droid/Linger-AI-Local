@@ -9,6 +9,39 @@ $ErrorActionPreference = 'Stop'
 # A caller's PowerShell 7 modules can prevent Get-Acl from loading.
 $env:PSModulePath = [IO.Path]::Combine($PSHOME, 'Modules')
 [Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
+# Administrators enabled in this token, or in the elevated token UAC links to
+# it (an administrator running without elevation). Only the rare second case
+# compiles the check.
+function Test-Administrator {
+  if ([Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { return $true }
+  Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class LingerLinkedToken {
+  [DllImport("advapi32.dll")] static extern bool OpenProcessToken(IntPtr process, uint access, out IntPtr token);
+  [DllImport("advapi32.dll")] static extern bool GetTokenInformation(IntPtr token, int infoClass, out IntPtr info, int length, out int returned);
+  [DllImport("advapi32.dll")] static extern bool CheckTokenMembership(IntPtr token, byte[] sid, out bool member);
+  [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+  [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr handle);
+  public static bool IsAdministrator(byte[] administrators) {
+    IntPtr token, linked;
+    int returned;
+    bool member;
+    if (!OpenProcessToken(GetCurrentProcess(), 0x0008, out token)) return false;
+    bool found = GetTokenInformation(token, 19, out linked, IntPtr.Size, out returned);
+    CloseHandle(token);
+    if (!found) return false;
+    bool checkedMember = CheckTokenMembership(linked, administrators, out member);
+    CloseHandle(linked);
+    return checkedMember && member;
+  }
+}
+'@
+  $administrators = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
+  $binary = [byte[]]::new($administrators.BinaryLength)
+  $administrators.GetBinaryForm($binary, 0)
+  return [LingerLinkedToken]::IsAdministrator($binary)
+}
 try {
   $request = [Console]::In.ReadToEnd() | ConvertFrom-Json
   $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
@@ -16,7 +49,13 @@ try {
   $item = Get-Item -LiteralPath $request.path -Force
   if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or ($item.PSIsContainer -ne ($request.kind -eq 'directory'))) { throw 'UNSAFE_TYPE' }
   $acl = Get-Acl -LiteralPath $item.FullName
-  if ($acl.GetOwner([Security.Principal.SecurityIdentifier]).Value -ne $sid.Value) { throw 'UNSAFE_OWNER' }
+  # What an elevated process (Run as administrator, the built-in
+  # Administrator) creates is owned by Administrators. For an administrator
+  # that owner counts as the user, as in Git for Windows: the ancestor check
+  # below already lets the group own and replace every parent folder, and an
+  # administrator can take ownership of any file, so it trusts no one new.
+  $owner = $acl.GetOwner([Security.Principal.SecurityIdentifier]).Value
+  if ($owner -ne $sid.Value -and !($owner -eq $admins -and (Test-Administrator))) { throw 'UNSAFE_OWNER' }
   $parent = $item.Directory
   if ($item.PSIsContainer) { $parent = $item.Parent }
   while ($parent) {
@@ -111,8 +150,7 @@ export const WINDOWS_PRIVATE_PATH_UNSAFE = "WINDOWS_PRIVATE_PATH_UNSAFE";
 // The ACL program's reason codes, worded for the error message.
 const WINDOWS_PRIVATE_REASONS = {
   UNSAFE_TYPE: "is a link, or not the expected file or folder",
-  UNSAFE_OWNER:
-    "is owned by another account, such as Administrators after Linger ran as administrator",
+  UNSAFE_OWNER: "is owned by another account",
   UNSAFE_PARENT_LINK: "is inside a linked folder",
   UNSAFE_PARENT_OWNER: "is inside a folder another account owns",
   UNSAFE_PARENT_ACCESS: "is inside a folder other accounts may change",

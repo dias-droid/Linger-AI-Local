@@ -109,6 +109,18 @@ never leaves a directory that later attempts treat as initialized. A `postgres-d
 `PG_VERSION` but no `postmaster.opts` (which only a started server writes)
 never served a connection, holds no data, and is initialized again.
 
+On Windows `postgres.exe` refuses a token with Administrators enabled. When
+the installer runs elevated (Run as administrator, the built-in
+Administrator), its supervisor starts `postgres` through a fixed PowerShell
+program (`windows-restricted-token.ts`) from a copy of its own token with
+Administrators and Power Users disabled, as `pg_ctl` does; `initdb` already
+does this itself. `postgres` stays the supervisor's descendant, so its lease
+tree, log and stop work as before. What an elevated process creates is owned
+by Administrators; `windowsPrivatePath` accepts that owner as well as the
+user when the user is an administrator (Administrators enabled in the token
+or in the elevated token UAC links to it, as Git for Windows decides), since
+the ancestor check already trusts that group. A standard user is refused.
+
 On Windows the installer stages UTF-8 application manifests beside the bundled
 PostgreSQL tools before recording their file hashes. This lets `initdb`
 relaunch itself and start `postgres` when the profile path contains characters

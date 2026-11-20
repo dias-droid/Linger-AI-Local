@@ -35,6 +35,7 @@ import {
 const windows = process.platform === "win32";
 const test = windows ? base : base.concurrent;
 const posix = windows ? test.skip : test;
+const win32 = windows ? test : test.skip;
 vi.setConfig({
   testTimeout: windows ? 60_000 : 30_000,
   hookTimeout: 60_000,
@@ -103,6 +104,41 @@ test("retains an owned service after launch and reuses its identity", async (con
     await readFile(path.join(root, "native/logs/web.log"), "utf8"),
   ).toContain("native fixture ready");
 });
+win32(
+  "starts a service from a token with Administrators disabled",
+  async (context) => {
+    const { expect } = context;
+    const root = await fixture(context);
+    const args = ["a b", "", 'say "hi"', "C:\\dir with space\\", "trailing\\"];
+    // The service reports the arguments it received and whether its token
+    // holds Administrators; an elevated test run proves the group is gone.
+    const report = [
+      "const ps=require('node:path').win32.join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe');",
+      "const role='([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)';",
+      "const administrator=require('node:child_process').execFileSync(ps,['-NoProfile','-NonInteractive','-Command',role],{encoding:'utf8'}).trim();",
+      "console.log(JSON.stringify({args:process.argv.slice(1),administrator}));",
+      "setInterval(()=>{},1000);",
+    ].join("");
+    await startNativeProcess({
+      root,
+      name: "web",
+      executable: process.execPath,
+      args: ["-e", report, ...args],
+      cwd: root,
+      env: process.env,
+      withoutAdministrators: true,
+    });
+    await expect
+      .poll(
+        async () => readFile(path.join(root, "native/logs/web.log"), "utf8"),
+        { timeout: 45_000 },
+      )
+      .toContain(JSON.stringify({ args, administrator: "False" }));
+    expect((await inspectNativeProcess(root, "web")).running).toBe(true);
+    await stopNativeProcess(root, "web");
+    expect((await inspectNativeProcess(root, "web")).running).toBe(false);
+  },
+);
 test("refuses to signal a PID whose recorded lease differs", async (context) => {
   const { expect } = context;
   const root = await fixture(context);

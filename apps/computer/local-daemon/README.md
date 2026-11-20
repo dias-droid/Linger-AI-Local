@@ -294,7 +294,10 @@ sandbox may hold that right on a parent, such as AppData. The sandbox acts
 through the `CodexSandboxUsers` group and the capability SIDs in
 `%USERPROFILE%\.codex\cap_sid`. A sandboxed Codex command can therefore replace
 such a parent; Linger accepts this so it installs beside Codex. Private paths
-themselves still grant access only to the current user and SYSTEM.
+themselves still grant access only to the current user and SYSTEM. Their
+owner is the current user or, when that user is an administrator,
+Administrators, which owns what an elevated process (Run as administrator,
+the built-in Administrator) creates.
 
 Process recovery uses the creation time and a held process handle, so a reused
 process ID is never mistaken for the original. Ordinary tasks are held by a Job

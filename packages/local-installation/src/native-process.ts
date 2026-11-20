@@ -252,6 +252,12 @@ export async function startNativeProcess(
     signal?: AbortSignal;
     redactions?: string[];
     restartOnConfigurationChange?: boolean;
+    /**
+     * Windows: start the service from a copy of the supervisor's token with
+     * Administrators disabled. The same service either way, so this is not
+     * part of the configuration.
+     */
+    withoutAdministrators?: boolean;
   },
 ): Promise<NativeProcessState> {
   options.signal?.throwIfAborted();
@@ -307,6 +313,7 @@ export async function startNativeProcess(
       args: options.args,
       cwd: options.cwd,
       env: { ...options.env, [leaseKey]: lease },
+      ...(options.withoutAdministrators ? { withoutAdministrators: true } : {}),
       log: location.log,
       redactions: [
         ...new Set(

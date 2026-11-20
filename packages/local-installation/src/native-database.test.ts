@@ -132,20 +132,25 @@ describe("prepareNativeDatabase on Windows", () => {
     ]);
     expect(vi.mocked(startNativeProcess).mock.calls[0]![0]).toMatchObject({
       executable: path.join(options.postgresBin, "postgres.exe"),
+      withoutAdministrators: false,
     });
     expect(vi.mocked(inspectNativeProcess)).toHaveBeenCalled();
   });
 
-  it("stops before initdb when Linger runs as administrator", async () => {
+  it("starts postgres with Administrators disabled when Linger runs as administrator", async () => {
     asWindows();
-    run.mockResolvedValue(
-      ok('"Mandatory Label\\High Mandatory Level","Label","S-1-16-12288",""'),
+    run.mockImplementation(async (command) =>
+      command.endsWith("whoami.exe")
+        ? ok(
+            '"Mandatory Label\\High Mandatory Level","Label","S-1-16-12288",""',
+          )
+        : ok(),
     );
-    await expect(prepareNativeDatabase(options)).rejects.toThrow(
-      /cannot run as administrator/,
-    );
-    expect(run).toHaveBeenCalledTimes(1);
-    expect(startNativeProcess).not.toHaveBeenCalled();
+    await prepareNativeDatabase(options);
+    expect(vi.mocked(startNativeProcess).mock.calls[0]![0]).toMatchObject({
+      executable: path.join(options.postgresBin, "postgres.exe"),
+      withoutAdministrators: true,
+    });
   });
 });
 
