@@ -148,6 +148,15 @@ func TestRunStopsWorkingOnceItReplied(t *testing.T) {
 	if lastRunStatusAnnouncementReplied(t, env.pool, roomID, runID) {
 		t.Fatal("the Room was not told the follow-up took back the reply")
 	}
+	// The provider refused the steer, so the follow-up moves to a Run of its
+	// own and the first Run is back to its reply.
+	queued, err := env.service.EnqueueSteer(ctx, agentruntimestate.EnqueueSteerInput{ContextKey: env.contextKey, Epoch: env.epoch, GroupID: group})
+	if err != nil || queued.RunID == "" || queued.RunID == runID {
+		t.Fatalf("enqueue steer: result=%+v err=%v", queued, err)
+	}
+	if !lastRunStatusAnnouncementReplied(t, env.pool, roomID, runID) {
+		t.Fatal("the Room was not told the Run replied again once the follow-up moved")
+	}
 }
 
 // lastRunStatusAnnouncementReplied returns whether the Run's latest

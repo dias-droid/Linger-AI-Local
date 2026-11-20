@@ -47,6 +47,25 @@ func (s *Service) EnqueueSteer(ctx context.Context, input EnqueueSteerInput) (En
 		if err != nil {
 			return EnqueueSteerResult{}, err
 		}
+		// A Run the follow-up was assigned to announced it was working on it.
+		// Moving the follow-up to a new Run may leave that Run replied again,
+		// and it may add no event before it stops, so announce it now.
+		assigned := map[string]bool{}
+		for _, row := range rows {
+			if !row.LocalRunID.Valid || assigned[row.LocalRunID.String] {
+				continue
+			}
+			assigned[row.LocalRunID.String] = true
+			log, err := openRunStatusLog(ctx, queries, row.LocalRunID.String)
+			if err != nil {
+				return EnqueueSteerResult{}, err
+			}
+			if log != nil && !log.stopped() {
+				if err := log.publish(ctx, queries); err != nil {
+					return EnqueueSteerResult{}, err
+				}
+			}
+		}
 		if _, err := queries.BumpAgentExecutionContextStateRevision(ctx, input.ContextKey); err != nil {
 			return EnqueueSteerResult{}, err
 		}
