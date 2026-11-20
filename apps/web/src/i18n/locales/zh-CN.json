@@ -5,7 +5,9 @@
     "loadingRoom": "正在加载 Room…",
     "unavailableTitle": "Web 客户端暂不可用",
     "unavailableBody": "应用未能完成加载。",
-    "tryAgain": "重试"
+    "tryAgain": "重试",
+    "avatar": "{name} 的头像",
+    "resizeHint": "拖动调整宽度，双击恢复默认"
   },
   "settings": {
     "navigation": "设置导航",

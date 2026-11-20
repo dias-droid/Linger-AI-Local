@@ -1,5 +1,8 @@
 import { useState } from "react";
 
+import { commonMessages } from "@/i18n/common.messages";
+import { useT } from "@/i18n/use-translation";
+
 import {
   useActorAvatarImage,
   useAgentAvatarRecord,
@@ -85,6 +88,7 @@ export function ActorAvatar({
   }[size];
   const displayName = name.trim() || "Unknown Actor";
   const title = showTitle ? displayName : undefined;
+  const label = useT()(commonMessages.avatar, { name: displayName });
   const uploadedImage = useActorAvatarImage(actorId);
   const agentRecord = useAgentAvatarRecord(
     kind === "agent" ? actorId : undefined,
@@ -98,7 +102,7 @@ export function ActorAvatar({
   if (uploadedImage && kind === "human") {
     return (
       <img
-        alt={`${displayName} avatar`}
+        alt={label}
         className={`shrink-0 object-cover ${shapeClass} ${sizeClass}`}
         onLoad={() => setLoadedSrc(uploadedImage)}
         src={uploadedImage}
@@ -120,7 +124,7 @@ export function ActorAvatar({
     });
     return (
       <span
-        aria-label={`${displayName} avatar`}
+        aria-label={label}
         className={`block shrink-0 overflow-hidden ${shapeClass} ${sizeClass}`}
         role="img"
         title={title}
@@ -137,7 +141,7 @@ export function ActorAvatar({
 
   return (
     <span
-      aria-label={`${displayName} avatar`}
+      aria-label={label}
       className={`flex shrink-0 items-center justify-center font-semibold tracking-[0.02em] ${shapeClass} ${humanAvatarTint(actorId ?? displayName)} ${sizeClass} ${textSizeClass}`}
       role="img"
       title={title}
