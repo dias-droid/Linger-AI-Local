@@ -533,7 +533,7 @@ func TestOversizedDispatchResultRejectsOnlyTheCall(t *testing.T) {
 	r := nodeRuntime(t, func(context.Context, Call) (json.RawMessage, error) { return large, nil }, Limits{MaxProtocolBytes: 2048, MaxOutputBytes: 1024})
 	first := execute(t, r, `state.kept = 1; try { await ui.browser.snapshot({}); return "delivered"; } catch (error) { return error.message; }`)
 	second := execute(t, r, `return state.kept;`)
-	if !strings.Contains(string(first.Value), "byte limit") || string(second.Value) != "1" || second.Generation != first.Generation {
+	if !strings.Contains(string(first.Value), "do not replay") || string(second.Value) != "1" || second.Generation != first.Generation {
 		t.Fatalf("first=%+v second=%+v", first, second)
 	}
 }

@@ -257,7 +257,7 @@ func (r *Runtime) Exec(hardCtx, schedulingCtx context.Context, code string) (res
 				if errors.Is(err, errFrameTooLarge) {
 					// The action has completed; reject only this call so the
 					// script keeps its state and can read a smaller result.
-					err = c.send(hard, map[string]any{"type": "reply", "execution": execution, "id": msg.ID, "error": "UI call result exceeds byte limit"}, r.opts.Limits.MaxProtocolBytes)
+					err = c.send(hard, map[string]any{"type": "reply", "execution": execution, "id": msg.ID, "error": "UI call completed, but its result exceeds the byte limit; do not replay it"}, r.opts.Limits.MaxProtocolBytes)
 				}
 			}
 			if err != nil {

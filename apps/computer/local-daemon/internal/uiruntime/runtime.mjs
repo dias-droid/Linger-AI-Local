@@ -33,7 +33,7 @@ const guest = await QuickJS.create({
   ...options,
   intrinsics: Intrinsics.ALL & ~Intrinsics.EVAL,
   onUnhandledRejection(_promise, _reason, handled) {
-    unhandled += handled ? -1 : 1;
+    unhandled = handled ? Math.max(0, unhandled - 1) : unhandled + 1;
   },
 });
 const drain = compiler.compile("__uiBridge.drain()");
