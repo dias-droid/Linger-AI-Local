@@ -58,6 +58,10 @@ import {
   TEAMHUB_BINARY_DIRECTORY,
 } from "@linger/local-installation/teamhub-binaries";
 import { redact } from "@linger/local-installation/redaction";
+import {
+  windowsPrivateRefusal,
+  type WindowsPrivateRefusal,
+} from "@linger/local-installation/windows-private";
 import { adoptUserEnvironment } from "@linger/local-installation/user-environment";
 
 import {
@@ -295,6 +299,9 @@ export interface LocalServerStatus {
   // Where this installation moved the data of the earlier Simplex app,
   // which it could not upgrade.
   readonly legacyBackup?: string;
+  // While failed because the installer refused a folder as not private
+  // (Windows): its code and reason.
+  readonly refusal?: WindowsPrivateRefusal;
 }
 
 export interface LocalServerOptions {
@@ -439,6 +446,7 @@ export class LocalServerModule implements Module {
   #home: string;
   #location: string | undefined;
   #locationError: string | undefined;
+  #refusal: WindowsPrivateRefusal | undefined;
   #node: Promise<string> | undefined;
   #abort = new AbortController();
   #offRetry: (() => void) | undefined;
@@ -635,6 +643,7 @@ export class LocalServerModule implements Module {
       ...(this.#byokCheck ? { byokCheck: this.#byokCheck } : {}),
       ...(this.#byokModels ? { byokModels: this.#byokModels } : {}),
       ...(this.#legacyBackup ? { legacyBackup: this.#legacyBackup } : {}),
+      ...(this.#refusal ? { refusal: this.#refusal } : {}),
     };
   }
 
@@ -1228,7 +1237,11 @@ export class LocalServerModule implements Module {
         step: this.#step,
         error: message,
       });
-      this.#set("failed", message);
+      this.#set(
+        "failed",
+        message,
+        windowsPrivateRefusal((error as { refusal?: unknown } | null)?.refusal),
+      );
       throw error;
     }
   }
@@ -1534,7 +1547,12 @@ export class LocalServerModule implements Module {
     );
   }
 
-  #set(phase: LocalServerPhase, message: string): void {
+  // A refusal stays only with the failure it caused.
+  #set(
+    phase: LocalServerPhase,
+    message: string,
+    refusal?: WindowsPrivateRefusal,
+  ): void {
     // A failure stays on the step it happened in.
     if (phase !== "installing" && phase !== "ready" && phase !== "failed") {
       this.#progress = 0;
@@ -1544,6 +1562,7 @@ export class LocalServerModule implements Module {
     if (phase !== "installing") this.#transfer = undefined;
     this.#phase = phase;
     this.#message = message;
+    this.#refusal = phase === "failed" ? refusal : undefined;
     this.#ctx?.bus.emit("local-server.changed");
   }
 
@@ -2194,17 +2213,20 @@ export class LocalServerModule implements Module {
       child.once("close", () => resolve(text));
       child.stdin.end(JSON.stringify(installerKeyChanges(changes)));
     });
-    let outcome: { saved?: unknown; error?: unknown } = {};
+    let outcome: { saved?: unknown; error?: unknown; refusal?: unknown } = {};
     try {
       outcome = JSON.parse(output.trim().split("\n").at(-1) ?? "") as never;
     } catch {
       // Reported below.
     }
     if (!Array.isArray(outcome.saved))
-      throw new Error(
-        typeof outcome.error === "string"
-          ? `Keys could not be saved: ${outcome.error}`
-          : "Keys could not be saved",
+      throw Object.assign(
+        new Error(
+          typeof outcome.error === "string"
+            ? `Keys could not be saved: ${outcome.error}`
+            : "Keys could not be saved",
+        ),
+        { refusal: windowsPrivateRefusal(outcome.refusal) },
       );
     this.#ctx?.log.info("local_server.keys_saved", { saved: outcome.saved });
     this.#ctx?.bus.emit("local-server.changed");
@@ -2252,7 +2274,11 @@ export class LocalServerModule implements Module {
       let output = "";
       const fail = (message: string) => {
         child.stdout.removeAllListeners("data");
-        reject(new Error(message));
+        reject(
+          Object.assign(new Error(message), {
+            refusal: startRefusal(output),
+          }),
+        );
       };
       child.stdout.on("data", (chunk: Buffer) => {
         output += chunk.toString("utf8");
@@ -3398,6 +3424,20 @@ const isByokProtocol = (value: unknown): value is SetupByokProtocol =>
   value === "openai-responses" ||
   value === "anthropic";
 
+// The refusal the installer names in its startFailure line on stdout when
+// it could not start (startFailureLine in apps/linger-installer).
+const startRefusal = (output: string): WindowsPrivateRefusal | undefined => {
+  for (const line of output.split("\n")) {
+    if (!line.startsWith('{"startFailure"')) continue;
+    try {
+      const parsed = JSON.parse(line) as { startFailure?: unknown };
+      return windowsPrivateRefusal(parsed.startFailure);
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+};
 // The installer's own words when it failed with { ok: false, message }:
 // localmodels names the address and HTTP status there.
 const byokFailure = (out: Record<string, unknown>, fallback: string): string =>

@@ -83,6 +83,11 @@ const home = args[args.indexOf("--home") + 1];
 if (args.includes("--user-keys")) {
   const changes = JSON.parse(fs.readFileSync(0, "utf8"));
   fs.writeFileSync(path.join(home, "keys-args.json"), JSON.stringify(args));
+  // As the installer reports a folder the ACL program refused.
+  if (Object.values(changes).includes("refused")) {
+    process.stdout.write(JSON.stringify({ error: "Windows private path validation failed", refusal: { code: "WINDOWS_PRIVATE_PATH_UNSAFE", reason: "UNSAFE_PARENT_ACCESS" } }) + "\n");
+    process.exit(1);
+  }
   if (Object.values(changes).includes("bad")) {
     process.stdout.write(JSON.stringify({ error: "COMPOSIO_API_KEY is not a valid key" }) + "\n");
     process.exit(1);
@@ -174,6 +179,12 @@ if (args.includes("--resume")) {
   const outcome = failure ? JSON.parse(failure) : { message: code ? "Native teamhub stopped" : "ok", details: { source, origin } };
   process.stdout.write("noise\n" + JSON.stringify({ code, ...outcome, ...(runtime ? { runtime } : {}) }) + "\n");
   process.exit(code);
+}
+if (fs.existsSync(path.join(home, "start-refused"))) {
+  // As the installer stops when the ACL program refuses its home.
+  process.stdout.write(JSON.stringify({ startFailure: { code: "WINDOWS_PRIVATE_PATH_UNSAFE", reason: "UNSAFE_OWNER" } }) + "\n");
+  process.stderr.write("Installer could not start (WINDOWS_PRIVATE_PATH_UNSAFE): Windows private path validation failed\n");
+  process.exit(1);
 }
 const origin = "http://127.0.0.1:4321";
 fs.writeFileSync(
@@ -2291,6 +2302,40 @@ describe("LocalServerModule", () => {
     });
     expect(f.signIn).not.toHaveBeenCalled();
     await f.host.stop("quit");
+  });
+
+  it("keeps the installer's refusal of a folder with the failure it caused", async () => {
+    const f = fixture(withCheckout, {}, checkout);
+    await f.host.start();
+    try {
+      writeFileSync(path.join(f.home, "start-refused"), "");
+      await expect(f.module.begin()).rejects.toThrow(
+        "The installer stopped while starting. Installer could not start (WINDOWS_PRIVATE_PATH_UNSAFE): Windows private path validation failed",
+      );
+      expect(f.module.status()).toMatchObject({
+        phase: "failed",
+        refusal: {
+          code: "WINDOWS_PRIVATE_PATH_UNSAFE",
+          reason: "UNSAFE_OWNER",
+        },
+      });
+      rmSync(path.join(f.home, "start-refused"));
+      await expect(
+        f.module.begin({ runtime: "claude", keys: { composio: "refused" } }),
+      ).rejects.toThrow("Keys could not be saved");
+      expect(f.module.status().refusal).toEqual({
+        code: "WINDOWS_PRIVATE_PATH_UNSAFE",
+        reason: "UNSAFE_PARENT_ACCESS",
+      });
+      // Another failure does not carry it on.
+      await expect(
+        f.module.begin({ runtime: "claude", keys: { composio: "bad" } }),
+      ).rejects.toThrow("COMPOSIO_API_KEY is not a valid key");
+      expect(f.module.status().phase).toBe("failed");
+      expect(f.module.status().refusal).toBeUndefined();
+    } finally {
+      await f.host.stop("quit");
+    }
   });
 });
 

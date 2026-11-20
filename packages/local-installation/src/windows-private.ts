@@ -168,3 +168,26 @@ const WINDOWS_PRIVATE_REASONS = {
   UNCHECKED: "could not be checked",
 } as const;
 export type WindowsPrivateReason = keyof typeof WINDOWS_PRIVATE_REASONS;
+/** The code and reason of a windowsPrivatePath refusal. */
+export interface WindowsPrivateRefusal {
+  readonly code: typeof WINDOWS_PRIVATE_PATH_UNSAFE;
+  readonly reason: WindowsPrivateReason;
+}
+/**
+ * The code and reason of a refusal from windowsPrivatePath, from the error
+ * itself or from a copy of the two passed between processes; undefined for
+ * anything else.
+ */
+export function windowsPrivateRefusal(
+  value: unknown,
+): WindowsPrivateRefusal | undefined {
+  const { code, reason } = (value ?? {}) as {
+    code?: unknown;
+    reason?: unknown;
+  };
+  return code === WINDOWS_PRIVATE_PATH_UNSAFE &&
+    typeof reason === "string" &&
+    Object.hasOwn(WINDOWS_PRIVATE_REASONS, reason)
+    ? { code, reason: reason as WindowsPrivateReason }
+    : undefined;
+}

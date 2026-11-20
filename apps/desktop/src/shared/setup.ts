@@ -6,6 +6,7 @@ import type {
   SetupChoice,
   SetupMemory,
 } from "@linger/local-installation/setup-plan";
+import type { WindowsPrivateRefusal } from "@linger/local-installation/windows-private";
 
 export interface SetupFolder {
   readonly grantId: string;
@@ -58,6 +59,9 @@ export interface SetupLocalServer {
   // Where the installation moved the earlier Simplex app's data it could
   // not upgrade (~ for the home folder).
   readonly legacyBackup?: string;
+  // While failed because the installer refused a folder as not private
+  // (Windows): its code and reason, for the page to say what to do.
+  readonly refusal?: WindowsPrivateRefusal;
 }
 
 export type SetupByokProtocol =

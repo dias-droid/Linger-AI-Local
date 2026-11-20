@@ -2503,6 +2503,22 @@
         value.length <= 46
           ? value
           : value.slice(0, 18) + "…" + value.slice(-27);
+      // Where to install instead, when the installer refused the location
+      // because another account could rename a folder on the way to it; the
+      // message, shown below, says why. A folder directly on the drive is
+      // refused for the drive's own permissions, which choosing the drive
+      // again would not change, so that case gets no hint.
+      const locationHint = (local) => {
+        const [, drive] =
+          /^([A-Za-z]:\\)[^\\]+\\[^\\]/.exec(local.location.path) ?? [];
+        return drive &&
+          local.refusal?.code === "WINDOWS_PRIVATE_PATH_UNSAFE" &&
+          local.refusal.reason === "UNSAFE_PARENT_ACCESS"
+          ? "Go back and set the install location to the drive itself (Linger installs into " +
+              drive +
+              "Linger) or an empty folder directly on the drive."
+          : "";
+      };
       // Quick Install installs what the localmodels tool recommends for this
       // computer once it has checked; until then (or when it cannot check)
       // the installer picks. The tool's local-models pick runs through Pi,
@@ -3707,7 +3723,8 @@
             ? "Starting Linger"
             : "Installing Linger";
         $("installing-plan").textContent = failed
-          ? "Your data is kept. Fix the problem and try again."
+          ? locationHint(local) ||
+            "Your data is kept. Fix the problem and try again."
           : "This takes a few minutes. You can keep working.";
         const section = document.querySelector('[data-step="installing"]');
         const steps = ALL_STEPS.filter(([id]) => local.steps.includes(id));

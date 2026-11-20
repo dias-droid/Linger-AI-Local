@@ -19,7 +19,11 @@ ancestor counts as well, because its holder can rename that folder, except on
 a volume root, which can be neither renamed nor removed. A folder directly on
 a data drive with the stock root ACL therefore passes, and a folder nested in
 one that inherits Modify for Authenticated Users does not. The Daemon's
-`privatefs` treats the volume root the same way.
+`privatefs` treats the volume root the same way. A refusal leaves the
+installer as its code and reason (`windowsPrivateRefusal`), never as its
+words: in the `startFailure` line on stdout when the installer manager cannot
+start, and in the `--user-keys` outcome. The Desktop setup page branches on
+`UNSAFE_PARENT_ACCESS` to say where to install instead.
 
 `atomicPrivate` closes and removes its temporary file on failed writes or
 syncs as well as failed publication. A failed replacement keeps the previous

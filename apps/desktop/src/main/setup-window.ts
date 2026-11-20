@@ -464,6 +464,7 @@ const localServerState = (
     byokCheck,
     byokModels,
     legacyBackup,
+    refusal,
   } = local.status();
   const home = os.homedir();
   const shown = (folder: string) =>
@@ -489,6 +490,7 @@ const localServerState = (
     ...(byokCheck ? { byokCheck } : {}),
     ...(byokModels ? { byokModels } : {}),
     ...(legacyBackup ? { legacyBackup: shown(legacyBackup) } : {}),
+    ...(refusal ? { refusal } : {}),
     ...(account ? { account } : {}),
   };
 };
