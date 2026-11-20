@@ -1,6 +1,9 @@
 import { PlugSocketIcon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
+import { useT } from "@/i18n/use-translation";
 import { useState } from "react";
+
+import { connectorMessages as m } from "./connectors.messages";
 
 const SIZES = {
   md: { image: "size-6", icon: 20 },
@@ -18,6 +21,7 @@ export function AppLogo({
   url?: string;
 }) {
   const [failedUrl, setFailedUrl] = useState<string>();
+  const t = useT();
   return url && failedUrl !== url ? (
     <img
       alt=""
@@ -28,7 +32,11 @@ export function AppLogo({
       onError={() => setFailedUrl(url)}
     />
   ) : (
-    <span aria-label={`${name} icon`} className="inline-flex" role="img">
+    <span
+      aria-label={t(m.appIcon, { name })}
+      className="inline-flex"
+      role="img"
+    >
       <Icon icon={PlugSocketIcon} size={SIZES[size].icon} />
     </span>
   );

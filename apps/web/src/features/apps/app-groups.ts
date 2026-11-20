@@ -1,9 +1,13 @@
 import type { TeamHubExternalApp } from "@/features/teamhub/teamhub-types";
+import { type Translate, translate } from "@/i18n/language";
+import type { Message } from "@/i18n/messages";
+
+import { connectorMessages as m } from "./connectors.messages";
 
 export interface AppGroup {
   apps: readonly string[];
   id: string;
-  title: string;
+  title: Message;
 }
 
 /**
@@ -19,7 +23,7 @@ export const WEB_SEARCH_FILTER = { id: "web-search", label: "Web search" };
 export const APP_GROUPS: readonly AppGroup[] = [
   {
     id: "mail-calendar",
-    title: "Mail & Calendar",
+    title: m.groupMailCalendar,
     apps: [
       "gmail",
       "outlook",
@@ -28,46 +32,52 @@ export const APP_GROUPS: readonly AppGroup[] = [
       "calendly",
     ],
   },
-  { id: "meetings", title: "Meetings", apps: ["granola", "google_meet"] },
+  { id: "meetings", title: m.groupMeetings, apps: ["granola", "google_meet"] },
   {
     id: "productivity",
-    title: "Productivity",
+    title: m.groupProductivity,
     apps: ["github", "notion", "linear"],
   },
-  { id: "messaging", title: "Messaging", apps: ["slack", "discord"] },
+  { id: "messaging", title: m.groupMessaging, apps: ["slack", "discord"] },
   {
     id: "design-creative",
-    title: "Design & Creative",
+    title: m.groupDesignCreative,
     apps: ["figma", "canva"],
   },
-  { id: "multimodal", title: "Multimodal", apps: ["higgsfield", "fal_ai"] },
+  {
+    id: "multimodal",
+    title: m.groupMultimodal,
+    apps: ["higgsfield", "fal_ai"],
+  },
 ];
 
 /**
  * One-line card labels. TeamHub's longer descriptions stay in the manage
  * dialog, where their import limits and scope matter.
  */
-const APP_SUMMARIES: Record<string, string> = {
-  calendly: "Scheduling links and events",
-  canva: "Designs and presentations",
-  discord: "Servers and channels",
-  fal_ai: "Generative media models",
-  figma: "Design files",
-  github: "Repositories and activity",
-  gmail: "Email",
-  google_calendar: "Calendars and events",
-  google_meet: "Video call records",
-  granola: "Meeting notes",
-  higgsfield: "AI images and video",
-  linear: "Issues and projects",
-  notion: "Pages and databases",
-  outlook: "Email",
-  outlook_calendar: "Calendars and events",
-  slack: "Workspaces and channels",
+const APP_SUMMARIES: Record<string, Message> = {
+  calendly: m.summaryCalendly,
+  canva: m.summaryCanva,
+  discord: m.summaryDiscord,
+  fal_ai: m.summaryFalAi,
+  figma: m.summaryFigma,
+  github: m.summaryGitHub,
+  gmail: m.summaryMail,
+  google_calendar: m.summaryCalendar,
+  google_meet: m.summaryGoogleMeet,
+  granola: m.summaryGranola,
+  higgsfield: m.summaryHiggsfield,
+  linear: m.summaryLinear,
+  notion: m.summaryNotion,
+  outlook: m.summaryMail,
+  outlook_calendar: m.summaryCalendar,
+  slack: m.summarySlack,
 };
 
-export function appSummary(app: TeamHubExternalApp) {
-  return APP_SUMMARIES[app.key] ?? app.description;
+/** What the app holds, in a few words; TeamHub's description for other apps. */
+export function appSummary(app: TeamHubExternalApp, t: Translate = translate) {
+  const summary = APP_SUMMARIES[app.key];
+  return summary ? t(summary) : app.description;
 }
 
 /** Each group with the catalog apps it holds, in group order; empty groups drop. */

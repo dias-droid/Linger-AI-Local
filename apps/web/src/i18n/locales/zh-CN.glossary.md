@@ -20,6 +20,8 @@ elsewhere.
 | Base URL, tokens, Dense, MoE         | Model terms people meet in provider documentation.  |
 | Local Computer                       | Only when it names the background program.          |
 | Reconnect This Computer              | A desktop menu item, quoted until it is translated. |
+| Read All, Write All                  | Permission names in Composio's dashboard.           |
+| Issue                                | Linear's word for a work item.                      |
 
 ## Translated
 
@@ -147,6 +149,11 @@ elsewhere.
 | Expand / Collapse             | 展开 / 收起                | Never `关闭` for folding a tree.                  |
 | Trash                         | 回收站                     |                                                   |
 | Archives (file type)          | 压缩包                     | Compressed files; `归档` is the archive action.   |
+| Apps (the page)               | 连接器                     | An older name of Connectors.                      |
+| Provider (of an account)      | 应用方                     | The service a connected account belongs to.       |
+| Active (a connection)         | 正常                       | A status; `已启用` is for a saved key.            |
+| Auto reminders                | 自动提醒                   |                                                   |
+| Popup (authorization)         | 弹窗                       | `拦截` for a popup the browser blocked.           |
 
 ## Style
 
