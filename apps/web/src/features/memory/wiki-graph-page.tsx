@@ -10,7 +10,9 @@ import { useParams, useSearchParams } from "react-router";
 
 import { Button } from "@/components/ui/button";
 import { requireRoomRouteParam } from "@/features/rooms/room-route-params";
+import { TeamHubError } from "@/features/teamhub/teamhub-error";
 import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
+import type { Translate } from "@/i18n/language";
 import { useT } from "@/i18n/use-translation";
 
 import {
@@ -36,6 +38,15 @@ const ReportCards = lazy(async () => {
   const { WikiGraphReportCards } = await import("./wiki-graph-report-cards");
   return { default: WikiGraphReportCards };
 });
+
+// TeamHub names this state with a code, so it can be worded in the language
+// on screen; any other error keeps the words it arrived with.
+function graphErrorText(error: Error, t: Translate) {
+  if (error instanceof TeamHubError && error.code === "GRAPH_UNAVAILABLE") {
+    return t(m.graphUnavailable);
+  }
+  return error.message || t(m.unavailable);
+}
 
 export function WikiGraphPage() {
   const t = useT();
@@ -112,7 +123,7 @@ export function WikiGraphPage() {
           </div>
         ) : graph.error ? (
           <div
-            aria-label={graph.error.message || t(m.unavailable)}
+            aria-label={graphErrorText(graph.error, t)}
             className="flex h-full min-h-[480px] flex-col items-center justify-center text-center"
             role="alert"
           >
@@ -122,7 +133,7 @@ export function WikiGraphPage() {
               size={24}
             />
             <p className="text-sm text-app-danger">
-              {graph.error.message || t(m.unavailable)}
+              {graphErrorText(graph.error, t)}
             </p>
             <Button
               className="mt-3"

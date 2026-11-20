@@ -2470,6 +2470,7 @@
     "reportCount": { "other": "{count} 份报告 · 按天浏览" },
     "generating": "正在生成 Wiki…",
     "unavailable": "时间线不可用。",
+    "graphUnavailable": "个人知识图谱暂不可用",
     "retryGraph": "重试加载图谱",
     "hiddenPreferences": "这个图谱无法按你隐藏文件的设置显示。请刷新图谱以加载当前视图。",
     "graphFrame": "个人知识图谱",
