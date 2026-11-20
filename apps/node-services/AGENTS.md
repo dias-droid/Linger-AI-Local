@@ -128,6 +128,13 @@ CSV and TSV normalization accepts large row counts within the existing source
 and Markdown byte limits. An output that exceeds its configured byte budget
 fails with `DOCUMENT_MARKDOWN_TOO_LARGE`, independently of the number of rows.
 
+## Imported table cells
+
+CSV, TSV and XLSX values are table data. Both table converters use the shared
+cell escaping function so backslashes and inline Markdown delimiters remain
+visible text after document materialization. CR, LF and CRLF inside a
+cell become spaces instead of introducing new Markdown rows.
+
 ## Image
 
 - The `Dockerfile` builds one image that runs every role: port 4319 for the

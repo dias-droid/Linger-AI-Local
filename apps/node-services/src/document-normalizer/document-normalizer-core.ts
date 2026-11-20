@@ -11,6 +11,7 @@ import {
   stripGzipExtension,
 } from "./document-archive-extract.js";
 import {
+  escapeMarkdownTableCell,
   extractDocText,
   extractOfficeMarkdown,
   extractSpreadsheetMarkdown,
@@ -207,7 +208,7 @@ function delimitedToMarkdown(text: string, delimiter: string): string {
   const width = rows.reduce((max, row) => Math.max(max, row.length), 0);
   const padded = rows.map((row) =>
     Array.from({ length: width }, (_, index) =>
-      (row[index] ?? "").replaceAll("\n", " ").replaceAll("|", "\\|"),
+      escapeMarkdownTableCell(row[index] ?? ""),
     ),
   );
   const header = padded[0] ?? [];

@@ -64,6 +64,10 @@ export function decodeXmlEntities(value: string): string {
     .replace(/&amp;/gu, "&");
 }
 
+export function escapeMarkdownTableCell(value: string): string {
+  return value.replace(/\r\n?|\n/gu, " ").replace(/[\\`*_[\]|~]/gu, "\\$&");
+}
+
 export async function extractOfficeMarkdown(
   source: Uint8Array,
   kind: SupportedFileType,
@@ -126,9 +130,7 @@ export async function extractSpreadsheetMarkdown(
       const lines = rows.map(
         (row) =>
           `| ${Array.from({ length: width }, (_, i) =>
-            String(row[i] ?? "")
-              .replace(/\r?\n/g, " ")
-              .replaceAll("|", "\\|"),
+            escapeMarkdownTableCell(String(row[i] ?? "")),
           ).join(" | ")} |`,
       );
       lines.splice(
