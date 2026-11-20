@@ -170,6 +170,11 @@ elsewhere.
 | Sponsor (of an Agent)         | 创建者                     | The Human who created the Agent.                  |
 | Avatar                        | 头像                       |                                                   |
 | Runs on                       | 运行位置                   | Where an Agent runs: Computer and Runtime.        |
+| Leave (a Room)                | 离开                       |                                                   |
+| Share conversation            | 分享对话                   | A read-only link to a snapshot of the chat.       |
+| Snapshot / Share link         | 快照 / 分享链接            |                                                   |
+| Revoke                        | 撤销                       | Withdraws a share link.                           |
+| Yours                         | 你的                       | The tag on an Agent you created.                  |
 
 ## Style
 
