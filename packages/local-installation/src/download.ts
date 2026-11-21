@@ -378,23 +378,13 @@ export async function downloadVerified(
         for (const [url, rate] of measured) {
           if (url === primary || rate <= bestRate) continue;
           // A challenger displaces the primary by clearing the bar by the
-          // switch ratio. The bar is the primary's own rate, or — when the
-          // primary yielded before its first byte and has no measurement —
-          // the best rate among the other measured hosts. With no other
-          // measurement the challenger is the only host that delivered
-          // bytes, so it displaces the unmeasured primary outright.
-          let bar = primaryRate;
-          if (bar === undefined) {
-            const others = [...measured]
-              .filter(([other]) => other !== url)
-              .map(([, otherRate]) => otherRate);
-            if (others.length === 0) {
-              bestUrl = url;
-              bestRate = rate;
-              continue;
-            }
-            bar = Math.max(...others);
-          }
+          // switch ratio. The bar is the primary's own rate; when the
+          // primary yielded before its first byte and has no measurement,
+          // the bar is zero, so the fastest host that delivered bytes
+          // displaces it. Measuring the challenger against the other
+          // mirrors instead would leave a hung primary in place whenever
+          // two mirrors run at similar speeds.
+          const bar = primaryRate ?? 0;
           if (rate >= bar * SLOW_SWITCH_RATIO) {
             bestUrl = url;
             bestRate = rate;

@@ -1021,3 +1021,91 @@ it("promotes the only measured mirror when the primary hangs", async () => {
   expect(Date.now() - startedAt).toBeLessThan(1_500);
   expect(await readFile(output)).toEqual(bytes);
 }, 10_000);
+
+it("promotes the fastest mirror when the primary hangs and two mirrors run at similar speeds", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "linger-download-"));
+  roots.push(root);
+  const bytes = Buffer.alloc(16 * 1024, 0x76);
+  const hosts: string[] = [];
+  const output = path.join(root, "two-mirrors.tgz");
+  const startedAt = Date.now();
+  const served = await downloadVerified(
+    {
+      url: "https://primary.example/two-mirrors.tgz",
+      mirrors: [
+        "https://m1.example/two-mirrors.tgz",
+        "https://m2.example/two-mirrors.tgz",
+      ],
+      output,
+      digest: createHash("sha256").update(bytes).digest("hex"),
+      algorithm: "sha256",
+      maxBytes: bytes.length,
+      signal: new AbortController().signal,
+    },
+    async (url, init) => {
+      const host = new URL(url as URL).host;
+      hosts.push(host);
+      if (host === "primary.example") {
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("aborted", "AbortError")),
+          );
+        });
+      }
+      const range = new Headers(init?.headers).get("range");
+      const start = range ? Number(/^bytes=(\d+)-$/.exec(range)?.[1] ?? 0) : 0;
+      const slice = bytes.subarray(start);
+      const headers: Record<string, string> = {
+        "content-length": String(slice.length),
+        ...(start > 0
+          ? {
+              "content-range": `bytes ${start}-${bytes.length - 1}/${bytes.length}`,
+            }
+          : {}),
+      };
+      // m1 is faster than m2 but by less than the switch ratio, so neither
+      // mirror clears the other as its bar: the old rule left the hung
+      // primary in place for round 1.
+      const intervalMs = host === "m1.example" ? 10 : 14;
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          async start(controller) {
+            for (let offset = 0; offset < slice.length; offset += 1024) {
+              await new Promise((resolve) =>
+                setTimeout(resolve, intervalMs),
+              );
+              try {
+                controller.enqueue(slice.subarray(offset, offset + 1024));
+              } catch {
+                return;
+              }
+            }
+            try {
+              controller.close();
+            } catch {
+              // Cancelled during round 0 comparison.
+            }
+          },
+        }),
+        { status: start > 0 ? 206 : 200, headers },
+      );
+    },
+    {
+      attempts: 2,
+      retryDelayMs: 0,
+      idleTimeoutMs: 2_000,
+      slowCheckAfterMs: 80,
+      minBytesPerSecond: 300_000,
+      minRemainingMs: 100,
+    },
+  );
+  expect(served).toBe("https://m1.example/two-mirrors.tgz");
+  expect(hosts).toEqual([
+    "primary.example",
+    "m1.example",
+    "m2.example",
+    "m1.example",
+  ]);
+  expect(Date.now() - startedAt).toBeLessThan(1_500);
+  expect(await readFile(output)).toEqual(bytes);
+}, 10_000);
