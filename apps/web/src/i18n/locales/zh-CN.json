@@ -2778,5 +2778,22 @@
     "signInRequired": "需要在 {computer} 上登录 {app}。",
     "needsUpdate": "{computer} 需要更新后才能运行 {app}。",
     "computerOffline": "{computer} 已离线。"
+  },
+  "cardPrompts": {
+    "profileSetupApps": "在帮你处理回复和后续跟进之前，我想先了解你。最快的方式是让我看看你平时在哪里沟通工作——一个账号就够了。",
+    "profileSetupSources": "你有个人网站或作品集吗？可以粘贴链接，或上传你的简历和作品。",
+    "connectionAuth": "请连接并授权你的 {app} 账号，以便我继续。",
+    "connectionAuthAccount": "请连接并授权 {app} 账号 {account}，以便我继续。",
+    "providerKey": "请添加 Composio API 密钥，以便我使用已连接的应用。",
+    "providerKeyApp": "请添加 Composio API 密钥，以便我连接 {app}。连接任何应用都需要它。",
+    "searchKeyMissing": "请添加 {backend} API 密钥，以便我搜索网页。",
+    "searchKeyRejected": "{backend} 拒绝了已保存的 API 密钥。请添加新的密钥，以便我搜索网页。",
+    "searchKeyFreeLimit": "{backend} 的免费试用已用完。请添加 {backend} API 密钥，以便我继续搜索。",
+    "searchKeyFreeLimitSuggested": "免费网页搜索试用已用完。请添加网页搜索 API 密钥，以便我继续搜索；推荐使用 {backend}。",
+    "browserConnection": "请连接你日常使用的 Chrome，以便我继续浏览器任务。扩展令牌只会发送到你的电脑。",
+    "computerPermission": "需要在你的 Mac 上授予系统权限",
+    "roomCreation": "请求创建协作 Room：{name}",
+    "agentCreate": "创建 Agent“{name}”",
+    "agentChange": "修改 Agent“{name}”"
   }
 }

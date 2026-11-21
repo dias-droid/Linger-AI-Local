@@ -37,6 +37,7 @@ import {
   CardRow,
   CardRowDetails,
 } from "./approval-card-parts";
+import { decisionCardHeading } from "./card-prompts";
 import { CardBox, CardDone, type ReceiptTone } from "./card-shell";
 import { cardsMessages as m } from "./cards.messages";
 import type { DecisionMessageCard } from "./decision-card";
@@ -103,7 +104,7 @@ export function SearchKeyDecision({
   const result = pending ? null : keyResult(card, view.backend, t);
   const canSave = list.data?.can_save_keys !== false;
   return (
-    <CardBox heading={card.title} label={t(m.labelSearchKey)}>
+    <CardBox heading={decisionCardHeading(card, t)} label={t(m.labelSearchKey)}>
       <CardRow
         detail={shown?.description}
         icon={
