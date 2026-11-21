@@ -807,29 +807,46 @@ describe("LocalServerModule", () => {
     expect(f.module.status().steps).toContain("signin");
     expect(f.enroll).not.toHaveBeenCalled();
 
-    // The runtime's own login runs in the installer; its page opens once.
+    // The runtime's own login runs in the installer. On Linux, Codex's
+    // browser login leaves its page to this app, which opens it once.
+    const oauth =
+      "https://auth.openai.com/oauth/authorize?redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&state=x";
+    api.runtime.login = { state: "waiting_user", url: oauth };
+    await f.module.startSignIn();
+    expect(api.runtime.logins).toEqual([
+      { instance: LOCAL_INSTANCE, method: "browser" },
+    ]);
+    expect(f.module.status().signIn).toEqual({
+      runtime: "codex",
+      state: "waiting_user",
+      url: oauth,
+    });
+    await waitForInstaller(() => expect(openExternal).toHaveBeenCalledTimes(1));
+    expect(openExternal).toHaveBeenCalledWith(oauth);
+
+    // A code for another device instead; its page opens too.
     api.runtime.login = {
       state: "waiting_user",
       url: "https://auth.openai.com/codex/device",
       deviceCode: "ABCD-1234",
     };
-    await f.module.startSignIn();
-    expect(api.runtime.logins).toEqual([{ instance: LOCAL_INSTANCE }]);
+    await f.module.startSignIn(undefined, true);
     expect(f.module.status().signIn).toEqual({
       runtime: "codex",
       state: "waiting_user",
       url: "https://auth.openai.com/codex/device",
       deviceCode: "ABCD-1234",
     });
-    await waitForInstaller(() => expect(openExternal).toHaveBeenCalledTimes(1));
-    expect(openExternal).toHaveBeenCalledWith(
+    await waitForInstaller(() => expect(openExternal).toHaveBeenCalledTimes(2));
+    expect(openExternal).toHaveBeenLastCalledWith(
       "https://auth.openai.com/codex/device",
     );
 
     // Claude Code's page shows a code to paste back.
     await f.module.startSignIn("pasted-code");
     expect(api.runtime.logins).toEqual([
-      { instance: LOCAL_INSTANCE },
+      { instance: LOCAL_INSTANCE, method: "browser" },
+      { instance: LOCAL_INSTANCE, method: "device" },
       { instance: LOCAL_INSTANCE, code: "pasted-code" },
     ]);
 
@@ -841,7 +858,7 @@ describe("LocalServerModule", () => {
       signIn: { runtime: "codex", state: "signed_in" },
     });
     expect(f.module.status().steps).toContain("signin");
-    expect(openExternal).toHaveBeenCalledTimes(1);
+    expect(openExternal).toHaveBeenCalledTimes(2);
     expect(f.enroll).toHaveBeenCalled();
     expect(f.host.ctx.config.get().runtimeEnvironment).toEqual(
       api.runtime.environment,
@@ -925,6 +942,77 @@ describe("LocalServerModule", () => {
       signIn: { runtime: "claude", state: "signed_in" },
     });
     expect(openExternal).toHaveBeenCalledTimes(1);
+    await f.host.stop("quit");
+  });
+
+  it("says when no browser opens, and why a sign-in ended", async () => {
+    const api = installerApi([], {
+      state: "succeeded",
+      origin: "http://localhost:3000",
+      stages: [{ id: "runtime", state: "waiting_user" }],
+    });
+    api.runtime.setupChoice = "codex";
+    api.runtime.login = { state: "idle" };
+    const openExternal = vi.fn(async (_url: string): Promise<void> => {
+      throw new Error("xdg-open exited with 3");
+    });
+    const f = fixture(
+      (home) => ({ ...withCheckout(home), openExternal, signInPollMs: 5 }),
+      {},
+      checkout,
+      api,
+    );
+    await f.host.start();
+    const done = f.module.begin();
+    await waitForInstaller(() =>
+      expect(f.module.status().signIn?.state).toBe("required"),
+    );
+    const login = {
+      state: "waiting_user" as const,
+      url: "https://auth.openai.com/oauth/authorize?redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&state=x",
+    };
+    api.runtime.login = login;
+    await f.module.startSignIn();
+    // No browser opened: the step says so, and the next checks keep it.
+    await waitForInstaller(() =>
+      expect(f.module.status().signIn).toEqual({
+        runtime: "codex",
+        ...login,
+        browserFailed: true,
+      }),
+    );
+    await delay(30);
+    expect(f.module.status().signIn?.browserFailed).toBe(true);
+    expect(openExternal).toHaveBeenCalledTimes(1);
+    // Opening it by hand works now.
+    openExternal.mockResolvedValueOnce(undefined);
+    await f.module.openSignInPage();
+    expect(f.module.status().signIn).toEqual({ runtime: "codex", ...login });
+
+    // The installer says why it ended; the step keeps the reason.
+    api.runtime.login = {
+      state: "failed",
+      reason: "timed_out",
+      message: "Sign-in timed out. Retry or sign in later.",
+    };
+    await waitForInstaller(() =>
+      expect(f.module.status().signIn).toEqual({
+        runtime: "codex",
+        state: "failed",
+        reason: "timed_out",
+        message: "Sign-in timed out. Retry or sign in later.",
+      }),
+    );
+    api.runtime.login = { state: "idle" };
+    await delay(30);
+    expect(f.module.status().signIn?.reason).toBe("timed_out");
+
+    api.runtime.login = { state: "ready" };
+    await done;
+    expect(f.module.status().signIn).toEqual({
+      runtime: "codex",
+      state: "signed_in",
+    });
     await f.host.stop("quit");
   });
 

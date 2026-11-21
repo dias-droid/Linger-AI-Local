@@ -45,6 +45,7 @@ import { fileLogger, type Logger } from "./log.js";
 import { MacPermissions } from "./mac-permissions.js";
 import { EventBus, ModuleHost, type Module } from "./modules.js";
 import { parseServerUrl } from "./navigation.js";
+import { openWithXdg } from "./open-url.js";
 import { PowerGuardModule, type PowerApi } from "./power-guard.js";
 import { SetupWindowModule } from "./setup-window.js";
 import { loginShellEnvironment, withLoginShell } from "./shell-env.js";
@@ -173,7 +174,9 @@ async function main(): Promise<void> {
         session.defaultSession.cookies.set({ url: server.origin, ...cookie }),
       ),
     sessionCookie: webSessionCookie,
-    openExternal: (url) => shell.openExternal(url),
+    // On Linux the sign-in needs to know when no browser opened.
+    openExternal: (url) =>
+      process.platform === "linux" ? openWithXdg(url) : shell.openExternal(url),
   });
   // Until this computer is connected, the setup window comes first.
   const needsSetup = !config.get().computerId;

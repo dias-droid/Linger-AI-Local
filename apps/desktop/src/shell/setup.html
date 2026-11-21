@@ -1505,6 +1505,7 @@
       .signin-modal .waiting {
         display: flex;
         align-items: center;
+        margin-bottom: 4px;
         color: var(--ink);
       }
       .signin-modal .device-code strong {
@@ -1521,6 +1522,61 @@
       .signin-modal .problem {
         width: auto;
         margin: 0 0 14px;
+      }
+      .signin-modal .hint {
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      /* No browser opened: the link below is the way on. */
+      .signin-modal .no-browser {
+        padding: 8px 10px;
+        border: 1px solid #f1e3c4;
+        border-radius: 10px;
+        background: #fdf9ef;
+        color: #6b5413;
+      }
+      .signin-modal .device-code {
+        margin-bottom: 12px;
+      }
+      .signin-modal .device-code p {
+        margin: 0;
+      }
+      .signin-modal .copy-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 4px 0;
+      }
+      .signin-modal .copy-row strong {
+        flex: 1;
+      }
+      .signin-modal .signin-link {
+        margin-bottom: 12px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--field);
+      }
+      .signin-modal .signin-link .label {
+        display: block;
+        margin-bottom: 4px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      .signin-modal .signin-link code {
+        display: block;
+        overflow: hidden;
+        margin-bottom: 8px;
+        color: var(--ink);
+        font: 11.5px var(--mono);
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        user-select: all;
+        -webkit-user-select: all;
+      }
+      .signin-modal .signin-link .buttons {
+        display: flex;
+        gap: 8px;
       }
       .signin-modal .actions {
         display: flex;
@@ -2059,13 +2115,45 @@
           <div class="sheet">
             <h2 id="runtime-signin-title"></h2>
             <p id="runtime-signin-lead"></p>
-            <p class="waiting" id="runtime-signin-waiting" role="status">
-              <span class="spinner"></span><span data-t="signInWaiting"></span>
+            <div id="runtime-signin-waiting" role="status">
+              <p class="waiting">
+                <span class="spinner"></span
+                ><span data-t="signInWaiting"></span>
+              </p>
+              <p class="hint" data-t="signInContinues"></p>
+            </div>
+            <p class="no-browser" id="runtime-signin-no-browser" role="alert">
+              <span id="runtime-signin-no-browser-text"></span>
             </p>
-            <p class="device-code" id="runtime-signin-device" hidden>
-              <span data-t="deviceCode"></span>
-              <strong id="runtime-signin-device-code"></strong>
-            </p>
+            <div class="device-code" id="runtime-signin-device" hidden>
+              <p data-t="deviceCode"></p>
+              <div class="copy-row">
+                <strong id="runtime-signin-device-code"></strong>
+                <button
+                  class="secondary"
+                  id="runtime-signin-copy-code"
+                  type="button"
+                ></button>
+              </div>
+              <p class="hint" data-t="deviceCodeSetting"></p>
+            </div>
+            <div class="signin-link" id="runtime-signin-link" hidden>
+              <span class="label" data-t="signInLink"></span>
+              <code id="runtime-signin-url"></code>
+              <div class="buttons">
+                <button
+                  class="secondary"
+                  id="runtime-signin-open"
+                  type="button"
+                  data-t="openInBrowser"
+                ></button>
+                <button
+                  class="secondary"
+                  id="runtime-signin-copy-url"
+                  type="button"
+                ></button>
+              </div>
+            </div>
             <p class="problem" id="runtime-signin-error" role="alert"></p>
             <div class="actions" id="runtime-signin-idle">
               <button
@@ -2073,6 +2161,12 @@
                 id="runtime-signin-start"
                 type="button"
                 data-t="authorize"
+              ></button>
+              <button
+                class="link quiet"
+                id="runtime-signin-device-start"
+                type="button"
+                data-t="useDeviceCode"
               ></button>
               <div class="row">
                 <button
@@ -2118,9 +2212,8 @@
             <div class="row" id="runtime-signin-busy">
               <button
                 class="link quiet"
-                id="runtime-signin-open"
+                id="runtime-signin-switch-method"
                 type="button"
-                data-t="openBrowserAgain"
               ></button>
               <button
                 class="ghost"
@@ -2131,7 +2224,7 @@
             </div>
             <details id="runtime-signin-trouble">
               <summary class="link quiet" data-t="havingTrouble"></summary>
-              <p id="runtime-signin-help"></p>
+              <p data-t="signInHelpCode"></p>
               <form id="runtime-signin-paste">
                 <input
                   id="runtime-signin-input"
@@ -3413,11 +3506,24 @@
         claude: "signInLeadClaude",
         pi: "signInLeadPi",
       };
+      // The page's own words for why a sign-in ended; the installer's
+      // message is the fallback for anything else.
+      const SIGN_IN_REASONS = {
+        timed_out: "signInTimedOut",
+        ended: "signInEnded",
+        unavailable: "signInUnavailable",
+      };
       let otherRuntimes = false;
+      // The sign-in's own errors, such as a failed copy; render keeps them.
+      let signInError = "";
+      // What was just copied: "url" or "code".
+      let signInCopied;
       // The runtime installed but not signed in: a dialog starts its own
-      // login, which opens the browser, and closes once it is signed in.
-      // The link and code it prints are only a fallback, folded away. No
-      // secret shows here; a pasted code goes straight to the runtime.
+      // login, which opens the browser, and closes once it is signed in,
+      // bringing setup back. The link (and Codex's device code) always show
+      // with buttons to open and copy them, so signing in works even when
+      // no browser opens. No secret shows here; a pasted code goes straight
+      // to the runtime.
       const renderSignIn = (local, busy) => {
         const sign = local.signIn;
         const open =
@@ -3429,6 +3535,7 @@
         if (!open) {
           otherRuntimes = false;
           signInByokOpen = false;
+          signInError = "";
           $("runtime-signin-trouble").open = false;
           return;
         }
@@ -3437,22 +3544,42 @@
         const running =
           sign.state === "starting" || sign.state === "waiting_user";
         const pi = sign.runtime === "pi";
+        const codex = sign.runtime === "codex";
+        const link = running && sign.url;
         $("runtime-signin-title").textContent = t("signInTo", {
           runtime: name,
         });
         $("runtime-signin-lead").textContent = t(SIGN_IN_LEADS[sign.runtime]);
         $("runtime-signin-lead").hidden = running;
         $("runtime-signin-waiting").hidden = !running;
-        $("runtime-signin-device").hidden = !sign.deviceCode;
+        $("runtime-signin-no-browser").hidden = !link || !sign.browserFailed;
+        // A device code works in any browser; the browser login calls back
+        // to this computer, so its link has to open here.
+        $("runtime-signin-no-browser-text").textContent = t(
+          sign.deviceCode ? "browserFailedDevice" : "browserFailed",
+        );
+        $("runtime-signin-device").hidden = !link || !sign.deviceCode;
         $("runtime-signin-device-code").textContent = sign.deviceCode || "";
+        $("runtime-signin-copy-code").textContent = t(
+          signInCopied === "code" ? "copied" : "copyCode",
+        );
+        $("runtime-signin-link").hidden = !link;
+        $("runtime-signin-url").textContent = sign.url || "";
+        $("runtime-signin-url").title = sign.url || "";
+        $("runtime-signin-copy-url").textContent = t(
+          signInCopied === "url" ? "copied" : "copyLink",
+        );
         $("runtime-signin-error").textContent = failed
-          ? sign.message || t("signInFailed")
-          : "";
+          ? SIGN_IN_REASONS[sign.reason]
+            ? t(SIGN_IN_REASONS[sign.reason])
+            : sign.message || t("signInFailed")
+          : signInError;
         $("runtime-signin-idle").hidden = running;
         $("runtime-signin-start").hidden = pi;
         $("runtime-signin-start").textContent = t(
           failed ? "retry" : "authorize",
         );
+        $("runtime-signin-device-start").hidden = !codex;
         $("runtime-signin-logs").hidden = !failed;
         $("runtime-signin-runtimes").hidden = !otherRuntimes && !pi;
         $("runtime-signin-other").hidden = pi;
@@ -3465,14 +3592,14 @@
           option.disabled = busy;
         }
         $("runtime-signin-busy").hidden = !running;
-        $("runtime-signin-open").hidden = !sign.url;
-        // The fallback: the printed link, and for Claude Code the code its
-        // page shows.
-        $("runtime-signin-trouble").hidden = !sign.url || !!sign.deviceCode;
-        $("runtime-signin-help").textContent = t(
-          sign.acceptsCode ? "signInHelpCode" : "signInHelp",
+        // Codex: a code for another device, or back to this computer's
+        // browser.
+        $("runtime-signin-switch-method").hidden = !codex;
+        $("runtime-signin-switch-method").textContent = t(
+          sign.deviceCode ? "useBrowserHere" : "useDeviceCode",
         );
-        $("runtime-signin-paste").hidden = !sign.acceptsCode;
+        // Claude Code's page shows a code to paste back.
+        $("runtime-signin-trouble").hidden = !link || !sign.acceptsCode;
         requestAnimationFrame(placeKnobs);
       };
 
@@ -4110,13 +4237,17 @@
       const run = async (command, errorId) => {
         if (pending !== null) return;
         pending = command.op;
-        if (errorId) $(errorId).textContent = "";
+        // The sign-in dialog renders its error itself.
+        if (errorId === "runtime-signin-error") signInError = "";
+        else if (errorId) $(errorId).textContent = "";
         render();
         try {
           state = await setup.run(command);
           return true;
         } catch (error) {
-          if (errorId) $(errorId).textContent = ipcMessage(error);
+          if (errorId === "runtime-signin-error")
+            signInError = ipcMessage(error);
+          else if (errorId) $(errorId).textContent = ipcMessage(error);
           return false;
         } finally {
           pending = null;
@@ -4177,8 +4308,48 @@
         // That page shows a code to paste back here.
         if (state.localServer.signIn?.acceptsCode)
           $("runtime-signin-trouble").open = true;
-        run({ op: "local.signin.open" }, "runtime-signin-error");
+        // On Linux opening waits up to seconds for xdg-open, so it skips run()
+        // and leaves the dialog usable; a browser that fails to open comes
+        // back through onState as browserFailed.
+        signInError = "";
+        setup.run({ op: "local.signin.open" }).catch((error) => {
+          signInError = ipcMessage(error);
+          render();
+        });
       });
+      const copySignIn = async (what) => {
+        if (
+          !(await run(
+            { op: "local.signin.copy", what },
+            "runtime-signin-error",
+          ))
+        )
+          return;
+        signInCopied = what;
+        render();
+        setTimeout(() => {
+          if (signInCopied !== what) return;
+          signInCopied = undefined;
+          render();
+        }, 1500);
+      };
+      $("runtime-signin-copy-url").addEventListener("click", () =>
+        copySignIn("url"),
+      );
+      $("runtime-signin-copy-code").addEventListener("click", () =>
+        copySignIn("code"),
+      );
+      $("runtime-signin-device-start").addEventListener("click", () =>
+        run({ op: "local.signin.start", device: true }, "runtime-signin-error"),
+      );
+      $("runtime-signin-switch-method").addEventListener("click", () =>
+        run(
+          state.localServer.signIn?.deviceCode
+            ? { op: "local.signin.start" }
+            : { op: "local.signin.start", device: true },
+          "runtime-signin-error",
+        ),
+      );
       $("runtime-signin-cancel").addEventListener("click", () =>
         run({ op: "local.signin.cancel" }, "runtime-signin-error"),
       );
