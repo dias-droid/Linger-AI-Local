@@ -3773,6 +3773,42 @@ func (e TeamMdPattern) Valid() bool {
 	}
 }
 
+// Defines values for TenantAgentAvailabilityReason.
+const (
+	TenantAgentAvailabilityReasonAuthenticationRequired TenantAgentAvailabilityReason = "authentication_required"
+	TenantAgentAvailabilityReasonOnline                 TenantAgentAvailabilityReason = "online"
+	TenantAgentAvailabilityReasonReconnecting           TenantAgentAvailabilityReason = "reconnecting"
+	TenantAgentAvailabilityReasonRuntimeError           TenantAgentAvailabilityReason = "runtime_error"
+	TenantAgentAvailabilityReasonRuntimeIncompatible    TenantAgentAvailabilityReason = "runtime_incompatible"
+	TenantAgentAvailabilityReasonRuntimeNotInstalled    TenantAgentAvailabilityReason = "runtime_not_installed"
+	TenantAgentAvailabilityReasonStatusUnavailable      TenantAgentAvailabilityReason = "status_unavailable"
+	TenantAgentAvailabilityReasonWaitingForComputer     TenantAgentAvailabilityReason = "waiting_for_computer"
+)
+
+// Valid indicates whether the value is a known member of the TenantAgentAvailabilityReason enum.
+func (e TenantAgentAvailabilityReason) Valid() bool {
+	switch e {
+	case TenantAgentAvailabilityReasonAuthenticationRequired:
+		return true
+	case TenantAgentAvailabilityReasonOnline:
+		return true
+	case TenantAgentAvailabilityReasonReconnecting:
+		return true
+	case TenantAgentAvailabilityReasonRuntimeError:
+		return true
+	case TenantAgentAvailabilityReasonRuntimeIncompatible:
+		return true
+	case TenantAgentAvailabilityReasonRuntimeNotInstalled:
+		return true
+	case TenantAgentAvailabilityReasonStatusUnavailable:
+		return true
+	case TenantAgentAvailabilityReasonWaitingForComputer:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TenantAgentAvailabilityStatus.
 const (
 	TenantAgentAvailabilityStatusError   TenantAgentAvailabilityStatus = "error"
@@ -9170,7 +9206,12 @@ type TenantAgentAvailability struct {
 	// ActiveTaskCount Number of non-terminal managed Tasks assigned to this Agent.
 	ActiveTaskCount int64                       `json:"active_task_count"`
 	CurrentActivity *TenantAgentCurrentActivity `json:"current_activity,omitempty"`
-	Label           string                      `json:"label"`
+
+	// Label English wording of the status, the fallback for clients that do not know `reason`.
+	Label string `json:"label"`
+
+	// Reason Why the Agent has its status, as a stable code clients word in their own language. `label` and `current_activity.summary` carry the same state in English for clients that do not know the code. With `runtime_error` the summary is the Runtime's own diagnostic text.
+	Reason *TenantAgentAvailabilityReason `json:"reason,omitempty"`
 
 	// Status Runtime availability. Managed Task execution is represented by active_task_count.
 	Status TenantAgentAvailabilityStatus `json:"status"`
@@ -9181,6 +9222,9 @@ type TenantAgentAvailabilityPage struct {
 	Items []TenantAgentAvailabilitySnapshot `json:"items"`
 	Page  PageMeta                          `json:"page"`
 }
+
+// TenantAgentAvailabilityReason Why the Agent has its status, as a stable code clients word in their own language. `label` and `current_activity.summary` carry the same state in English for clients that do not know the code. With `runtime_error` the summary is the Runtime's own diagnostic text.
+type TenantAgentAvailabilityReason string
 
 // TenantAgentAvailabilitySnapshot defines model for TenantAgentAvailabilitySnapshot.
 type TenantAgentAvailabilitySnapshot struct {

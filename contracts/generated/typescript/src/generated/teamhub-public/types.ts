@@ -4423,6 +4423,19 @@ export interface components {
      * @enum {string}
      */
     TenantAgentAvailabilityStatus: "online" | "error" | "offline" | "unknown";
+    /**
+     * @description Why the Agent has its status, as a stable code clients word in their own language. `label` and `current_activity.summary` carry the same state in English for clients that do not know the code. With `runtime_error` the summary is the Runtime's own diagnostic text.
+     * @enum {string}
+     */
+    TenantAgentAvailabilityReason:
+      | "online"
+      | "status_unavailable"
+      | "reconnecting"
+      | "authentication_required"
+      | "waiting_for_computer"
+      | "runtime_not_installed"
+      | "runtime_incompatible"
+      | "runtime_error";
     TenantAgentCurrentActivity: {
       summary: string;
       run_id?: components["schemas"]["Id"];
@@ -4430,7 +4443,9 @@ export interface components {
     };
     TenantAgentAvailability: {
       status: components["schemas"]["TenantAgentAvailabilityStatus"];
+      /** @description English wording of the status, the fallback for clients that do not know `reason`. */
       label: string;
+      reason?: components["schemas"]["TenantAgentAvailabilityReason"];
       /**
        * Format: int64
        * @description Number of non-terminal managed Tasks assigned to this Agent.
