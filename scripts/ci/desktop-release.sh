@@ -50,6 +50,9 @@ set -euo pipefail
 #   WINDOWS_SIGNING_P12, WINDOWS_SIGNING_PASSWORD_FILE
 #                                Authenticode .p12 and a file with its password for
 #                                the setup program (osslsigncode); unsigned without
+#   DESKTOP_REQUIRE_SIGNING      "true" turns every missing signing input above
+#                                into an error instead of a warning; the workflow
+#                                sets it for a published stable release
 #   CI_API_V4_URL, CI_PROJECT_ID, CI_JOB_TOKEN
 #                                GitLab CI's own variables for gitlab-upload
 #   DESKTOP_PACKAGE_NAME         generic package of the dry-run files (linger-desktop-dry-run)
@@ -265,6 +268,7 @@ cmd_package() {
   local target="${1:-}" version out pkg assets
   check_target "$target"
   version="$(release_version)"
+  require_signed_release "$target"
   [[ -d "$desktop/dist/installer" ]] || die "run '$0 compile $target' first"
   out="$(out_dir)"
   pkg="$out/package-$target"
@@ -279,6 +283,26 @@ cmd_package() {
   esac
   rm -rf "$pkg"
   ls -l "$assets"
+}
+
+# A published stable release is signed end to end: no ad-hoc macOS signature,
+# no skipped notarization, no unsigned Windows setup. Prereleases and manual
+# test builds keep the warn-and-continue fallbacks in the package functions.
+require_signed_release() {
+  local target="$1"
+  [[ "${DESKTOP_REQUIRE_SIGNING:-}" == true ]] || return 0
+  case "$target" in
+    darwin-arm64)
+      [[ -n "${MACOS_DEVELOPER_ID_P12:-}" ]] ||
+        die "MACOS_DEVELOPER_ID_P12 is required for a stable release; refusing an ad-hoc signature (docs/desktop-release.md)"
+      [[ -n "${MACOS_NOTARY_KEY:-}" ]] ||
+        die "MACOS_NOTARY_KEY is required for a stable release; refusing to skip notarization (docs/desktop-release.md)"
+      ;;
+    win32-x64)
+      [[ -n "${WINDOWS_SIGNING_P12:-}" ]] ||
+        die "WINDOWS_SIGNING_P12 is required for a stable release; refusing an unsigned setup program (docs/desktop-release.md)"
+      ;;
+  esac
 }
 
 cmd_build() {
@@ -304,6 +328,8 @@ cmd_manifest() {
   [[ "$version" =~ $version_pattern ]] || die "manifest needs the release version"
   rm -f "$dir/manifest.json" "$dir/manifest.json.sig"
   if [[ -z "${DESKTOP_UPDATE_KEY:-}" ]]; then
+    [[ "${DESKTOP_REQUIRE_SIGNING:-}" == true ]] &&
+      die "DESKTOP_UPDATE_KEY is required for a stable release; refusing to publish without a signed update manifest (docs/desktop-release.md)"
     echo "::warning::DESKTOP_UPDATE_KEY_PEM is not set: this release has no update manifest, so installed apps will not update to $version (docs/desktop-release.md)."
     return 0
   fi

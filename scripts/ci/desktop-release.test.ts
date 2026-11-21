@@ -213,6 +213,18 @@ describe("desktop-release.sh manifest", () => {
     expect(existsSync(join(dir, "manifest.json"))).toBe(false);
   });
 
+  it("fails without the key when the release requires signing", () => {
+    const dir = release();
+
+    const result = run(["manifest", dir, version], {
+      DESKTOP_REQUIRE_SIGNING: "true",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("DESKTOP_UPDATE_KEY");
+    expect(existsSync(join(dir, "manifest.json"))).toBe(false);
+  });
+
   it("refuses a key installed apps would not accept", () => {
     const dir = release();
     // The throwaway key against this checkout's UPDATE_PUBLIC_KEY.
@@ -240,6 +252,71 @@ describe("desktop-release.sh manifest", () => {
 
     expect(result.status).toBe(1);
     expect(result.stderr).toContain(packages["darwin-arm64"]);
+  });
+});
+
+describe("desktop-release.sh signing requirements", () => {
+  // The gate runs before the compiled-app check, so these cases need no
+  // build output: a rejection names the missing secret, and a passed gate
+  // lands on the "run compile first" error instead.
+  it("fails a stable-release macOS package without signing material", () => {
+    const result = run(["package", "darwin-arm64"], {
+      DESKTOP_VERSION: "1.0.0",
+      DESKTOP_REQUIRE_SIGNING: "true",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("MACOS_DEVELOPER_ID_P12");
+  });
+
+  it("fails a stable-release macOS package without the notary key", () => {
+    const result = run(["package", "darwin-arm64"], {
+      DESKTOP_VERSION: "1.0.0",
+      DESKTOP_REQUIRE_SIGNING: "true",
+      MACOS_DEVELOPER_ID_P12: "/tmp/developer-id.p12",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("MACOS_NOTARY_KEY");
+  });
+
+  it("fails a stable-release Windows package without a certificate", () => {
+    const result = run(["package", "win32-x64"], {
+      DESKTOP_VERSION: "1.0.0",
+      DESKTOP_REQUIRE_SIGNING: "true",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("WINDOWS_SIGNING_P12");
+  });
+
+  it("packages nothing before compile once the signing gate passes", () => {
+    const result = run(["package", "darwin-arm64"], {
+      DESKTOP_VERSION: "1.0.0",
+      DESKTOP_REQUIRE_SIGNING: "true",
+      MACOS_DEVELOPER_ID_P12: "/tmp/developer-id.p12",
+      MACOS_NOTARY_KEY: "/tmp/notary.json",
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("compile darwin-arm64");
+  });
+
+  it("keeps the unsigned fallbacks without DESKTOP_REQUIRE_SIGNING", () => {
+    const result = run(["package", "darwin-arm64"], {
+      DESKTOP_VERSION: "1.0.0",
+    });
+
+    expect(result.stderr).toContain("compile darwin-arm64");
+  });
+
+  it("requires no signing material for a Linux package", () => {
+    const result = run(["package", "linux-x64"], {
+      DESKTOP_VERSION: "1.0.0",
+      DESKTOP_REQUIRE_SIGNING: "true",
+    });
+
+    expect(result.stderr).toContain("compile linux-x64");
   });
 });
 

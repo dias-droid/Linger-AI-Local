@@ -101,11 +101,11 @@ that runs the workflow:
 | `LINGER_DIAGNOSTICS_UPLOAD_URL` | secret               | no                                        | https URL of the hosted diagnostics receiver ([diagnostics-upload.md](diagnostics-upload.md)) that the build carries. A secret, so the address stays masked in logs. Without it Send Diagnostics is hidden unless `config.json` names a receiver. |
 | `RELEASE_REPO`                  | variable             | no                                        | `owner/name` that receives the release; `simplexai-labs/linger` when unset.                                                                                                                                                                       |
 | `LINGER_RELEASE_TOKEN`          | secret               | when `RELEASE_REPO` is another repository | Fine-grained token for `RELEASE_REPO` only, with Contents: read and write. Not needed in simplexai-labs/linger itself.                                                                                                                            |
-| `MACOS_DEVELOPER_ID_P12_BASE64` | secret               | no                                        | Base64 of the Developer ID `.p12`. Without it the app is signed ad hoc.                                                                                                                                                                           |
+| `MACOS_DEVELOPER_ID_P12_BASE64` | secret               | for a stable release                      | Base64 of the Developer ID `.p12`. A published stable release fails without it; a prerelease or manual build signs ad hoc.                                                                                                                        |
 | `MACOS_DEVELOPER_ID_PASSWORD`   | secret               | with the `.p12`                           | Password of that `.p12`.                                                                                                                                                                                                                          |
-| `MACOS_NOTARY_KEY_JSON`         | secret               | no                                        | App Store Connect API key JSON; needs the Developer ID.                                                                                                                                                                                           |
-| `DESKTOP_UPDATE_KEY_PEM`        | secret               | for auto-update                           | Ed25519 private key (PEM) that signs `manifest.json`. Without it the release has no manifest and installed apps are not offered it.                                                                                                               |
-| `WINDOWS_SIGNING_P12_BASE64`    | secret               | no                                        | Base64 of an Authenticode `.p12`. Without it the setup program is unsigned.                                                                                                                                                                       |
+| `MACOS_NOTARY_KEY_JSON`         | secret               | for a stable release                      | App Store Connect API key JSON; needs the Developer ID.                                                                                                                                                                                           |
+| `DESKTOP_UPDATE_KEY_PEM`        | secret               | for a stable release                      | Ed25519 private key (PEM) that signs `manifest.json`. A published stable release fails without it; any other release has no manifest and installed apps are not offered it.                                                                       |
+| `WINDOWS_SIGNING_P12_BASE64`    | secret               | for a stable release                      | Base64 of an Authenticode `.p12`. A published stable release fails without it; a prerelease or manual build ships an unsigned setup program.                                                                                                      |
 | `WINDOWS_SIGNING_PASSWORD`      | secret               | with the `.p12`                           | Password of that `.p12`.                                                                                                                                                                                                                          |
 
 ### Bundled archives
@@ -289,8 +289,9 @@ manifest must be signed by the same key.
 The `release` job signs `manifest.json` with `DESKTOP_UPDATE_KEY_PEM`
 (`desktop-release.sh manifest`) after all three packages are built, and
 refuses a key whose public half is not `UPDATE_PUBLIC_KEY`, since installed
-apps would reject its signature. Without the secret the job logs a warning and
-publishes the release without a manifest. Make a new pair only when the key is
+apps would reject its signature. A published stable release fails without
+the secret; a prerelease or manual run logs a warning and publishes without
+a manifest. Make a new pair only when the key is
 lost, and ship the new public key in a release first:
 
 ```sh
