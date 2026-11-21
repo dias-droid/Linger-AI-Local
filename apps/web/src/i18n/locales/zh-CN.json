@@ -3566,5 +3566,12 @@
   },
   "documentSources": {
     "personalWiki": "个人 Wiki"
+  },
+  "teamHubClientErrors": {
+    "resourceUnavailable": "请求的 TeamHub 资源不可用。",
+    "roomHistoryTooLong": "TeamHub 返回的 Room 历史记录超出了可加载的上限。",
+    "invalidRoomMessageCursor": "TeamHub 返回了无效的 Room 消息分页游标。",
+    "invalidCursor": "TeamHub 返回了无效的分页游标。",
+    "directoryTooLong": "TeamHub 返回的目录数据超出了可加载的上限。"
   }
 }

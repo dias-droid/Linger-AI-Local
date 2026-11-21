@@ -13,6 +13,7 @@ import {
   TeamHubError,
   type TeamHubClient,
 } from "@/features/teamhub/teamhub-client";
+import { teamHubClientErrorMessages } from "@/features/teamhub/teamhub-client-errors.messages";
 import type {
   TeamHubDocument,
   TeamHubDocumentOpenResult,
@@ -70,7 +71,7 @@ export function useRoomDocumentSession({
     ) {
       throw new TeamHubError({
         code: "RESOURCE_NOT_FOUND",
-        message: "The requested TeamHub resource is unavailable.",
+        message: translate(teamHubClientErrorMessages.resourceUnavailable),
         status: 404,
       });
     }
