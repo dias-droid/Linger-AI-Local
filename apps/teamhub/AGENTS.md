@@ -120,6 +120,11 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
   extra, or wrongly bound route. Handlers are `App` methods that read bound
   query and header parameters with `contractParams[T]` and path parameters
   with `c.Param`.
+- Text TeamHub writes for a person to read stays English and ships with the
+  meaning the client words it from: a status or error with a stable code, a
+  card with its kind and fields, catalog text with its id. Add the code (an
+  enum in `contracts/openapi`) beside the English rather than wording it per
+  language here; the client keeps the English for a code it does not know.
 - `internal/app` opens no transaction and calls no store queries: handlers
   call a domain service and map its errors. `TestAppLayerHoldsNoTransactionsOrQueries`
   (`tests/integration/layout`) fails on a transaction, SQL, a `store.Queries` or

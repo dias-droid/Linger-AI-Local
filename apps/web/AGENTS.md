@@ -284,8 +284,22 @@ build:assets` to check the initial JS budget.
     stored as a reason or a key and worded when it is shown, so it follows a
     language switch and a reload. `pending-message-failure.ts` is the pattern:
     the Outbox stores `failure.reason`, the hook words it with `t`.
-  - Names and text that come from TeamHub or from people (Agent names, message
-    previews, server error messages) are data and are shown as they are.
+  - Names and text that people or Agents wrote (Agent names, message
+    previews, a published template) are data and are shown as they are.
+  - TeamHub's own English is worded here from what it means, never translated
+    on the server: a status from its stable code
+    (`agent-availability-text.ts`), a card's ask from its kind and fields
+    (`card-prompts.ts`). A code or kind this client does not know shows
+    TeamHub's English.
+  - Errors are worded from the code only when TeamHub's message says nothing
+    more (`teamhub-error-text.ts`: expired sign-in, rate limit, server error,
+    a response without a TeamHub body). `FORBIDDEN`, `CONFLICT`, `NOT_FOUND`,
+    `INVALID_REQUEST` and the like keep TeamHub's message, which says what to
+    do; a case worth its own wording needs its own code from TeamHub.
+  - Fixed catalog text (`web-search-backend-text.ts`, `app-groups.ts`,
+    `builtin-template-text.ts`, `runtime-model-label.ts`) keeps a copy by id
+    for other languages only, through `teamHubCatalogText`: English shows
+    TeamHub's text, so a change on the server shows at once.
   - Add a language: add it to `LANGUAGES` and `catalogLoaders` in
     `src/i18n/language.ts` and add `src/i18n/locales/<tag>.json`. Catalogs
     load on demand, so English users download none.
