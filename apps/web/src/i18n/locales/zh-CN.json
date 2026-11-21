@@ -2762,5 +2762,21 @@
     "sourceRevision": "team.md · 第 {revision} 版",
     "viewSource": "查看源文件",
     "hideSource": "隐藏源文件"
+  },
+  "agentAvailability": {
+    "offline": "离线",
+    "needsAttention": "需要处理",
+    "statusUnavailable": "无法获取状态",
+    "reconnecting": "正在重新连接",
+    "authenticationRequired": "需要登录",
+    "waitingForComputer": "正在等待电脑连接",
+    "runtimeNotInstalled": "未安装 AI 应用",
+    "runtimeIncompatible": "AI 应用需要更新"
+  },
+  "localRuntimeMessage": {
+    "notInstalled": "{computer} 上未安装 {app}。",
+    "signInRequired": "需要在 {computer} 上登录 {app}。",
+    "needsUpdate": "{computer} 需要更新后才能运行 {app}。",
+    "computerOffline": "{computer} 已离线。"
   }
 }
