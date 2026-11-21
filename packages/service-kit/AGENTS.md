@@ -19,6 +19,11 @@ installation core.
   `defaultByokEndpoint`, `normalizeByokPath`, `normalizeByokBaseUrl`,
   `validByokPath`, `isByokProtocol`, and the BYOK path pattern and runtime
   default constants), exported as `@linger/service-kit/byok-endpoint`.
+- `src/messages.ts`: isomorphic message formatting (`defineMessages`,
+  `formatMessage`, `resolveMessage`; plurals through `Intl.PluralRules`,
+  `{name}` placeholders and `<tag>` spans), exported as
+  `@linger/service-kit/messages` for the Web client and the desktop shell.
+  It holds no catalog and no language choice.
 - `src/node.ts`: Node-only entry (`sha256Hex`, `createJsonLogger`,
   `serviceCredential`). `serviceCredential` takes the environment from its
   caller and is checked against `contracts/fixtures/service-credentials/vectors.json`.
