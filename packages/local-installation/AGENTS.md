@@ -192,11 +192,13 @@ that check and the quit-time stop share one lock per home
 `restoreByokSource` (`local-models.ts`) brings back a saved BYOK source's
 Bifrost gateway on every resume (warm, or a restart from the saved choice,
 which then prepares the saved runtime and no other source). Under the same
-lock, waiting as the restore check does, it skips a loopback gateway whose
-`/health` answers, otherwise runs `source apply` from the kit's saved
-configuration, so the key never passes through Node. Each re-mount sends
-the kit's one small probe request to the person's endpoint and adds a few
-seconds to a launch after a quit. A failure (`LOCAL_MODELS_BUSY` when the
+lock, it skips a healthy loopback gateway if the saved Pi profile, when
+configured, has both `models.json` and `settings.json`. For a recorded
+gateway, `restore-byok.py` uses the verified kit and saved credentials to
+mount the current BYOK route and regenerate the managed runtime profiles,
+including when upgrading an older route while the upstream is offline.
+If the base gateway configuration or matching ownership record is missing,
+the kit's `source apply` establishes the gateway again. A failure (`LOCAL_MODELS_BUSY` when the
 lock never frees) is logged and returned as `details.byokGateway`
 (`{ code, message }`) of a successful resume, so Linger still opens.
 
