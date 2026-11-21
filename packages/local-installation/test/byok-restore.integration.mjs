@@ -109,6 +109,17 @@ test("the pinned kit restores the saved route before the upstream comes back", a
           JSON.parse(await readFile(path.join(root, "bifrost", name), "utf8")),
         ),
       );
+    const sourceFile = path.join(
+      root,
+      "runtime/localmodels/state/model-source.json",
+    );
+    const saved = JSON.parse(await readFile(sourceFile, "utf8"));
+    const profileFiles = ["models.json", "settings.json"].map((name) =>
+      path.join(saved.environment.PI_CODING_AGENT_DIR, name),
+    );
+    const readProfiles = () =>
+      Promise.all(profileFiles.map((file) => readFile(file)));
+    const configuredProfiles = await readProfiles();
     const configured = await gatewayState();
     await command(["stack", "down", "--json"]);
     await upstream[Symbol.asyncDispose]();
@@ -118,6 +129,10 @@ test("the pinned kit restores the saved route before the upstream comes back", a
     assert.equal(await restoreByokSource(root, options), undefined);
     assert.equal((await fetch(`${gateway}/health`)).status, 200);
     assert.deepEqual(await gatewayState(), configured);
+
+    await Promise.all(profileFiles.map((file) => rm(file)));
+    assert.equal(await restoreByokSource(root, options), undefined);
+    assert.deepEqual(await readProfiles(), configuredProfiles);
 
     upstream.listen(upstreamPort, "127.0.0.1");
     await once(upstream, "listening");
@@ -135,11 +150,6 @@ test("the pinned kit restores the saved route before the upstream comes back", a
       "recovered",
     );
     // The daemon can change the source after Desktop has already read it.
-    const sourceFile = path.join(
-      root,
-      "runtime/localmodels/state/model-source.json",
-    );
-    const saved = JSON.parse(await readFile(sourceFile, "utf8"));
     await writeFile(
       sourceFile,
       JSON.stringify({ ...saved, mode: "subscription" }),
