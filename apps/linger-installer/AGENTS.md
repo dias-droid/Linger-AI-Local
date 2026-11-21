@@ -30,6 +30,13 @@ on stderr for the desktop to show.
 Native sign-in sessions belong to an instance and its selected runtime. A changed
 setup choice must not reuse another runtime's URL or accept a code for its process;
 starting sign-in for the new runtime stops the previous runtime's pending login.
+A Codex start may name its login method: `browser` (localhost callback; on
+Linux it runs with `BROWSER=true` so only the caller opens the link, elsewhere
+the CLI opens its own page) or `device` (device code).
+Without one, macOS and Windows use the browser login, which opens its own
+page, and other platforms the device code. A start with another method replaces
+the running login. A failed login carries its `reason`; a timeout stays
+`timed_out` after the process exits.
 
 `--resume` (native source with `--instance`) starts an installed instance's
 stopped services headless, reusing its saved choices; the desktop client runs it
