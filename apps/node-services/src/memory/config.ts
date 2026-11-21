@@ -4,6 +4,7 @@ import { serviceCredential } from "@linger/service-kit/node";
 
 export interface MemoryScheduleConfig {
   readonly concurrency: number;
+  readonly dailyHour: number;
   /** The process time zone; days and the hourly calendar turn over in it. */
   readonly timeZone: string;
   readonly weeklyDay: number;
@@ -22,11 +23,20 @@ export function readMemoryConfig(
     dataRoot: contextHostRoot(environment),
     schedule: Object.freeze({
       concurrency: 4,
+      dailyHour: readDailyHour(environment.MEMORY_DAILY_HOUR),
       timeZone: localTimeZone(),
       weeklyDay: 1,
     }),
     serviceToken: requiredServiceCredential(environment),
   });
+}
+
+function readDailyHour(raw: string | undefined): number {
+  const value = raw?.trim() || "0";
+  const hour = Number(value);
+  if (!/^\d{1,2}$/u.test(value) || hour > 23)
+    throw new TypeError("MEMORY_DAILY_HOUR must be an integer from 0 to 23");
+  return hour;
 }
 
 function requiredServiceCredential(environment: NodeJS.ProcessEnv): string {

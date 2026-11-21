@@ -6,7 +6,11 @@ import path from "node:path";
 import { parseEnv } from "node:util";
 import { afterEach, expect, test } from "vitest";
 import { loadInstance } from "./instance.js";
-import { updateUserKeys } from "./user-environment.js";
+import {
+  updateUserKeys,
+  userEnvironmentFile,
+  userEnvironmentPending,
+} from "./user-environment.js";
 import { readLiveKitSettings } from "./native-livekit.js";
 import { saveSourceBinding } from "./source-checkout.js";
 import { freePort } from "./ports.js";
@@ -386,6 +390,24 @@ test(
   },
   process.platform === "win32" ? 150_000 : undefined,
 );
+test("the desktop applies the memory consolidation hour from user.env", async () => {
+  const f = await fixture();
+  const options = { home: f.home, name: "desktop", externalComputer: true };
+  const first = await prepareNativeConfiguration(f.repo, options);
+  await writeFile(
+    userEnvironmentFile(first.instance.root),
+    "MEMORY_DAILY_HOUR=23\n",
+    { mode: 0o600 },
+  );
+  expect(await userEnvironmentPending(first.instance)).toBe(true);
+
+  const { instance, env } = await prepareNativeConfiguration(f.repo, options);
+  expect(env.MEMORY_DAILY_HOUR).toBe("23");
+  const persisted = parseEnv(await readFile(env.LOCAL_ENV_FILE!, "utf8"));
+  expect(persisted.MEMORY_DAILY_HOUR).toBe("23");
+  expect(await userEnvironmentPending(instance)).toBe(false);
+});
+
 test("the desktop's web origin moves off a taken port after the account exists", async () => {
   const f = await fixture();
   const options = { home: f.home, name: "desktop", externalComputer: true };

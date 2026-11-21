@@ -826,6 +826,7 @@ describe("Raw Chunk search with PG Raw BM25 fallback", () => {
         {
           concurrency: 1,
           timeZone: "Asia/Shanghai",
+          dailyHour: 0,
           weeklyDay: 1,
         },
         async () => undefined,

@@ -4,7 +4,12 @@ import path from "node:path";
 import { localDate } from "../../src/memory/date.js";
 import { describe, expect, it, vi } from "vitest";
 
-import type { MemoryScheduledTask } from "../../src/memory/scheduler.js";
+import { readMemoryConfig } from "../../src/memory/config.js";
+import {
+  isClosingWiki,
+  MemoryScheduler,
+  type MemoryScheduledTask,
+} from "../../src/memory/scheduler.js";
 import type { DailyRunResult } from "../../src/memory/daily-cli.js";
 import type { SessionlyRunResult } from "../../src/memory/sync-runners.js";
 import { memoryWikiRefreshLog } from "../../src/memory/run-telemetry.js";
@@ -15,6 +20,7 @@ import {
   filesystemMemoryTaskState,
   type MemoryTaskState,
 } from "../../src/memory/task-state.js";
+import { MemoryCalendarFixture } from "./scheduler-state-fixture.js";
 
 const memoryRoot = "/data/agents";
 
@@ -116,6 +122,41 @@ describe("runMemoryTask", () => {
         argv.includes("--index-only"),
       ),
     ).toEqual([true, true, false]);
+  });
+
+  it("requests a full Wiki refresh for a recovered non-midnight closure", async () => {
+    const { schedule } = readMemoryConfig({
+      LINGER_SECRET_SEED: "test-seed-0123456789abcdef0123456789",
+      MEMORY_DAILY_HOUR: "23",
+    });
+    const taskSteps = steps();
+    taskSteps.wiki.mockResolvedValue({ updatedSessionCount: 0 });
+    const state = taskState();
+    const scheduler = new MemoryScheduler(
+      schedule,
+      (input, reason, subjectLane, period) =>
+        runMemoryTask(memoryRoot, input, taskSteps, state, {
+          ...subjects("agent_1"),
+          subjectLane,
+          nightly: isClosingWiki(input, reason, period),
+        }),
+      [],
+      new MemoryCalendarFixture(),
+    );
+
+    scheduler.runDueTasks(new Date("2026-09-29T23:20:00+08:00"));
+    await scheduler.idle();
+    scheduler.runDueTasks(new Date("2026-09-30T00:05:00+08:00"));
+    await scheduler.idle();
+
+    expect(taskSteps.wikiSync).toHaveBeenCalledExactlyOnceWith([
+      "--date",
+      "2026-09-28",
+      "--memory-root",
+      memoryRoot,
+      "--memory-subject-key",
+      "agent_1",
+    ]);
   });
 
   it("skips subjects held by their unfinished dependency", async () => {

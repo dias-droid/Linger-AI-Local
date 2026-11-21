@@ -2,6 +2,7 @@ import { createWikiIndex } from "./wiki-index.js";
 import { FlashbackService } from "./flashback/service.js";
 import { readMemoryConfig } from "./config.js";
 import {
+  isClosingWiki,
   isRebuildStep,
   MEMORY_SCHEDULER_FALLBACK_MS,
   MemoryScheduler,
@@ -114,7 +115,7 @@ export async function startMemoryService({
         : runMemoryTask(config.dataRoot, input, undefined, undefined, {
             indexSessionRaw: (agentId) => chunkIndex.syncRawSources(agentId),
             rebuild: reason === "rebuild",
-            nightly: reason === "hourly" && period.endsWith("T00"),
+            nightly: isClosingWiki(input, reason, period),
             subjectLane,
             // The scheduler's periodic report reconciliation retries a
             // failure, so a failed index does not fail the report task.

@@ -15,6 +15,7 @@ export const USER_ENVIRONMENT_KEYS = [
   "SONIOX_API_KEY",
   "XAI_API_KEY",
   "TZ",
+  "MEMORY_DAILY_HOUR",
 ] as const;
 export type UserEnvironmentKey = (typeof USER_ENVIRONMENT_KEYS)[number];
 export type UserEnvironment = Partial<Record<UserEnvironmentKey, string>>;
@@ -33,6 +34,8 @@ SONIOX_API_KEY=
 XAI_API_KEY=
 # Time zone of the services, for example America/New_York.
 TZ=
+# Local hour for daily memory consolidation (0-23, defaults to 0).
+MEMORY_DAILY_HOUR=
 `;
 
 export function userEnvironmentFile(root: string): string {

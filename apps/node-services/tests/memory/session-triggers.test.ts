@@ -19,6 +19,7 @@ import type { MemoryScheduleConfig } from "../../src/memory/config.js";
 import { SessionTriggerFixture } from "./scheduler-state-fixture.js";
 
 const config: MemoryScheduleConfig = {
+  dailyHour: 0,
   weeklyDay: 1,
   timeZone: "Asia/Shanghai",
   concurrency: 4,

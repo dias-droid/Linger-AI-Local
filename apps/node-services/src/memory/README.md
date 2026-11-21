@@ -559,6 +559,15 @@ Both kinds of index are isolated by Tenant / Human owner, and Raw is also bound 
 
 The one index (`memory_index.sources` and `chunks`, for every source kind including `wiki` and `period_summary`) is created by TeamHub migrations; deploy TeamHub before Memory. Runtime switches stay explicit configuration, and the root `.env` is never changed automatically.
 
+Daily consolidation runs at `MEMORY_DAILY_HOUR` (an integer from 0 to 23 in
+the process time zone, default 0). It always processes the previous local
+calendar day. For example, Monday at 23:00 closes Sunday. Set
+`MEMORY_DAILY_HOUR=23` in `.env` for a source or Compose deployment, or in
+the installed desktop instance's `user.env` (by default,
+`~/.simplexai/instances/desktop/user.env`). Restart the source process,
+recreate the Compose `node-services` container, or quit and reopen the
+desktop app to apply it.
+
 The calendar saves its planning cursor, unfinished tasks and success receipts in one
 `memory_index.scheduler_state` row in TeamHub's database, so the Memory role does not start without
 `TEAMHUB_DATABASE_URL`. The first start checks from midnight of the current business day; after
@@ -624,7 +633,7 @@ dropped once it leaves the discovery window. Because the scan runs once
 a minute, a Room is summarized between 10 and 11 minutes after its last message (plus queueing),
 and a ready recording within a minute.
 A restart restores pending items; after a Session is written, the subject's Wiki downstream recovery marker is saved
-before the checkpoint is committed. When a targeted source finishes later than the midnight Daily of its date, the
+before the checkpoint is committed. When a targeted source finishes for a past business date, the
 same subject's Daily → Wiki → Graph for that date runs again, and the recovery marker is cleared only after the whole
 chain succeeds, without updating other subjects. Per-person lanes hold only within one process and are no
 distributed multi-process lock; each data root still needs exactly one Scheduler process.
@@ -633,15 +642,15 @@ The calendar tasks run each AnotherMe isolated and in parallel, at most 4 at onc
 subject's lane is free, so a subject still busy with its own earlier work does not hold one:
 
 - Hourly `wiki`: lists every authorized AnotherMe (a deployment usually has one) and runs each in isolation. The chain is Session Raw staging → indexing that Raw.
-  Only the 00:00 run that closes the previous day, and a meeting's recording, then ask TeamHub for a Wiki
-  refresh; the other hourly runs and a quiet Room only index (`--index-only`). At midnight each subject checks
+  Only the run that closes the previous day, and a meeting's recording, then ask TeamHub for a Wiki
+  refresh; the other hourly runs and a quiet Room only index (`--index-only`). At the closing hour each subject checks
   all changed sources, even if its conversations were already indexed or only My Pages changed. The nightly refresh is not
   awaited, so the Daily does not wait for the Wiki. A failure of one person leaves only that person's Wiki downstream
   pending and logs `memory_subject_refresh_failed`; it does not mark the whole `memory_schedule_run` failed or
   interrupt others. Only when every AnotherMe fails is the run `failed`, retried hourly.
   Each `(memory subject, Room)` saves the last successfully handled Message in
-  `evidence/<date>/sessions/.checkpoints/<roomId>.json`. The midnight run handles the previous day, catching up the
-  messages after the last read and the pending Wiki updates; from 01:00 runs handle the new day. Daytime runs without
+  `evidence/<date>/sessions/.checkpoints/<roomId>.json`. The closing run handles the previous day, catching up the
+  messages after the last read and the pending Wiki updates. Other hourly runs handle the current day. Runs without
   new Room messages skip; whether the night generates is decided by TeamHub from changes across all sources. An
   explicitly named Room that does not match, a database failure and an attachment read failure still report errors.
   Raw is restaged only when new messages appear after that position; the input always holds the Session's full Room
@@ -661,7 +670,7 @@ subject's lane is free, so a subject still busy with its own earlier work does n
   `memory_subject_refresh_failed` and a `memory_schedule_run` with skips or failures all log `"level":"ERROR"` so log
   collection raises an alert; other AnotherMes in the same calendar refresh are not marked failed because of it.
   New writes still fail closed as a whole batch, and unqualified model output never reaches disk.
-- Daily at 00:00 (`daily`): per AnotherMe, in parallel, after the closing Raw staging and without waiting
+- Daily at the configured hour (`daily`): per AnotherMe, in parallel, after the closing Raw staging and without waiting
   for the Wiki. The day read (`day-read.ts`, one memory Agent task) reads the day's raw conversations once
   and writes the memory.md edits, then `timeline/daily/<date>.md`, which is indexed beside the Wiki pages
   as a `period_summary` source, never as Raw. Daily keeps no long-lived entities and builds no graph.
@@ -684,7 +693,7 @@ subject's lane is free, so a subject still busy with its own earlier work does n
   the end.
 - The day read maintains memory.md in the same task as the Daily, before it: the day's raw conversations go to the model, which returns only add, replace and delete edits (a day too large for one task falls back to separate calls that read it in parts above 100,000 characters, with the Daily); an edit drawn from a Session must quote the Human's words found in that Session. The checked edits become one new TeamHub `user_memory_revisions` version for the day, projected to the read-only `me/memory.md`. Days without Sessions skip the step. Each written Weekly updates it the same way, and TeamHub calls `POST /internal/v1/profile-memory-syncs` about a minute after each Profile publication, merging the newer Revision against memory.md's `base_profile_revision_id` (the first one builds memory.md); a sync that keeps failing leaves the last good version. Apart from those Profile syncs, memory.md has no daytime writes. Rollback: `pnpm --filter @linger/node-services memory:user-memory:rollback <memory-subject-key> <version>`.
 - Weekly on its set day (`weekly`): per AnotherMe, isolated and in parallel, each Subject with its own collection and
-  prompt. It still waits for the same midnight's Daily task to succeed (when every AnotherMe fails, Daily still blocks
+  prompt. It still waits for the closing slot's Daily task to succeed (when every AnotherMe fails, Daily still blocks
   Weekly). One person's Weekly failure does not interrupt others; when a person finishes, `timeline/weekly/<weekStart>.md`
   is published atomically as PostgreSQL Raw and Chunks, with no Wiki Revision or graph update. A week without useful
   information calls no model, writes no empty report and publishes no index; an existing report stays unchanged. Last
