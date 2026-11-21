@@ -47,12 +47,12 @@ runs:
         go_ver=$(sed -n 's/^toolchain go//p' apps/teamhub/go.mod | head -n 1)
         [ -n "$go_ver" ] || go_ver=$(sed -n 's/^go //p' apps/teamhub/go.mod | head -n 1)
         echo "go=$go_ver" >>"$GITHUB_OUTPUT"
-    - uses: actions/cache@v6
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       if: inputs.node == 'true'
       with:
         path: ${{ runner.tool_cache }}/node/${{ steps.versions.outputs.node }}
         key: toolcache-node-${{ runner.os }}-${{ runner.arch }}-${{ steps.versions.outputs.node }}
-    - uses: actions/cache@v6
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       if: inputs.go == 'true'
       with:
         path: ${{ runner.tool_cache }}/go/${{ steps.versions.outputs.go }}
@@ -63,7 +63,7 @@ runs:
     # `packages` globs and must stay identical in the save step below, since
     # the cache version hashes them.
     - id: node-modules
-      uses: actions/cache/restore@v6
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       if: inputs.install == 'true'
       with:
         path: |
@@ -73,9 +73,9 @@ runs:
           contracts/generated/typescript/node_modules
         key: node-modules-${{ runner.os }}-${{ runner.arch }}-${{ steps.versions.outputs.node }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', '.npmrc', 'patches/**', 'package.json', 'apps/*/package.json', 'packages/*/package.json', 'contracts/generated/typescript/package.json') }}
     # Reads the version from packageManager in package.json.
-    - uses: pnpm/action-setup@v6
+    - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
       if: inputs.install == 'true'
-    - uses: actions/setup-node@v7
+    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
       if: inputs.node == 'true'
       with:
         node-version-file: .node-version
@@ -84,7 +84,7 @@ runs:
     # The caller caches Go per job: setup-go's one shared entry is saved by
     # whichever job finishes first, often one that compiled no Go, and its key
     # never changes while go.sum stays the same.
-    - uses: actions/setup-go@v7
+    - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
       if: inputs.go == 'true'
       with:
         go-version-file: apps/teamhub/go.mod
@@ -96,7 +96,7 @@ runs:
       run: pnpm install --frozen-lockfile --ignore-scripts
     # Saved before any check runs, so tool caches such as node_modules/.vite
     # never enter the entry.
-    - uses: actions/cache/save@v6
+    - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       if: inputs.install == 'true' && inputs.save-node-modules == 'true' && steps.node-modules.outputs.cache-hit != 'true'
       with:
         path: |
