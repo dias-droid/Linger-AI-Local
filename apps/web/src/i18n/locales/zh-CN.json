@@ -2839,5 +2839,15 @@
     "researchAnalystDescription": "把问题和资料整理成有出处、可直接用于决策的简报。",
     "codeReviewerName": "代码审查员",
     "codeReviewerDescription": "从正确性、风险和清晰度审查改动，并给出可执行的发现。"
+  },
+  "teamHubErrors": {
+    "unauthenticated": "登录已过期，请重新登录。",
+    "rateLimited": "请求过于频繁，请稍后再试。",
+    "unavailable": "服务器暂时不可用，请稍后再试。",
+    "internal": "服务器出错了，请重试。",
+    "computerOffline": "电脑已离线。",
+    "refused": "服务器拒绝了此请求。请刷新页面后重试。",
+    "notCompleted": "服务器无法完成此请求（{status}），请重试。",
+    "unreachable": "无法连接到服务器。请检查网络后重试。"
   }
 }
