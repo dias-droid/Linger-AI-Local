@@ -679,6 +679,18 @@ export async function mountSavedByokSource(
       },
       dependencies.localmodels ?? runLocalmodels,
     );
+    if (
+      result.code === 0 &&
+      parseToolJson(result.stdout)?.restore === "skipped"
+    ) {
+      options.onEvent({
+        kind: "stage",
+        stage: "runtime",
+        state: "skipped",
+        message: "The active model source changed during BYOK recovery.",
+      });
+      return undefined;
+    }
     if (result.code !== 0)
       failure = sourceApplyFailure(
         result.stdout,

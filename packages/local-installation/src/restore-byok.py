@@ -2,6 +2,7 @@
 
 import json
 import sys
+from typing import Literal
 
 from localmodels import (
     bifrost_config,
@@ -12,17 +13,20 @@ from localmodels import (
     source_byok,
 )
 from localmodels.__main__ import main
+from localmodels.library_model import LibraryError
 
 
-def restore_saved_gateway() -> bool:
-    """Return False if the kit needs to apply the saved source again."""
+def restore_saved_gateway() -> Literal["restored", "skipped", "apply"]:
+    """Restore an owned gateway or defer to source apply when its base is missing."""
     with library_gateway.gateway_locked():
         source = source_byok.load_source_state()
-        if not source or source["mode"] != "byok":
-            return True
+        if source is None:
+            raise source_byok.ByokError("BYOK_INVALID_CONFIG", "Saved model source is missing or invalid.")
+        if source["mode"] != "byok":
+            return "skipped"
         record = library_gateway.ensure_instance(None)
         if not record or source["gateway_url"] != "http://" + record["addr"]:
-            return False
+            return "apply"
         addr = record["addr"]
         gateway_bifrost.require_target(
             {"tools_dir": hosts.tools_dir(), "tools": [{"tool": "gateway", "path": addr}]}
@@ -30,7 +34,7 @@ def restore_saved_gateway() -> bool:
         app = gateway_bifrost.app_dir()
         config = bifrost_config.read_config(app)
         if not config:
-            return False
+            return "apply"
         creds = source_byok.load_credentials()
         if not creds:
             raise source_byok.ByokError("BYOK_INVALID_CONFIG", "Saved BYOK credentials are missing.")
@@ -56,13 +60,15 @@ def restore_saved_gateway() -> bool:
         # can block on a provider that accepts connections before it is ready.
         library_gateway.apply_config(record, config, sheet)
         source_byok.write_byok_profiles(addr, creds)
-        return True
+        return "restored"
 
 
 if __name__ == "__main__":
     try:
-        restored = restore_saved_gateway()
-    except (OSError, ValueError, RuntimeError) as error:
+        outcome = restore_saved_gateway()
+    except (LibraryError, OSError, ValueError, RuntimeError, KeyError) as error:
         print(json.dumps({"code": getattr(error, "code", "BYOK_GATEWAY_FAILED"), "message": str(error)}))
         sys.exit(1)
-    sys.exit(0 if restored else main())
+    if outcome == "apply":
+        sys.exit(main())
+    print(json.dumps({"restore": outcome}))
