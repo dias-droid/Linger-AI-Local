@@ -85,6 +85,10 @@ validator owns these checks and loads no graph schema. If any file fails, nothin
 Daily and Weekly models return one JSON object of report fields (title,
 description, `source_refs`, one array per section, Weekly `work_intensity`)
 under a strict JSON schema; they never write Markdown, paths or headings. The
+field text is in the main language the represented Human uses: Daily reads it
+from that day's conversations and Pocket Note, and Weekly from the week's
+Daily items. Neither takes it from the prompt, an earlier report or another
+participant, so a Chinese-speaking Human gets Chinese reports. The
 application renders the whole file: YAML frontmatter, the fixed English H2
 headings (`DAILY_REPORT_SECTIONS` / `WEEKLY_REPORT_SECTIONS` in
 `@linger/knowledge-format/sections`), one bullet per item, `None observed.`
