@@ -30,6 +30,7 @@ import { webSearchBackendLogo } from "@/features/web-search/web-search-logos";
 import type { Translate } from "@/i18n/language";
 import { useT } from "@/i18n/use-translation";
 import { cn } from "@/lib/cn";
+import { webSearchBackendDescription } from "@/features/web-search/web-search-backend-text";
 
 import {
   CardActions,
@@ -106,7 +107,7 @@ export function SearchKeyDecision({
   return (
     <CardBox heading={decisionCardHeading(card, t)} label={t(m.labelSearchKey)}>
       <CardRow
-        detail={shown?.description}
+        detail={shown && webSearchBackendDescription(shown, t)}
         icon={
           <AppLogoTile name={target.name} url={webSearchBackendLogo(shownID)} />
         }
@@ -230,7 +231,7 @@ function OtherProviders({
                     ) : null}
                   </p>
                   <p className="truncate text-xs text-app-muted">
-                    {backend.description}
+                    {webSearchBackendDescription(backend, t)}
                   </p>
                 </div>
               </div>

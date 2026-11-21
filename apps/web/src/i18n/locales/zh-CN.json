@@ -2795,5 +2795,49 @@
     "roomCreation": "请求创建协作 Room：{name}",
     "agentCreate": "创建 Agent“{name}”",
     "agentChange": "修改 Agent“{name}”"
+  },
+  "runtimeModel": {
+    "hostDefault": "{app} 默认"
+  },
+  "webSearchBackendText": {
+    "descriptionTavily": "面向 AI Agent 的实时搜索引擎。",
+    "descriptionBrave": "企业级网页搜索 API，索引超过 400 亿个网页。",
+    "descriptionFirecrawl": "面向 AI Agent 的网页数据 API。",
+    "descriptionExa": "面向需要实时网页数据的 AI Agent 的搜索 API。",
+    "descriptionYou": "面向 AI Agent 和大语言模型的网页搜索 API。",
+    "descriptionDuckDuckGo": "来自互联网隐私公司的私密搜索。",
+    "descriptionDirect": "从 Agent 自己的电脑读取网页。",
+    "freeTierTavily": "每月 1,000 个免费 API 额度。",
+    "freeTierBrave": "每月 5 美元免费额度；注册需要绑定信用卡。",
+    "freeTierFirecrawl": "每月 1,000 个免费额度。",
+    "freeTierExa": "每月 10 美元免费额度；无需绑卡。",
+    "freeTierYou": "不填密钥也能用，但有限制；填写密钥可获得完整质量和更高额度。",
+    "freeUseYou": "不填密钥即可免费使用：搜索次数有限，结果质量较低。",
+    "freeUseDuckDuckGo": "免费，无需密钥：搜索过于频繁时，DuckDuckGo 会暂时拦截。"
+  },
+  "appDescriptions": {
+    "mail": "导入最近六个月、最多 3,000 封邮件，用于个人资料和 Wiki。",
+    "googleDrive": "让 Agent 使用你的 Drive 文件。",
+    "slack": "连接工作区和所选频道。",
+    "discord": "连接一个已安装的 Discord 服务器和所选频道。",
+    "facebook": "连接受支持的 Facebook 内容。",
+    "github": "导入公开资料和所选的自有仓库，并让获得授权的 Agent 读取仓库、Issue 和 Pull Request。",
+    "googleMeet": "连接可用的 Google Meet 记录。",
+    "googleCalendar": "连接日历并导入所选日程。",
+    "notion": "连接 Notion 来生成你的个人资料，并让获得授权的 Agent 使用共享的页面和数据库。",
+    "linear": "让 Agent 使用你的 Linear Issue 和项目。",
+    "figma": "让 Agent 使用你的 Figma 文件。",
+    "canva": "让 Agent 使用你的 Canva 设计。",
+    "higgsfield": "让 Agent 用 Higgsfield 生成图片和视频。",
+    "falAi": "让 Agent 在 fal.ai 上运行生成式媒体模型。",
+    "granola": "让 Agent 读取你的 Granola 会议笔记和转写。",
+    "calendly": "让 Agent 使用你的 Calendly 活动类型和已安排的活动。",
+    "outlookCalendar": "让 Agent 使用你的 Outlook 日历和日程。"
+  },
+  "builtinTemplates": {
+    "researchAnalystName": "研究分析师",
+    "researchAnalystDescription": "把问题和资料整理成有出处、可直接用于决策的简报。",
+    "codeReviewerName": "代码审查员",
+    "codeReviewerDescription": "从正确性、风险和清晰度审查改动，并给出可执行的发现。"
   }
 }
