@@ -20,6 +20,12 @@ import { parseArgs } from "node:util";
 
 import { createGatewayModelCall } from "../gateway-model-call.js";
 import {
+  type AbstentionSummary,
+  calibrateDeclinedJudge,
+  judgeDeclined,
+  summarizeAbstention,
+} from "./abstention.js";
+import {
   type AnswerRecord,
   ARMS,
   type Arm,
@@ -191,6 +197,7 @@ const judgeGateway = createGatewayModelCall({
   concurrency,
 });
 await calibrateJudge(judgeGateway.modelCall, plan.benchmark);
+await calibrateDeclinedJudge(judgeGateway.modelCall);
 console.log(`Judge ${args["judge-model"]} passed its known-answer controls`);
 
 const product = await openProduct({
@@ -211,6 +218,8 @@ interface StoredAnswer {
   gold: string;
   record?: AnswerRecord;
   judgment?: Judgment;
+  /** For an answerable question graded wrong: whether the answer declined. */
+  declined?: { declined: boolean; reason: string };
   error?: string;
   source: typeof source;
 }
@@ -256,6 +265,13 @@ async function runOne(arm: Arm, round: number, item: Case) {
       `${arm}:${round}:${item.id}`,
       judgePrompt(item, result.record.answer),
     );
+    if (!item.unanswerable && !result.judgment.correct)
+      result.declined = await judgeDeclined(
+        judgeGateway.modelCall,
+        `${arm}:${round}:${item.id}`,
+        item.question,
+        result.record.answer,
+      );
   } catch (error) {
     // Bounded: the gateway calls already retried; the question is recorded as
     // failed and the run moves on. --retry-errors runs it again.
@@ -338,6 +354,7 @@ interface ArmSummary {
   max: number;
   errors: number;
   by_type: Record<string, number>;
+  abstention: AbstentionSummary;
   tokens: { prompt: number; completion: number };
   seconds_per_answer: number;
   tool_calls_per_answer: number;
@@ -375,6 +392,7 @@ function summarize(
           ];
         }),
       ),
+      abstention: summarizeAbstention(own),
       tokens: {
         prompt: answered.reduce(
           (sum, answer) => sum + answer.record!.usage.prompt,
@@ -469,6 +487,22 @@ const lines = [
     ),
   ),
 ];
+const share = (value: number | null | undefined) =>
+  value === null || value === undefined ? "—" : percent(value);
+lines.push(
+  "",
+  "## Abstention (all rounds)",
+  "",
+  "Correct abstention: unanswerable questions the answer declined. False abstention: answerable questions the answer declined instead of answering.",
+  "",
+  "| Arm | Unanswerable | Correct abstention | Baseline | Answerable | False abstention | Baseline |",
+  "| --- | --- | --- | --- | --- | --- | --- |",
+  ...Object.entries(summary.arms).map(([arm, { abstention }]) => {
+    // A baseline written before these figures has no abstention block.
+    const other = baseline?.arms[arm]?.abstention;
+    return `| ${arm} | ${abstention.unanswerable} | ${share(abstention.correct_abstention)} | ${share(other?.correct_abstention)} | ${abstention.answerable} | ${share(abstention.false_abstention)} | ${share(other?.false_abstention)} |`;
+  }),
+);
 if (baseline)
   lines.push(
     "",
