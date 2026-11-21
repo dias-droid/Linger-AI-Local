@@ -210,6 +210,7 @@ func (r ExecutionResolver) Resolve(ctx context.Context, command protocol.Command
 		ResumeAfterYield:  request.RunContext.ResumeAfterYield,
 		HumanInteractions: request.RunContext.HumanInteractions,
 		PermissionReview:  request.RunContext.PermissionReview,
+		StopHook:          request.RunContext.StopHook,
 		TeamHubCLIBin:     r.TeamHubCLIBin,
 		ThinkingLevel:     request.Runtime.ReasoningEffort,
 		ContextWindow:     installation.ContextWindows[request.Runtime.Model],
@@ -419,6 +420,7 @@ type semanticRequest struct {
 		ResumeAfterYield  bool   `json:"resume_after_yield,omitempty"`
 		HumanInteractions bool   `json:"human_interactions,omitempty"`
 		PermissionReview  bool   `json:"permission_review,omitempty"`
+		StopHook          bool   `json:"stop_hook,omitempty"`
 	} `json:"run_context,omitempty"`
 }
 

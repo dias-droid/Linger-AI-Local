@@ -46,10 +46,13 @@ func main() {
 	if len(os.Args) == 2 && os.Args[1] == "shell-text-hook" {
 		os.Exit(permission.ShellTextHook(os.Stdin, os.Stderr))
 	}
-	// Codex runs this for every PermissionRequest of a reviewed Run; it only
-	// forwards the hook to the running Daemon.
+	// Codex runs these for managed PermissionRequest and Stop hooks; they only
+	// forward the hook payload to the running Daemon.
 	if len(os.Args) == 3 && os.Args[1] == "permission-hook" {
 		os.Exit(permission.CodexRunHook(os.Stdin, os.Stdout, os.Stderr, os.Args[2]))
+	}
+	if len(os.Args) == 3 && os.Args[1] == "stop-hook" {
+		os.Exit(permission.CodexRunStopHook(os.Stdin, os.Stdout, os.Stderr, os.Args[2]))
 	}
 	if handoff := recoverPendingUpgrade(os.Args[1:]); handoff != nil {
 		if execErr := handoff.Exec(); execErr != nil {
