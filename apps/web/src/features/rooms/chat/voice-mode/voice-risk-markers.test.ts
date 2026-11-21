@@ -55,6 +55,10 @@ const notActions: Record<string, string> = {
     "leaves full screen in place; it decides nothing and closes nothing",
   "/src/features/rooms/files/artifact-content-renderer.tsx: filePreview.resetImageZoom":
     "resets the image zoom in place; it decides nothing",
+  "/src/features/rooms/documents/document-share-dialog.tsx: documentShare.removeAccess":
+    "the permission option only opens the confirm dialog; its marked Remove access button removes",
+  "/src/features/rooms/documents/room-document-comment-thread.tsx: documentComments.deletedReference":
+    "says the quoted text of a comment was deleted; the button only scrolls to the quote",
 };
 
 type Need = "confirm" | "never" | "close";
