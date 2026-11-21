@@ -174,6 +174,7 @@ elsewhere.
 | Daily / Weekly report         | 日报 / 周报                |                                                   |
 | Highlights / Next             | 要点 / 接下来              | Sections of a report card.                        |
 | Personal Knowledge Graph      | 个人知识图谱               | The Wiki's graph of pages.                        |
+| Personal Wiki                 | 个人 Wiki                  | Where a Document is visible.                      |
 | Session (a Wiki page)         | 会话记录                   | Not `会话`, which is the browser session.         |
 | Playhead (of the Timeline)    | 游标                       | The marker a day or week rests under.             |
 | Email (an address)            | 邮箱                       | `邮件` is a message that is sent.                 |

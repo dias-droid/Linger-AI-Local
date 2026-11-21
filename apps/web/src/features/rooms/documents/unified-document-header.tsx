@@ -28,6 +28,7 @@ import {
   canRenameDocument,
   useDocumentRename,
 } from "@/features/library/use-document-rename";
+import { documentSourceLabel } from "@/features/library/document-source-label";
 import { WORKSPACE_TREE_ID } from "@/features/library/workspace-tree";
 import { writeDocumentLinkClipboard } from "@/features/rooms/files/document-clipboard-link";
 import { documentDetailPath } from "@/features/rooms/files/document-detail-routes";
@@ -418,7 +419,8 @@ function UnifiedDocumentBreadcrumb({
   }
   const context = document.from[0];
   const contextLabel =
-    context?.label ?? documentContextLabel(context?.binding_kind, t);
+    (context && documentSourceLabel(context, t)) ??
+    documentContextLabel(context?.binding_kind, t);
   return (
     <DocumentBreadcrumb
       ancestors={ancestors}
@@ -444,9 +446,7 @@ function documentContextLabel(
     ? t(m.contextRoom)
     : bindingKind === "task"
       ? t(m.contextWorkItem)
-      : bindingKind === "wiki_page" || bindingKind === "wiki_source"
-        ? t(m.contextWiki)
-        : t(m.contextDocuments);
+      : t(m.contextDocuments);
 }
 
 function DocumentBreadcrumb<T extends { id: string; name: string }>({

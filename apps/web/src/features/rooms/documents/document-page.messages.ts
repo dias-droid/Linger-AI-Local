@@ -17,7 +17,6 @@ export const documentPageMessages = defineMessages("documentPage", {
   // Where a Document comes from, when it is not in the Library tree.
   contextRoom: "Room",
   contextWorkItem: "Work Item",
-  contextWiki: "Wiki",
   contextDocuments: "Documents",
   documentMode: "Document mode",
   read: "Read",

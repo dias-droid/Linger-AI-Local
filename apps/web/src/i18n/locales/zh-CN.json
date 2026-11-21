@@ -3034,7 +3034,6 @@
     "breadcrumb": "路径",
     "contextRoom": "Room",
     "contextWorkItem": "工作项",
-    "contextWiki": "Wiki",
     "contextDocuments": "文档",
     "documentMode": "文档模式",
     "read": "阅读",
@@ -3564,5 +3563,8 @@
     "workItemUnavailable": "这个工作区中没有这个工作项。",
     "dashboardTenantMismatch": "工作项仪表盘与当前工作区不匹配。",
     "agentListTenantMismatch": "Agent 的工作项列表与当前工作区不匹配。"
+  },
+  "documentSources": {
+    "personalWiki": "个人 Wiki"
   }
 }
