@@ -221,8 +221,8 @@
     "connecting": "正在连接…",
     "connectThisComputer": "连接这台电脑",
     "lookingForApps": "正在这台电脑上查找 Codex 和 Claude Code…",
-    "desktopAuthFailed": "这台电脑的登录已过期。请在 Linger 的菜单栏菜单中选择 Reconnect This Computer。",
-    "desktopIdentityConflict": "这台电脑已登记在另一个电脑条目下。请在 Linger 的菜单栏菜单中选择 Reconnect This Computer。",
+    "desktopAuthFailed": "这台电脑的登录已过期。请在 Linger 的菜单栏菜单中选择“重新连接这台电脑”。",
+    "desktopIdentityConflict": "这台电脑已登记在另一个电脑条目下。请在 Linger 的菜单栏菜单中选择“重新连接这台电脑”。",
     "desktopUpgradeRequired": "请先更新 Linger 应用，再连接这台电脑。",
     "desktopDisconnected": "Linger 后台服务没有运行，请退出并重新打开应用。",
     "desktopRuntimeCrashed": "本地 Runtime 已停止，无法检查 Codex 和 Claude Code。Linger 正在重启它。"

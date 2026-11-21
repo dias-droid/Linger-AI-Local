@@ -9,19 +9,18 @@ Product names and the concepts people see in commands, logs and documentation
 keep their English form, so the interface matches what a Human types and reads
 elsewhere.
 
-| Term                                 | Note                                                |
-| ------------------------------------ | --------------------------------------------------- |
-| Linger, TeamHub                      | Product names.                                      |
-| Agent, Room, Runtime, Skill, Routine | Product concepts.                                   |
-| Another Me, Wiki                     | Feature names.                                      |
-| CLI, PowerShell, npm, Node.js        | Tools.                                              |
-| Claude Code, Codex, Pi, Antigravity  | App names.                                          |
-| API, URL, BYOK, PDF, Markdown        | Abbreviations and formats.                          |
-| Base URL, tokens, Dense, MoE         | Model terms people meet in provider documentation.  |
-| Local Computer                       | Only when it names the background program.          |
-| Reconnect This Computer              | A desktop menu item, quoted until it is translated. |
-| Read All, Write All                  | Permission names in Composio's dashboard.           |
-| Issue                                | Linear's word for a work item.                      |
+| Term                                 | Note                                               |
+| ------------------------------------ | -------------------------------------------------- |
+| Linger, TeamHub                      | Product names.                                     |
+| Agent, Room, Runtime, Skill, Routine | Product concepts.                                  |
+| Another Me, Wiki                     | Feature names.                                     |
+| CLI, PowerShell, npm, Node.js        | Tools.                                             |
+| Claude Code, Codex, Pi, Antigravity  | App names.                                         |
+| API, URL, BYOK, PDF, Markdown        | Abbreviations and formats.                         |
+| Base URL, tokens, Dense, MoE         | Model terms people meet in provider documentation. |
+| Local Computer                       | Only when it names the background program.         |
+| Read All, Write All                  | Permission names in Composio's dashboard.          |
+| Issue                                | Linear's word for a work item.                     |
 
 ## Translated
 
@@ -193,6 +192,10 @@ elsewhere.
 | Snapshot / Share link         | 快照 / 分享链接            |                                                   |
 | Revoke                        | 撤销                       | Withdraws a share link.                           |
 | Yours                         | 你的                       | The tag on an Agent you created.                  |
+| Reconnect This Computer       | 重新连接这台电脑           | A desktop menu item; quote it as shown.           |
+| Diagnostics                   | 诊断信息                   | Logs and settings sent to support.                |
+| Prevent Sleep                 | 防止休眠                   | A desktop setting.                                |
+| Menu bar / System tray        | 菜单栏 / 系统托盘          | Where the desktop app lives.                      |
 
 ## Style
 

@@ -75,9 +75,13 @@ build:assets` to check the initial JS budget.
   cannot fit only when it needs more than the pool's total. A Computer's detail
   on the Computers page links here and reads no model state itself.
 - `src/i18n`: the interface languages (English and Simplified Chinese).
-  `messages.ts` is the React-free core, `language.ts` holds the language on
-  screen and the stored choice, `use-translation.tsx` is the React side, and
-  `locales/` holds one catalog per translated language plus its glossary.
+  `messages.ts` re-exports the React-free core from
+  `@linger/service-kit/messages`, which the desktop shell shares,
+  `language.ts` holds the language on screen and the stored choice,
+  `desktop-language.ts` reports a stored choice to the desktop app so its
+  menus and pages follow, `use-translation.tsx` is the React side, and
+  `locales/` holds one catalog per translated language plus its glossary,
+  which the desktop catalog follows too.
 - `src/test`: unit-test support, including the in-process TeamHub test server.
 - `e2e`: Playwright product workflows; every spec runs on the real TeamHub and
   Document Runtime stack (`make check-e2e-room-document`).
