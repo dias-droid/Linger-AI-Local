@@ -51,6 +51,10 @@ const notActions: Record<string, string> = {
     "the status line of a backend card, which is not a control",
   "/src/features/rooms/cards/decision-search-key-view.tsx: cards.hideOtherProviders":
     "folds the other providers' key fields in place; it closes nothing",
+  "/src/features/rooms/files/artifact-preview-surface.tsx: filePreview.exitFullScreen":
+    "leaves full screen in place; it decides nothing and closes nothing",
+  "/src/features/rooms/files/artifact-content-renderer.tsx: filePreview.resetImageZoom":
+    "resets the image zoom in place; it decides nothing",
 };
 
 type Need = "confirm" | "never" | "close";
