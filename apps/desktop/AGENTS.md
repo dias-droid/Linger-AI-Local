@@ -349,6 +349,30 @@ Gateway and runs Agents. The daemon exits with the app.
   `voiceWindow` keeps the in-page windows.
 - `src/shell/*.html`: app-owned pages (title bar, offline/setup page). They
   have no network access and talk to the main process via `src/preload/shell.ts`.
+  Their text lives in the `*.messages.ts` beside them; the main process
+  serves each page through `localizePage` (`src/i18n/page.ts`), which adds the
+  page's messages in the current language and the small runtime in
+  `src/shell/messages.html` (`t`, `tSpans`, and `data-t` / `data-t-<attribute>`
+  fill-in). Markup carries message names, never English or translated text.
+- `src/i18n`: the shell's languages (English and Simplified Chinese) on the
+  shared core `@linger/service-kit/messages`. `language.ts` matches a language
+  and formats messages; `locales/zh-CN.json` is the shell's Chinese catalog,
+  one namespace per `*.messages.ts`, following the Web glossary
+  (`apps/web/src/i18n/locales/zh-CN.glossary.md`). `catalog.test.ts` finds
+  every `*.messages.ts` and fails on a missing or extra translation, a changed
+  placeholder or tag, or a page naming a message it lacks.
+- `src/main/language.ts`: Language. The shell follows the language picked in
+  the Web client's Settings, which the SPA reports (`language.set`) once a
+  choice is stored; the main process keeps it in its config. Before any
+  choice it follows the system's preferred languages (Simplified Chinese for
+  `zh`, `zh-CN`, `zh-Hans-*`; English otherwise). A change emits
+  `language.changed`: the tray menu and status rebuild, the title bar reloads,
+  and the offline page takes it on its next load. The setup page takes the
+  language when it opens; it runs before the SPA has ever reported one, so it
+  uses the stored choice or the system's language. Main-process text (menus,
+  dialogs, notifications) uses `Language.t` with the messages in
+  `src/main/*.messages.ts`; a message missing from the catalog shows in
+  English. Errors from transfers and servers stay in English.
 - `src/preload/index.ts`: the only SPA API, `window.lingerDesktop`. Its
   `update` reads the Updater's state (without the release page URL) and runs
   the tray's install and check, for the SPA's account menu.

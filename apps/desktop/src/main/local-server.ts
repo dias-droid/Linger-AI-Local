@@ -227,6 +227,8 @@ export const LOCAL_STEPS = [
 ] as const;
 export type LocalServerStep = (typeof LOCAL_STEPS)[number];
 
+export type LocalServerPreparing = "updating" | "starting";
+
 export type LocalServerPhase =
   | "idle"
   | "preparing"
@@ -275,6 +277,9 @@ export interface LocalServerStatus {
   readonly available: boolean;
   readonly phase: LocalServerPhase;
   readonly message: string;
+  // While preparing: whether the services restart on a new version or
+  // only start, for pages that word it themselves.
+  readonly preparing?: LocalServerPreparing;
   // While installing: the steps shown, the current one and the overall share
   // done (0-1).
   readonly steps: readonly LocalServerStep[];
@@ -429,6 +434,7 @@ export class LocalServerModule implements Module {
   #ctx: ModuleContext | undefined;
   #phase: LocalServerPhase = "idle";
   #message = "";
+  #preparing: LocalServerPreparing = "starting";
   #step: LocalServerStep = "prepare";
   #progress = 0;
   #transfer: LocalServerStatus["transfer"];
@@ -624,6 +630,7 @@ export class LocalServerModule implements Module {
       available,
       phase: this.#phase,
       message: this.#message,
+      ...(this.#phase === "preparing" ? { preparing: this.#preparing } : {}),
       steps: this.#steps(),
       step: this.#step,
       progress: this.#progress,
@@ -2472,9 +2479,11 @@ export class LocalServerModule implements Module {
       const update = this.#sourceUpdate(record);
       if (update) {
         // The services restart even if they still answer.
+        this.#preparing = "updating";
         this.#set("preparing", "Updating Linger on this computer…");
         windows?.showUpdating();
       } else {
+        this.#preparing = "starting";
         this.#set("preparing", "Starting Linger on this computer…");
         // The window would show the server as unreachable until it is back.
         const checkStartedAt = Date.now();

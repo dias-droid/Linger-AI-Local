@@ -23,6 +23,9 @@ export interface SetupLocalServer {
   readonly available: boolean;
   readonly phase: "idle" | "preparing" | "installing" | "ready" | "failed";
   readonly message: string;
+  // While preparing: a restart on a new version or a plain start; the page
+  // words it in its own language.
+  readonly preparing?: "updating" | "starting";
   // While installing: the steps shown, the current one and the overall share
   // done (0-1).
   readonly steps: readonly SetupLocalStep[];

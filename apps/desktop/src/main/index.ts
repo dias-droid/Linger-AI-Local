@@ -26,8 +26,10 @@ import {
 } from "./computer-daemon.js";
 import { ConfigStore } from "./config.js";
 import { DesktopIpcModule } from "./desktop-ipc.js";
+import { dialogMessages } from "./dialogs.messages.js";
 import { DiagnosticsModule } from "./diagnostics.js";
 import { EnrollmentModule } from "./enrollment.js";
+import { LanguageModule } from "./language.js";
 import {
   LocalServerModule,
   signInWithPassword,
@@ -205,6 +207,9 @@ async function main(): Promise<void> {
         }
       : {}),
   });
+  const language = new LanguageModule({
+    systemLanguages: () => app.getPreferredSystemLanguages(),
+  });
   const status = new StatusModule();
   // Set once the bundle was swapped, so quitting relaunches the new version.
   let relaunch = false;
@@ -220,7 +225,7 @@ async function main(): Promise<void> {
     downloadDirectory: path.join(userData, "updates"),
     announce: (state) => {
       if (!Notification.isSupported()) return;
-      const notice = new Notification(updateNotice(state));
+      const notice = new Notification(updateNotice(state, language.t));
       notice.on("click", () => void updater.install());
       notice.show();
     },
@@ -266,6 +271,7 @@ async function main(): Promise<void> {
       start: async () => {},
       stop: async () => {},
     },
+    language,
     new EnrollmentModule({
       defaultDisplayName,
       credentials,
@@ -361,12 +367,14 @@ async function main(): Promise<void> {
     if (status.current().tone === "busy") {
       const { response } = await dialog.showMessageBox({
         type: "warning",
-        buttons: ["Quit and Stop Tasks", "Cancel"],
+        buttons: [
+          language.t(dialogMessages.quitAndStop),
+          language.t(dialogMessages.cancel),
+        ],
         defaultId: 1,
         cancelId: 1,
-        message: "Quit Linger and stop the running tasks?",
-        detail:
-          "Until you open Linger again, tasks from your phone or the web can't run on this computer.",
+        message: language.t(dialogMessages.quitConfirm),
+        detail: language.t(dialogMessages.quitConfirmDetail),
       });
       if (response !== 0) return;
     }
@@ -384,7 +392,10 @@ async function main(): Promise<void> {
     });
   } catch (error) {
     log.error("desktop.start_failed", { error: String(error) });
-    dialog.showErrorBox("Linger", `Linger failed to start: ${String(error)}`);
+    dialog.showErrorBox(
+      "Linger",
+      language.t(dialogMessages.startFailed, { error: String(error) }),
+    );
     app.exit(1);
   }
 }

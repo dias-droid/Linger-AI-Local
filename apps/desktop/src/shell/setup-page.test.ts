@@ -5,6 +5,9 @@ import { fileURLToPath } from "node:url";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { Language } from "../i18n/language.js";
+import zhCN from "../i18n/locales/zh-CN.json" with { type: "json" };
+import { localizePage } from "../i18n/page.js";
 import type {
   SetupCommand,
   SetupLocalAccount,
@@ -13,10 +16,15 @@ import type {
   SetupState,
 } from "../shared/setup.js";
 
-const page = readFileSync(
-  path.join(path.dirname(fileURLToPath(import.meta.url)), "setup.html"),
-  "utf8",
-);
+import { setupMessages } from "./setup.messages.js";
+
+const shellFile = (name: string) =>
+  readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), name),
+    "utf8",
+  );
+const rawPage = shellFile("setup.html");
+const messagesRuntime = shellFile("messages.html");
 const PASSWORD = "a-private-password";
 
 const state = (
@@ -56,6 +64,7 @@ let stopPage = () => {};
 const openPage = async (
   initial: SetupState = state("installing"),
   step = "installing",
+  language: Language = "en",
 ) => {
   stopPage();
   const intervals: ReturnType<typeof setInterval>[] = [];
@@ -64,6 +73,8 @@ const openPage = async (
     intervals.forEach(clearInterval);
     timeouts.forEach(clearTimeout);
   };
+  // The page as setup-window.ts serves it.
+  const page = localizePage(rawPage, messagesRuntime, setupMessages, language);
   const [, body] = /<body[^>]*>([\s\S]*)<\/body>/.exec(page)!;
   const [, script] = /<script>([\s\S]*)<\/script>/.exec(body!)!;
   document.body.innerHTML = body!.replace(/<script>[\s\S]*<\/script>/, "");
@@ -1116,5 +1127,64 @@ describe("setup page refused install location", () => {
     // The words alone do not bring the hint.
     await openPage(failed("D:\\Software\\Linger"));
     expect($("installing-plan").textContent).toBe(usual);
+  });
+});
+
+describe("setup page in Chinese", () => {
+  const zh = zhCN.setup;
+  const fill = (text: string, values: Record<string, string>) =>
+    text.replace(/\{(\w+)\}/gu, (_, name: string) => values[name]!);
+
+  it("speaks the language it was served in", async () => {
+    await openPage(welcome(capable), "welcome", "zh-CN");
+    // The harness loads the body only; static text comes from data-t.
+    expect(document.querySelector('[data-t="welcomeTitle"]')!.textContent).toBe(
+      zh.welcomeTitle,
+    );
+    expect($("plan-summary").textContent).toBe(
+      fill(zh.recommendedPlan, { plan: zh.localModelPi }),
+    );
+    expect($("plan-why").textContent).toBe(
+      [
+        "qwen3-8b",
+        fill(zh.fitsGpu, { gpu: "RTX 4090" }),
+        fill(zh.memoryAmount, { size: "64 GB" }),
+        fill(zh.downloadAmount, { size: "6 GB" }),
+      ].join(" · "),
+    );
+    expect($("local-install-label").textContent).toBe(zh.quickInstall);
+  });
+
+  it("words a held local model from the catalog", async () => {
+    await openPage(welcome(held), "welcome", "zh-CN");
+    expect($("plan-why").textContent).toBe(
+      fill(zh.heldWhy, { reasons: zh.reasonHeld, plan: "Codex" }),
+    );
+  });
+
+  it("counts the download its way", async () => {
+    const base = state("installing");
+    await openPage(
+      {
+        ...base,
+        localServer: {
+          ...base.localServer,
+          transfer: {
+            label: "Downloading the local model…",
+            completed: 3 * GB,
+            total: 4 * GB,
+            bytesPerSecond: 50 * 1024 ** 2,
+            partial: true,
+          },
+        },
+      },
+      "installing",
+      "zh-CN",
+    );
+    expect($("installing-transfer-bytes").textContent).toBe(
+      `${fill(zh.thisFile, {
+        amount: fill(zh.amountOf, { done: "3.0 GB", total: "4.0 GB" }),
+      })} · 50 MB/s`,
+    );
   });
 });
