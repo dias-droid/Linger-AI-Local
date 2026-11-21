@@ -1,3 +1,4 @@
+import i18next from "i18next";
 import {
   ArrowDown01Icon,
   ArrowRight01Icon,
@@ -976,10 +977,14 @@ function hasDragType(transfer: DataTransfer, type: string) {
 
 function nextSharedFolderName(folders: SharedFolder[]) {
   const names = new Set(folders.map((folder) => folder.name));
-  if (!names.has("New Folder")) return "New Folder";
+  const base = i18next.t("defaultFolderName", {
+    ns: "library",
+    defaultValue: "New Folder",
+  });
+  if (!names.has(base)) return base;
   let suffix = 2;
-  while (names.has(`New Folder ${suffix}`)) suffix += 1;
-  return `New Folder ${suffix}`;
+  while (names.has(`${base} ${suffix}`)) suffix += 1;
+  return `${base} ${suffix}`;
 }
 
 function compareSharedTreeItems(

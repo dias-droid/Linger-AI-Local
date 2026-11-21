@@ -180,6 +180,14 @@ function setup(
         start: async () => {},
         stop: async () => {},
       },
+      {
+        name: "Language",
+        dependsOn: [],
+        start: async () => {},
+        stop: async () => {},
+        // The module interface plus the one method serve-time reads.
+        current: () => "en" as const,
+      } as Module,
       diagnosticsStub,
       manager,
     ],

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import {
   HierarchySquare01Icon,
   Loading03Icon,
@@ -35,6 +36,7 @@ const ReportCards = lazy(async () => {
 });
 
 export function WikiGraphPage() {
+  const { t } = useTranslation("wiki");
   const { client } = useTeamHubRuntime();
   const tenantId = requireRoomRouteParam(useParams().tenantId, "Tenant");
   const [searchParams] = useSearchParams();
@@ -77,11 +79,11 @@ export function WikiGraphPage() {
     <main className="wiki-graph-page flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-app-surface">
       <header className="wiki-graph-page-header px-4 pt-4 pb-6">
         <WikiBack />
-        <h1 className="mb-2 text-2xl text-foreground">Daily report</h1>
+        <h1 className="mb-2 text-2xl text-foreground">{t("dailyReport")}</h1>
         <p className="text-sm text-muted-foreground">
           {reports.isPending
-            ? "Loading reports…"
-            : `${reports.data?.length ?? 0} reports · Browse by day`}
+            ? t("loadingReports")
+            : t("reportsCount", { count: reports.data?.length ?? 0 })}
         </p>
       </header>
 
@@ -102,13 +104,13 @@ export function WikiGraphPage() {
               className={refresh.initializing ? "town-shimmer-text" : undefined}
             >
               {refresh.initializing
-                ? "Wiki is being generated…"
-                : "Loading timeline…"}
+                ? t("wikiGenerating")
+                : t("loadingTimeline")}
             </span>
           </div>
         ) : graph.error ? (
           <div
-            aria-label={graph.error.message || "Timeline is unavailable."}
+            aria-label={graph.error.message || t("timelineUnavailable")}
             className="flex h-full min-h-[480px] flex-col items-center justify-center text-center"
             role="alert"
           >

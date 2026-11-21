@@ -1,3 +1,5 @@
+import i18next from "i18next";
+
 import type { TeamHubExternalApp } from "@/features/teamhub/teamhub-types";
 
 export interface AppGroup {
@@ -64,7 +66,29 @@ const APP_SUMMARIES: Record<string, string> = {
 };
 
 export function appSummary(app: TeamHubExternalApp) {
-  return APP_SUMMARIES[app.key] ?? app.description;
+  // The key is built from app data, so the lookup stays loosely typed.
+  const lookup = i18next.t as unknown as (
+    key: string,
+    options?: Record<string, unknown>,
+  ) => string;
+  return APP_SUMMARIES[app.key]
+    ? lookup(`summary.${app.key}`, {
+        ns: "apps",
+        defaultValue: APP_SUMMARIES[app.key],
+      })
+    : app.description;
+}
+
+/** The group's name in the interface language. */
+export function appGroupTitle(group: AppGroup) {
+  const lookup = i18next.t as unknown as (
+    key: string,
+    options?: Record<string, unknown>,
+  ) => string;
+  return lookup(`group.${group.id}`, {
+    ns: "apps",
+    defaultValue: group.title,
+  });
 }
 
 /** Each group with the catalog apps it holds, in group order; empty groups drop. */

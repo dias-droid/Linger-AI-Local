@@ -1,0 +1,41 @@
+{
+  "status": {
+    "notConnected": "Not Connected",
+    "signInExpired": "Sign-in Expired · Reconnect This Computer",
+    "identityConflict": "Computer Identity Conflict · Reconnect This Computer",
+    "updateRequired": "Update Required",
+    "runtimeError": "Runtime Error · Restarting",
+    "starting": "Starting…",
+    "offlineReconnecting": "Offline · Reconnecting",
+    "tasks_one": "Running {{count}} Task",
+    "tasks_other": "Running {{count}} Tasks",
+    "onlineIdle": "Online · Idle"
+  },
+  "tray": {
+    "open": "Open Linger",
+    "reconnect": "Reconnect This Computer",
+    "connect": "Connect This Computer…",
+    "preventSleep": "Prevent Sleep",
+    "showLogs": "Show Logs",
+    "saveDiagnostics": "Save Diagnostics…",
+    "sendDiagnostics": "Send Diagnostics…",
+    "quit": "Quit Linger"
+  },
+  "update": {
+    "downloading": "Downloading Update {{version}}…",
+    "restartToUpdate": "Restart to Update ({{version}})",
+    "waiting": "Updating to {{version}} When Tasks Finish",
+    "download": "Download Linger {{version}}…",
+    "failed": "Update Failed: {{reason}}",
+    "tryAgain": "Try Updating Again",
+    "noticeAvailableTitle": "Update available",
+    "noticeAvailableBody": "Linger {{version}} is available. Click to open its download page.",
+    "noticeReadyTitle": "Update ready",
+    "noticeReadyBody": "Linger {{version}} is downloaded. Click to restart Linger and update."
+  },
+  "enroll": {
+    "signInFirst": "Sign in first",
+    "signInFirstDetail": "Sign in to Linger in the window, then choose Connect This Computer again.",
+    "failed": "Couldn't connect this computer"
+  }
+}

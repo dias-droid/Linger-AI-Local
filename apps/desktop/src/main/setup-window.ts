@@ -30,6 +30,8 @@ import {
 import { appWindow } from "./app-window.js";
 import type { DiagnosticsModule } from "./diagnostics.js";
 import type { EnrollmentModule } from "./enrollment.js";
+import { shellDictionary, injectShellI18n } from "./i18n/shell-html.js";
+import type { LanguageModule } from "./language.js";
 import type { LocalServerModule } from "./local-server.js";
 import {
   SETTINGS_URL,
@@ -68,6 +70,7 @@ export class SetupWindowModule implements Module {
   readonly dependsOn = [
     "Diagnostics",
     "Enrollment",
+    "Language",
     "LocalServer",
     "PowerGuard",
     "WindowManager",
@@ -140,6 +143,14 @@ export class SetupWindowModule implements Module {
       ctx.bus.on("server.changed", onCookie),
       ctx.bus.on("server.moved", onCookie),
       ctx.bus.on("setup.open", () => this.show()),
+      // The page translates at serve time, so a language change reloads it.
+      // Mid-install the reload would wipe the progress view; the new
+      // language applies the next time the page loads.
+      ctx.bus.on("language.changed", () => {
+        const phase = local.status().phase;
+        if (this.visible() && ["idle", "ready", "failed"].includes(phase))
+          this.#window?.webContents.reload();
+      }),
     );
     if (this.#options.show) this.show();
   }
@@ -438,9 +449,14 @@ export class SetupWindowModule implements Module {
       return new Response(Buffer.from(geistWoff2), {
         headers: { "content-type": "font/woff2" },
       });
-    return new Response(setupHtml, {
-      headers: { "content-type": "text/html; charset=utf-8" },
-    });
+    return new Response(
+      injectShellI18n(
+        setupHtml,
+        this.#ctx!.get<LanguageModule>("Language").current(),
+        shellDictionary,
+      ),
+      { headers: { "content-type": "text/html; charset=utf-8" } },
+    );
   }
 }
 

@@ -19,6 +19,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router";
 
 import { Button } from "@/components/ui/button";
@@ -112,6 +113,7 @@ export function RoomSecondaryNavigation({
   runningRoomIds?: readonly string[];
   tenant: TeamHubTenant;
 }) {
+  const { t } = useTranslation("rooms");
   usePrefetchTemplateFlow();
   const [localAgentOpen, setLocalAgentOpen] = useState(false);
   const [templateAgentOpen, setTemplateAgentOpen] = useState(false);
@@ -189,7 +191,7 @@ export function RoomSecondaryNavigation({
       title={`Search (${searchShortcutLabel()})`}
       type="button"
     >
-      <span className="truncate">Search chats</span>
+      <span className="truncate">{t("searchChats")}</span>
       <Icon className="shrink-0" icon={Search01Icon} size={14} />
     </button>
   );
@@ -361,7 +363,7 @@ export function RoomSecondaryNavigation({
                               ? markdownPlainText(
                                   room.latest_message.raw_message,
                                 )
-                              : (room.description ?? "No messages yet")}
+                              : (room.description ?? t("noMessagesYet"))}
                           </span>
                         </span>
                         <RoomRowStatus
@@ -531,6 +533,7 @@ function DirectRoomLink({
   room: TeamHubRoomListItem;
   tenantId: string;
 }) {
+  const { t } = useTranslation("rooms");
   const peer = room.direct_peer!;
   const displayName = peer.display_name;
   const inactive = room.direct_peer_active === false;
@@ -560,10 +563,10 @@ function DirectRoomLink({
         </RoomRowTitle>
         <span className="mt-0.5 block truncate text-xs leading-4 text-muted-foreground">
           {inactive
-            ? "Deleted"
+            ? t("deleted")
             : room.latest_message
               ? markdownPlainText(room.latest_message.raw_message)
-              : "No messages yet"}
+              : t("noMessagesYet")}
         </span>
       </span>
       <RoomRowStatus failed={failed} room={room} working={working} />

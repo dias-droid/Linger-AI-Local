@@ -41,6 +41,7 @@ import {
 } from "./legacy-migration.js";
 import { fileLogger, type Logger } from "./log.js";
 import { MacPermissions } from "./mac-permissions.js";
+import { LanguageModule } from "./language.js";
 import { EventBus, ModuleHost, type Module } from "./modules.js";
 import { parseServerUrl } from "./navigation.js";
 import { PowerGuardModule, type PowerApi } from "./power-guard.js";
@@ -122,6 +123,11 @@ async function main(): Promise<void> {
     envServer ? { serverUrl: envServer } : {},
   );
   const defaultDisplayName = os.hostname();
+  // The interface language for the shell's own surfaces; the web Settings
+  // changes it over IPC.
+  const language = new LanguageModule({
+    deviceLocale: () => app.getLocale(),
+  });
   const daemonDirectory = path.join(userData, "computer");
   const credentials = new CredentialStore(
     path.join(daemonDirectory, "credential.json"),
@@ -220,7 +226,7 @@ async function main(): Promise<void> {
     downloadDirectory: path.join(userData, "updates"),
     announce: (state) => {
       if (!Notification.isSupported()) return;
-      const notice = new Notification(updateNotice(state));
+      const notice = new Notification(updateNotice(state, language.current()));
       notice.on("click", () => void updater.install());
       notice.show();
     },
@@ -266,6 +272,7 @@ async function main(): Promise<void> {
       start: async () => {},
       stop: async () => {},
     },
+    language,
     new EnrollmentModule({
       defaultDisplayName,
       credentials,

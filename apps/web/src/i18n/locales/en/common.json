@@ -1,0 +1,28 @@
+{
+  "justNow": "just now",
+  "loading": {
+    "teamhub": "Loading TeamHub",
+    "room": "Loading Room..."
+  },
+  "nav": {
+    "rooms": "Rooms",
+    "settings": "Settings",
+    "messages": "Messages",
+    "collaborationSidebar": "Collaboration sidebar",
+    "primaryNavigation": "Primary navigation",
+    "roomNavigation": "Room navigation"
+  },
+  "error": {
+    "roomUnavailableToYou": "This Room is not available to you",
+    "pageUnavailableToYou": "This page is not available to you",
+    "restrictedMessage": "You may not have access, or it may have been deleted. Check that you are signed in to the right account, or ask the person who shared this link to invite you.",
+    "dataNotLoaded": "The requested TeamHub data could not be loaded.",
+    "roomUnavailable": "Room unavailable",
+    "teamhubUnavailable": "TeamHub unavailable",
+    "viewNotLoaded": "This view could not be loaded",
+    "backToRooms": "Back to my Rooms",
+    "tryAgain": "Try again",
+    "surfaceAria": "TeamHub loading error",
+    "useBackToRooms": "Use “Back to my Rooms” to return to your conversations."
+  }
+}

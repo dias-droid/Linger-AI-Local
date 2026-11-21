@@ -1,5 +1,6 @@
 import { ArrowRight01Icon, Folder01Icon } from "@hugeicons/core-free-icons";
 import { type FormEvent, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -205,6 +206,7 @@ export function NewFolderDialog({
   onCancel: () => void;
   onCreate: (name: string) => Promise<void>;
 }) {
+  const { t } = useTranslation("library");
   const [name, setName] = useState(defaultName);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -221,7 +223,7 @@ export function NewFolderDialog({
       setError(
         createError instanceof Error
           ? createError.message
-          : "The folder could not be created.",
+          : t("folderCreateFailed"),
       );
       setPending(false);
     }
@@ -233,7 +235,7 @@ export function NewFolderDialog({
       footer={
         <>
           <Button disabled={pending} onClick={onCancel} tone="secondary">
-            Cancel
+            {t("cancel")}
           </Button>
           <Button
             disabled={!trimmed}
@@ -241,7 +243,7 @@ export function NewFolderDialog({
             onClick={() => void submit()}
             tone="primary"
           >
-            Create
+            {t("create")}
           </Button>
         </>
       }
@@ -249,13 +251,13 @@ export function NewFolderDialog({
         if (!pending) onCancel();
       }}
       size="sm"
-      title="New folder"
+      title={t("newFolderTitle")}
     >
       <form className="px-5 py-4" onSubmit={(event) => void submit(event)}>
         <label className="block text-sm font-medium text-app-body">
-          Folder name
+          {t("folderName")}
           <input
-            aria-label="Folder name"
+            aria-label={t("folderName")}
             className="mt-1 h-9 w-full rounded-md border border-app-border bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             maxLength={255}
             onChange={(event) => setName(event.target.value)}

@@ -1,3 +1,5 @@
+import type { UiLanguage } from "../shared/api.js";
+import { translate } from "../i18n/i18n.js";
 import type { StatusSummary } from "./status.js";
 import type { AnnouncedUpdate, UpdateState } from "./updater.js";
 
@@ -31,70 +33,100 @@ export interface TrayMenuState {
   readonly update?: UpdateState;
   // A diagnostics server is set up, so reports can be sent from here.
   readonly canSendDiagnostics?: boolean;
+  // Absent reads as English, so existing callers and tests are unchanged.
+  readonly language?: UiLanguage;
 }
 
 // The tray menu. Items for features that do not exist yet
 // (pause, approvals) are added with those features.
 export const trayMenu = (state: TrayMenuState): TrayMenuItem[] => [
   { kind: "label", label: state.status.label },
-  ...updateItems(state.update),
+  ...updateItems(state.update, state.language),
   { kind: "separator" },
-  { kind: "action", action: "open", label: "Open Linger" },
+  {
+    kind: "action",
+    action: "open",
+    label: translate(state.language, "tray.open"),
+  },
   // Reconnecting re-enrolls the same computer, e.g. after its credential
   // was rejected or the server moved.
   {
     kind: "action",
     action: "enroll",
     label: state.enrolled
-      ? "Reconnect This Computer"
-      : "Connect This Computer…",
+      ? translate(state.language, "tray.reconnect")
+      : translate(state.language, "tray.connect"),
   },
   {
     kind: "action",
     action: "toggle-prevent-sleep",
-    label: "Prevent Sleep",
+    label: translate(state.language, "tray.preventSleep"),
     checked: state.preventSleep,
   },
   { kind: "separator" },
   // What to send when something goes wrong.
-  { kind: "action", action: "show-logs", label: "Show Logs" },
-  { kind: "action", action: "save-diagnostics", label: "Save Diagnostics…" },
+  {
+    kind: "action",
+    action: "show-logs",
+    label: translate(state.language, "tray.showLogs"),
+  },
+  {
+    kind: "action",
+    action: "save-diagnostics",
+    label: translate(state.language, "tray.saveDiagnostics"),
+  },
   ...(state.canSendDiagnostics
     ? [
         {
           kind: "action" as const,
           action: "send-diagnostics" as const,
-          label: "Send Diagnostics…",
+          label: translate(state.language, "tray.sendDiagnostics"),
         },
       ]
     : []),
   { kind: "separator" },
   // Tasks run in the app, so quitting takes the computer offline.
-  { kind: "action", action: "quit", label: "Quit Linger" },
+  {
+    kind: "action",
+    action: "quit",
+    label: translate(state.language, "tray.quit"),
+  },
 ];
 
 // Long native errors would stretch the menu; the log has the full text.
 const REASON_LENGTH = 80;
 
-const updateItems = (update: TrayMenuState["update"]): TrayMenuItem[] => {
+const updateItems = (
+  update: TrayMenuState["update"],
+  language: UiLanguage | undefined,
+): TrayMenuItem[] => {
   switch (update?.kind) {
     case "downloading":
       return [
-        { kind: "label", label: `Downloading Update ${update.version}…` },
+        {
+          kind: "label",
+          label: translate(language, "update.downloading", {
+            version: update.version,
+          }),
+        },
       ];
     case "ready":
       return [
         {
           kind: "action",
           action: "install-update",
-          label: `Restart to Update (${update.version})`,
+          label: translate(language, "update.restartToUpdate", {
+            version: update.version,
+          }),
         },
       ];
     case "waiting":
       return [
         {
           kind: "label",
-          label: `Updating to ${update.version} When Tasks Finish`,
+          label: translate(language, "update.waiting", {
+            version: update.version,
+          }),
         },
       ];
     case "available":
@@ -102,7 +134,9 @@ const updateItems = (update: TrayMenuState["update"]): TrayMenuItem[] => {
         {
           kind: "action",
           action: "install-update",
-          label: `Download Linger ${update.version}…`,
+          label: translate(language, "update.download", {
+            version: update.version,
+          }),
         },
       ];
     case "failed": {
@@ -111,11 +145,14 @@ const updateItems = (update: TrayMenuState["update"]): TrayMenuItem[] => {
           ? `${update.error.slice(0, REASON_LENGTH - 1)}…`
           : update.error;
       return [
-        { kind: "label", label: `Update Failed: ${reason}` },
+        {
+          kind: "label",
+          label: translate(language, "update.failed", { reason }),
+        },
         {
           kind: "action",
           action: "check-update",
-          label: "Try Updating Again",
+          label: translate(language, "update.tryAgain"),
         },
       ];
     }
@@ -126,17 +163,21 @@ const updateItems = (update: TrayMenuState["update"]): TrayMenuItem[] => {
 
 // The notification for an update once it is ready or available; clicking it
 // does what the tray's update item does.
-export function updateNotice(update: AnnouncedUpdate): {
-  title: string;
-  body: string;
-} {
+export function updateNotice(
+  update: AnnouncedUpdate,
+  language: UiLanguage = "en",
+): { title: string; body: string } {
   if (update.kind === "available")
     return {
-      title: "Update available",
-      body: `Linger ${update.version} is available. Click to open its download page.`,
+      title: translate(language, "update.noticeAvailableTitle"),
+      body: translate(language, "update.noticeAvailableBody", {
+        version: update.version,
+      }),
     };
   return {
-    title: "Update ready",
-    body: `Linger ${update.version} is downloaded. Click to restart Linger and update.`,
+    title: translate(language, "update.noticeReadyTitle"),
+    body: translate(language, "update.noticeReadyBody", {
+      version: update.version,
+    }),
   };
 }

@@ -5,6 +5,7 @@ import {
   ViewOffIcon,
 } from "@hugeicons/core-free-icons";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
 
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ export function TeamHubLoginPage({
 }: {
   onAuthenticated?: (result: AuthenticationResult) => Promise<void> | void;
 }) {
+  const { t } = useTranslation("auth");
   const [searchParams] = useSearchParams();
   const returnTo = safeAuthenticationReturnTo(searchParams.get("return_to"));
   const authentication = useTeamHubAuthentication({
@@ -39,11 +41,11 @@ export function TeamHubLoginPage({
   const localAccount = useDesktopLocalAccount();
   const authenticationNotice =
     searchParams.get("reason") === "session-expired"
-      ? "Your session has expired. Sign in again to continue."
+      ? t("login.sessionExpired")
       : null;
 
   return (
-    <AuthShell subtitle="Welcome back to Linger." title="Log in">
+    <AuthShell subtitle={t("login.subtitle")} title={t("login.title")}>
       {authenticationNotice ? (
         <div className="mb-4">
           <FormFeedback tone="danger">{authenticationNotice}</FormFeedback>
@@ -67,6 +69,7 @@ function LocalAccountSignIn({
   account: DesktopLocalAccount;
   authentication: AuthenticationController;
 }) {
+  const { t } = useTranslation("auth");
   return (
     <div className="auth-local-account">
       <Button
@@ -80,11 +83,11 @@ function LocalAccountSignIn({
         type="button"
       >
         <Icon icon={ComputerIcon} size={16} />
-        <span>Sign in with this computer's account</span>
+        <span>{t("login.withComputerAccount")}</span>
       </Button>
       <div className="auth-divider">
         <span />
-        <span>or</span>
+        <span>{t("login.orDivider")}</span>
         <span />
       </div>
     </div>
@@ -96,6 +99,7 @@ function AuthenticationForm({
 }: {
   authentication: AuthenticationController;
 }) {
+  const { t } = useTranslation("auth");
   const { email, error, isSubmitting, password } = authentication.state;
   const { changeField, handleSubmit } = authentication;
 
@@ -109,7 +113,7 @@ function AuthenticationForm({
     >
       <Field
         autoComplete="email"
-        label="Email"
+        label={t("login.email")}
         onChange={(event) => changeField("email", event.target.value)}
         placeholder="you@company.com"
         type="email"
@@ -117,20 +121,20 @@ function AuthenticationForm({
       />
       <PasswordField
         autoComplete="current-password"
-        label="Password"
+        label={t("login.password")}
         onChange={(value) => changeField("password", value)}
         value={password}
       />
       {error ? <FormFeedback tone="danger">{error}</FormFeedback> : null}
       <Button
-        aria-label="Sign in"
+        aria-label={t("login.signInAria")}
         className="auth-submit w-full"
         disabled={isSubmitting}
         size="large"
         type="submit"
         tone="primary"
       >
-        <span>{isSubmitting ? "Working..." : "Log in"}</span>
+        <span>{isSubmitting ? t("login.working") : t("login.title")}</span>
         {!isSubmitting ? <Icon icon={ArrowRight02Icon} size={16} /> : null}
       </Button>
     </form>
@@ -148,7 +152,9 @@ function PasswordField({
   onChange: (value: string) => void;
   value: string;
 }) {
+  const { t } = useTranslation("auth");
   const [visible, setVisible] = useState(false);
+  const action = visible ? t("login.hide") : t("login.show");
 
   return (
     <Field
@@ -157,7 +163,10 @@ function PasswordField({
       onChange={(event) => onChange(event.target.value)}
       suffix={
         <button
-          aria-label={`${visible ? "Hide" : "Show"} ${label.toLowerCase()}`}
+          aria-label={t("login.toggleAria", {
+            action,
+            label: label.toLowerCase(),
+          })}
           className="grid size-7 place-items-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => setVisible((current) => !current)}
           type="button"

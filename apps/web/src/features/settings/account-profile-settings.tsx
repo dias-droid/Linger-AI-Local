@@ -6,6 +6,7 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -125,18 +126,7 @@ export function AccountProfileSettings({
   }, [latestGeneration?.id, latestGeneration?.status, queryClient, tenantId]);
 
   if (accountQuery.isPending) {
-    return (
-      <div
-        aria-busy="true"
-        aria-label="Loading Account profile"
-        className="rounded-2xl border border-border p-6"
-        role="status"
-      >
-        <span className="sr-only">Loading Account profile...</span>
-        <Skeleton className="h-4 w-32" />
-        <Skeleton className="mt-5 h-40 w-full" />
-      </div>
-    );
+    return <LoadingProfile />;
   }
 
   if (accountQuery.error) {
@@ -194,6 +184,22 @@ export function AccountProfileSettings({
   );
 }
 
+function LoadingProfile() {
+  const { t } = useTranslation("settings");
+  return (
+    <div
+      aria-busy="true"
+      aria-label={t("profile.loading")}
+      className="rounded-2xl border border-border p-6"
+      role="status"
+    >
+      <span className="sr-only">{t("profile.loading")}...</span>
+      <Skeleton className="h-4 w-32" />
+      <Skeleton className="mt-5 h-40 w-full" />
+    </div>
+  );
+}
+
 function PersonalInsightsPanel({
   deletingId,
   error,
@@ -207,10 +213,13 @@ function PersonalInsightsPanel({
   onDelete: (insightId: string) => void;
   pending: boolean;
 }) {
+  const { t } = useTranslation("settings");
   return (
     <section className="rounded-2xl border border-border bg-background p-6">
       <div className="flex min-h-7 items-center justify-between gap-3">
-        <h2 className="text-sm font-medium text-foreground">Insights</h2>
+        <h2 className="text-sm font-medium text-foreground">
+          {t("profile.insights")}
+        </h2>
       </div>
       {error ? (
         <p className="mt-3 text-sm text-app-danger" role="alert">
@@ -220,10 +229,12 @@ function PersonalInsightsPanel({
       {pending && items.length === 0 ? (
         <div className="mt-4 flex min-h-16 items-center gap-2 text-sm text-muted-foreground">
           <Icon icon={Loading03Icon} className="animate-spin" size={16} />
-          Loading insights...
+          {t("profile.loadingInsights")}
         </div>
       ) : items.length === 0 ? (
-        <p className="mt-4 text-sm text-muted-foreground">No insights yet.</p>
+        <p className="mt-4 text-sm text-muted-foreground">
+          {t("profile.noInsights")}
+        </p>
       ) : (
         <div className="mt-3 divide-y divide-border">
           {items.map((item) => (
@@ -238,11 +249,13 @@ function PersonalInsightsPanel({
                 <p className="mt-1 text-sm text-foreground">{item.statement}</p>
               </div>
               <Button
-                aria-label={`Delete ${item.dimension} insight`}
+                aria-label={t("profile.deleteInsightAria", {
+                  dimension: item.dimension,
+                })}
                 disabled={deletingId === item.id}
                 onClick={() => onDelete(item.id)}
                 size="compactIcon"
-                title="Delete insight"
+                title={t("profile.deleteInsight")}
                 tone="ghost"
               >
                 {deletingId === item.id ? (
@@ -291,40 +304,41 @@ function AccountIdentityPanel({
     }
   }
 
+  const { t } = useTranslation("settings");
+
   return (
     <section className="min-w-0 rounded-2xl border border-border bg-background p-6">
       <form onSubmit={handleSubmit}>
         <label className="block">
           <span className="mb-1.5 block text-sm font-medium text-foreground">
-            Bio
+            {t("profile.bio")}
           </span>
           <textarea
-            aria-label="Bio"
+            aria-label={t("profile.bio")}
             className="ui-field-control min-h-[88px] w-full resize-y disabled:cursor-not-allowed disabled:bg-app-surface-soft disabled:text-muted-foreground"
             disabled={savePending}
             maxLength={500}
             onChange={(event) => onBioChange(event.target.value)}
-            placeholder="A short description of how you work."
+            placeholder={t("profile.bioPlaceholder")}
             value={bio}
           />
         </label>
         <label className="mt-4 block">
           <span className="mb-1.5 block text-sm font-medium text-foreground">
-            Organization
+            {t("profile.organization")}
           </span>
           <input
-            aria-label="Organization"
+            aria-label={t("profile.organization")}
             className="ui-field-control w-full disabled:cursor-not-allowed disabled:bg-app-surface-soft disabled:text-muted-foreground"
             disabled={savePending}
             maxLength={120}
             onChange={(event) => onOrganizationChange(event.target.value)}
-            placeholder="Your company or organization"
+            placeholder={t("profile.organizationPlaceholder")}
             value={organization}
           />
         </label>
         <p className="mt-2 text-xs text-muted-foreground">
-          Hand-edited fields stay yours. Later generations fill only the fields
-          you have not changed.
+          {t("profile.handEdited")}
         </p>
 
         {saveError ? (
@@ -338,7 +352,7 @@ function AccountIdentityPanel({
             role="status"
           >
             <Icon icon={Tick02Icon} size={16} />
-            Account saved
+            {t("profile.saved")}
           </p>
         ) : null}
 
@@ -349,7 +363,7 @@ function AccountIdentityPanel({
             type="submit"
             tone="primary"
           >
-            {savePending ? "Saving..." : "Save"}
+            {savePending ? t("profile.saving") : t("profile.save")}
           </Button>
         ) : null}
       </form>

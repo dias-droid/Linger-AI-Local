@@ -1,6 +1,7 @@
 import { Tick02Icon } from "@hugeicons/core-free-icons";
 import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -24,6 +25,7 @@ const composioLogoUrl = "https://logos.composio.dev/api/composio";
 
 /** Every provider key this server uses, managed in one list in Security. */
 export function ApiKeysSettings() {
+  const { t } = useTranslation("settings");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [notice, setNotice] = useState<string>();
   const [voiceDialog, setVoiceDialog] = useState<TeamHubVoiceProvider>();
@@ -43,10 +45,9 @@ export function ApiKeysSettings() {
   return (
     <section className="flex flex-col gap-3">
       <header>
-        <h2 className="text-base text-foreground">API keys</h2>
+        <h2 className="text-base text-foreground">{t("apiKeys.title")}</h2>
         <p className="text-sm text-muted-foreground">
-          Used by everyone on this server. Stored encrypted and never shown
-          again.
+          {t("apiKeys.usedByEveryone")}
         </p>
       </header>
       <div className="divide-y divide-border rounded-2xl border border-border bg-background">
@@ -54,14 +55,14 @@ export function ApiKeysSettings() {
         {voicePolicy?.voice_available ? (
           <>
             <VoiceKeyRow
-              detail="Transcribes meetings, Pocket Notes dictation and Voice Mode dictation."
+              detail={t("apiKeys.sonioxDetail")}
               environmentVariable="SONIOX_API_KEY"
               onOpen={() => openVoice("soniox")}
               status={voicePolicy.soniox_key}
               title="Soniox"
             />
             <VoiceKeyRow
-              detail="Turns Voice Mode into a live conversation with Grok."
+              detail={t("apiKeys.xaiDetail")}
               environmentVariable="XAI_API_KEY"
               onOpen={() => openVoice("xai")}
               status={voicePolicy.xai_key}
@@ -85,13 +86,13 @@ export function ApiKeysSettings() {
         <ModalDialog
           className="app-key-dialog"
           closeOnBackdrop
-          description="Connects Gmail, GitHub, Slack, Notion and other apps for everyone here."
+          description={t("apiKeys.composioDialogDescription")}
           onClose={() => setDialogOpen(false)}
           size="md"
           title={
             <span className="flex items-center gap-2.5">
               <AppLogoTile name="Composio" small url={composioLogoUrl} />
-              Composio key
+              {t("apiKeys.composioKey")}
             </span>
           }
         >
@@ -99,7 +100,7 @@ export function ApiKeysSettings() {
             <ComposioKeyGuide />
             <ComposioKeyForm
               onSaved={() => {
-                setNotice("Composio key saved");
+                setNotice(t("apiKeys.saved"));
                 setDialogOpen(false);
               }}
             />
@@ -111,7 +112,11 @@ export function ApiKeysSettings() {
         <LazyVoiceKeyDialog
           onClose={() => setVoiceDialog(undefined)}
           onReady={(provider) => {
-            setNotice(`${provider === "soniox" ? "Soniox" : "xAI"} key saved`);
+            setNotice(
+              t("apiKeys.keySaved", {
+                provider: provider === "soniox" ? "Soniox" : "xAI",
+              }),
+            );
             setVoiceDialog(undefined);
           }}
           policy={voicePolicy}
@@ -129,12 +134,13 @@ function KeySourcePill({
 }: {
   source: TeamHubVoiceProviderKeyStatus["source"];
 }) {
+  const { t } = useTranslation("settings");
   return source === "environment" ? (
-    <StatusPill>Set by your server</StatusPill>
+    <StatusPill>{t("apiKeys.setByServer")}</StatusPill>
   ) : source === "stored" ? (
-    <StatusPill tone="success">Active</StatusPill>
+    <StatusPill tone="success">{t("apiKeys.active")}</StatusPill>
   ) : (
-    <StatusPill>Not set</StatusPill>
+    <StatusPill>{t("apiKeys.notSet")}</StatusPill>
   );
 }
 
@@ -151,23 +157,30 @@ function VoiceKeyRow({
   status: TeamHubVoiceProviderKeyStatus | undefined;
   title: string;
 }) {
+  const { t } = useTranslation("settings");
   return (
     <KeyRow
       actions={
         status?.can_save ? (
           <Button
-            aria-label={`${status.source === "stored" ? "Replace" : "Add"} ${title} key`}
+            aria-label={
+              status.source === "stored"
+                ? t("apiKeys.replaceKeyFor", { provider: title })
+                : t("apiKeys.addKeyFor", { provider: title })
+            }
             onClick={onOpen}
           >
-            {status.source === "stored" ? "Replace key" : "Add key"}
+            {status.source === "stored"
+              ? t("apiKeys.replaceKey")
+              : t("apiKeys.addKey")}
           </Button>
         ) : null
       }
       detail={
         status?.source === "environment"
-          ? `${detail} Set with ${environmentVariable} on the server.`
+          ? detail + t("apiKeys.setWithEnv", { env: environmentVariable })
           : status?.can_save === false
-            ? `${detail} Set ${environmentVariable} on the server, or set TEAMHUB_SECRET_ENCRYPTION_KEY to save the key here.`
+            ? detail + t("apiKeys.setEnvOnServer", { env: environmentVariable })
             : detail
       }
       logo={<AppLogoTile name={title} />}
@@ -207,20 +220,23 @@ function KeyRow({
 
 function ComposioKeyRow({ onOpen }: { onOpen: () => void }) {
   const { client } = useTeamHubRuntime();
+  const { t } = useTranslation("settings");
   const catalog = useQuery(externalAppsQueryOptions(client));
   const key = catalog.data?.provider_key;
   const detail =
     key?.source === "environment"
-      ? "Connects Gmail, GitHub, Slack, Notion and other apps. Set with COMPOSIO_API_KEY on the server, in user.env when Linger is installed on this computer."
+      ? t("apiKeys.composioEnv")
       : key?.can_save === false
-        ? "Connects Gmail, GitHub, Slack, Notion and other apps. When Linger is installed on this computer, set COMPOSIO_API_KEY in user.env, then reopen the Linger app. On a server you run yourself, set it there, or set TEAMHUB_SECRET_ENCRYPTION_KEY to save the key here."
-        : "Connects Gmail, GitHub, Slack, Notion and other apps. Use a key with full read and write access.";
+        ? t("apiKeys.composioCannotSave")
+        : t("apiKeys.composioDefault");
   return (
     <KeyRow
       actions={
         key?.can_save ? (
           <Button onClick={onOpen}>
-            {key.source === "stored" ? "Replace key" : "Add key"}
+            {key.source === "stored"
+              ? t("apiKeys.replaceKey")
+              : t("apiKeys.addKey")}
           </Button>
         ) : null
       }

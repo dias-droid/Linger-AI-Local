@@ -1,9 +1,38 @@
-export const APP_LOCALE = "en-US";
+import i18next from "i18next";
+
+// Every interface language formats in its own locale; English keeps the app's
+// original en-US output. Formatters cache per locale and reset when the
+// interface language changes.
+const localesByLanguage = {
+  en: "en-US",
+  "zh-CN": "zh-CN",
+} as const;
+
+type SupportedLanguage = keyof typeof localesByLanguage;
+
+function currentLocale(): string {
+  const language = i18next.language as SupportedLanguage | undefined;
+  return (language && localesByLanguage[language]) || localesByLanguage.en;
+}
+
+const dateTimeFormats = new Map<string, Intl.DateTimeFormat>();
+const relativeTimeFormats = new Map<string, Intl.RelativeTimeFormat>();
+
+i18next.on("languageChanged", () => {
+  dateTimeFormats.clear();
+  relativeTimeFormats.clear();
+});
 
 export function dateTimeFormat(
   options?: Intl.DateTimeFormatOptions,
 ): Intl.DateTimeFormat {
-  return new Intl.DateTimeFormat(APP_LOCALE, options);
+  const cacheKey = `${currentLocale()}:${JSON.stringify(options ?? {})}`;
+  let formatter = dateTimeFormats.get(cacheKey);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(currentLocale(), options);
+    dateTimeFormats.set(cacheKey, formatter);
+  }
+  return formatter;
 }
 
 export function formatDateTime(
@@ -30,9 +59,24 @@ export function dayKey(value: Date): string {
   return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
-const relativeFormatter = new Intl.RelativeTimeFormat(APP_LOCALE, {
-  numeric: "auto",
-});
+function relativeTimeFormat(): Intl.RelativeTimeFormat {
+  const formatter = relativeTimeFormats.get(currentLocale());
+  if (formatter) return formatter;
+  const created = new Intl.RelativeTimeFormat(currentLocale(), {
+    numeric: "auto",
+  });
+  relativeTimeFormats.set(currentLocale(), created);
+  return created;
+}
+
+/** The one way everything says "less than a minute ago". Callers that never
+ * loaded the interface translations (unit tests, background rendering) keep
+ * the English fallback. */
+function justNowText(): string {
+  if (!i18next.isInitialized) return "just now";
+  return i18next.t("common:justNow");
+}
+
 const relativeUnits = [
   ["day", 86_400_000],
   ["hour", 3_600_000],
@@ -51,10 +95,10 @@ export function formatUpdatedAt(
   const time = new Date(value).getTime();
   if (!Number.isFinite(time)) return "—";
   const elapsed = Math.max(0, now - time);
-  if (elapsed < 60_000) return "just now";
+  if (elapsed < 60_000) return justNowText();
   if (elapsed < RELATIVE_WINDOW_MS) {
     const [unit, size] = relativeUnits.find(([, size]) => elapsed >= size)!;
-    return relativeFormatter.format(-Math.floor(elapsed / size), unit);
+    return relativeTimeFormat().format(-Math.floor(elapsed / size), unit);
   }
   const sameYear = new Date(time).getFullYear() === new Date(now).getFullYear();
   return dateTimeFormat({

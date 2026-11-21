@@ -6,6 +6,7 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import background from "./profile-background.png";
 import { Button } from "@/components/ui/button";
 import { ActorAvatar } from "@/features/rooms/members/actor-avatar";
@@ -32,6 +33,7 @@ export function AccountProfileHero({
   client: TeamHubClient;
   tenantId: string;
 }) {
+  const { t } = useTranslation("settings");
   const queryClient = useQueryClient();
   // The Actor ID seeds the initials tint, so this avatar matches the rail's.
   const actorId = useQuery(
@@ -75,16 +77,14 @@ export function AccountProfileHero({
       );
     } catch (error) {
       setImageError(
-        error instanceof Error
-          ? error.message
-          : "Could not upload image. Try again.",
+        error instanceof Error ? error.message : t("hero.uploadFailed"),
       );
     } finally {
       setProcessing(false);
     }
   }
   return (
-    <section aria-label="Profile appearance">
+    <section aria-label={t("hero.appearance")}>
       <div className="relative flex min-h-64 items-center justify-center overflow-hidden rounded-2xl border border-border bg-muted px-4 py-8">
         <img
           alt=""
@@ -99,13 +99,13 @@ export function AccountProfileHero({
             onClick={() => backgroundInput.current?.click()}
           >
             <Icon icon={Camera01Icon} size={14} />
-            Change cover
+            {t("hero.changeCover")}
           </Button>
         </div>
         <div className="relative flex w-48 flex-col items-center gap-5 rounded-2xl bg-card/90 px-3 pb-3 pt-7 text-foreground shadow-md backdrop-blur-md">
           <button
             type="button"
-            aria-label="Upload profile photo"
+            aria-label={t("hero.uploadPhoto")}
             className="relative rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             disabled={busy}
             onClick={() => avatarInput.current?.click()}
@@ -139,7 +139,7 @@ export function AccountProfileHero({
               <input
                 // eslint-disable-next-line jsx-a11y/no-autofocus -- the field is focused on purpose because the user just opened this dialog or inline editor
                 autoFocus
-                aria-label="Profile display name"
+                aria-label={t("hero.displayName")}
                 className="ui-field-control w-full text-center"
                 maxLength={120}
                 value={name}
@@ -152,7 +152,7 @@ export function AccountProfileHero({
                   disabled={busy}
                   onClick={() => setEditing(false)}
                 >
-                  Cancel
+                  {t("hero.cancel")}
                 </Button>
                 <Button
                   type="submit"
@@ -160,14 +160,14 @@ export function AccountProfileHero({
                   disabled={busy || !name.trim()}
                   tone="primary"
                 >
-                  Save
+                  {t("hero.save")}
                 </Button>
               </div>
             </form>
           ) : (
             <button
               type="button"
-              aria-label="Edit display name"
+              aria-label={t("hero.editDisplayName")}
               disabled={busy}
               onClick={() => {
                 setName(account.name);
@@ -186,7 +186,7 @@ export function AccountProfileHero({
         ref={avatarInput}
         type="file"
         accept="image/jpeg,image/png,image/webp"
-        aria-label="Profile photo file"
+        aria-label={t("hero.photoFile")}
         className="sr-only"
         tabIndex={-1}
         onChange={(event) => {
@@ -198,7 +198,7 @@ export function AccountProfileHero({
         ref={backgroundInput}
         type="file"
         accept="image/jpeg,image/png,image/webp"
-        aria-label="Profile cover file"
+        aria-label={t("hero.coverFile")}
         className="sr-only"
         tabIndex={-1}
         onChange={(event) => {
@@ -208,7 +208,7 @@ export function AccountProfileHero({
       />
       {busy ? (
         <p role="status" className="mt-2 text-xs text-muted-foreground">
-          Saving profile…
+          {t("hero.saving")}
         </p>
       ) : null}
       {imageError || update.error ? (

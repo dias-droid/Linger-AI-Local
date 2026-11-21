@@ -1,4 +1,5 @@
 import type { RoomDocumentMenuActions } from "@/features/rooms/documents/room-document-actions-menu";
+import { useTranslation } from "react-i18next";
 import { Select, SelectItem } from "@/components/ui/select";
 import type { TeamHubDocumentTreeSummary } from "@/features/teamhub/teamhub-types";
 
@@ -66,35 +67,38 @@ export function LibraryFolderListing({
   tenantId: string;
   trail: readonly LibraryFolder[];
 }) {
+  const { t } = useTranslation("library");
+  // File-type labels mix catalog keys with brand names that stay as they are.
+  const translate = t as (key: string) => string;
   return (
     <>
       <div className="workspace-file-filters">
         <Select
-          aria-label="File type"
+          aria-label={t("fileType")}
           onValueChange={onFileTypeChange}
           value={fileType}
           variant="pill"
         >
           {documentFileTypes.map(({ value, label }) => (
             <SelectItem key={value} value={value}>
-              {label}
+              {translate(label)}
             </SelectItem>
           ))}
         </Select>
         <Select
-          aria-label="Sort documents"
+          aria-label={t("sortDocuments")}
           onValueChange={onSortByChange}
           value={sortBy}
           variant="pill"
         >
-          <SelectItem value="updated">Sort by last modified</SelectItem>
-          <SelectItem value="name">Sort by name</SelectItem>
+          <SelectItem value="updated">{t("sortByLastModified")}</SelectItem>
+          <SelectItem value="name">{t("sortByName")}</SelectItem>
         </Select>
       </div>
       {folderId ? (
         <LibraryFolderBreadcrumb
           onOpen={onOpenFolder}
-          rootLabel={activeView.label}
+          rootLabel={translate(activeView.label)}
           trail={trail}
         />
       ) : null}

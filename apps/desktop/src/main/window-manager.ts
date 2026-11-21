@@ -25,6 +25,8 @@ import { IPC } from "../shared/api.js";
 import type { DiagnosticsModule } from "./diagnostics.js";
 import { diagnosticsDialogs } from "./diagnostics-dialogs.js";
 import { sendWithPrompts } from "./diagnostics-upload.js";
+import { injectShellI18n, shellDictionary } from "./i18n/shell-html.js";
+import type { LanguageModule } from "./language.js";
 import type { Module, ModuleContext } from "./modules.js";
 import {
   OFFLINE_ORIGIN,
@@ -136,7 +138,7 @@ const extractAssetPaths = (documentHtml: string): string[] => {
 // Closing hides the window; the tray keeps the app running.
 export class WindowManagerModule implements Module {
   readonly name = "WindowManager";
-  readonly dependsOn = ["Config"];
+  readonly dependsOn = ["Config", "Language"];
   readonly #options: WindowManagerOptions;
   #ctx: ModuleContext | undefined;
   #window: BaseWindow | undefined;
@@ -176,6 +178,15 @@ export class WindowManagerModule implements Module {
     this.#unsubscribe.push(
       () => ipcMain.removeHandler(SHELL_IPC.state),
       () => ipcMain.removeAllListeners(SHELL_IPC.command),
+      // The titlebar translates at serve time; the transient offline and
+      // starting pages pick the language up the next time they are served.
+      ctx.bus.on("language.changed", () => {
+        const titlebar = this.#titlebar;
+        if (titlebar && !titlebar.webContents.isDestroyed())
+          void titlebar.webContents
+            .loadURL(`${SHELL_ORIGIN}/titlebar`)
+            .catch(() => undefined);
+      }),
     );
     if (!this.#options.background) this.show();
   }
@@ -800,7 +811,13 @@ export class WindowManagerModule implements Module {
   #serveApp(request: Request): Response {
     const url = new URL(request.url);
     if (url.host === "shell" && url.pathname === "/titlebar")
-      return html(titlebarHtml);
+      return html(
+        injectShellI18n(
+          titlebarHtml,
+          this.#ctx!.get<LanguageModule>("Language").current(),
+          shellDictionary,
+        ),
+      );
     if (url.host !== "offline") return new Response(null, { status: 404 });
     if (url.pathname === "/logo.png")
       return new Response(Buffer.from(iconPng), {
@@ -842,6 +859,12 @@ export class WindowManagerModule implements Module {
         this.#loadOffline(INVALID_SERVER);
       return new Response(null, { status: 204 });
     }
-    return html(offlineHtml);
+    return html(
+      injectShellI18n(
+        offlineHtml,
+        this.#ctx!.get<LanguageModule>("Language").current(),
+        shellDictionary,
+      ),
+    );
   }
 }

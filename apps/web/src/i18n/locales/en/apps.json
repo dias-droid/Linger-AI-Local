@@ -1,0 +1,49 @@
+{
+  "group": {
+    "all": "All",
+    "mail-calendar": "Mail & Calendar",
+    "meetings": "Meetings",
+    "productivity": "Productivity",
+    "messaging": "Messaging",
+    "design-creative": "Design & Creative",
+    "multimodal": "Multimodal"
+  },
+  "summary": {
+    "calendly": "Scheduling links and events",
+    "canva": "Designs and presentations",
+    "discord": "Servers and channels",
+    "fal_ai": "Generative media models",
+    "figma": "Design files",
+    "github": "Repositories and activity",
+    "gmail": "Email",
+    "google_calendar": "Calendars and events",
+    "google_meet": "Video call records",
+    "granola": "Meeting notes",
+    "higgsfield": "AI images and video",
+    "linear": "Issues and projects",
+    "notion": "Pages and databases",
+    "outlook": "Email",
+    "outlook_calendar": "Calendars and events",
+    "slack": "Workspaces and channels"
+  },
+  "page": {
+    "applicationConnections": "Application connections",
+    "connectorCategories": "Connector categories",
+    "connectorsUnavailable": "Connectors are unavailable.",
+    "connectedOnly": "Connected only",
+    "connect": "Connect",
+    "connected": "Connected",
+    "accountsCount": "{{count}} accounts",
+    "needsReconnectingOne": "{{count}} needs reconnecting",
+    "needsReconnectingOther": "{{count}} need reconnecting",
+    "connectAria": "Connect {{name}}",
+    "loadingConnectors": "Loading connectors...",
+    "noConnectedApps": "No connected apps yet.",
+    "retry": "Retry",
+    "manage": "Manage",
+    "disconnect": "Disconnect",
+    "authorizing": "Authorizing…",
+    "couldntConfirm": "Couldn't confirm connection",
+    "unavailable": "Unavailable"
+  }
+}

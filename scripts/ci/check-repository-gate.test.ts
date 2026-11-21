@@ -182,6 +182,17 @@ describe("local repository gate", { timeout: 60_000 }, () => {
     expect(kana.status).toBe(0);
   });
 
+  it("allows CJK ideographs in localization catalogs while still formatting them", () => {
+    const catalog = runGate({
+      changedPath: "apps/web/src/i18n/locales/zh-CN/settings.json",
+      changedContent: '{\n  "language.title": "\u8bed\u8a00"\n}\n',
+    });
+    expect(catalog.status).toBe(0);
+    expect(catalog.commands).toContain(
+      "pnpm exec prettier --check apps/web/src/i18n/locales/zh-CN/settings.json",
+    );
+  });
+
   it("formats and lints only existing changed files outside published Skill versions", () => {
     const skill = runGate({
       changedPath: "skills/builtin/example/1.0.0/scripts/run.js",

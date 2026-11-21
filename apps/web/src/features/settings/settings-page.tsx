@@ -1,11 +1,13 @@
 import {
   AiChipIcon,
+  Globe02Icon,
   Key01Icon,
   LaptopIcon,
   UserIcon,
 } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
 import { Suspense, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { NavLink, Outlet, useLocation } from "react-router";
 
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,38 +15,44 @@ import { Skeleton } from "@/components/ui/skeleton";
 /** Settings is a page in the Space shell: its own sections beside the rail. */
 export function SettingsLayout() {
   const { pathname } = useLocation();
+  const { t } = useTranslation("settings");
   return (
     <div className="flex min-h-0 flex-1 flex-col md:flex-row">
       <aside
-        aria-label="Settings navigation"
+        aria-label={t("nav.settingsNavigation")}
         className="flex shrink-0 flex-col border-b border-border px-3 py-4 md:w-[228px] md:border-r md:border-b-0"
       >
         <div className="flex items-center pt-0.5 pb-3.5">
-          <h1 className="text-lg">Settings</h1>
+          <h1 className="text-lg">{t("nav.settings")}</h1>
         </div>
         <nav
-          aria-label="Settings sections"
+          aria-label={t("nav.settingsSections")}
           className="workspace-scrollbar flex min-h-0 flex-1 gap-0.5 overflow-x-auto md:flex-col md:overflow-x-visible md:overflow-y-auto"
         >
           <SettingsLink
             icon={<Icon icon={UserIcon} size={14} />}
-            label="Profile"
+            label={t("nav.profile")}
             to="account"
           />
           <SettingsLink
             icon={<Icon icon={Key01Icon} size={14} />}
-            label="Security"
+            label={t("nav.security")}
             to="security"
           />
           <SettingsLink
             icon={<Icon icon={LaptopIcon} size={14} />}
-            label="Computers"
+            label={t("nav.computers")}
             to="computers"
           />
           <SettingsLink
             icon={<Icon icon={AiChipIcon} size={14} />}
-            label="Models"
+            label={t("nav.models")}
             to="models"
+          />
+          <SettingsLink
+            icon={<Icon icon={Globe02Icon} size={14} />}
+            label={t("nav.language")}
+            to="language"
           />
         </nav>
       </aside>
@@ -64,7 +72,8 @@ export function SettingsLayout() {
 }
 
 function SettingsSectionLoading({ computers }: { computers: boolean }) {
-  const label = computers ? "Loading Computers" : "Loading content";
+  const { t } = useTranslation("settings");
+  const label = computers ? t("nav.loadingComputers") : t("nav.loadingContent");
   return (
     <div
       aria-busy="true"

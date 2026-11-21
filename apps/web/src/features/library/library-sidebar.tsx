@@ -1,6 +1,7 @@
 import { ArrowLeft01Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
 import { type ReactNode, useLayoutEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 import { secondaryNavigationHeaderClass } from "@/components/ui/secondary-navigation";
@@ -39,8 +40,9 @@ export function LibrarySidebar({
   tenantId: string;
 }) {
   const sidebarRef = useRef<HTMLElement>(null);
+  const { t } = useTranslation("library");
   const wikiOnly = active === "wiki" || holdsOpenFile === "wiki";
-  const sidebarLabel = wikiOnly ? "Wiki" : "Library";
+  const sidebarLabel = wikiOnly ? t("wiki") : t("library");
   const scrollKey = `linger:${wikiOnly ? "wiki" : "library"}-sidebar-scroll:${tenantId}`;
   const navigationWidth = useSecondaryNavigationWidth(tenantId);
   useLayoutEffect(() => {

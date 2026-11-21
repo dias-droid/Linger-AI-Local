@@ -1,5 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import i18next from "i18next";
+
 import type { TeamHubDocumentPlacementNode } from "@/features/teamhub/teamhub-types";
 
 import { documentFileName } from "./document-display-name";
@@ -67,9 +69,13 @@ export function nextFolderName(
       )
       .map((item) => item.name.toLocaleLowerCase()),
   );
-  if (!rootNames.has("new folder")) return "New Folder";
+  const base = i18next.t("defaultFolderName", {
+    ns: "library",
+    defaultValue: "New Folder",
+  });
+  if (!rootNames.has(base.toLocaleLowerCase())) return base;
   for (let index = 2; ; index += 1) {
-    const candidate = `New Folder ${index}`;
+    const candidate = `${base} ${index}`;
     if (!rootNames.has(candidate.toLocaleLowerCase())) return candidate;
   }
 }

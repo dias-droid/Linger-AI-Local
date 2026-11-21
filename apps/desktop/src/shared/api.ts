@@ -24,9 +24,15 @@ export interface WorkspaceGrantView {
   readonly createdAt: string;
 }
 
+// The languages the app ships interfaces for; "zh-CN" covers Simplified
+// Chinese (see AGENTS.md's localization catalogs).
+export type UiLanguage = "en" | "zh-CN";
+
 export interface DesktopSettings {
   readonly serverUrl: string;
   readonly displayName: string;
+  // The interface language the shell uses now; the SPA's Settings chooses it.
+  readonly language: UiLanguage;
 }
 
 // Signing in with the owner account of the Linger this app installed; the
@@ -84,7 +90,11 @@ export interface LingerDesktopApi {
   };
   readonly settings: {
     get(): Promise<DesktopSettings>;
-    set(patch: { displayName?: string }): Promise<DesktopSettings>;
+    // null for language follows the device again.
+    set(patch: {
+      displayName?: string;
+      language?: UiLanguage | null;
+    }): Promise<DesktopSettings>;
   };
   // The owner account of the Linger installed on this computer.
   readonly localAccount: {

@@ -73,12 +73,22 @@ fi
 
 # The repository is English-only. Only CJK ideographs are rejected, so tests
 # may still use kana, Hangul, and full-width punctuation as unspaced scripts.
-# git grep exits 1 when nothing matches; any other non-zero status is an error
-# (for example a git without PCRE), which must fail the check rather than pass
-# it. --untracked lets the local run see files not yet added.
-if ((${#changed_files[@]} > 0)); then
+# Localization catalogs (*/i18n/locales/*.json, see AGENTS.md) hold the
+# translated strings the apps show on purpose and are exempt from this check
+# only; prettier and eslint still cover them. git grep exits 1 when nothing
+# matches; any other non-zero status is an error (for example a git without
+# PCRE), which must fail the check rather than pass it. --untracked lets the
+# local run see files not yet added.
+cjk_files=()
+for file in ${changed_files[@]+"${changed_files[@]}"}; do
+  case "$file" in
+    */i18n/locales/*.json) ;;
+    *) cjk_files+=("$file") ;;
+  esac
+done
+if ((${#cjk_files[@]} > 0)); then
   cjk_status=0
-  LC_ALL=C git grep --untracked -nIP '(*UTF)[\x{3400}-\x{4DBF}\x{4E00}-\x{9FFF}\x{F900}-\x{FAFF}]' -- "${changed_files[@]}" || cjk_status=$?
+  LC_ALL=C git grep --untracked -nIP '(*UTF)[\x{3400}-\x{4DBF}\x{4E00}-\x{9FFF}\x{F900}-\x{FAFF}]' -- "${cjk_files[@]}" || cjk_status=$?
   if ((cjk_status == 0)); then
     echo "Changed files contain Chinese characters; the repository is English-only (see AGENTS.md)." >&2
     exit 1

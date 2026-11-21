@@ -5,12 +5,26 @@ import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
 import type { TeamHubDocument } from "@/features/teamhub/teamhub-types";
 import type { WikiGraphData } from "@/features/memory/wiki-graph-model";
 
+import i18next from "i18next";
+
 export const wikiCollectionLabels = {
   projects: "Projects",
   topics: "Topics",
   contacts: "People",
   clients: "Companies",
 } as const;
+
+/** The collection's name in the interface language. */
+export function wikiCollectionLabel(collection: WikiCollection) {
+  const lookup = i18next.t as unknown as (
+    key: string,
+    options?: Record<string, unknown>,
+  ) => string;
+  return lookup(`collection.${collection}`, {
+    ns: "wiki",
+    defaultValue: wikiCollectionLabels[collection],
+  });
+}
 export type WikiCollection = keyof typeof wikiCollectionLabels;
 export function isWikiCollection(value: string): value is WikiCollection {
   return Object.hasOwn(wikiCollectionLabels, value);

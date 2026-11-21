@@ -1,6 +1,7 @@
 /* oxlint-disable react-doctor/only-export-components -- Route factories and route surfaces share one app-owned interface. */
 import type { QueryClient } from "@tanstack/react-query";
 import { Suspense, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   redirect,
   type RouteObject,
@@ -744,6 +745,14 @@ function createSettingsRoute(): RouteObject {
       },
       {
         lazy: async () => ({
+          Component: (
+            await import("@/features/settings/language-settings-page")
+          ).LanguageSettingsPage,
+        }),
+        path: "language",
+      },
+      {
+        lazy: async () => ({
           Component: (await import("@/features/local-computer/computers-page"))
             .ComputersPage,
         }),
@@ -771,14 +780,15 @@ function createSettingsRoute(): RouteObject {
 }
 
 export function InitialAppLoading() {
+  const { t } = useTranslation("common");
   return (
     <main
       aria-busy="true"
-      aria-label="Loading TeamHub"
+      aria-label={t("loading.teamhub")}
       className="flex min-h-dvh items-center justify-center gap-2 bg-app-canvas text-sm text-app-muted"
     >
       <Spinner />
-      Loading Room...
+      {t("loading.room")}
     </main>
   );
 }

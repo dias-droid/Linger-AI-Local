@@ -1,0 +1,40 @@
+{
+  "status": {
+    "notConnected": "未连接",
+    "signInExpired": "登录已过期 · 重新连接此计算机",
+    "identityConflict": "计算机身份冲突 · 重新连接此计算机",
+    "updateRequired": "需要更新",
+    "runtimeError": "运行环境错误 · 正在重启",
+    "starting": "正在启动…",
+    "offlineReconnecting": "离线 · 正在重新连接",
+    "tasks_other": "正在运行 {{count}} 个任务",
+    "onlineIdle": "在线 · 空闲"
+  },
+  "tray": {
+    "open": "打开 Linger",
+    "reconnect": "重新连接此计算机",
+    "connect": "连接此计算机…",
+    "preventSleep": "阻止休眠",
+    "showLogs": "显示日志",
+    "saveDiagnostics": "保存诊断信息…",
+    "sendDiagnostics": "发送诊断信息…",
+    "quit": "退出 Linger"
+  },
+  "update": {
+    "downloading": "正在下载更新 {{version}}…",
+    "restartToUpdate": "重启以更新（{{version}}）",
+    "waiting": "正在等待任务完成以更新到 {{version}}",
+    "download": "下载 Linger {{version}}…",
+    "failed": "更新失败：{{reason}}",
+    "tryAgain": "重新尝试更新",
+    "noticeAvailableTitle": "有可用更新",
+    "noticeAvailableBody": "Linger {{version}} 已发布。点击打开下载页面。",
+    "noticeReadyTitle": "更新已就绪",
+    "noticeReadyBody": "Linger {{version}} 已下载。点击重启 Linger 完成更新。"
+  },
+  "enroll": {
+    "signInFirst": "请先登录",
+    "signInFirstDetail": "请先在窗口中登录 Linger，然后再次选择“连接此计算机”。",
+    "failed": "无法连接此计算机"
+  }
+}

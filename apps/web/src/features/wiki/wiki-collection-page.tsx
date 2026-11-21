@@ -1,4 +1,5 @@
 import { lazy, Suspense, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Search01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
 import type { TeamHubDocument } from "@/features/teamhub/teamhub-types";
@@ -6,7 +7,7 @@ import { Navigate, useParams } from "react-router";
 import { requireRoomRouteParam } from "@/features/rooms/room-route-params";
 import {
   isWikiCollection,
-  wikiCollectionLabels,
+  wikiCollectionLabel,
   type WikiCollection,
 } from "./wiki-display-state";
 import {
@@ -27,6 +28,7 @@ const GraphPage = lazy(async () => {
 });
 
 export function WikiCollectionPage() {
+  const { t } = useTranslation("wiki");
   const { collection, tenantId = "" } = useParams();
   if (!collection) return <WikiHomePage />;
   // Profile is the Wiki home's default tab.
@@ -42,7 +44,7 @@ export function WikiCollectionPage() {
       <Suspense
         fallback={
           <p role="status" className="p-4 text-sm text-app-muted">
-            Loading timeline…
+            {t("loadingTimeline")}
           </p>
         }
       >
@@ -55,7 +57,7 @@ export function WikiCollectionPage() {
         <WikiCollectionContent collection={collection} />
       ) : (
         <p role="alert" className="p-4">
-          Wiki collection unavailable.
+          {t("collectionUnavailable")}
         </p>
       )}
     </main>
@@ -63,6 +65,7 @@ export function WikiCollectionPage() {
 }
 
 function WikiCollectionContent({ collection }: { collection: WikiCollection }) {
+  const { t } = useTranslation("wiki");
   const tenantId = requireRoomRouteParam(useParams().tenantId, "Tenant");
   const collections = useWikiCollectionPages(tenantId);
   const nodes = useWikiGraphNodes(tenantId);
@@ -70,7 +73,7 @@ function WikiCollectionContent({ collection }: { collection: WikiCollection }) {
   const previews = useMemo(() => wikiPreviewPages(preview), [preview]);
   const [query, setQuery] = useState("");
   const all = collections.entries(collection, previews);
-  const label = wikiCollectionLabels[collection];
+  const label = wikiCollectionLabel(collection);
   const description = (entry: WikiEntry) =>
     (entry.preview
       ? entry.preview.description
@@ -90,7 +93,7 @@ function WikiCollectionContent({ collection }: { collection: WikiCollection }) {
       <WikiBack />
       <h1 className="mb-2 text-2xl text-foreground">{label}</h1>
       <p className="mb-6 text-sm text-muted-foreground">
-        {all.length} {label.toLowerCase()}
+        {t("pageCount", { count: all.length, label })}
       </p>
       {/* Same search field as the Connectors catalog. */}
       <label className="relative mb-6 block">
@@ -100,21 +103,21 @@ function WikiCollectionContent({ collection }: { collection: WikiCollection }) {
           size={14}
         />
         <input
-          aria-label={`Search ${label}`}
+          aria-label={t("searchCollectionAria", { label })}
           className="h-9 w-full rounded-lg border border-border bg-card pr-3 pl-9 text-sm text-foreground transition-colors duration-150 placeholder:text-app-placeholder hover:border-border-hover focus-visible:border-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onChange={(event) => setQuery(event.target.value)}
-          placeholder={`Search ${label.toLowerCase()}`}
+          placeholder={t("searchCollectionPlaceholder", { label })}
           type="search"
           value={query}
         />
       </label>
       {collections.pending ? (
         <p role="status" className="text-sm text-muted-foreground">
-          Loading Wiki Documents…
+          {t("loadingWikiDocuments")}
         </p>
       ) : collections.error ? (
         <p role="alert" className="text-sm text-muted-foreground">
-          Wiki Documents are unavailable.
+          {t("wikiDocumentsUnavailable")}
         </p>
       ) : pages.length ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

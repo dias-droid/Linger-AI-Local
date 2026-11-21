@@ -1,0 +1,49 @@
+{
+  "group": {
+    "all": "全部",
+    "mail-calendar": "邮件与日历",
+    "meetings": "会议",
+    "productivity": "效率",
+    "messaging": "消息",
+    "design-creative": "设计与创意",
+    "multimodal": "多模态"
+  },
+  "summary": {
+    "calendly": "排期链接与活动",
+    "canva": "设计与演示文稿",
+    "discord": "服务器与频道",
+    "fal_ai": "生成式媒体模型",
+    "figma": "设计文件",
+    "github": "仓库与动态",
+    "gmail": "电子邮件",
+    "google_calendar": "日历与日程",
+    "google_meet": "视频通话记录",
+    "granola": "会议笔记",
+    "higgsfield": "AI 图像与视频",
+    "linear": "事项与项目",
+    "notion": "页面与数据库",
+    "outlook": "电子邮件",
+    "outlook_calendar": "日历与日程",
+    "slack": "工作区与频道"
+  },
+  "page": {
+    "applicationConnections": "应用连接",
+    "connectorCategories": "连接器分类",
+    "connectorsUnavailable": "连接器不可用。",
+    "connectedOnly": "仅看已连接",
+    "connect": "连接",
+    "connected": "已连接",
+    "accountsCount": "{{count}} 个账户",
+    "needsReconnectingOne": "{{count}} 个需要重新连接",
+    "needsReconnectingOther": "{{count}} 个需要重新连接",
+    "connectAria": "连接 {{name}}",
+    "loadingConnectors": "正在加载连接器…",
+    "noConnectedApps": "还没有已连接的应用。",
+    "retry": "重试",
+    "manage": "管理",
+    "disconnect": "断开连接",
+    "authorizing": "正在授权…",
+    "couldntConfirm": "无法确认连接",
+    "unavailable": "不可用"
+  }
+}

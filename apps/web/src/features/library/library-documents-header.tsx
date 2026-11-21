@@ -6,6 +6,7 @@ import {
   PlusSignIcon,
 } from "@hugeicons/core-free-icons";
 import { type RefObject, useRef } from "react";
+import { useTranslation } from "react-i18next";
 
 import { ActionMenu } from "@/components/ui/action-menu";
 import { buttonClassName } from "@/components/ui/button";
@@ -29,10 +30,11 @@ export function LibraryDocumentsHeader({
   onNewFolder: () => void;
   onUploadFolder: (files: File[]) => void;
 }) {
+  const { t } = useTranslation("library");
   const folderInputRef = useRef<HTMLInputElement>(null);
   return (
     <header className="workspace-files-heading">
-      <h2>Library</h2>
+      <h2>{t("library")}</h2>
       <div className="ml-auto flex items-center gap-1">
         <input
           hidden
@@ -66,34 +68,34 @@ export function LibraryDocumentsHeader({
             {
               disabled: createBusy,
               icon: <Icon icon={FileAddIcon} size={16} />,
-              label: "New file",
+              label: t("newFile"),
               onSelect: onCreateDocument,
             },
             {
               disabled: createBusy,
               icon: <Icon icon={FolderAddIcon} size={16} />,
-              label: "New folder",
+              label: t("newFolder"),
               onSelect: onNewFolder,
             },
             {
               disabled: createBusy,
               icon: <Icon icon={FileImportIcon} size={16} />,
-              label: "Import",
+              label: t("import"),
               onSelect: onImportPick,
             },
             {
               disabled: createBusy,
               icon: <Icon icon={FolderUploadIcon} size={16} />,
-              label: "Upload folder",
+              label: t("uploadFolder"),
               onSelect: () => folderInputRef.current?.click(),
             },
           ]}
-          label="Create in My pages"
+          label={t("createInMyPages")}
           placement="bottom-end"
           trigger={
             <>
               <Icon icon={PlusSignIcon} size={16} />
-              New
+              {t("new")}
             </>
           }
         />

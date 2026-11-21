@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 
+import type { UiLanguage } from "../shared/api.js";
 import type { ConfigStore } from "./config.js";
 import type { Logger } from "./log.js";
 
@@ -23,6 +24,8 @@ export interface BusEvents {
   "computer.runtime": [];
   "diagnostics.changed": [];
   "grants.changed": [];
+  // The interface language changed; text surfaces rebuild their strings.
+  "language.changed": [language: UiLanguage];
   "local-server.changed": [];
   // Forget the installation the window used and set this computer up again.
   "local-server.reset": [];

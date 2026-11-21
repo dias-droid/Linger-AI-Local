@@ -6,20 +6,20 @@ import {
 import type { TeamHubDocumentTreeSummary } from "@/features/teamhub/teamhub-types";
 
 export const documentFileTypes = [
-  { value: "", label: "All types" },
+  { value: "", label: "allTypes" },
   { value: "md", label: "Markdown" },
   { value: "pdf", label: "PDF" },
   { value: "word", label: "Word" },
-  { value: "spreadsheet", label: "Spreadsheets (Excel / CSV)" },
+  { value: "spreadsheet", label: "spreadsheets" },
   { value: "presentation", label: "PowerPoint" },
   { value: "html", label: "HTML" },
-  { value: "text", label: "Plain text" },
-  { value: "image", label: "Images" },
-  { value: "audio", label: "Audio" },
-  { value: "video", label: "Video" },
-  { value: "archive", label: "Archives" },
-  { value: "code", label: "Code" },
-  { value: "others", label: "Others" },
+  { value: "text", label: "plainText" },
+  { value: "image", label: "images" },
+  { value: "audio", label: "audio" },
+  { value: "video", label: "video" },
+  { value: "archive", label: "archives" },
+  { value: "code", label: "code" },
+  { value: "others", label: "others" },
 ] as const;
 
 export function documentFileType(

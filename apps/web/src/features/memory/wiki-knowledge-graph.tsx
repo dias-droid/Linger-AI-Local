@@ -14,6 +14,8 @@ import {
 import { WikiGraphTimeline } from "./wiki-graph-timeline";
 
 /** Daily or Weekly report cards above a ruler of dated Wiki pages. */
+import { useTranslation } from "react-i18next";
+
 export function WikiKnowledgeGraph({
   graph,
   timelineMoments,
@@ -34,6 +36,7 @@ export function WikiKnowledgeGraph({
   onReadingModeChange?: () => void;
   dailyPanel?: ReactNode;
 }) {
+  const { t } = useTranslation("wiki");
   const [granularity, setGranularity] = useState<TimeGranularity>("day");
   const [query, setQuery] = useState("");
   const moments = useMemo(
@@ -125,16 +128,16 @@ export function WikiKnowledgeGraph({
               aria-checked={granularity === value}
               onClick={() => changeGranularity(value)}
             >
-              {value === "day" ? "Day" : "Week"}
+              {value === "day" ? t("day") : t("week")}
             </button>
           ))}
         </div>
         <label className="wiki-graph-search">
           <Icon icon={Search01Icon} size={14} />
           <input
-            aria-label="Search pages"
+            aria-label={t("searchPages")}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search pages"
+            placeholder={t("searchPages")}
             type="search"
             value={query}
           />

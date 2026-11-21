@@ -1,13 +1,7 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { AgentAvatarPortrait } from "@/features/rooms/members/agent-avatar-portrait";
-
-/** What Linger says first, one nudge at a time, across a working day. */
-const NUDGES = [
-  { time: "9:00 AM", text: "Demo is tomorrow. I drafted the brief." },
-  { time: "1:30 PM", text: "I reviewed the code. Two notes." },
-  { time: "5:00 PM", text: "Before you go: the deck is ready." },
-] as const;
 
 const LINGER_AVATAR = "figure:red_panda:79524A";
 // The first nudge waits for the headline and the timeline to settle.
@@ -25,6 +19,7 @@ type MomentState = "later" | "now" | "past";
  * time. It is decorative; the login shell hides it from assistive technology.
  */
 export function AuthIllustration() {
+  const { t } = useTranslation("auth");
   // Reduced motion keeps the first nudge lit and never starts the loop.
   const [landed, setLanded] = useState(() => (prefersReducedMotion() ? 1 : 0));
   const [awake, setAwake] = useState(false);
@@ -50,19 +45,22 @@ export function AuthIllustration() {
     };
   }, []);
 
+  // What Linger says first, one nudge at a time, across a working day.
+  const NUDGES = [
+    { time: t("art.nudge1Time"), text: t("art.nudge1Text") },
+    { time: t("art.nudge2Time"), text: t("art.nudge2Text") },
+    { time: t("art.nudge3Time"), text: t("art.nudge3Text") },
+  ];
   const current = landed === 0 ? null : (landed - 1) % NUDGES.length;
 
   return (
     <div className="auth-art">
       <div className="auth-art-copy">
         <h2 className="auth-art-title">
-          <span>Your personal AI.</span>
-          <span>A step ahead.</span>
+          <span>{t("art.titleLine1")}</span>
+          <span>{t("art.titleLine2")}</span>
         </h2>
-        <p className="auth-art-lede">
-          Linger runs on your own computer, keeps track of your work, and
-          reaches out before anything slips.
-        </p>
+        <p className="auth-art-lede">{t("art.lede")}</p>
       </div>
 
       <div className="auth-art-day">

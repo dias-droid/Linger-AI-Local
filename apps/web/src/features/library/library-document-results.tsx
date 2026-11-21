@@ -1,4 +1,5 @@
 import { Loading03Icon } from "@hugeicons/core-free-icons";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router";
 
 import { Icon } from "@/components/ui/icon";
@@ -41,23 +42,22 @@ export function RecentDocumentCards({
   pending: boolean;
   tenantId: string;
 }) {
+  const { t } = useTranslation("library");
   const recentShowUnlinked = anyLinked(documents);
   return (
-    <section aria-label="Recent" className="workspace-recent">
-      <h3 className="workspace-recent-title">Recent</h3>
+    <section aria-label={t("recent")} className="workspace-recent">
+      <h3 className="workspace-recent-title">{t("recent")}</h3>
       {pending ? (
         <p className="flex items-center gap-2 py-6 text-sm text-app-muted">
           <Spinner size={15} />
-          Loading documents…
+          {t("loadingDocuments")}
         </p>
       ) : error ? (
         <p className="py-6 text-sm text-app-danger" role="alert">
-          {error.message || "Recent documents are unavailable."}
+          {error.message || t("recentUnavailable")}
         </p>
       ) : documents.length === 0 ? (
-        <p className="py-6 text-sm text-app-muted">
-          No recently updated documents
-        </p>
+        <p className="py-6 text-sm text-app-muted">{t("noRecentDocuments")}</p>
       ) : (
         <div className="workspace-recent-cards">
           {documents.map((document) => {
@@ -146,18 +146,21 @@ export function LibraryDocumentResults({
   section: LibrarySection;
   tenantId: string;
 }) {
+  const { t } = useTranslation("library");
+  // Tab labels and empty lines come from the tabs catalog as keys.
+  const translate = t as (key: string) => string;
   if (pending) {
     return (
       <p className="flex items-center justify-center gap-2 py-16 text-center text-sm text-app-muted">
         <Spinner size={16} />
-        Loading documents…
+        {t("loadingDocuments")}
       </p>
     );
   }
   if (error) {
     return (
       <p className="py-16 text-center text-sm text-app-danger" role="alert">
-        {error.message || "Document list is unavailable."}
+        {error.message || t("documentListUnavailable")}
       </p>
     );
   }
@@ -169,13 +172,13 @@ export function LibraryDocumentResults({
   ) {
     return (
       <p className="border-y border-app-border py-16 text-center text-sm text-app-muted">
-        {activeView.empty}
+        {activeView.empty === "" ? "" : translate(activeView.empty)}
       </p>
     );
   }
   return (
     <div
-      aria-label={`${activeView.label} documents`}
+      aria-label={`${translate(activeView.label)} documents`}
       className="workspace-file-list"
     >
       {folders.map((folder) => (

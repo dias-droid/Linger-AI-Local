@@ -58,3 +58,28 @@ describe("summarizeStatus", () => {
     });
   });
 });
+
+describe("summarizeStatus in Simplified Chinese", () => {
+  it("translates each state line", () => {
+    expect(summarizeStatus({ ...base, language: "zh-CN" })).toEqual({
+      tone: "online",
+      label: "\u5728\u7ebf · \u7a7a\u95f2",
+    });
+    expect(summarizeStatus({ ...base, running: 3, language: "zh-CN" })).toEqual(
+      { tone: "busy", label: "\u6b63\u5728\u8fd0\u884c 3 \u4e2a\u4efb\u52a1" },
+    );
+    expect(
+      summarizeStatus({ ...base, connection: "connecting", language: "zh-CN" }),
+    ).toEqual({
+      tone: "offline",
+      label: "\u79bb\u7ebf · \u6b63\u5728\u91cd\u65b0\u8fde\u63a5",
+    });
+    expect(
+      summarizeStatus({ ...base, runtime: "starting", language: "zh-CN" })
+        .label,
+    ).toBe("\u6b63\u5728\u542f\u52a8…");
+    expect(
+      summarizeStatus({ ...base, enrolled: false, language: "zh-CN" }).label,
+    ).toBe("\u672a\u8fde\u63a5");
+  });
+});

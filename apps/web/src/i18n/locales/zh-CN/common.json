@@ -1,0 +1,28 @@
+{
+  "justNow": "刚刚",
+  "loading": {
+    "teamhub": "正在加载 TeamHub",
+    "room": "正在加载聊天室…"
+  },
+  "nav": {
+    "rooms": "聊天室",
+    "settings": "设置",
+    "messages": "消息",
+    "collaborationSidebar": "协作侧栏",
+    "primaryNavigation": "主导航",
+    "roomNavigation": "聊天室导航"
+  },
+  "error": {
+    "roomUnavailableToYou": "此聊天室对你不可用",
+    "pageUnavailableToYou": "此页面对你不可用",
+    "restrictedMessage": "你可能没有权限，或它已被删除。请确认你登录的是正确的账户，或让分享此链接的人邀请你。",
+    "dataNotLoaded": "无法加载所请求的 TeamHub 数据。",
+    "roomUnavailable": "聊天室不可用",
+    "teamhubUnavailable": "TeamHub 不可用",
+    "viewNotLoaded": "无法加载此视图",
+    "backToRooms": "返回我的聊天室",
+    "tryAgain": "重试",
+    "surfaceAria": "TeamHub 加载出错",
+    "useBackToRooms": "使用“返回我的聊天室”回到你的对话。"
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "language": {
+    "title": "Language",
+    "description": "Choose the language Linger's interface uses.",
+    "savedToThisDevice": "Saved on this device only.",
+    "option": {
+      "system": "System default",
+      "systemDetail": "Follow this device's language ({{language}})",
+      "en": "English",
+      "zhCN": "简体中文"
+    }
+  },
+  "nav": {
+    "settings": "Settings",
+    "settingsNavigation": "Settings navigation",
+    "settingsSections": "Settings sections",
+    "profile": "Profile",
+    "security": "Security",
+    "computers": "Computers",
+    "models": "Models",
+    "language": "Language",
+    "loadingContent": "Loading content",
+    "loadingComputers": "Loading Computers"
+  },
+  "accountPage": {
+    "title": "Profile",
+    "description": "Photo, name, and connected accounts used across this space.",
+    "tenant": "Tenant"
+  },
+  "hero": {
+    "appearance": "Profile appearance",
+    "changeCover": "Change cover",
+    "uploadPhoto": "Upload profile photo",
+    "displayName": "Profile display name",
+    "editDisplayName": "Edit display name",
+    "photoFile": "Profile photo file",
+    "coverFile": "Profile cover file",
+    "saving": "Saving profile…",
+    "uploadFailed": "Could not upload image. Try again.",
+    "save": "Save",
+    "cancel": "Cancel"
+  },
+  "profile": {
+    "loading": "Loading Account profile",
+    "bio": "Bio",
+    "bioPlaceholder": "A short description of how you work.",
+    "organization": "Organization",
+    "organizationPlaceholder": "Your company or organization",
+    "handEdited": "Hand-edited fields stay yours. Later generations fill only the fields you have not changed.",
+    "saved": "Account saved",
+    "save": "Save",
+    "saving": "Saving...",
+    "insights": "Insights",
+    "loadingInsights": "Loading insights...",
+    "noInsights": "No insights yet.",
+    "deleteInsight": "Delete insight",
+    "deleteInsightAria": "Delete {{dimension}} insight"
+  },
+  "security": {
+    "title": "Security",
+    "description": "Manage your sign-in password.",
+    "password": "Password",
+    "passwordHint": "Update the password used to sign in.",
+    "changePassword": "Change password",
+    "changed": "Password changed",
+    "cancel": "Cancel",
+    "dialogTitle": "Change password",
+    "dialogDescription": "Confirm your current password before choosing a new one. Other browsers and devices will be signed out; this browser stays signed in.",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "mismatch": "Passwords do not match."
+  },
+  "apiKeys": {
+    "title": "API keys",
+    "usedByEveryone": "Used by everyone on this server. Stored encrypted and never shown again.",
+    "composioKey": "Composio key",
+    "composioDefault": "Connects Gmail, GitHub, Slack, Notion and other apps. Use a key with full read and write access.",
+    "composioEnv": "Connects Gmail, GitHub, Slack, Notion and other apps. Set with COMPOSIO_API_KEY on the server, in user.env when Linger is installed on this computer.",
+    "composioCannotSave": "Connects Gmail, GitHub, Slack, Notion and other apps. When Linger is installed on this computer, set COMPOSIO_API_KEY in user.env, then reopen the Linger app. On a server you run yourself, set it there, or set TEAMHUB_SECRET_ENCRYPTION_KEY to save the key here.",
+    "composioDialogDescription": "Connects Gmail, GitHub, Slack, Notion and other apps for everyone here.",
+    "sonioxDetail": "Transcribes meetings, Pocket Notes dictation and Voice Mode dictation.",
+    "xaiDetail": "Turns Voice Mode into a live conversation with Grok.",
+    "setWithEnv": " Set with {{env}} on the server.",
+    "setEnvOnServer": " Set {{env}} on the server, or set TEAMHUB_SECRET_ENCRYPTION_KEY to save the key here.",
+    "setByServer": "Set by your server",
+    "active": "Active",
+    "notSet": "Not set",
+    "addKey": "Add key",
+    "replaceKey": "Replace key",
+    "addKeyFor": "Add {{provider}} key",
+    "replaceKeyFor": "Replace {{provider}} key",
+    "keySaved": "{{provider}} key saved",
+    "saved": "Composio key saved"
+  }
+}

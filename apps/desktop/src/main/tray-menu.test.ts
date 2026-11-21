@@ -147,3 +147,50 @@ describe("updateNotice", () => {
     });
   });
 });
+
+describe("trayMenu and updateNotice in Simplified Chinese", () => {
+  it("translates the actions", () => {
+    const items = trayMenu({
+      status: { tone: "online", label: "\u5728\u7ebf · \u7a7a\u95f2" },
+      preventSleep: false,
+      enrolled: true,
+      language: "zh-CN",
+    });
+    expect(items[0]).toEqual({
+      kind: "label",
+      label: "\u5728\u7ebf · \u7a7a\u95f2",
+    });
+    expect(items).toContainEqual({
+      kind: "action",
+      action: "open",
+      label: "\u6253\u5f00 Linger",
+    });
+    expect(items).toContainEqual({
+      kind: "action",
+      action: "quit",
+      label: "\u9000\u51fa Linger",
+    });
+  });
+
+  it("translates the update items and notices", () => {
+    const items = trayMenu({
+      status: { tone: "online", label: "\u5728\u7ebf" },
+      preventSleep: false,
+      enrolled: true,
+      update: { kind: "ready", version: "0.17.0" },
+      language: "zh-CN",
+    });
+    expect(items[1]).toEqual({
+      kind: "action",
+      action: "install-update",
+      label: "\u91cd\u542f\u4ee5\u66f4\u65b0（0.17.0）",
+    });
+
+    expect(updateNotice({ kind: "ready", version: "0.17.0" }, "zh-CN")).toEqual(
+      {
+        title: "\u66f4\u65b0\u5df2\u5c31\u7eea",
+        body: "Linger 0.17.0 \u5df2\u4e0b\u8f7d。\u70b9\u51fb\u91cd\u542f Linger \u5b8c\u6210\u66f4\u65b0。",
+      },
+    );
+  });
+});

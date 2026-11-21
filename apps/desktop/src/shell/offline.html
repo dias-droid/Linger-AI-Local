@@ -224,31 +224,72 @@
       <div class="mark">
         <img src="app://offline/logo.png" alt="" /><span class="badge"></span>
       </div>
-      <h1 id="title">Can't reach the server</h1>
+      <h1 id="title" data-i18n="offline.cantReach">Can't reach the server</h1>
       <p id="reason">
-        Linger can't reach <span class="host" id="host"></span>. Check your
-        network or VPN and make sure the server is running.
+        <span data-i18n="offline.reasonPrefix">Linger can't reach </span
+        ><span class="host" id="host"></span
+        ><span data-i18n="offline.reasonSuffix"
+          >. Check your network or VPN and make sure the server is
+          running.</span
+        >
       </p>
       <span class="code" id="code"></span>
       <div class="actions">
-        <button class="primary" id="retry" type="button">Try Again</button>
-        <button class="link" id="edit" type="button">Change Server</button>
-        <button class="link failed-only" id="logs" type="button">
+        <button
+          class="primary"
+          id="retry"
+          type="button"
+          data-i18n="offline.tryAgain"
+        >
+          Try Again
+        </button>
+        <button
+          class="link"
+          id="edit"
+          type="button"
+          data-i18n="offline.changeServer"
+        >
+          Change Server
+        </button>
+        <button
+          class="link failed-only"
+          id="logs"
+          type="button"
+          data-i18n="offline.showLogs"
+        >
           Show Logs
         </button>
-        <button class="link failed-only" id="diagnostics" type="button">
+        <button
+          class="link failed-only"
+          id="diagnostics"
+          type="button"
+          data-i18n="offline.saveDiagnostics"
+        >
           Save Diagnostics
         </button>
-        <button class="link failed-only" id="send" type="button" hidden>
+        <button
+          class="link failed-only"
+          id="send"
+          type="button"
+          hidden
+          data-i18n="offline.sendDiagnostics"
+        >
           Send Diagnostics
         </button>
-        <button class="link failed-only" id="reset" type="button">
+        <button
+          class="link failed-only"
+          id="reset"
+          type="button"
+          data-i18n="offline.setUpAgain"
+        >
           Set Up Again
         </button>
         <span class="countdown" id="countdown"></span>
       </div>
       <form action="app://offline/connect" method="get" id="form">
-        <label for="server">Server address</label>
+        <label for="server" data-i18n="offline.serverAddress"
+          >Server address</label
+        >
         <input
           id="server"
           name="server"
@@ -257,15 +298,37 @@
           spellcheck="false"
           required
         />
-        <p class="hint" id="hint">The address of your team's Linger server.</p>
+        <p class="hint" id="hint" data-i18n="offline.hint">
+          The address of your team's Linger server.
+        </p>
         <div class="row">
-          <button class="primary" type="submit">Connect</button>
-          <button class="link" id="cancel" type="button">Cancel</button>
+          <button class="primary" type="submit" data-i18n="offline.connect">
+            Connect
+          </button>
+          <button
+            class="link"
+            id="cancel"
+            type="button"
+            data-i18n="offline.cancel"
+          >
+            Cancel
+          </button>
         </div>
       </form>
     </main>
     <script>
       const $ = (id) => document.getElementById(id);
+      // Looks the key up in the injected dictionary, else keeps the English
+      // fallback, then fills its {placeholders}.
+      const T = (key, fallback, parts) => {
+        let text = window.LINGER_I18N
+          ? window.LINGER_I18N.t(key, fallback)
+          : fallback;
+        if (parts)
+          for (const [name, value] of Object.entries(parts))
+            text = text.split("{" + name + "}").join(String(value));
+        return text;
+      };
       const params = new URLSearchParams(location.search);
       const server = params.get("server") ?? "";
       const error = params.get("error") ?? "";
@@ -279,25 +342,34 @@
       );
       if (local === "updating") {
         document.body.dataset.mode = "updating";
-        $("title").textContent = "Updating Linger";
-        $("reason").textContent =
-          "Linger is restarting on this computer with the new version. This takes about a minute.";
+        $("title").textContent = T("offline.updating", "Updating Linger");
+        $("reason").textContent = T(
+          "offline.updatingReason",
+          "Linger is restarting on this computer with the new version. This takes about a minute.",
+        );
       } else if (local === "starting") {
         document.body.dataset.mode = "starting";
-        $("title").textContent = "Starting Linger";
-        $("reason").textContent =
-          "Linger is starting on this computer. This takes about a minute.";
+        $("title").textContent = T("offline.starting", "Starting Linger");
+        $("reason").textContent = T(
+          "offline.startingReason",
+          "Linger is starting on this computer. This takes about a minute.",
+        );
       } else if (local === "failed") {
         document.body.dataset.mode = "failed";
-        $("title").textContent = "Linger couldn't start on this computer";
+        $("title").textContent = T(
+          "offline.failedTitle",
+          "Linger couldn't start on this computer",
+        );
         $("reason").textContent = params.get("failed");
       } else if (!server) {
         document.body.dataset.mode = "setup";
-        $("title").textContent = "Connect to Linger";
-        $("reason").textContent =
-          "Enter your team's server address, then sign in.";
+        $("title").textContent = T("offline.connectTitle", "Connect to Linger");
+        $("reason").textContent = T(
+          "offline.connectReason",
+          "Enter your team's server address, then sign in.",
+        );
         // Setup, where Linger can also be installed on this computer.
-        $("cancel").textContent = "Back to Setup";
+        $("cancel").textContent = T("offline.backToSetup", "Back to Setup");
         $("server").focus();
       } else {
         $("host").textContent = new URL(server).host;
@@ -346,7 +418,11 @@
           }
           left -= 1;
           if (left <= 0) return connect(server);
-          $("countdown").textContent = "Retrying in " + left + "s";
+          $("countdown").textContent = T(
+            "offline.retryIn",
+            "Retrying in {n}s",
+            { n: left },
+          );
         };
         tick();
         setInterval(tick, 1000);

@@ -6,6 +6,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Link, useSearchParams } from "react-router";
 
 import {
@@ -28,15 +29,23 @@ const levelClass = [
   "bg-[#7d7b6e]",
   "bg-app-ink",
 ] as const;
-const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const weekdayLabels = [
+  "meetings.weekdaySun",
+  "meetings.weekdayMon",
+  "meetings.weekdayTue",
+  "meetings.weekdayWed",
+  "meetings.weekdayThu",
+  "meetings.weekdayFri",
+  "meetings.weekdaySat",
+] as const;
 const recentDayCount = 7;
 
 /** Which meetings the panel shows; `?meetings=` keeps the choice in the URL. */
 export type MeetingsRange = "all" | "today" | "week";
 const meetingRanges: ReadonlyArray<{ id: MeetingsRange; label: string }> = [
-  { id: "today", label: "Today" },
-  { id: "week", label: "Past 7 days" },
-  { id: "all", label: "All meetings" },
+  { id: "today", label: "meetings.today" },
+  { id: "week", label: "meetings.past7Days" },
+  { id: "all", label: "meetings.allMeetings" },
 ];
 const rangeParam: Record<MeetingsRange, string> = {
   all: "all",
@@ -70,6 +79,9 @@ function shiftDate(date: string, days: number) {
  * the list by file name, date, or time.
  */
 export function MeetingsPanel({ tenantId }: { tenantId: string }) {
+  const { t } = useTranslation("library");
+  // Weekday and range labels come from the catalog as keys.
+  const translate = t as (key: string) => string;
   const meetings = useMeetings(tenantId);
   const byDate = useMemo(
     () => meetingsByDate(meetings.data ?? []),
@@ -94,9 +106,9 @@ export function MeetingsPanel({ tenantId }: { tenantId: string }) {
       : range === "today"
         ? today
         : shiftDate(today, -(recentDayCount - 1));
-  const rangeLabel = meetingRanges.find(
-    (candidate) => candidate.id === range,
-  )!.label;
+  const rangeLabel = translate(
+    meetingRanges.find((candidate) => candidate.id === range)!.label,
+  );
   const [chosen, setChosen] = useState<string>();
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const [tip, setTip] = useState<{ text: string; x: number; y: number }>();
@@ -169,7 +181,7 @@ export function MeetingsPanel({ tenantId }: { tenantId: string }) {
   return (
     <div className="flex flex-col gap-4">
       <div
-        aria-label="Meeting range"
+        aria-label={translate("meetings.range")}
         className="inline-flex w-fit gap-0.5 rounded-lg bg-muted p-0.5"
         role="radiogroup"
       >
@@ -186,7 +198,7 @@ export function MeetingsPanel({ tenantId }: { tenantId: string }) {
             role="radio"
             type="button"
           >
-            {candidate.label}
+            {translate(candidate.label)}
           </button>
         ))}
       </div>
@@ -207,7 +219,7 @@ export function MeetingsPanel({ tenantId }: { tenantId: string }) {
           <div className="flex w-full flex-col gap-4">
             {range === "today" ? null : (
               <section
-                aria-label="Meeting calendar"
+                aria-label={translate("meetings.calendar")}
                 className="rounded-xl border border-border bg-card p-4 md:p-5"
               >
                 {recentOnly ? (
@@ -240,7 +252,9 @@ export function MeetingsPanel({ tenantId }: { tenantId: string }) {
                           </button>
                           <span className="text-center leading-4">
                             <span className="block font-medium text-app-ink">
-                              {day.date === today ? "Today" : day.weekday}
+                              {day.date === today
+                                ? translate("meetings.todayLabel")
+                                : translate(day.weekday)}
                             </span>
                             {day.label}
                           </span>
@@ -329,10 +343,10 @@ export function MeetingsPanel({ tenantId }: { tenantId: string }) {
                 <label className="flex h-9 w-full items-center gap-2 rounded-lg border border-border bg-card px-3 text-muted-foreground transition-colors hover:border-border-hover focus-within:border-foreground focus-within:ring-2 focus-within:ring-ring/40 sm:w-64">
                   <Icon icon={Search01Icon} size={16} />
                   <input
-                    aria-label="Search meetings"
+                    aria-label={translate("meetings.searchMeetings")}
                     className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-app-placeholder"
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search by date or time"
+                    placeholder={translate("meetings.searchByDate")}
                     type="search"
                     value={query}
                   />
@@ -340,7 +354,10 @@ export function MeetingsPanel({ tenantId }: { tenantId: string }) {
               </div>
               {chosen && !byDate.has(chosen) && !needle ? (
                 <p className="border-b border-app-border px-4 py-2.5 text-sm text-app-muted md:px-5">
-                  No meetings on {formatMeetingDay(chosen)}.
+                  {translate("meetings.noMeetingsOn").replace(
+                    "{day}",
+                    formatMeetingDay(chosen),
+                  )}
                 </p>
               ) : null}
               {days.length ? (
@@ -431,12 +448,15 @@ export function MeetingsPanel({ tenantId }: { tenantId: string }) {
               ) : (
                 <p className="px-4 py-3 text-sm text-app-muted md:px-5">
                   {needle
-                    ? `No meetings match “${query.trim()}”.`
+                    ? translate("meetings.noMatch").replace(
+                        "{query}",
+                        query.trim(),
+                      )
                     : range === "today"
                       ? "No meetings today."
                       : recentOnly
-                        ? "No meetings in the past 7 days."
-                        : "No meetings yet."}
+                        ? translate("meetings.noMeetingsWeek")
+                        : translate("meetings.noMeetingsYet")}
                 </p>
               )}
             </section>

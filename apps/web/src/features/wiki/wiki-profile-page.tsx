@@ -1,5 +1,6 @@
 import { WikiProfileSourcesRow } from "./wiki-profile-sources";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { useParams, useSearchParams } from "react-router";
 import { ReadOnlyBlockNoteDocument } from "@/components/read-only-blocknote-document";
 import { Button } from "@/components/ui/button";
@@ -161,6 +162,7 @@ function ProfileTimeline({
 }
 
 export function WikiProfilePage() {
+  const { t } = useTranslation("wiki");
   const { tenantId = "" } = useParams();
   const { client } = useTeamHubRuntime();
   const profile = useQuery(personalProfileQueryOptions(client, tenantId));
@@ -305,10 +307,7 @@ export function WikiProfilePage() {
               title="Getting to know you…"
             />
           ) : (
-            <p className="text-sm text-app-muted">
-              Your profile is not available yet. Add a source under Sources to
-              create it.
-            </p>
+            <p className="text-sm text-app-muted">{t("profileUnavailable")}</p>
           )}
         </div>
       </div>

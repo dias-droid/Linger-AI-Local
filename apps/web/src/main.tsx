@@ -14,16 +14,18 @@ import { markDesktopShell } from "@/app/desktop-shell";
 import "@fontsource-variable/geist";
 import "@fontsource-variable/roboto-slab";
 import "@/app/globals.css";
-import { loadHanFont } from "@/app/han-font";
 import { installVitePreloadRecovery } from "@/app/vite-preload-recovery";
 import { DesktopConnectorReturn } from "@/features/apps/desktop-connector-return";
 import { createBrowserTeamHubRuntime } from "@/features/teamhub/browser-teamhub-runtime";
 import { teamHubData } from "@/features/teamhub/teamhub-api";
 import { TeamHubRuntimeProvider } from "@/features/teamhub/teamhub-runtime";
+import { initUiLanguage } from "@/i18n/i18n";
+import { resolveInitialLanguage } from "@/i18n/languages";
 
 installVitePreloadRecovery({ buildId: import.meta.url });
 markDesktopShell();
-loadHanFont(navigator.languages);
+// Also loads the Han font for a Simplified Chinese interface or device.
+initUiLanguage(resolveInitialLanguage(navigator.languages));
 
 const rootElement = document.getElementById("root");
 

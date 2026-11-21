@@ -123,11 +123,16 @@ Memory, and Voice services.
   Every fixed local default for `pnpm dev` lives in
   `scripts/local-defaults.env`; `scripts/with-local-env.mjs` only merges files.
 - The repository is English-only: docs, code, comments, logs, user-facing
-  strings, prompts, Skills, tests, fixtures, and benchmark data.
-  `make check-repository-gate` rejects CJK ideographs in changed files.
+  strings, prompts, Skills, tests, fixtures, and benchmark data. The one
+  exception is localization catalogs under `*/i18n/locales/*.json`, which
+  hold the strings the apps show in another language on purpose; every other
+  changed file is still checked.
+  `make check-repository-gate` rejects CJK ideographs in changed files
+  outside those catalogs.
   - NO: a test fixture with a literal Chinese sentence.
-  - OK: the same text as escaped code points (`"\u4f60\u597d"`), or kana,
-    accented Latin, or emoji when any unspaced script will do.
+  - OK: the same text as escaped code points (`"\u4f60\u597d"`), a
+    localization catalog under `*/i18n/locales/`, or kana, accented Latin,
+    or emoji when any unspaced script will do.
 
 ## Cross-Module Conventions
 

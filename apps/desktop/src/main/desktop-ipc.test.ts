@@ -46,6 +46,11 @@ const fixture = async (
     ...stubModule("WindowManager"),
     webContents: () => ({ send }),
   };
+  const language = {
+    ...stubModule("Language"),
+    current: vi.fn(() => "en" as const),
+    set: vi.fn((choice: "en" | "zh-CN" | null) => choice ?? "en"),
+  };
   const bus = new EventBus();
   const host = testHost(
     [
@@ -56,19 +61,20 @@ const fixture = async (
       stubModule("WorkspaceGrants"),
       updater as never,
       local as never,
+      language as never,
       new DesktopIpcModule({ defaultDisplayName: "Desk" }),
     ],
     { serverUrl: SERVER },
     bus,
   );
   await host.start();
-  const invoke = (channel: string, origin = SERVER) =>
-    handlers.get(channel)!({ senderFrame: { origin } });
+  const invoke = (channel: string, origin = SERVER, ...args: unknown[]) =>
+    handlers.get(channel)!({ senderFrame: { origin } }, ...args);
   const setUpdate = (state: UpdateState) => {
     updateState = state;
     bus.emit("update.changed", state.kind);
   };
-  return { host, local, updater, send, setUpdate, invoke };
+  return { host, language, local, updater, send, setUpdate, invoke };
 };
 
 afterEach(() => handlers.clear());
@@ -175,6 +181,35 @@ describe("DesktopIpcModule updates", () => {
       );
     expect(f.updater.install).not.toHaveBeenCalled();
     expect(f.updater.check).not.toHaveBeenCalled();
+    await f.host.stop("quit");
+  });
+});
+
+describe("DesktopIpcModule language", () => {
+  it("reports the resolved language with the settings", async () => {
+    const f = await fixture();
+    expect(await f.invoke(IPC.settingsGet)).toMatchObject({ language: "en" });
+    await f.host.stop("quit");
+  });
+
+  it("hands a chosen language to the shell's language module", async () => {
+    const f = await fixture();
+    await f.invoke(IPC.settingsSet, SERVER, { language: "zh-CN" });
+    expect(f.language.set).toHaveBeenCalledWith("zh-CN");
+    await f.invoke(IPC.settingsSet, SERVER, { language: null });
+    expect(f.language.set).toHaveBeenLastCalledWith(null);
+    // An absent language leaves the module alone.
+    await f.invoke(IPC.settingsSet, SERVER, { displayName: "Renamed" });
+    expect(f.language.set).toHaveBeenCalledTimes(2);
+    await f.host.stop("quit");
+  });
+
+  it("rejects unknown languages", async () => {
+    const f = await fixture();
+    expect(() =>
+      f.invoke(IPC.settingsSet, SERVER, { language: "fr" }),
+    ).toThrow();
+    expect(f.language.set).not.toHaveBeenCalled();
     await f.host.stop("quit");
   });
 });

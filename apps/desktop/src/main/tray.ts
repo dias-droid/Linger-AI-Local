@@ -12,10 +12,12 @@ import mark16 from "../../resources/tray/mark-16.png";
 import mark32 from "../../resources/tray/mark-32.png";
 import tile16 from "../../resources/tray/tile-16.png";
 import tile32 from "../../resources/tray/tile-32.png";
+import { translate } from "../i18n/i18n.js";
 import type { DiagnosticsModule } from "./diagnostics.js";
 import { diagnosticsDialogs } from "./diagnostics-dialogs.js";
 import { sendWithPrompts } from "./diagnostics-upload.js";
 import { EnrollmentError, type EnrollmentModule } from "./enrollment.js";
+import type { LanguageModule } from "./language.js";
 import type { Module, ModuleContext } from "./modules.js";
 import type { PowerGuardModule } from "./power-guard.js";
 import type { SetupWindowModule } from "./setup-window.js";
@@ -71,6 +73,7 @@ export class TrayModule implements Module {
     "SetupWindow",
     "Updater",
     "Diagnostics",
+    "Language",
   ];
   readonly #options: TrayOptions;
   #ctx: ModuleContext | undefined;
@@ -101,6 +104,7 @@ export class TrayModule implements Module {
       ctx.bus.on("status.changed", () => this.#refresh()),
       ctx.bus.on("power.changed", () => this.#refresh()),
       ctx.bus.on("update.changed", () => this.#refresh()),
+      ctx.bus.on("language.changed", () => this.#refresh()),
     );
     this.#refresh();
   }
@@ -156,8 +160,13 @@ export class TrayModule implements Module {
       update,
       canSendDiagnostics:
         !!this.#ctx!.get<DiagnosticsModule>("Diagnostics").uploadUrl(),
+      language: this.#language(),
     });
     return Menu.buildFromTemplate(items.map((item) => this.#item(item)));
+  }
+
+  #language() {
+    return this.#ctx!.get<LanguageModule>("Language").current();
   }
 
   #item(item: TrayMenuItem): MenuItemConstructorOptions {
@@ -229,11 +238,14 @@ export class TrayModule implements Module {
       const signedOut =
         error instanceof EnrollmentError && error.code === "NOT_SIGNED_IN";
       const window = windows.window();
+      const language = this.#language();
       const options = {
         type: "warning" as const,
-        message: signedOut ? "Sign in first" : "Couldn't connect this computer",
+        message: signedOut
+          ? translate(language, "enroll.signInFirst")
+          : translate(language, "enroll.failed"),
         detail: signedOut
-          ? "Sign in to Linger in the window, then choose Connect This Computer again."
+          ? translate(language, "enroll.signInFirstDetail")
           : error instanceof Error
             ? error.message
             : String(error),

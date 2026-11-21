@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
 import { ModalDialog } from "@/components/ui/modal-dialog";
@@ -23,6 +24,7 @@ export function ChangePasswordDialog({
   onChanged: () => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation("settings");
   const formId = useId();
   const currentPasswordRef = useRef<HTMLInputElement>(null);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -67,14 +69,14 @@ export function ChangePasswordDialog({
 
   return (
     <ModalDialog
-      description="Confirm your current password before choosing a new one. Other browsers and devices will be signed out; this browser stays signed in."
+      description={t("security.dialogDescription")}
       onClose={requestClose}
       size="md"
-      title="Change password"
+      title={t("security.dialogTitle")}
       footer={
         <>
           <Button disabled={mutation.isPending} onClick={requestClose}>
-            Cancel
+            {t("security.cancel")}
           </Button>
           <Button
             disabled={!canSubmit}
@@ -83,7 +85,7 @@ export function ChangePasswordDialog({
             tone="primary"
             type="submit"
           >
-            Change password
+            {t("security.changePassword")}
           </Button>
         </>
       }
@@ -93,7 +95,7 @@ export function ChangePasswordDialog({
           <PasswordField
             autoComplete="current-password"
             inputRef={currentPasswordRef}
-            label="Current password"
+            label={t("security.currentPassword")}
             onChange={(value) => {
               resetFailure();
               setCurrentPassword(value);
@@ -102,7 +104,7 @@ export function ChangePasswordDialog({
           />
           <PasswordField
             autoComplete="new-password"
-            label="New password"
+            label={t("security.newPassword")}
             onChange={(value) => {
               resetFailure();
               setNewPassword(value);
@@ -111,7 +113,7 @@ export function ChangePasswordDialog({
           />
           <PasswordField
             autoComplete="new-password"
-            label="Confirm new password"
+            label={t("security.confirmPassword")}
             onChange={(value) => {
               resetFailure();
               setConfirmation(value);
@@ -122,7 +124,7 @@ export function ChangePasswordDialog({
 
         {mismatch ? (
           <p className="mt-4 text-sm text-app-danger" role="alert">
-            Passwords do not match.
+            {t("security.mismatch")}
           </p>
         ) : null}
         {mutation.error ? (

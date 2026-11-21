@@ -13,6 +13,7 @@ import type { ComputerDaemonModule } from "./computer-daemon.js";
 import type { WorkspaceGrant } from "./config.js";
 import { ConnectorOAuth } from "./connector-oauth.js";
 import type { EnrollmentModule } from "./enrollment.js";
+import type { LanguageModule } from "./language.js";
 import type { LocalServerModule } from "./local-server.js";
 import type { Module, ModuleContext } from "./modules.js";
 import { sameOrigin } from "./navigation.js";
@@ -29,7 +30,11 @@ const grantIdInput = z.string().min(1).max(128);
 // The server address is not settable from the SPA: a page served by one
 // server must not be able to repoint the app. It changes on app://offline.
 const settingsPatchInput = z
-  .object({ displayName: z.string().min(1).max(120).optional() })
+  .object({
+    displayName: z.string().min(1).max(120).optional(),
+    // null follows the device language again; absent leaves it alone.
+    language: z.enum(["en", "zh-CN"]).nullish(),
+  })
   .strict();
 
 const permissionId = z.enum(["screen_recording", "accessibility"]);
@@ -74,6 +79,7 @@ export class DesktopIpcModule implements Module {
     "WindowManager",
     "WorkspaceGrants",
     "Updater",
+    "Language",
   ];
   readonly #defaultDisplayName: string;
   // Set on macOS only.
@@ -142,6 +148,7 @@ export class DesktopIpcModule implements Module {
       return {
         serverUrl: config.serverUrl ?? "",
         displayName: config.displayName ?? this.#defaultDisplayName,
+        language: ctx.get<LanguageModule>("Language").current(),
       };
     };
     const handle = (
@@ -173,8 +180,13 @@ export class DesktopIpcModule implements Module {
     });
     handle(IPC.settingsGet, () => settings());
     handle(IPC.settingsSet, (patch) => {
+      const parsed = settingsPatchInput.parse(patch);
       const before = settings().displayName;
-      ctx.config.update(settingsPatchInput.parse(patch));
+      const { language, ...rest } = parsed;
+      ctx.config.update(rest);
+      // The shell surfaces rebuild from the module's bus event.
+      if (language !== undefined)
+        ctx.get<LanguageModule>("Language").set(language ?? null);
       // The daemon announces the name; a new name restarts it when idle.
       if (settings().displayName !== before) ctx.bus.emit("computer.renamed");
       return settings();

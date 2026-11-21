@@ -5,6 +5,8 @@ import {
   Building03Icon,
 } from "@hugeicons/core-free-icons";
 import { lazy, type ReactNode, Suspense, useMemo } from "react";
+import i18next from "i18next";
+import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { Icon } from "@/components/ui/icon";
 import { useTabIndicator } from "@/components/ui/tab-indicator";
@@ -76,9 +78,13 @@ function entityColors(key: number | string) {
 
 export function editedLabel(page: TeamHubDocument) {
   const date = new Date(page.updated_at);
-  return Number.isNaN(date.valueOf())
-    ? ""
-    : `Edited ${dateFormatter.format(date)}`;
+  if (Number.isNaN(date.valueOf())) return "";
+  // Outside React, so the shared instance answers directly.
+  const lookup = i18next.t as unknown as (
+    key: string,
+    options?: Record<string, unknown>,
+  ) => string;
+  return lookup("edited", { date: dateFormatter.format(date) });
 }
 
 /** Graph nodes by Wiki page key; descriptions and links feed the cards. */
@@ -128,8 +134,8 @@ export function useWikiCollectionPages(tenantId: string) {
 }
 
 const homeTabs = [
-  { id: "profile", label: "Profile" },
-  { id: "wiki", label: "Wiki" },
+  { id: "profile", label: "profileTab" },
+  { id: "wiki", label: "wikiTab" },
 ] as const;
 type WikiHomeTab = (typeof homeTabs)[number]["id"];
 
@@ -147,6 +153,7 @@ export function WikiHomePage() {
   const tab: WikiHomeTab =
     searchParams.get("tab") === "wiki" ? "wiki" : "profile";
   const refresh = usePersonalWikiRefresh(tenantId);
+  const { t } = useTranslation("wiki");
   const { tabRef, indicator } = useTabIndicator(tab);
   return (
     <main className="workspace-content-viewport workspace-scrollbar wiki-landing min-w-0 flex-1 overflow-y-auto bg-app-surface [scrollbar-gutter:stable]">
@@ -174,7 +181,7 @@ export function WikiHomePage() {
                 role="tab"
                 type="button"
               >
-                {candidate.label}
+                {t(candidate.label)}
               </button>
             ))}
             {indicator}
@@ -212,6 +219,7 @@ function WikiOverview({
   refresh: WikiRefreshStatus;
   tenantId: string;
 }) {
+  const { t } = useTranslation("wiki");
   const { preview, refreshing } = refresh;
   const navigate = useNavigate();
   const collections = useWikiCollectionPages(tenantId);
@@ -259,7 +267,7 @@ function WikiOverview({
         <div className="landing-col landing-col-left">
           <section className="landing-section landing-daily">
             <SectionHeader
-              title="Daily report"
+              title={t("dailyReport")}
               count={daily.length}
               to={`${base}/graph`}
             />
@@ -289,16 +297,16 @@ function WikiOverview({
                 })}
               </div>
             ) : (
-              <p className="landing-empty">No daily reports yet.</p>
+              <p className="landing-empty">{t("noDailyReports")}</p>
             )}
           </section>
           <EntryCards
             {...card}
             className="landing-projects"
-            title="Projects"
+            title={t("projects")}
             to={`${base}/projects`}
             entries={projects}
-            empty={status("No projects yet.")}
+            empty={status(t("noProjects"))}
             description={description}
             members={(entry) =>
               [
@@ -315,10 +323,10 @@ function WikiOverview({
           <EntryCards
             {...card}
             className="landing-topics"
-            title="Topics"
+            title={t("topics")}
             to={`${base}/topics`}
             entries={topics}
-            empty={status("No topics yet.")}
+            empty={status(t("noTopics"))}
             description={description}
             members={() => []}
           />
@@ -326,7 +334,7 @@ function WikiOverview({
         <div className="landing-col landing-col-right">
           <section className="landing-section landing-people">
             <SectionHeader
-              title="People"
+              title={t("people")}
               count={people.length}
               to={`${base}/contacts`}
             />
@@ -348,12 +356,12 @@ function WikiOverview({
                 ))}
               </div>
             ) : (
-              status("No people yet.")
+              status(t("noPeople"))
             )}
           </section>
           <section className="landing-section landing-companies">
             <SectionHeader
-              title="Companies"
+              title={t("companies")}
               count={companies.length}
               to={`${base}/clients`}
             />
@@ -377,7 +385,7 @@ function WikiOverview({
                 ))}
               </div>
             ) : (
-              status("No companies yet.")
+              status(t("noCompanies"))
             )}
           </section>
         </div>
@@ -494,6 +502,7 @@ function SectionHeader({
   count: number;
   to: string;
 }) {
+  const { t } = useTranslation("wiki");
   return (
     <header className="landing-section-header">
       <h2 className="landing-section-title">
@@ -501,7 +510,7 @@ function SectionHeader({
         <span className="section-count">{count}</span>
       </h2>
       <Link className="landing-view-all" to={to}>
-        View all
+        {t("viewAll")}
         <Icon icon={ArrowRight02Icon} size={14} />
       </Link>
     </header>

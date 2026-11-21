@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { DesktopBarTitle } from "@/app/desktop-frame";
 import { type MouseEvent, type ReactNode, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router";
 
 import { ActionMenu } from "@/components/ui/action-menu";
@@ -16,7 +17,7 @@ import type {
 } from "@/features/teamhub/teamhub-types";
 
 import { AppLogo } from "./app-logo";
-import { appSummary, groupCatalogApps } from "./app-groups";
+import { appGroupTitle, appSummary, groupCatalogApps } from "./app-groups";
 import {
   AppManageDialog,
   DisconnectConnectionDialog,
@@ -40,6 +41,7 @@ function stopCardClick(event: MouseEvent) {
 }
 
 export function ConnectedAppsPage() {
+  const { t } = useTranslation("apps");
   const { client } = useTeamHubRuntime();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedApp = searchParams.get("app");
@@ -67,8 +69,11 @@ export function ConnectedAppsPage() {
       ).length > 0,
   );
   const filters = [
-    { id: "all", label: "All" },
-    ...groups.map(({ group }) => ({ id: group.id, label: group.title })),
+    { id: "all", label: t("group.all") },
+    ...groups.map(({ group }) => ({
+      id: group.id,
+      label: appGroupTitle(group),
+    })),
   ];
   const groupApps = groups.find((entry) => entry.group.id === filter)?.apps;
   // Connected only narrows whichever view is open; with All it is one grid.
@@ -123,13 +128,13 @@ export function ConnectedAppsPage() {
           <h1 className="mb-5 text-2xl text-foreground">Connectors</h1>
         </DesktopBarTitle>
         {apps.isPending || connections.isPending ? (
-          <PageMessage busy>Loading connectors...</PageMessage>
+          <PageMessage busy>{t("page.loadingConnectors")}</PageMessage>
         ) : apps.error || connections.error ? (
           <div className="py-10 text-center" role="alert">
             <p className="text-sm text-app-danger">
               {apps.error?.message ??
                 connections.error?.message ??
-                "Connectors are unavailable."}
+                t("page.connectorsUnavailable")}
             </p>
             <Button
               className="mt-3"
@@ -138,7 +143,7 @@ export function ConnectedAppsPage() {
               }
               size="compact"
             >
-              Retry
+              {t("page.retry")}
             </Button>
           </div>
         ) : (
@@ -149,7 +154,7 @@ export function ConnectedAppsPage() {
               <UnderlineTabs
                 className="min-w-0 flex-1"
                 items={filters}
-                label="Connector categories"
+                label={t("page.connectorCategories")}
                 onChange={setFilter}
                 value={filter}
               />
@@ -160,22 +165,22 @@ export function ConnectedAppsPage() {
                 size="large"
                 tone={connectedOnly ? "primary" : "secondary"}
               >
-                Connected only
+                {t("page.connectedOnly")}
               </Button>
             </div>
             {filteredApps ? (
               filteredApps.length ? (
                 <section
-                  aria-label="Application connections"
+                  aria-label={t("page.applicationConnections")}
                   className={APP_GRID_CLASS}
                 >
                   {filteredApps.map(renderApp)}
                 </section>
               ) : (
-                <PageMessage>No connected apps yet.</PageMessage>
+                <PageMessage>{t("page.noConnectedApps")}</PageMessage>
               )
             ) : (
-              <div aria-label="Application connections" role="region">
+              <div aria-label={t("page.applicationConnections")} role="region">
                 {groups.map(({ group, apps: groupApps }) => (
                   <section
                     aria-labelledby={`connector-group-${group.id}`}
@@ -186,7 +191,7 @@ export function ConnectedAppsPage() {
                       className="mb-2.5 text-[14px] font-medium text-muted-foreground"
                       id={`connector-group-${group.id}`}
                     >
-                      {group.title}
+                      {appGroupTitle(group)}
                     </h2>
                     <div className={APP_GRID_CLASS}>
                       {groupApps.map(renderApp)}
@@ -231,13 +236,18 @@ function CatalogAppCard({
   const pending = openPendingExternalConnection(connections, app.key);
   const canConnect = app.availability === "available";
   const canStart = connectFlow.canStart(app);
+  const { t } = useTranslation("apps");
   const needsReconnecting = connections.filter(
     externalConnectionNeedsAttention,
   ).length;
   const connectedLabel = active.length
-    ? `${active.length === 1 ? "Connected" : `${active.length} accounts`}${
+    ? `${active.length === 1 ? t("page.connected") : t("page.accountsCount", { count: active.length })}${
         needsReconnecting
-          ? `, ${needsReconnecting} ${needsReconnecting === 1 ? "needs" : "need"} reconnecting`
+          ? `, ${
+              needsReconnecting === 1
+                ? t("page.needsReconnectingOne", { count: needsReconnecting })
+                : t("page.needsReconnectingOther", { count: needsReconnecting })
+            }`
           : ""
       }`
     : null;
@@ -246,11 +256,11 @@ function CatalogAppCard({
   const unconfirmed = connections.some(externalConnectionUnconfirmed);
   const summary =
     connectFlow.configured && app.availability === "unavailable"
-      ? "Unavailable"
+      ? t("page.unavailable")
       : authorizing
-        ? "Authorizing…"
+        ? t("page.authorizing")
         : unconfirmed
-          ? "Couldn't confirm connection"
+          ? t("page.couldntConfirm")
           : appSummary(app);
 
   return (
@@ -296,7 +306,7 @@ function CatalogAppCard({
       </button>
       {canStart && active.length === 0 ? (
         <Button
-          aria-label={`Connect ${app.display_name}`}
+          aria-label={t("page.connectAria", { name: app.display_name })}
           className="px-2.5"
           disabled={createConnection.isPending}
           onClick={(event) => {
@@ -306,17 +316,17 @@ function CatalogAppCard({
           size="compact"
           tone="secondary"
         >
-          Connect
+          {t("page.connect")}
         </Button>
       ) : null}
       {canConnect && active.length === 1 ? (
         // Disconnecting is destructive, so it sits in a menu, not beside Connect.
         <ActionMenu
           items={[
-            { label: "Manage", onSelect: onOpen },
+            { label: t("page.manage"), onSelect: onOpen },
             {
               danger: true,
-              label: "Disconnect",
+              label: t("page.disconnect"),
               onSelect: () => setDisconnecting(active[0] ?? null),
             },
           ]}

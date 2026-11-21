@@ -1,17 +1,20 @@
+import { useTranslation } from "react-i18next";
+
 import { UnderlineTabs } from "@/components/ui/underline-tabs";
 
+// Labels and empty lines are catalog keys; render sites translate them.
 export const workspaceTabs = [
   {
-    empty: "No documents created by you",
+    empty: "noDocumentsCreatedByYou",
     id: "owned",
-    label: "My pages",
+    label: "myPages",
   },
   {
-    empty: "No documents shared with you",
+    empty: "noDocumentsSharedWithYou",
     id: "shared",
-    label: "Shared with me",
+    label: "sharedWithMe",
   },
-  { empty: "", id: "meetings", label: "Meetings" },
+  { empty: "", id: "meetings", label: "meetingsLabel" },
 ] as const;
 export type WorkspaceTab = (typeof workspaceTabs)[number]["id"];
 
@@ -22,10 +25,11 @@ export function WorkspaceTabs({
   onChange: (tab: WorkspaceTab) => void;
   value: WorkspaceTab;
 }) {
+  const { t } = useTranslation("library");
   return (
     <UnderlineTabs
-      items={workspaceTabs}
-      label="Library views"
+      items={workspaceTabs.map((tab) => ({ ...tab, label: t(tab.label) }))}
+      label={t("libraryViews")}
       onChange={onChange}
       value={value}
     />

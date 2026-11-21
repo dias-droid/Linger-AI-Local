@@ -23,6 +23,8 @@ import {
   type PeriodReportKind,
 } from "./wiki-period-reports";
 
+import { useTranslation } from "react-i18next";
+
 export function WikiGraphReportCards({
   tenantId,
   pages,
@@ -84,7 +86,8 @@ function PeriodCards({
     moved: boolean;
   } | null>(null);
   const suppressClick = useRef(false);
-  const label = kind === "daily" ? "Daily" : "Weekly";
+  const { t } = useTranslation("wiki");
+  const label = kind === "daily" ? t("dailyLabel") : t("weeklyLabel");
   const entriesByDate = useMemo(
     () =>
       new Map((reports.data ?? []).map((entry) => [reportDate(entry)!, entry])),
@@ -301,11 +304,14 @@ function PeriodCards({
   }
 
   return (
-    <section aria-label={`${label} timeline`} className="wiki-report-timeline">
+    <section
+      aria-label={t("cardsTimelineAria", { label })}
+      className="wiki-report-timeline"
+    >
       <div className="wiki-report-controls">
         <button
           type="button"
-          aria-label={`Previous ${granularity} card`}
+          aria-label={t("previousCard")}
           disabled={scrollEdges.start}
           onClick={() => browseToCard(activeIndex - 1)}
         >
@@ -313,7 +319,7 @@ function PeriodCards({
         </button>
         <button
           type="button"
-          aria-label={`Next ${granularity} card`}
+          aria-label={t("nextCard")}
           disabled={scrollEdges.end}
           onClick={() => browseToCard(activeIndex + 1)}
         >
@@ -330,11 +336,11 @@ function PeriodCards({
       ) : null}
       {reports.isPending ? (
         <p role="status" className="p-6 text-sm text-app-muted">
-          Loading {label} cards…
+          {t("loadingCards", { label })}
         </p>
       ) : !cards.length ? (
         <p className="p-6 text-sm text-app-muted">
-          No {label} reports or dated pages yet.
+          {t("noReportsOrPages", { label })}
         </p>
       ) : (
         <>

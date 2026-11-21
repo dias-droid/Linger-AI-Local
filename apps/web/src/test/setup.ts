@@ -1,6 +1,9 @@
 import { focusManager, onlineManager } from "@tanstack/react-query";
 import { afterEach, vi } from "vitest";
 
+// Components translate through i18next, so every test file sees it
+// initialized; English is the default, matching readers without a choice.
+import "@/i18n/i18n";
 import { resetComposerAttachmentDraftsForTest } from "@/features/rooms/chat/composer-attachment-drafts";
 import { setRoomDiagnosticsEnabledForTest } from "@/lib/room-diagnostics";
 import { restoreGlobalProperties } from "@/test/global-properties";
