@@ -32,7 +32,10 @@ export type PositiveInteger = number;
 /**
  * An optional Runner behavior the Agent Service accepts. An older service rejects its frames as a protocol violation.
  */
-export type ServiceFeature = "local_models" | "byok_endpoint";
+export type ServiceFeature =
+  | "local_models"
+  | "byok_endpoint"
+  | "local_models_diagnostics";
 export type JsonValue =
   | null
   | boolean
@@ -326,7 +329,7 @@ export type LocalModelsUnavailableCode = "TOOL_NOT_INSTALLED" | "TOOL_FAILED";
  */
 export type LocalModelPoolId = string;
 /**
- * Closed localmodels library error set. Extend it only together with the localmodels library contract.
+ * Closed localmodels library error set. Extend it only together with the localmodels library contract; UNKNOWN_ERROR preserves forward compatibility with newer localmodels releases.
  */
 export type LocalModelErrorCode =
   | "MODEL_UNKNOWN"
@@ -335,6 +338,9 @@ export type LocalModelErrorCode =
   | "MEMORY_INSUFFICIENT"
   | "DISK_INSUFFICIENT"
   | "PLATFORM_UNSUPPORTED"
+  | "GPU_UNSUPPORTED"
+  | "DRIVER_UPDATE_REQUIRED"
+  | "RUNTIME_DEPENDENCY_MISSING"
   | "LOAD_NO_ROOM"
   | "DOWNLOAD_FAILED"
   | "CHECKSUM_MISMATCH"
@@ -344,7 +350,8 @@ export type LocalModelErrorCode =
   | "OUT_OF_MEMORY"
   | "MODEL_FILES_MISSING"
   | "GATEWAY_REGISTRATION_FAILED"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "UNKNOWN_ERROR";
 /**
  * Model family for brand presentation; never inferred from name.
  */
@@ -490,6 +497,9 @@ export type LocalModelActionRefusalCode =
   | "MEMORY_INSUFFICIENT"
   | "DISK_INSUFFICIENT"
   | "PLATFORM_UNSUPPORTED"
+  | "GPU_UNSUPPORTED"
+  | "DRIVER_UPDATE_REQUIRED"
+  | "RUNTIME_DEPENDENCY_MISSING"
   | "LOAD_NO_ROOM"
   | "DOWNLOAD_FAILED"
   | "CHECKSUM_MISMATCH"
@@ -500,6 +510,7 @@ export type LocalModelActionRefusalCode =
   | "MODEL_FILES_MISSING"
   | "GATEWAY_REGISTRATION_FAILED"
   | "CANCELLED"
+  | "UNKNOWN_ERROR"
   | "TOOL_NOT_INSTALLED"
   | "TOOL_FAILED";
 export type CapabilityModelSourceSucceeded = LocalSkillCommandIdentity & {
@@ -1313,6 +1324,7 @@ export interface LocalModelsSnapshot {
    * @maxItems 256
    */
   models: LocalModel[];
+  debug?: LocalModelsDebugInfo;
 }
 /**
  * Present only when available is false.
@@ -1458,9 +1470,165 @@ export interface LocalModelAvailability {
  * Present only when downloadable is false.
  */
 export interface LocalModelAvailabilityReason {
-  code: "MEMORY_INSUFFICIENT" | "DISK_INSUFFICIENT" | "PLATFORM_UNSUPPORTED";
+  code:
+    | "MEMORY_INSUFFICIENT"
+    | "DISK_INSUFFICIENT"
+    | "PLATFORM_UNSUPPORTED"
+    | "GPU_UNSUPPORTED"
+    | "DRIVER_UPDATE_REQUIRED"
+    | "RUNTIME_DEPENDENCY_MISSING"
+    | "UNAVAILABLE";
   need_bytes?: NonNegativeInteger;
   have_bytes?: NonNegativeInteger;
+  /**
+   * With MEMORY_INSUFFICIENT: which memory space was short.
+   */
+  memory_kind?: "vram" | "ram" | "unified";
+  /**
+   * With GPU_UNSUPPORTED: detected GPU vendor class on this Computer.
+   */
+  gpu_vendor?: "amd" | "intel" | "none" | "unknown";
+  /**
+   * With DRIVER_UPDATE_REQUIRED: minimum CUDA version required by the pinned engine.
+   */
+  required_cuda?: string;
+  /**
+   * With DRIVER_UPDATE_REQUIRED: CUDA version reported by the installed driver.
+   */
+  detected_cuda?: string;
+  /**
+   * With DRIVER_UPDATE_REQUIRED: installed NVIDIA driver version.
+   */
+  driver_version?: string;
+  /**
+   * With RUNTIME_DEPENDENCY_MISSING: missing shared libraries such as libgomp.so.1.
+   *
+   * @minItems 1
+   * @maxItems 16
+   */
+  missing_libraries?:
+    | [string]
+    | [string, string]
+    | [string, string, string]
+    | [string, string, string, string]
+    | [string, string, string, string, string]
+    | [string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string]
+    | [string, string, string, string, string, string, string, string, string]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+      ]
+    | [
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+        string,
+      ];
+  /**
+   * With RUNTIME_DEPENDENCY_MISSING: minimum glibc version required by the engine.
+   */
+  required_glibc?: string;
+  /**
+   * With RUNTIME_DEPENDENCY_MISSING: glibc version detected on this Computer.
+   */
+  detected_glibc?: string;
 }
 /**
  * Present only while downloading.
@@ -1500,6 +1668,17 @@ export interface LocalModelError {
  */
 export interface LocalModelNote {
   code: "NO_ROOM_TO_LOAD";
+}
+/**
+ * Present only when localmodels debug mode is active and the Agent Service declared local_models_diagnostics.
+ */
+export interface LocalModelsDebugInfo {
+  mode: "tiny" | "simulate";
+  source: "env" | "state_config" | "user_config";
+  /**
+   * Local config file path when source is state_config or user_config; stripped for non-owners in the public view.
+   */
+  config_path?: string;
 }
 export interface RuntimeRegistrationObserved {
   type: "runtime.registration.observed";
