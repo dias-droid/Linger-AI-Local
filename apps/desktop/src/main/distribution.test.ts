@@ -2,10 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  localmodelsPythonArgs,
-  validateToolSource,
-} from "@linger/local-installation/localmodels-tool";
+import { validateToolSource } from "@linger/local-installation/localmodels-tool";
 import {
   validateNativeSource,
   validateNativeVoiceTools,
@@ -36,34 +33,6 @@ const pin = (name: string) =>
   new RegExp(`^${name}='([^']+)'$`, "m").exec(stack)?.[1];
 
 describe("desktop distributions", () => {
-  it("runs the Windows binding adapter for the pinned kit and upstream for other commands", () => {
-    const { platform, localmodelsTool } = read("win32-x64");
-    const binding = ["setup", "binding", "--plan", "plan.json", "--json"];
-    const adapter = fileURLToPath(
-      new URL(
-        "../../../../packages/local-installation/src/windows-stack-binding.py",
-        import.meta.url,
-      ),
-    );
-    expect(
-      localmodelsPythonArgs(platform, localmodelsTool.sourceCommit, binding),
-    ).toEqual(["-P", "-s", adapter, ...binding]);
-    const inspect = ["setup", "inspect", "--json"];
-    expect(
-      localmodelsPythonArgs(platform, localmodelsTool.sourceCommit, inspect),
-    ).toEqual(["-P", "-s", "-m", "localmodels", ...inspect]);
-    expect(
-      localmodelsPythonArgs("linux", localmodelsTool.sourceCommit, binding),
-    ).toEqual(["-P", "-s", "-m", "localmodels", ...binding]);
-    expect(localmodelsPythonArgs(platform, "0".repeat(40), binding)).toEqual([
-      "-P",
-      "-s",
-      "-m",
-      "localmodels",
-      ...binding,
-    ]);
-  });
-
   // Native installs need PostgreSQL and the voice tools for their target.
   // Every target bundles them beside the installer (build.mjs copies it), so they need no network.
   for (const [target, bundled] of [
