@@ -492,6 +492,26 @@ function downloadStageMessage(
       : `${label}: retrying…`;
   return undefined;
 }
+export function localmodelsPythonArgs(
+  platform: string,
+  sourceCommit: string,
+  args: string[],
+): string[] {
+  if (
+    platform === "win32" &&
+    sourceCommit === "f486ac59cf66a834c37253d66ebcebcd8f6583e0" &&
+    args[0] === "setup" &&
+    args[1] === "binding"
+  )
+    return [
+      "-P",
+      "-s",
+      fileURLToPath(new URL("./windows-stack-binding.py", import.meta.url)),
+      ...args,
+    ];
+  return ["-P", "-s", "-m", "localmodels", ...args];
+}
+
 async function runLocalmodelsCommand(
   home: string,
   args: string[],
@@ -607,20 +627,11 @@ async function runLocalmodelsCommand(
       });
     }
   };
-  const windowsBinding =
-    process.platform === "win32" &&
-    tool.sourceCommit === "f486ac59cf66a834c37253d66ebcebcd8f6583e0" &&
-    args[0] === "setup" &&
-    args[1] === "binding";
-  const entry = windowsBinding
-    ? [fileURLToPath(new URL("./windows-stack-binding.py", import.meta.url))]
-    : ["-m", "localmodels"];
-  const result = await run(tool.python, ["-P", "-s", ...entry, ...args], {
-    ...options,
-    cwd: tool.moduleDir,
-    env,
-    onOutput,
-  });
+  const result = await run(
+    tool.python,
+    localmodelsPythonArgs(process.platform, tool.sourceCommit, args),
+    { ...options, cwd: tool.moduleDir, env, onOutput },
+  );
   const seconds = (ms: number) => (ms / 1000).toFixed(1);
   options.onEvent?.({
     kind: "log",
