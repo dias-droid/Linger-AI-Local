@@ -262,6 +262,9 @@ type ModelSource struct {
 	// and outcome, under mu, so Runs that waited for it share its outcome.
 	remountedAt time.Time
 	remountErr  error
+	// waiting, when set, runs once a Run has noted when it started waiting
+	// for mu, so a test can release the lock after every Run waits on it.
+	waiting func()
 }
 
 // NewModelSource constructs a ModelSource controller for the given localmodels Tool.

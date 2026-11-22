@@ -136,7 +136,10 @@ func TestEnsureGatewaySharesARemountThatFailedWhileWaiting(t *testing.T) {
 		JobDirectory: filepath.Join(t.TempDir(), "jobs"),
 	})
 
-	// An Apply holds the lock while three Runs arrive.
+	// An Apply holds the lock while three Runs arrive; it ends once all
+	// three wait on it.
+	waiting := make(chan struct{}, 4)
+	ms.waiting = func() { waiting <- struct{}{} }
 	ms.mu.Lock()
 	var wg sync.WaitGroup
 	errs := make([]error, 3)
@@ -147,7 +150,13 @@ func TestEnsureGatewaySharesARemountThatFailedWhileWaiting(t *testing.T) {
 			errs[i] = ms.EnsureGateway(t.Context(), "pi")
 		}()
 	}
-	time.Sleep(300 * time.Millisecond)
+	for range errs {
+		select {
+		case <-waiting:
+		case <-time.After(10 * time.Second):
+			t.Fatal("the Runs did not wait for the lock")
+		}
+	}
 	ms.mu.Unlock()
 	wg.Wait()
 

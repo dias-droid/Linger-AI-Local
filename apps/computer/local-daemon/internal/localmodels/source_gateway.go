@@ -29,6 +29,9 @@ func (m *ModelSource) EnsureGateway(ctx context.Context, runtimeType string) err
 		return nil
 	}
 	waitedFrom := time.Now()
+	if m.waiting != nil {
+		m.waiting()
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	// Another Run or an Apply may have mounted the gateway, or switched the
