@@ -45,9 +45,6 @@ func openObject(path string) (*os.File, error) {
 		0,
 	)
 	if err != nil {
-		if err == windows.ERROR_FILE_NOT_FOUND || err == windows.ERROR_PATH_NOT_FOUND {
-			err = os.ErrNotExist
-		}
 		return nil, &os.PathError{Op: "open", Path: path, Err: err}
 	}
 	return os.NewFile(uintptr(handle), path), nil
