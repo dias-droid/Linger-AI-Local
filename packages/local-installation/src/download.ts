@@ -372,20 +372,14 @@ export async function downloadVerified(
       }
       if (round === 0 && measured.size > 0) {
         const primary = active[0];
-        const primaryRate = primary ? measured.get(primary) : undefined;
+        const baseRate = primary ? (measured.get(primary) ?? 0) : 0;
         let bestUrl = primary;
-        let bestRate = primaryRate ?? 0;
+        let bestRate = baseRate;
         for (const [url, rate] of measured) {
-          if (url === primary || rate <= bestRate) continue;
-          // A challenger displaces the primary by clearing the bar by the
-          // switch ratio. The bar is the primary's own rate; when the
-          // primary yielded before its first byte and has no measurement,
-          // the bar is zero, so the fastest host that delivered bytes
-          // displaces it. Measuring the challenger against the other
-          // mirrors instead would leave a hung primary in place whenever
-          // two mirrors run at similar speeds.
-          const bar = primaryRate ?? 0;
-          if (rate >= bar * SLOW_SWITCH_RATIO) {
+          if (
+            rate > bestRate &&
+            (baseRate === 0 ? rate > 0 : rate >= baseRate * SLOW_SWITCH_RATIO)
+          ) {
             bestUrl = url;
             bestRate = rate;
           }
