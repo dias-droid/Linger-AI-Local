@@ -314,10 +314,7 @@ export function modelSourceFailureCopy(
       ? t(m.sourceByokGatewayFailedDetail, { detail })
       : t(m.sourceByokGatewayFailed);
   }
-  if (error?.code && byokEndpointRefusals.has(error.code) && error.message) {
-    return error.message;
-  }
-  return modelSourceErrorCopy(error?.code, t);
+  return byokFailureCopy(error?.code, error?.message ?? "", t);
 }
 
 /** Why a request to a BYOK endpoint (a test or a model listing) failed. */

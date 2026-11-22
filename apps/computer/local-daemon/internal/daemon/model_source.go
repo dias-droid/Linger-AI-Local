@@ -169,7 +169,7 @@ func (d *Daemon) handleModelSourceCommand(ctx context.Context, stream transport.
 	if actionErr != nil {
 		var typed *localmodels.ModelSourceError
 		if errors.As(actionErr, &typed) {
-			slog.Warn("model_source.command_refused", "action", request.Action, "code", typed.Code, "message", typed.Message)
+			slog.Warn("model_source.command_refused", "action", request.Action, "code", typed.Code)
 			return sendFailed(typed.Code, typed.Message, typed.Retryable)
 		}
 		slog.Warn("model_source.command_failed", "action", request.Action)
