@@ -1,4 +1,5 @@
 /* eslint-disable jsx-a11y/no-autofocus -- The name input is mounted only after an explicit edit action. */
+import { PencilEdit02Icon } from "@hugeicons/core-free-icons";
 import { useQuery } from "@tanstack/react-query";
 import {
   lazy,
@@ -10,7 +11,9 @@ import {
   type ReactNode,
 } from "react";
 
+import { Icon } from "@/components/ui/icon";
 import { AgentConnectors } from "@/features/apps/agent-connectors";
+import { Hint } from "@/features/local-computer/computer-hint";
 import { useTeamHubRuntime } from "@/features/teamhub/teamhub-runtime";
 import type { Message } from "@/i18n/messages";
 import { useT } from "@/i18n/use-translation";
@@ -322,6 +325,8 @@ function AgentInfoIdentity({
       actorId={actor.id}
       kind="agent"
       name={actor.display_name}
+      // The edit hint replaces the native name tooltip so two never overlap.
+      showTitle={!canEdit}
       size="card"
     />
   );
@@ -329,14 +334,22 @@ function AgentInfoIdentity({
     <div className="relative mx-auto flex w-full max-w-[780px] flex-col items-center px-5 pb-4 pt-5 text-center">
       {action ? <div className="absolute right-3 top-3">{action}</div> : null}
       {canEdit ? (
-        <button
-          aria-label={t(agentInfoMessages.editAvatar)}
-          className="rounded-[20%] outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-app-focus"
-          onClick={onEdit}
-          type="button"
-        >
-          {avatar}
-        </button>
+        <Hint placement="bottom" text={t(agentInfoMessages.editAvatar)}>
+          <button
+            aria-label={t(agentInfoMessages.editAvatar)}
+            className="relative rounded-[20%] outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-app-focus"
+            onClick={onEdit}
+            type="button"
+          >
+            {avatar}
+            <span
+              className="absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full bg-card text-muted-foreground shadow-outline"
+              data-avatar-edit-badge
+            >
+              <Icon icon={PencilEdit02Icon} size={12} />
+            </span>
+          </button>
+        </Hint>
       ) : (
         avatar
       )}
