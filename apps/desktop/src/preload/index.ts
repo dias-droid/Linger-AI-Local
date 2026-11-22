@@ -75,6 +75,9 @@ const api: LingerDesktopApi = {
   language: {
     set: (language) => ipcRenderer.invoke(IPC.languageSet, language),
   },
+  diagnostics: {
+    save: () => ipcRenderer.invoke(IPC.diagnosticsSave),
+  },
   ...(process.platform === "darwin"
     ? {
         permissions: {

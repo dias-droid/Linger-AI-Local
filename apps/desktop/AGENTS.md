@@ -289,18 +289,19 @@ Gateway and runs Agents. The daemon exits with the app.
 - `src/main/diagnostics.ts`: Diagnostics, "Show Logs" (opens
   `<userData>/logs`) and "Save Diagnostics" (a redacted
   `linger-diagnostics-<time>.zip` in Downloads) for the setup page's failed
-  step, the start failure page and the tray. The zip holds the Desktop logs
-  and `config.json`, the installer job JSON and logs, the instance JSON and
-  service logs under each install home. Credential files (`gateway.json`, `caller.key`,
+  step, the start failure page and the tray; the Web client's Settings runs
+  the same save through the preload's `diagnostics.save`. The zip holds the
+  Desktop logs and `config.json`, the installer job JSON and logs, the
+  instance JSON and service logs under each install home. Credential files (`gateway.json`, `caller.key`,
   `control.key`, `credential.json`, `launch.html`, `*.env`, `*.input.json`,
   keys, cookies, databases) never go in, every saved voice key is replaced
   wherever a log printed it, and every text passes through `redact` plus a
   secret-key JSON filter, and the person's home folder becomes `~`. It
   imports no Electron API, so it is tested with Windows paths on any
   platform.
-- `src/main/diagnostics-upload.ts`: "Send Diagnostics" on the same three
-  surfaces, shown only while a receiver is set up (`diagnosticsUploadUrl` in
-  `config.json`, else `HOSTED_DIAGNOSTICS_UPLOAD_URL`, which `build.mjs` bakes
+- `src/main/diagnostics-upload.ts`: "Send Diagnostics" on the setup page, the
+  start failure page and the tray, shown only while a receiver is set up
+  (`diagnosticsUploadUrl` in `config.json`, else `HOSTED_DIAGNOSTICS_UPLOAD_URL`, which `build.mjs` bakes
   in from the release pipeline's `LINGER_DIAGNOSTICS_UPLOAD_URL` secret and
   leaves unset in other builds). `DiagnosticsSender` builds the zip
   into `<userData>/diagnostics-outbox`, waits for consent showing every file,
