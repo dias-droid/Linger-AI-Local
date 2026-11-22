@@ -82,10 +82,10 @@ take precedence.
   the Run loop re-checks TeamHub's persisted reply status so compound scripts,
   decision cards, presentation sequences, and reactions that activity
   classification missed are not misreported. A Room Run whose every write
-  failed finishes failed with `reply_undelivered`. One that left no reply while
-  a Human's Message that mentioned the Agent (a direct chat always does) waits
-  finishes failed with `reply_not_sent`. Its final text is private scratch and
-  is never posted for it.
+  failed or was declined finishes failed with `reply_undelivered`. One that
+  left no reply while a Human's Message that mentioned the Agent (a direct
+  chat always does) waits finishes failed with `reply_not_sent`. Its final
+  text is private scratch and is never posted for it.
 - Ordinary Room/Meta execution reads effective Agent configuration before a new
   Local Run. Skill saves do not activate idle Contexts. If versions changed,
   reuse graceful activation to resume the same native history; running/steered
