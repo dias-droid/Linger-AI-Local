@@ -38,7 +38,10 @@ build:assets` to check the initial JS budget.
   edits while offline). BYOK addresses requests as base URL + path + endpoint
   and sends the format the address's ending names (else the Runtime's own);
   it lists models only on request and shows a Test result as a floating
-  message, with the Computer's own message for endpoint refusals. A switch
+  message, with the Computer's own message for endpoint refusals; switch
+  failures also surface the Computer's diagnostic detail for
+  `BYOK_GATEWAY_FAILED` (from the `gateway` detail entry) and BYOK endpoint
+  refusals. A switch
   refused with `AGENT_HAS_ACTIVE_RUNS` retries with `force_terminate` only
   after the owner confirms. The Local model
   tab is one Computer's model library as TeamHub last stored it. The Computer

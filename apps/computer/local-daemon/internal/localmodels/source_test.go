@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	wire "github.com/simplexai-labs/linger/contracts-go/runnergateway"
 )
@@ -23,13 +24,18 @@ func runFakeSourceTool(state string, args []string) int {
 		_ = calls.Close()
 	}
 	_ = os.WriteFile(filepath.Join(state, "source-stdin.json"), stdinBytes, 0o600)
+	if waitBytes, err := os.ReadFile(filepath.Join(state, "source-"+verb+"-wait")); err == nil {
+		if ms, parseErr := strconv.Atoi(strings.TrimSpace(string(waitBytes))); parseErr == nil && ms > 0 {
+			time.Sleep(time.Duration(ms) * time.Millisecond)
+		}
+	}
 	out, err := os.ReadFile(filepath.Join(state, "source-"+verb+".json"))
 	if err != nil {
 		return 1
 	}
 	_, _ = os.Stdout.Write(out)
 	if codeBytes, err := os.ReadFile(filepath.Join(state, "source-"+verb+"-exit")); err == nil {
-		if code, err := strconv.Atoi(strings.TrimSpace(string(codeBytes))); err == nil {
+		if code, parseErr := strconv.Atoi(strings.TrimSpace(string(codeBytes))); parseErr == nil {
 			return code
 		}
 	}
@@ -348,5 +354,86 @@ func TestGatewayRuntimeFollowsTheManagedProfile(t *testing.T) {
 	}
 	if GatewayRuntime(byok, "", "codex") {
 		t.Fatal("a Computer without localmodels has no gateway Runtime")
+	}
+}
+
+func TestModelSourceApplyPropagatesByokGatewayFailedRedactsKeyAndMapsTimeout(t *testing.T) {
+	ft := newFakeTool(t)
+	ms := NewModelSource(ModelSourceOptions{
+		Tool:         &ft.tool,
+		Environment:  map[string]string{"LOCALMODELS_FAKE_TOOL": "1"},
+		JobDirectory: filepath.Join(t.TempDir(), "jobs"),
+		ApplyTimeout: 5 * time.Second,
+	})
+
+	const gatewayMsg = "cannot record Bifrost process identity ([Errno 1] Operation not permitted: '/bin/ps'); stopped it"
+	if err := os.WriteFile(filepath.Join(ft.state, "source-apply.json"), []byte(`{
+		"schema": "localmodels.model-source-status/v1",
+		"ok": false,
+		"code": "BYOK_GATEWAY_FAILED",
+		"message": "`+gatewayMsg+`"
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ft.state, "source-apply-exit"), []byte("1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := ms.Apply(t.Context(), ModelSourceApply{
+		Mode:    "byok",
+		Runtime: "pi",
+		Byok: &wire.ByokConfigInput{
+			BaseURL:  "https://api.kimi.com/coding",
+			Path:     "/v1",
+			Endpoint: "/chat/completions",
+			Protocol: "openai-chat",
+			APIKey:   "sk-secret-key-must-never-leak",
+			ModelID:  "k3",
+		},
+	})
+	var sourceErr *ModelSourceError
+	if !errors.As(err, &sourceErr) || sourceErr.Code != "BYOK_GATEWAY_FAILED" || sourceErr.Message != gatewayMsg {
+		t.Fatalf("BYOK_GATEWAY_FAILED apply = %+v (%v)", sourceErr, err)
+	}
+
+	// Defense in depth: an API key echoed in a tool error message is scrubbed
+	// before leaving the Computer.
+	if err := os.WriteFile(filepath.Join(ft.state, "source-apply.json"), []byte(`{
+		"schema": "localmodels.model-source-status/v1",
+		"ok": false,
+		"code": "BYOK_GATEWAY_FAILED",
+		"message": "failed using sk-secret-key-must-never-leak on gateway"
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err = ms.Apply(t.Context(), ModelSourceApply{
+		Mode:    "byok",
+		Runtime: "pi",
+		Byok: &wire.ByokConfigInput{
+			BaseURL:  "https://api.kimi.com/coding",
+			Path:     "/v1",
+			Endpoint: "/chat/completions",
+			Protocol: "openai-chat",
+			APIKey:   "sk-secret-key-must-never-leak",
+			ModelID:  "k3",
+		},
+	})
+	if !errors.As(err, &sourceErr) || strings.Contains(sourceErr.Message, "sk-secret-key-must-never-leak") {
+		t.Fatalf("API key leaked into ModelSourceError.Message: %+v", sourceErr)
+	}
+
+	// Hitting Apply's timeout maps to MODEL_SOURCE_TIMEOUT (not TOOL_FAILED).
+	if err := os.WriteFile(filepath.Join(ft.state, "source-apply-wait"), []byte("5000"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fastTimeout := NewModelSource(ModelSourceOptions{
+		Tool:         &ft.tool,
+		Environment:  map[string]string{"LOCALMODELS_FAKE_TOOL": "1"},
+		JobDirectory: filepath.Join(t.TempDir(), "jobs"),
+		ApplyTimeout: 100 * time.Millisecond,
+	})
+	_, err = fastTimeout.Apply(t.Context(), ModelSourceApply{Mode: "byok", Runtime: "pi"})
+	if !errors.As(err, &sourceErr) || sourceErr.Code != "MODEL_SOURCE_TIMEOUT" || !sourceErr.Retryable {
+		t.Fatalf("timed-out apply = %+v (%v), want retryable MODEL_SOURCE_TIMEOUT", sourceErr, err)
 	}
 }

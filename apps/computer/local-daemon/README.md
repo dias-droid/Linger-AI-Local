@@ -179,7 +179,9 @@ model.
 
 `internal/localmodels/source.go` runs `localmodels source status|check|models|apply`
 for `execute` commands of kind `model_source`, on their own goroutine so they
-never block Operation commands; `apply` is serialized. A BYOK key reaches the
+never block Operation commands; `apply` is serialized, maps apply timeouts to
+`MODEL_SOURCE_TIMEOUT`, scrubs any submitted BYOK API key from tool error
+messages before they leave the Computer, and logs structured refusals. A BYOK key reaches the
 tool on stdin, never in argv or logs, together with the address as base URL,
 path and endpoint and the protocol the owner's client chose; `check` sends one
 request there and `models` lists base URL + path + `/models`. The BYOK summary

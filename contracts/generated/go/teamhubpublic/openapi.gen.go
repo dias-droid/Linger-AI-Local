@@ -2850,6 +2850,7 @@ func (e MessageKind) Valid() bool {
 const (
 	ModelSourceErrorCodeAgentHasActiveRuns            ModelSourceErrorCode = "AGENT_HAS_ACTIVE_RUNS"
 	ModelSourceErrorCodeByokAuthFailed                ModelSourceErrorCode = "BYOK_AUTH_FAILED"
+	ModelSourceErrorCodeByokGatewayFailed             ModelSourceErrorCode = "BYOK_GATEWAY_FAILED"
 	ModelSourceErrorCodeByokInvalidConfig             ModelSourceErrorCode = "BYOK_INVALID_CONFIG"
 	ModelSourceErrorCodeByokNotFound                  ModelSourceErrorCode = "BYOK_NOT_FOUND"
 	ModelSourceErrorCodeByokUnreachable               ModelSourceErrorCode = "BYOK_UNREACHABLE"
@@ -2871,6 +2872,8 @@ func (e ModelSourceErrorCode) Valid() bool {
 	case ModelSourceErrorCodeAgentHasActiveRuns:
 		return true
 	case ModelSourceErrorCodeByokAuthFailed:
+		return true
+	case ModelSourceErrorCodeByokGatewayFailed:
 		return true
 	case ModelSourceErrorCodeByokInvalidConfig:
 		return true
@@ -7696,7 +7699,7 @@ type MessageThreadSummaryUpdatedPayload struct {
 
 // ModelSourceError The common error body with error.code narrowed to ModelSourceErrorCode.
 type ModelSourceError struct {
-	// Code error.code of a refused model-source request (403, 409, 502, 503, 504); 400, 401, and 404 use the common codes. LOCAL_COMPUTER_OFFLINE: the Computer is not connected. MODEL_SOURCE_FORBIDDEN: the viewer is not the Computer owner. MODEL_SOURCE_UNAVAILABLE: the Computer has no localmodels tool or cannot switch model sources. AGENT_HAS_ACTIVE_RUNS: Agents on the Computer have running work and force_terminate was false; details carries one entry per such Agent, with field "agent" and the Agent's display name as reason. RUNTIME_NOT_ENABLED, LOCAL_MODEL_NO_ROOM, LOCAL_MODEL_UNKNOWN, and the BYOK_ codes are the Computer's refusals (409); for BYOK_AUTH_FAILED, BYOK_NOT_FOUND, BYOK_UNREACHABLE and BYOK_UPSTREAM_REJECTED, message is the Computer's own and names the address it sent to and the endpoint's HTTP status. MODEL_SOURCE_FAILED: the Computer failed with an error that has no code of its own here (502). MODEL_SOURCE_SERVICE_UNAVAILABLE: Agent Service could not be reached (503). MODEL_SOURCE_UNCONFIRMED: the Computer had not answered by the deadline; it may still switch (504).
+	// Code error.code of a refused model-source request (403, 409, 502, 503, 504); 400, 401, and 404 use the common codes. LOCAL_COMPUTER_OFFLINE: the Computer is not connected. MODEL_SOURCE_FORBIDDEN: the viewer is not the Computer owner. MODEL_SOURCE_UNAVAILABLE: the Computer has no localmodels tool or cannot switch model sources. AGENT_HAS_ACTIVE_RUNS: Agents on the Computer have running work and force_terminate was false; details carries one entry per such Agent, with field "agent" and the Agent's display name as reason. RUNTIME_NOT_ENABLED, LOCAL_MODEL_NO_ROOM, LOCAL_MODEL_UNKNOWN, and the BYOK endpoint refusals (BYOK_INVALID_CONFIG, BYOK_AUTH_FAILED, BYOK_NOT_FOUND, BYOK_UNREACHABLE, BYOK_UPSTREAM_REJECTED) are the Computer's refusals (409); for BYOK_AUTH_FAILED, BYOK_NOT_FOUND, BYOK_UNREACHABLE and BYOK_UPSTREAM_REJECTED, message is the Computer's own and names the address it sent to and the endpoint's HTTP status. BYOK_GATEWAY_FAILED: the Computer could not start, stop, or configure its local BYOK gateway (502); when the Computer reported a diagnostic message, message carries it and details carries one entry with field "gateway" and that diagnostic as reason. MODEL_SOURCE_FAILED: the Computer failed with an error that has no code of its own here (502). MODEL_SOURCE_SERVICE_UNAVAILABLE: Agent Service could not be reached (503). MODEL_SOURCE_UNCONFIRMED: the Computer had not answered by the deadline; it may still switch (504).
 	Code    ModelSourceErrorCode `json:"code"`
 	Details *[]ErrorDetail       `json:"details,omitempty"`
 
@@ -7705,7 +7708,7 @@ type ModelSourceError struct {
 	RequestId string `json:"request_id"`
 }
 
-// ModelSourceErrorCode error.code of a refused model-source request (403, 409, 502, 503, 504); 400, 401, and 404 use the common codes. LOCAL_COMPUTER_OFFLINE: the Computer is not connected. MODEL_SOURCE_FORBIDDEN: the viewer is not the Computer owner. MODEL_SOURCE_UNAVAILABLE: the Computer has no localmodels tool or cannot switch model sources. AGENT_HAS_ACTIVE_RUNS: Agents on the Computer have running work and force_terminate was false; details carries one entry per such Agent, with field "agent" and the Agent's display name as reason. RUNTIME_NOT_ENABLED, LOCAL_MODEL_NO_ROOM, LOCAL_MODEL_UNKNOWN, and the BYOK_ codes are the Computer's refusals (409); for BYOK_AUTH_FAILED, BYOK_NOT_FOUND, BYOK_UNREACHABLE and BYOK_UPSTREAM_REJECTED, message is the Computer's own and names the address it sent to and the endpoint's HTTP status. MODEL_SOURCE_FAILED: the Computer failed with an error that has no code of its own here (502). MODEL_SOURCE_SERVICE_UNAVAILABLE: Agent Service could not be reached (503). MODEL_SOURCE_UNCONFIRMED: the Computer had not answered by the deadline; it may still switch (504).
+// ModelSourceErrorCode error.code of a refused model-source request (403, 409, 502, 503, 504); 400, 401, and 404 use the common codes. LOCAL_COMPUTER_OFFLINE: the Computer is not connected. MODEL_SOURCE_FORBIDDEN: the viewer is not the Computer owner. MODEL_SOURCE_UNAVAILABLE: the Computer has no localmodels tool or cannot switch model sources. AGENT_HAS_ACTIVE_RUNS: Agents on the Computer have running work and force_terminate was false; details carries one entry per such Agent, with field "agent" and the Agent's display name as reason. RUNTIME_NOT_ENABLED, LOCAL_MODEL_NO_ROOM, LOCAL_MODEL_UNKNOWN, and the BYOK endpoint refusals (BYOK_INVALID_CONFIG, BYOK_AUTH_FAILED, BYOK_NOT_FOUND, BYOK_UNREACHABLE, BYOK_UPSTREAM_REJECTED) are the Computer's refusals (409); for BYOK_AUTH_FAILED, BYOK_NOT_FOUND, BYOK_UNREACHABLE and BYOK_UPSTREAM_REJECTED, message is the Computer's own and names the address it sent to and the endpoint's HTTP status. BYOK_GATEWAY_FAILED: the Computer could not start, stop, or configure its local BYOK gateway (502); when the Computer reported a diagnostic message, message carries it and details carries one entry with field "gateway" and that diagnostic as reason. MODEL_SOURCE_FAILED: the Computer failed with an error that has no code of its own here (502). MODEL_SOURCE_SERVICE_UNAVAILABLE: Agent Service could not be reached (503). MODEL_SOURCE_UNCONFIRMED: the Computer had not answered by the deadline; it may still switch (504).
 type ModelSourceErrorCode string
 
 // ModelSourceErrorResponse defines model for ModelSourceErrorResponse.

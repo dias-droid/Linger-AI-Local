@@ -77,7 +77,7 @@ func (m *ModelSource) remount(ctx context.Context, runtime string) error {
 		if unsupported := unsupportedSourceCommand(exitCode, stdout); unsupported != nil {
 			return unsupported
 		}
-		return parseToolFailure(stdout, "BYOK_GATEWAY_FAILED", "The BYOK gateway could not be started on this Computer.")
+		return parseToolFailure(stdout, "BYOK_GATEWAY_FAILED", "The BYOK gateway could not be started on this Computer.", "")
 	}
 	// The tool rewrites model-source.json without the Runtime paths.
 	m.persistRuntimePaths(stdout)

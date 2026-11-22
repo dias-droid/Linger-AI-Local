@@ -15,6 +15,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { TeamHubEventSync } from "@/features/rooms/event-sync";
 import { TeamHubRuntimeProvider } from "@/features/teamhub/teamhub-runtime";
 import type { TeamHubLocalComputerPage } from "@/features/teamhub/teamhub-types";
+import { resetLanguageForTest, setLanguage } from "@/i18n/language";
+import zhCN from "@/i18n/locales/zh-CN.json";
 import {
   acceptTenantAgentUpdates,
   createTestTeamHubRuntime,
@@ -3340,5 +3342,140 @@ describe("Model source", () => {
         "Couldn't switch Codex to Llama 3.3 70B while working. Switch once the current turn finishes.",
       ),
     ).toBeVisible();
+  });
+
+  it("surfaces BYOK gateway and endpoint failure details when switching fails", async () => {
+    const fixture = setup([labView()]);
+    withSource(fixture, { ...byokStatus, mode: "local", runtime: "pi" });
+    const gatewayDetail =
+      "cannot record Bifrost process identity ([Errno 1] Operation not permitted: '/bin/ps'); stopped it";
+    const responses = [
+      Response.json(
+        {
+          error: {
+            code: "BYOK_GATEWAY_FAILED",
+            details: [{ field: "gateway", reason: gatewayDetail }],
+            message: gatewayDetail,
+            request_id: "test-byok-gateway-detail",
+          },
+        },
+        { status: 502 },
+      ),
+      Response.json(
+        {
+          error: {
+            code: "BYOK_GATEWAY_FAILED",
+            message: "The Computer could not configure its local BYOK gateway",
+            request_id: "test-byok-gateway-plain",
+          },
+        },
+        { status: 502 },
+      ),
+      teamHubErrorResponse(
+        409,
+        "BYOK_AUTH_FAILED",
+        "https://api.kimi.com/coding/v1/chat/completions rejected the API key (HTTP 401).",
+      ),
+    ];
+    let attempt = 0;
+    fixture.runtime.server.on(
+      "POST",
+      switchPath,
+      () => responses[attempt++] ?? responses[responses.length - 1]!,
+    );
+    await renderPage(fixture);
+
+    fireEvent.click(await screen.findByRole("tab", { name: /BYOK/u }));
+    const submit = await screen.findByRole("button", {
+      name: "Save & Switch to BYOK",
+    });
+
+    fireEvent.click(submit);
+    const gatewayAlert = await screen.findByRole("alert");
+    expect(gatewayAlert).toHaveTextContent(
+      `The computer couldn't configure its local BYOK gateway: ${gatewayDetail}`,
+    );
+    expect(gatewayAlert).not.toHaveTextContent(
+      "The computer couldn't switch. Try again.",
+    );
+
+    fireEvent.click(submit);
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        /^The computer couldn't configure its local BYOK gateway\.$/u,
+      ),
+    );
+
+    fireEvent.click(submit);
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "https://api.kimi.com/coding/v1/chat/completions rejected the API key (HTTP 401).",
+      ),
+    );
+  });
+
+  it("localizes BYOK gateway failure copy in Simplified Chinese while keeping Computer detail", async () => {
+    try {
+      await setLanguage("zh-CN");
+      const fixture = setup([labView()]);
+      withSource(fixture, { ...byokStatus, mode: "local", runtime: "pi" });
+      const gatewayDetail =
+        "cannot record Bifrost process identity ([Errno 1] Operation not permitted: '/bin/ps'); stopped it";
+      const responses = [
+        Response.json(
+          {
+            error: {
+              code: "BYOK_GATEWAY_FAILED",
+              details: [{ field: "gateway", reason: gatewayDetail }],
+              message: gatewayDetail,
+              request_id: "test-byok-gateway-zh-detail",
+            },
+          },
+          { status: 502 },
+        ),
+        Response.json(
+          {
+            error: {
+              code: "BYOK_GATEWAY_FAILED",
+              message:
+                "The Computer could not configure its local BYOK gateway",
+              request_id: "test-byok-gateway-zh-plain",
+            },
+          },
+          { status: 502 },
+        ),
+      ];
+      let attempt = 0;
+      fixture.runtime.server.on(
+        "POST",
+        switchPath,
+        () => responses[attempt++] ?? responses[responses.length - 1]!,
+      );
+      await renderPage(fixture);
+
+      fireEvent.click(await screen.findByRole("tab", { name: /BYOK/u }));
+      const submit = await screen.findByRole("button", {
+        name: zhCN.localModels.saveAndSwitch,
+      });
+
+      fireEvent.click(submit);
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent(
+        zhCN.localModels.sourceByokGatewayFailedDetail.replace(
+          "{detail}",
+          gatewayDetail,
+        ),
+      );
+      expect(alert).not.toHaveTextContent(zhCN.localModels.sourceSwitchFailed);
+
+      fireEvent.click(submit);
+      await waitFor(() =>
+        expect(screen.getByRole("alert")).toHaveTextContent(
+          zhCN.localModels.sourceByokGatewayFailed,
+        ),
+      );
+    } finally {
+      resetLanguageForTest();
+    }
   });
 });

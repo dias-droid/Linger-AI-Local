@@ -1390,6 +1390,8 @@
     "architectureMoe": "MoE",
     "sourceAgentsWorking": "这台电脑上的 Agent 正在执行任务。",
     "sourceByokAuthFailed": "端点拒绝了这个 API 密钥。",
+    "sourceByokGatewayFailed": "这台电脑没能配置本地 BYOK 网关。",
+    "sourceByokGatewayFailedDetail": "这台电脑没能配置本地 BYOK 网关：{detail}",
     "sourceByokInvalidConfig": "这台电脑无法使用这个端点。HTTPS 端点需要 API 密钥；普通 HTTP 只能用于这台电脑或你的局域网。",
     "sourceByokNotFound": "端点的地址没有应答，或者它不提供这个模型 ID。",
     "sourceByokUnreachable": "这台电脑连接不到端点。",

@@ -367,7 +367,7 @@ func (m *ModelSource) Status(ctx context.Context) (wire.ModelSourceStatus, error
 		if unsupported := unsupportedSourceCommand(exitCode, stdout); unsupported != nil {
 			return wire.ModelSourceStatus{}, unsupported
 		}
-		return wire.ModelSourceStatus{}, parseToolFailure(stdout, CodeToolFailed, "Could not read model source status on this Computer.")
+		return wire.ModelSourceStatus{}, parseToolFailure(stdout, CodeToolFailed, "Could not read model source status on this Computer.", "")
 	}
 	return parseSourceStatus(stdout)
 }
@@ -457,7 +457,7 @@ func (m *ModelSource) runEndpointCommand(ctx context.Context, input wire.ByokCon
 		}
 		return &ModelSourceError{
 			Code:      code,
-			Message:   clip(msg, 500),
+			Message:   clip(redactSecret(msg, input.APIKey), 500),
 			Retryable: code == "BYOK_UNREACHABLE",
 		}
 	}
@@ -507,9 +507,16 @@ func (m *ModelSource) Apply(ctx context.Context, apply ModelSourceApply) (wire.M
 	args := m.applyArgs(apply.Mode, apply.Runtime, apply.LocalModelID, len(stdin) > 0)
 	stdout, exitCode, runErr := m.runTool(runCtx, "source_apply", args, stdin)
 	if runErr != nil {
+		if errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+			return wire.ModelSourceStatus{}, &ModelSourceError{
+				Code:      "MODEL_SOURCE_TIMEOUT",
+				Message:   "Model source switch timed out on this Computer.",
+				Retryable: true,
+			}
+		}
 		return wire.ModelSourceStatus{}, &ModelSourceError{
 			Code:      CodeToolFailed,
-			Message:   "Model source switch timed out or could not run on this Computer.",
+			Message:   "Model source switch could not run on this Computer.",
 			Retryable: true,
 		}
 	}
@@ -517,7 +524,11 @@ func (m *ModelSource) Apply(ctx context.Context, apply ModelSourceApply) (wire.M
 		if unsupported := unsupportedSourceCommand(exitCode, stdout); unsupported != nil {
 			return wire.ModelSourceStatus{}, unsupported
 		}
-		return wire.ModelSourceStatus{}, parseToolFailure(stdout, CodeToolFailed, "Could not switch model source on this Computer.")
+		apiKey := ""
+		if apply.Byok != nil {
+			apiKey = apply.Byok.APIKey
+		}
+		return wire.ModelSourceStatus{}, parseToolFailure(stdout, CodeToolFailed, "Could not switch model source on this Computer.", apiKey)
 	}
 	status, err := parseSourceStatus(stdout)
 	if err != nil {
@@ -676,7 +687,7 @@ func unsupportedSourceCommand(exitCode int, stdout []byte) error {
 	return nil
 }
 
-func parseToolFailure(stdout []byte, fallbackCode, fallbackMessage string) error {
+func parseToolFailure(stdout []byte, fallbackCode, fallbackMessage, secret string) error {
 	var errDoc struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
@@ -696,11 +707,22 @@ func parseToolFailure(stdout []byte, fallbackCode, fallbackMessage string) error
 		}
 		return &ModelSourceError{
 			Code:      code,
-			Message:   clip(msg, 500),
+			Message:   clip(redactSecret(msg, secret), 500),
 			Retryable: code == "BYOK_UNREACHABLE" || code == "NETWORK_UNAVAILABLE",
 		}
 	}
 	return &ModelSourceError{Code: fallbackCode, Message: fallbackMessage, Retryable: true}
+}
+
+func redactSecret(text, secret string) string {
+	trimmed := strings.TrimSpace(secret)
+	if trimmed == "" || text == "" {
+		return text
+	}
+	if secret != trimmed {
+		text = strings.ReplaceAll(text, secret, "[REDACTED]")
+	}
+	return strings.ReplaceAll(text, trimmed, "[REDACTED]")
 }
 
 // runTool executes localmodels with stdout in a temporary file and stderr on

@@ -396,6 +396,10 @@ export const localModelsMessages = defineMessages("localModels", {
   // Why a model-source switch, endpoint test or read failed.
   sourceAgentsWorking: "Agents on this computer are working on tasks.",
   sourceByokAuthFailed: "The endpoint rejected the API key.",
+  sourceByokGatewayFailed:
+    "The computer couldn't configure its local BYOK gateway.",
+  sourceByokGatewayFailedDetail:
+    "The computer couldn't configure its local BYOK gateway: {detail}",
   sourceByokInvalidConfig:
     "The computer can't use this endpoint. An HTTPS endpoint needs an API key; plain HTTP works only on this computer or your local network.",
   sourceByokNotFound:
