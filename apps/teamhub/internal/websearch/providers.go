@@ -169,7 +169,7 @@ func retryAfter(header http.Header) time.Duration {
 		if wait > maximum-(time.Second-1) {
 			return maximum
 		}
-		return (wait + time.Second - 1) / time.Second * time.Second
+		return (wait + time.Second - 1).Truncate(time.Second)
 	}
 	seconds, err := strconv.Atoi(strings.TrimSpace(value))
 	if err != nil || seconds < 0 {
