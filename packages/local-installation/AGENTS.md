@@ -202,7 +202,9 @@ Missing or invalid source state is reported as a configuration error.
 If the base gateway configuration or matching ownership record is missing,
 the kit's `source apply` establishes the gateway again. A failure (`LOCAL_MODELS_BUSY` when the
 lock never frees) is logged and returned as `details.byokGateway`
-(`{ code, message }`) of a successful resume, so Linger still opens.
+(`{ code, message }`) of a successful resume, so Linger still opens; the
+Computer mounts the gateway again before the next Run on it
+(`EnsureGateway` in the Daemon's `internal/localmodels`).
 
 `runProcess` decodes stdout and stderr as separate UTF-8 streams before
 capture and output callbacks, preserving characters split across pipe reads.

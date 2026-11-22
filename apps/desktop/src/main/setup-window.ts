@@ -84,6 +84,8 @@ export class SetupWindowModule implements Module {
   #ctx: ModuleContext | undefined;
   #window: BrowserWindow | undefined;
   #signedIn = false;
+  // The runtime's sign-in was waiting on the browser.
+  #runtimeSigningIn = false;
   #permissions: PermissionStatuses | undefined;
   #diagnostics: SetupState["diagnostics"];
   #account: SetupAccount | undefined;
@@ -129,6 +131,13 @@ export class SetupWindowModule implements Module {
     const onCookie = (): void => void this.#refreshSignedIn().then(push);
     // The account file exists once the installation is ready.
     const onLocal = (): void => {
+      // Back from signing in to the runtime in the browser: setup comes to
+      // the front again and goes on by itself.
+      const signIn = local.status().signIn?.state;
+      if (signIn === "signed_in" && this.#runtimeSigningIn && this.visible())
+        this.show();
+      this.#runtimeSigningIn =
+        signIn === "starting" || signIn === "waiting_user";
       push();
       if (local.status().phase === "ready")
         void this.#refreshAccount().then(push);
@@ -280,8 +289,18 @@ export class SetupWindowModule implements Module {
       case "local.signin.start":
         await ctx
           .get<LocalServerModule>("LocalServer")
-          .startSignIn(command.code);
+          .startSignIn(command.code, command.device);
         return;
+      case "local.signin.copy": {
+        // Copied from what the step shows, never from the page.
+        const signIn = ctx
+          .get<LocalServerModule>("LocalServer")
+          .status().signIn;
+        const text = command.what === "code" ? signIn?.deviceCode : signIn?.url;
+        if (!text) throw new Error("Nothing to copy");
+        clipboard.writeText(text);
+        return;
+      }
       case "local.signin.open":
         await ctx.get<LocalServerModule>("LocalServer").openSignInPage();
         return;

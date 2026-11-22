@@ -268,8 +268,22 @@ export interface RuntimeSignIn {
   readonly deviceCode?: string;
   // The vendor's page shows a code to paste back (Claude Code).
   readonly acceptsCode?: boolean;
+  // Why a failed sign-in ended, which the page words itself; message is the
+  // installer's own English for anything else.
+  readonly reason?: RuntimeLoginReason;
   readonly message?: string;
+  // The browser could not be opened on url; the page offers to copy it.
+  readonly browserFailed?: boolean;
 }
+
+// unavailable: no native sign-in for this runtime; timed_out: nobody
+// finished it in time; ended: the login stopped without a sign-in.
+export type RuntimeLoginReason = "unavailable" | "timed_out" | "ended";
+
+// Codex's two logins: browser calls back to this computer, so the browser
+// must run here; device shows a code to enter in any browser, which needs
+// device-code sign-in turned on in the person's ChatGPT settings.
+export type RuntimeLoginMethod = "browser" | "device";
 
 export interface LocalServerStatus {
   // Source installs ship for macOS arm64, Linux x64 and Windows x64 only, and need the
@@ -473,6 +487,9 @@ export class LocalServerModule implements Module {
   #switchTo: LocalRuntime | undefined;
   #switchByok: SetupByokConfig | undefined;
   #opened: string | undefined;
+  // The Codex login this app asked for; undefined leaves the choice, and
+  // opening the browser, to the installer.
+  #signInMethod: RuntimeLoginMethod | undefined;
   #serverCheck:
     | { readonly at: number; readonly ok: Promise<boolean> }
     | undefined;
@@ -1347,29 +1364,38 @@ export class LocalServerModule implements Module {
           ? "failed"
           : "required"
         : login.state;
+    const url = state === "waiting_user" ? login.url : undefined;
+    const reason =
+      state === "failed"
+        ? login.state === "failed"
+          ? login.reason
+          : previous?.reason
+        : undefined;
     this.#signIn = {
       runtime,
       state,
-      ...(state === "waiting_user" && login.url ? { url: login.url } : {}),
-      ...(state === "waiting_user" && login.deviceCode
-        ? { deviceCode: login.deviceCode }
-        : {}),
-      ...(state === "waiting_user" && login.acceptsCode
-        ? { acceptsCode: true }
-        : {}),
+      ...(url ? { url } : {}),
+      ...(url && login.deviceCode ? { deviceCode: login.deviceCode } : {}),
+      ...(url && login.acceptsCode ? { acceptsCode: true } : {}),
+      ...(reason ? { reason } : {}),
       ...(state === "failed"
         ? { message: login.message ?? previous?.message ?? "" }
         : {}),
+      ...(url && url === previous?.url && previous.browserFailed
+        ? { browserFailed: true }
+        : {}),
     };
-    // Claude Code and Codex open the browser themselves, on the page that
-    // calls back to them; the link they print is the fallback that needs a
-    // pasted code. A device login opens nothing, so its page opens here.
+    // On macOS and Windows, Claude Code and Codex open the browser
+    // themselves, on the page that calls back to them; the link they print
+    // is the fallback. A device login opens nothing, and on Linux this app
+    // asks Codex to leave the browser to it, so those pages open here,
+    // where a failure to open shows.
     if (
-      this.#signIn.deviceCode &&
-      this.#signIn.url &&
-      this.#signIn.url !== this.#opened
+      url &&
+      url !== this.#opened &&
+      (this.#signIn.deviceCode || this.#signInMethod === "browser")
     ) {
-      this.#opened = this.#signIn.url;
+      this.#opened = url;
       void this.openSignInPage();
     }
     this.#advance("signin", 0, `Sign in to ${RUNTIME_NAMES[runtime]}`);
@@ -1380,6 +1406,7 @@ export class LocalServerModule implements Module {
     this.#signInInstaller = undefined;
     this.#signInWake = undefined;
     this.#opened = undefined;
+    this.#signInMethod = undefined;
   }
 
   // Whether the window shows the Linger this app installed here and its
@@ -1500,15 +1527,30 @@ export class LocalServerModule implements Module {
   }
 
   // Starts the runtime's own login (the installer runs it), or hands it the
-  // code the vendor's page showed.
-  async startSignIn(code?: string): Promise<void> {
+  // code the vendor's page showed. device starts Codex's device-code login,
+  // for a browser on another device. On Linux, Codex's browser login opens
+  // its page from here rather than from the CLI, so a failure to open shows.
+  async startSignIn(code?: string, device = false): Promise<void> {
     const installer = this.#signInInstaller;
     const runtime = this.#signIn?.runtime;
     if (!installer || !runtime) return;
+    if (code === undefined)
+      this.#signInMethod =
+        runtime !== "codex"
+          ? undefined
+          : device
+            ? "device"
+            : (this.#options.platform ?? process.platform) === "linux"
+              ? "browser"
+              : undefined;
     this.#signIn = { runtime, state: "starting" };
     this.#ctx?.bus.emit("local-server.changed");
     const login = await installer
-      .runtimeLogin(true, code)
+      .runtimeLogin(
+        true,
+        code,
+        code === undefined ? this.#signInMethod : undefined,
+      )
       .catch((error: unknown) => ({
         state: "failed" as const,
         message: error instanceof Error ? error.message : String(error),
@@ -1527,6 +1569,7 @@ export class LocalServerModule implements Module {
     if (this.#signInInstaller !== installer) return;
     this.#signIn = { runtime, state: "required" };
     this.#opened = undefined;
+    this.#signInMethod = undefined;
     this.#ctx?.bus.emit("local-server.changed");
   }
 
@@ -1544,10 +1587,27 @@ export class LocalServerModule implements Module {
     this.#signInWake?.();
   }
 
+  // Opens the sign-in page in the default browser. When none opens, the
+  // step says so and the page offers the link to copy; the link itself is
+  // never logged, since it carries the login's state.
   async openSignInPage(): Promise<void> {
     const url = this.#signIn?.url;
-    if (url && new URL(url).protocol === "https:")
-      await this.#options.openExternal?.(url);
+    const open = this.#options.openExternal;
+    if (!url || !open || new URL(url).protocol !== "https:") return;
+    let failed = false;
+    try {
+      await open(url);
+    } catch (error) {
+      failed = true;
+      this.#ctx?.log.warn("local_server.sign_in_browser_failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    const signIn = this.#signIn;
+    if (signIn?.url !== url || !!signIn.browserFailed === failed) return;
+    const { browserFailed: _, ...rest } = signIn;
+    this.#signIn = failed ? { ...rest, browserFailed: true } : rest;
+    this.#ctx?.bus.emit("local-server.changed");
   }
 
   // Whether the source package comes over the network; a bundled one and a
@@ -2701,8 +2761,8 @@ export class LocalServerModule implements Module {
           .join(" "),
       );
     }
-    // The services run without the BYOK gateway; the person switches or
-    // fixes the source on the Models page, so this only leaves a trace.
+    // The services run without the BYOK gateway; the Computer mounts it
+    // again before the next Run on it, so this only leaves a trace.
     const byokGateway = outcome.details?.byokGateway as
       | { code?: unknown; message?: unknown }
       | null
@@ -3378,11 +3438,16 @@ export class InstallerApi {
     );
   }
 
-  runtimeLogin(start = false, code?: string): Promise<RuntimeLogin> {
+  runtimeLogin(
+    start = false,
+    code?: string,
+    method?: RuntimeLoginMethod,
+  ): Promise<RuntimeLogin> {
     return start
       ? this.#json("/api/runtime-login", {
           instance: LOCAL_INSTANCE,
           ...(code ? { code } : {}),
+          ...(method ? { method } : {}),
         })
       : this.#json(`/api/runtime-login?instance=${LOCAL_INSTANCE}`);
   }
@@ -3437,6 +3502,7 @@ interface RuntimeLogin {
   readonly url?: string;
   readonly deviceCode?: string;
   readonly acceptsCode?: boolean;
+  readonly reason?: RuntimeLoginReason;
   readonly message?: string;
 }
 

@@ -147,7 +147,12 @@ export interface SetupRuntimeSignIn {
   readonly url?: string;
   readonly deviceCode?: string;
   readonly acceptsCode?: boolean;
+  // Why it failed, worded by the page: unavailable, timed_out or ended.
+  // message is the installer's English, for anything else.
+  readonly reason?: "unavailable" | "timed_out" | "ended";
   readonly message?: string;
+  // No browser opened on url; the page offers it to copy.
+  readonly browserFailed?: boolean;
 }
 
 export interface SetupTransfer {
@@ -291,10 +296,16 @@ export type SetupCommand =
   | { readonly op: "local.location.pick" }
   | { readonly op: "local.location.reset" }
   // The runtime sign-in step: start the runtime's login (or give it the
-  // code its page showed), open its page again, check again, or install
-  // another runtime instead.
-  | { readonly op: "local.signin.start"; readonly code?: string }
+  // code its page showed; device starts Codex's device-code login), open
+  // its page again, copy its link or code, check again, or install another
+  // runtime instead.
+  | {
+      readonly op: "local.signin.start";
+      readonly code?: string;
+      readonly device?: true;
+    }
   | { readonly op: "local.signin.open" }
+  | { readonly op: "local.signin.copy"; readonly what: "url" | "code" }
   | { readonly op: "local.signin.cancel" }
   | {
       readonly op: "local.signin.switch";

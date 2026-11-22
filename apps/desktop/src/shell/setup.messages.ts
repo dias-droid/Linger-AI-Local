@@ -187,19 +187,34 @@ export const setupMessages = defineMessages("setup", {
   signInLeadClaude:
     "Your agents run on Claude Code. Authorize it with your Claude account to continue.",
   signInWaiting: "Waiting for authorization in your browser…",
-  deviceCode: "Enter this code in your browser:",
+  signInContinues: "Linger continues by itself once you've signed in.",
+  deviceCode: "Enter this code on the sign-in page:",
+  deviceCodeSetting:
+    "Turn on device code sign-in for Codex in ChatGPT first: Settings → Security.",
+  copyCode: "Copy code",
+  signInLink: "Sign-in link",
+  openInBrowser: "Open in browser",
+  copyLink: "Copy link",
+  browserFailed:
+    "Linger couldn't open a browser. Copy the link and open it in a browser on this computer.",
+  browserFailedDevice:
+    "Linger couldn't open a browser. Copy the link and open it in any browser, on this computer or another device.",
+  useDeviceCode: "Use a code on another device",
+  useBrowserHere: "Use the browser on this computer",
   signInFailed: "Sign-in did not finish.",
+  signInTimedOut: "Sign-in timed out. Retry to get a new link.",
+  signInEnded:
+    "Sign-in stopped before it finished. Retry, or choose another way below.",
+  signInUnavailable:
+    "This runtime can't be signed in to from here. Use a different runtime or BYOK.",
   authorize: "Authorize",
   retry: "Retry",
   otherRuntime: "Use a different runtime",
   byokInstead: "Use BYOK instead",
   continueWithByok: "Continue with BYOK",
-  openBrowserAgain: "Open browser again",
   cancel: "Cancel",
   havingTrouble: "Having trouble?",
-  signInHelpCode:
-    "If your browser didn't open, choose Open browser again, then paste the code the page shows.",
-  signInHelp: "If your browser didn't open, choose Open browser again.",
+  signInHelpCode: "If the sign-in page shows a code, paste it here.",
   pastedCode: "Code from the sign-in page",
   pasteCode: "Paste the code",
   continue: "Continue",

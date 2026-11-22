@@ -2139,7 +2139,7 @@
     "updateFailed": "Wiki 更新失败",
     "updateFailedComputerOffline": "Wiki 更新失败：你的电脑当时处于离线状态。",
     "updateFailedSignIn": "Wiki 更新失败：需要登录 Runtime。",
-    "updateFailedIncompatible": "Wiki 更新失败：Runtime 不兼容。请更新本地的 CLI 或 Linger。",
+    "updateFailedIncompatible": "Wiki 更新失败：Runtime 不兼容，或你的账号不能使用它的模型。请更新本地的 CLI 或 Linger，或检查它的模型设置。",
     "updateFailedRuntimeUnavailable": "Wiki 更新失败：本地 Runtime 不可用。",
     "notWrittenYet": "这个页面还没有写好。",
     "notPublished": "这个页面没有发布。",
@@ -3034,7 +3034,6 @@
     "breadcrumb": "路径",
     "contextRoom": "Room",
     "contextWorkItem": "工作项",
-    "contextWiki": "Wiki",
     "contextDocuments": "文档",
     "documentMode": "文档模式",
     "read": "阅读",
@@ -3564,5 +3563,15 @@
     "workItemUnavailable": "这个工作区中没有这个工作项。",
     "dashboardTenantMismatch": "工作项仪表盘与当前工作区不匹配。",
     "agentListTenantMismatch": "Agent 的工作项列表与当前工作区不匹配。"
+  },
+  "documentSources": {
+    "personalWiki": "个人 Wiki"
+  },
+  "teamHubClientErrors": {
+    "resourceUnavailable": "请求的 TeamHub 资源不可用。",
+    "roomHistoryTooLong": "TeamHub 返回的 Room 历史记录超出了可加载的上限。",
+    "invalidRoomMessageCursor": "TeamHub 返回了无效的 Room 消息分页游标。",
+    "invalidCursor": "TeamHub 返回了无效的分页游标。",
+    "directoryTooLong": "TeamHub 返回的目录数据超出了可加载的上限。"
   }
 }

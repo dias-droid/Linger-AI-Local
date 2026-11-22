@@ -30,6 +30,13 @@ on stderr for the desktop to show.
 Native sign-in sessions belong to an instance and its selected runtime. A changed
 setup choice must not reuse another runtime's URL or accept a code for its process;
 starting sign-in for the new runtime stops the previous runtime's pending login.
+A Codex start may name its login method: `browser` (localhost callback; on
+Linux it runs with `BROWSER=true` so only the caller opens the link, elsewhere
+the CLI opens its own page) or `device` (device code).
+Without one, macOS and Windows use the browser login, which opens its own
+page, and other platforms the device code. A start with another method replaces
+the running login. A failed login carries its `reason`; a timeout stays
+`timed_out` after the process exits.
 
 `--resume` (native source with `--instance`) starts an installed instance's
 stopped services headless, reusing its saved choices; the desktop client runs it
@@ -65,7 +72,8 @@ a saved BYOK source restores its recorded Bifrost gateway, upgrades its
 route and repairs missing managed Pi profile files even while the upstream
 endpoint is offline. A failure
 is logged and reported in the ready outcome's `details.byokGateway`
-without failing the resume.
+without failing the resume; the Computer mounts it again before the next Run
+on it.
 A failed installation records the stage that caused it, even when native
 checkout preparation and runtime setup ran in parallel. A BYOK mount failure
 belongs to runtime and keeps the redacted provider error in the job.

@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -17,6 +18,10 @@ func runFakeSourceTool(state string, args []string) int {
 	verb := args[0]
 	stdinBytes, _ := io.ReadAll(os.Stdin)
 	_ = os.WriteFile(filepath.Join(state, "source-args.txt"), []byte(strings.Join(args, " ")), 0o600)
+	if calls, err := os.OpenFile(filepath.Join(state, "source-calls.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
+		_, _ = calls.WriteString(strings.Join(args, " ") + "\n")
+		_ = calls.Close()
+	}
 	_ = os.WriteFile(filepath.Join(state, "source-stdin.json"), stdinBytes, 0o600)
 	out, err := os.ReadFile(filepath.Join(state, "source-"+verb+".json"))
 	if err != nil {
@@ -24,8 +29,8 @@ func runFakeSourceTool(state string, args []string) int {
 	}
 	_, _ = os.Stdout.Write(out)
 	if codeBytes, err := os.ReadFile(filepath.Join(state, "source-"+verb+"-exit")); err == nil {
-		if strings.TrimSpace(string(codeBytes)) == "2" {
-			return 2
+		if code, err := strconv.Atoi(strings.TrimSpace(string(codeBytes))); err == nil {
+			return code
 		}
 	}
 	return 0

@@ -41,6 +41,12 @@ describe("parseSetupCommand", () => {
     expect(
       parseSetupCommand({ op: "local.signin.start", code: " abc#def " }),
     ).toEqual({ op: "local.signin.start", code: "abc#def" });
+    expect(
+      parseSetupCommand({ op: "local.signin.start", device: true }),
+    ).toEqual({ op: "local.signin.start", device: true });
+    expect(
+      parseSetupCommand({ op: "local.signin.copy", what: "code" }),
+    ).toEqual({ op: "local.signin.copy", what: "code" });
     expect(parseSetupCommand({ op: "local.signin.cancel" })).toEqual({
       op: "local.signin.cancel",
     });
@@ -229,6 +235,16 @@ describe("parseSetupCommand", () => {
     ).toThrow();
     expect(() =>
       parseSetupCommand({ op: "local.signin.switch", runtime: "local" }),
+    ).toThrow();
+    // Copying takes what the step shows, never text from the page.
+    expect(() =>
+      parseSetupCommand({ op: "local.signin.copy", what: "password" }),
+    ).toThrow();
+    expect(() =>
+      parseSetupCommand({ op: "local.signin.copy", what: "url", text: "x" }),
+    ).toThrow();
+    expect(() =>
+      parseSetupCommand({ op: "local.signin.start", device: false }),
     ).toThrow();
     // The account file is the installation's own; the page never names one.
     expect(() =>

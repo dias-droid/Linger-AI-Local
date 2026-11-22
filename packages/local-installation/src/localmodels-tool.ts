@@ -495,6 +495,7 @@ function downloadStageMessage(
       : `${label}: retrying…`;
   return undefined;
 }
+
 async function runLocalmodelsCommand(
   home: string,
   args: string[],

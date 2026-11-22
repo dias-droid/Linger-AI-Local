@@ -77,9 +77,16 @@ const setupCommand = z.discriminatedUnion("op", [
     .object({
       op: z.literal("local.signin.start"),
       code: z.string().trim().min(1).max(4096).optional(),
+      device: z.literal(true).optional(),
     })
     .strict(),
   z.object({ op: z.literal("local.signin.open") }).strict(),
+  z
+    .object({
+      op: z.literal("local.signin.copy"),
+      what: z.enum(["url", "code"]),
+    })
+    .strict(),
   z.object({ op: z.literal("local.signin.cancel") }).strict(),
   z
     .object({

@@ -76,11 +76,20 @@ Gateway and runs Agents. The daemon exits with the app.
   installer (`GET /api/runtime-login`) whether the runtime is signed in
   after all; only when it is not does a "Sign in to <Runtime>" step show,
   with a dialog. Authorize starts the runtime's own login through the
-  installer (`POST /api/runtime-login`), which opens the browser on its
-  localhost callback page itself; Desktop opens only a Codex device page.
-  The dialog waits, checks every few seconds and closes once signed in. The
-  printed link and Claude Code's paste-code form sit behind "Having
-  trouble?"; Cancel stops the login (`DELETE /api/runtime-login`); the
+  installer (`POST /api/runtime-login`). On macOS and Windows the runtime
+  opens the browser on its localhost callback page itself. On Linux Desktop
+  asks for Codex's `method: "browser"` login, which keeps the CLI from
+  opening a browser, and opens the link itself through `xdg-open`, waiting
+  for its result (`open-url.ts`), because Electron's `shell.openExternal`
+  never reports failure there; when no browser opens the dialog says so.
+  "Use a code on another device" restarts Codex with `method: "device"` on
+  any platform, and Desktop opens that device page too. While a login runs
+  the dialog shows its link with Open in browser and Copy link, and a
+  Codex device code with Copy code; it checks every few seconds, closes
+  once signed in and brings the window forward. A failed login's `reason`
+  (`unavailable`, `timed_out`, `ended`) picks its message. Claude Code's
+  paste-code form sits behind "Having trouble?"; Cancel stops the login
+  (`DELETE /api/runtime-login`); the
   dialog also offers installing another runtime instead (a new job with
   that `setupChoice`). No sign-in secret passes through the page. The
   dialog also offers BYOK, with the same form as Customize's BYOK
@@ -328,7 +337,8 @@ Gateway and runs Agents. The daemon exits with the app.
   (`total_ms`), and `local_server.resume_failed` (`stage`, `total_ms`,
   redacted `error` bounded to 500 chars with query/hash stripped). A resume
   whose saved BYOK gateway did not come back still succeeds and logs
-  `local_server.byok_gateway_unavailable` (`code`, `message`).
+  `local_server.byok_gateway_unavailable` (`code`, `message`); the Computer
+  mounts the gateway again before the next Run on it.
 - `src/main/voice-window.ts`: the floating voice window. Electron cannot open
   Document Picture-in-Picture windows, so the SPA opens a small native window
   with `window.open("")` under the target `linger-voice-window-<n>`
