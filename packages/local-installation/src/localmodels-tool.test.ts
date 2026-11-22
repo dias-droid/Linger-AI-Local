@@ -467,12 +467,52 @@ test("invokes the verified upstream module with isolated module and state paths"
       env: expect.objectContaining({
         PYTHONPATH: path.join(f.directory, "modules"),
         LOCALMODELS_STATE: path.join(f.home, "runtime/localmodels/state"),
+        PYTHONUTF8: "1",
+        PYTHONIOENCODING: "utf-8",
       }),
     }),
   );
   expect(await readFile(path.join(f.directory, "tool.json"), "utf8")).toContain(
     "sourceCommit",
   );
+});
+test("forces Python UTF-8 mode and strips conflicting case variants from the environment", async () => {
+  const f = await fixture();
+  vi.stubEnv("LINGER_LOCALMODELS_TOOL_JSON", JSON.stringify(f.source));
+  vi.stubEnv("PYTHONUTF8", "0");
+  vi.stubEnv("pythonutf8", "0");
+  vi.stubEnv("PYTHONIOENCODING", "gbk");
+  vi.stubEnv("PythonIOEncoding", "cp936");
+  const run = vi.fn(async () => ({ code: 0, stdout: "{}", stderr: "" }));
+  await runLocalmodels(
+    f.home,
+    ["foundations", "stop", "--json"],
+    {
+      env: {
+        PYTHONUTF8: "0",
+        PythonUtf8: "0",
+        PYTHONIOENCODING: "cp932",
+        pythonioencoding: "cp949",
+      },
+    },
+    { run },
+  );
+  expect(run).toHaveBeenCalledTimes(1);
+  const env = (
+    run.mock.calls[0] as unknown as [
+      string,
+      string[],
+      { env: NodeJS.ProcessEnv },
+    ]
+  )[2].env;
+  expect(env.PYTHONUTF8).toBe("1");
+  expect(env.PYTHONIOENCODING).toBe("utf-8");
+  expect(
+    Object.keys(env).filter((key) => key.toUpperCase() === "PYTHONUTF8"),
+  ).toEqual(["PYTHONUTF8"]);
+  expect(
+    Object.keys(env).filter((key) => key.toUpperCase() === "PYTHONIOENCODING"),
+  ).toEqual(["PYTHONIOENCODING"]);
 });
 test("passes the resolved download region to every localmodels child", async () => {
   const f = await fixture();

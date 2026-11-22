@@ -507,6 +507,8 @@ const STRIPPED_LOCALMODELS_ENVIRONMENT = new Set([
   "PYTHONSTARTUP",
   "PYTHONINSPECT",
   "PYTHONPATH",
+  "PYTHONUTF8",
+  "PYTHONIOENCODING",
   "LOCALMODELS_STATE",
   "LOCALMODELS_TOOLS_DIR",
   "LOCALMODELS_BIFROST_DIR",
@@ -747,6 +749,10 @@ async function runLocalmodelsCommand(
     LOCALMODELS_BIFROST_ADDR: bifrostAddr,
     PYTHONNOUSERSITE: "1",
     PYTHONDONTWRITEBYTECODE: "1",
+    // Force UTF-8 mode so Python reads and writes UTF-8 state files and stdio
+    // instead of falling back to a legacy Windows ANSI code page.
+    PYTHONUTF8: "1",
+    PYTHONIOENCODING: "utf-8",
   };
   delete env.PYTHONHOME;
   delete env.PYTHONSTARTUP;

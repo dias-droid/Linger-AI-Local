@@ -128,7 +128,8 @@ func (t Tool) command(environment map[string]string, action Action) *exec.Cmd {
 
 // commandArgs builds one tool invocation the way the installer runs it: the
 // sealed kit on PYTHONPATH and as the working directory, no user site
-// packages, no bytecode writes into the sealed kit, and PI_CODING_AGENT_DIR
+// packages, no bytecode writes into the sealed kit, forced UTF-8 mode so Python
+// never falls back to a legacy Windows ANSI code page, and PI_CODING_AGENT_DIR
 // resolved through OverlayEnvironment and workspace.PiSourceEnvironment so
 // localmodels reads and writes the same Pi profile the Daemon probes and runs.
 func (t Tool) commandArgs(environment map[string]string, args []string) *exec.Cmd {
@@ -138,6 +139,7 @@ func (t Tool) commandArgs(environment map[string]string, args []string) *exec.Cm
 	for key, value := range environment {
 		switch strings.ToUpper(key) {
 		case "PYTHONHOME", "PYTHONSTARTUP", "PYTHONINSPECT", "PYTHONPATH",
+			"PYTHONUTF8", "PYTHONIOENCODING",
 			"LOCALMODELS_STATE", "LOCALMODELS_TOOLS_DIR", "LOCALMODELS_BIFROST_DIR", "LOCALMODELS_BIFROST_ADDR":
 			continue
 		case "PI_CODING_AGENT_DIR":
@@ -168,6 +170,8 @@ func (t Tool) commandArgs(environment map[string]string, args []string) *exec.Cm
 	}
 	effective["PYTHONNOUSERSITE"] = "1"
 	effective["PYTHONDONTWRITEBYTECODE"] = "1"
+	effective["PYTHONUTF8"] = "1"
+	effective["PYTHONIOENCODING"] = "utf-8"
 	cmd.Env = make([]string, 0, len(effective))
 	for key, value := range effective {
 		cmd.Env = append(cmd.Env, key+"="+value)
