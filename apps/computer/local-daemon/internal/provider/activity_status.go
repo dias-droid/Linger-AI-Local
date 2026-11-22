@@ -28,19 +28,28 @@ type activityStatus struct {
 // names it for the Room status line. A shell script gets the kind of its
 // last shown step, the same for every Runtime's shell tool, and its input
 // carries the script rather than the shell wrapper Codex reports around it.
+// A PowerShell or cmd script names the steps but keeps its wrapper in the
+// input: the POSIX reader only approximates it, so createsTask must not
+// judge it and publish a step's output.
 func activityPresentation(message native.Event) (string, map[string]any, activityStatus) {
 	kind, input := message.ActivityKind, message.Input
 	if kind == "" {
 		kind = native.ActivityTool
 	}
 	key, command := inputCommand(input)
-	if script := shellScript(command); script != command {
+	script, posix := shellScript(command)
+	if posix && script != command {
 		input = maps.Clone(input)
-		input[key], command = script, script
+		input[key] = script
+	}
+	if !posix {
+		// PowerShell and cmd read a backslash as a path separator, not as
+		// the escape the POSIX reader would drop.
+		script = strings.ReplaceAll(script, `\`, "/")
 	}
 	var steps []step
 	if kind == native.ActivityCommand {
-		steps = scriptSteps(command)
+		steps = scriptSteps(script)
 	} else if next, ok := toolStep(kind, message.ToolName, input); ok {
 		steps = []step{next}
 	}
