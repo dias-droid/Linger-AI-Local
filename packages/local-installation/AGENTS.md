@@ -294,6 +294,15 @@ model data and tool state remain writable. Setup can replace a damaged kit
 from its pinned archive; quit and uninstall do not download or execute a kit
 that fails verification.
 
+For the Windows dev45 kit, `setup binding` runs through
+`windows-stack-binding.py`. It fingerprints the same Pi files in the
+same order. Binding reads each configuration file's type, owner and contents
+through one handle even if Pi replaces the path during inspection.
+A file must belong to the current user, or to Administrators
+when that group is enabled in the current or UAC-linked elevated token.
+This lets the same administrator resume an elevated install from a normal
+desktop session. Other kit revisions use their own binding implementation.
+
 Setting `LINGER_LOCALMODELS_DEV_PYTHON` and `LINGER_LOCALMODELS_DEV_MODULE_DIR`
 to absolute paths runs a local `localmodels` checkout instead of fetching the
 published kit, and `LOCALMODELS_DEBUG` (`simulate` or `tiny`, or

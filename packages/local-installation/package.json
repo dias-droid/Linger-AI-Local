@@ -11,7 +11,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').copyFileSync('src/windows-stack-binding.py', 'dist/windows-stack-binding.py')\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --maxWorkers=2",
     "check": "pnpm typecheck && pnpm lint && pnpm test",

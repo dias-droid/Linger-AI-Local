@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat, readdir, readFile, rm, chmod } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { x as extract } from "tar";
 import { downloadInRegion, resolveRegion } from "./region.js";
 import {
@@ -606,11 +607,20 @@ async function runLocalmodelsCommand(
       });
     }
   };
-  const result = await run(
-    tool.python,
-    ["-P", "-s", "-m", "localmodels", ...args],
-    { ...options, cwd: tool.moduleDir, env, onOutput },
-  );
+  const windowsBinding =
+    process.platform === "win32" &&
+    tool.sourceCommit === "f486ac59cf66a834c37253d66ebcebcd8f6583e0" &&
+    args[0] === "setup" &&
+    args[1] === "binding";
+  const entry = windowsBinding
+    ? [fileURLToPath(new URL("./windows-stack-binding.py", import.meta.url))]
+    : ["-m", "localmodels"];
+  const result = await run(tool.python, ["-P", "-s", ...entry, ...args], {
+    ...options,
+    cwd: tool.moduleDir,
+    env,
+    onOutput,
+  });
   const seconds = (ms: number) => (ms / 1000).toFixed(1);
   options.onEvent?.({
     kind: "log",
