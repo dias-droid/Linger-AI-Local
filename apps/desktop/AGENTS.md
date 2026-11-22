@@ -414,11 +414,14 @@ Gateway and runs Agents. The daemon exits with the app.
   `desktop` section puts the daemon in Desktop mode: no self-update, it exits
   when its stdin closes, and it reports `{"type":"status",...}` lines on
   stdout, which drive the tray and the SPA status. Its log goes to
-  `<userData>/logs/computer-daemon.log`. Crashes restart with backoff; the
-  exit reason, logged with `computer_daemon.exited` and shown once starts
-  keep failing, is the last stderr line outside the daemon's log records (a
-  Go crash: its `panic:` line), or none; new
-  folders or a new name restart it once tasks finish.
+  `<userData>/logs/computer-daemon.log`. Crashes and launch failures retry
+  with backoff. The Desktop reports the reason after three consecutive
+  attempts fail before the daemon reports a status. The exit log
+  (`computer_daemon.exited`) records the last stderr line outside the
+  daemon's log records, when present, or the `panic:` line for a Go panic.
+  A synchronous launch failure logs the error as `computer_daemon.launch_failed`.
+  Invalid launch arguments are reported without their values.
+  New folders or a new name restart the daemon once tasks finish.
   On macOS it writes `{"type":"hello","features":["permissions.v1"]}` to
   the daemon's stdin after spawn and answers `permission.request` lines with
   `permission.response` from `src/main/system-permissions.ts` (the app's
