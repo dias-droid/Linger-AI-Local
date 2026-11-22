@@ -102,6 +102,7 @@ export function BackgroundTasksPill({
   return (
     <div
       className="absolute bottom-2 left-1/2 z-20 -translate-x-1/2"
+      data-background-tasks-pill=""
       ref={root}
     >
       {open ? (
