@@ -731,3 +731,20 @@ func writeByokOverlayFile(t *testing.T, stateDir, runtimeType, runtimeModel, mod
 		t.Fatal(err)
 	}
 }
+
+func TestRuntimeRefreshAllowedPausesInTerminalGatewayStates(t *testing.T) {
+	for _, tc := range []struct {
+		state string
+		want  bool
+	}{
+		{state: "connecting", want: true},
+		{state: "connected", want: true},
+		{state: "upgrade-required", want: false},
+		{state: "authentication-failed", want: false},
+		{state: "identity-conflict", want: false},
+	} {
+		if got := runtimeRefreshAllowed(tc.state); got != tc.want {
+			t.Fatalf("runtimeRefreshAllowed(%q) = %v, want %v", tc.state, got, tc.want)
+		}
+	}
+}

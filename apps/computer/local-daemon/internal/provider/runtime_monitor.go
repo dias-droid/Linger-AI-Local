@@ -24,7 +24,10 @@ type RuntimeMonitorOptions struct {
 	// Shape projects each DiscoveryResult after full discovery or
 	// authentication refresh (for example applying a persisted BYOK catalog
 	// overlay) before diffing against current diagnostics or publishing.
-	Shape              func(DiscoveryResult) DiscoveryResult
+	Shape func(DiscoveryResult) DiscoveryResult
+	// RefreshAllowed reports whether periodic discovery and authentication
+	// refreshes should run. Nil means allowed.
+	RefreshAllowed     func() bool
 	FullRefreshAllowed func() bool
 	// RuntimeBusy reports an active operation. A running operation proves its
 	// Runtime works, so an inconclusive auth probe then keeps the ready state.
@@ -68,6 +71,9 @@ func MonitorRuntimeDiagnostics(ctx context.Context, options RuntimeMonitorOption
 			tick++
 		case <-options.Refresh:
 			requested = true
+		}
+		if options.RefreshAllowed != nil && !options.RefreshAllowed() {
+			continue
 		}
 		activeDiscovery = resolveDiscovery()
 		envChanged := !maps.Equal(prevEnv, activeDiscovery.Environment) || !maps.Equal(prevPaths, activeDiscovery.ConfiguredPaths)

@@ -50,7 +50,9 @@ A protocol probe passes once the Runtime answers the handshake, however the
 process exits after its input closes. When the handshake fails, the daemon log
 records `runner.runtime_probe.handshake_failed` with the exit status and the
 redacted end of stderr; the diagnostic sent to TeamHub stays categorical.
-It periodically refreshes authentication and unavailable Runtimes without a restart.
+It periodically refreshes authentication and unavailable Runtimes without a
+restart. The daemon pauses those refreshes in the `upgrade-required`,
+`authentication-failed`, and `identity-conflict` Gateway states.
 The Claude check also probes idle Context homes, because each one can hold its
 own refreshed login. It reconciles only the four most recently used homes and
 runs `claude auth status` once per distinct credential, so its cost does not

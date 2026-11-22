@@ -467,3 +467,51 @@ done
 		t.Fatalf("gateway /v1/models requests = %d, want %d (1 initial + %d full refreshes)", got, 1+fullRefreshes, fullRefreshes)
 	}
 }
+
+func TestRuntimeMonitorSkipsAllRefreshesWhenRefreshDisallowed(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture uses a POSIX script")
+	}
+	root := t.TempDir()
+	claude := filepath.Join(root, "claude")
+	authTrace := filepath.Join(root, "auth-trace")
+	script := `#!/bin/sh
+echo called >> "$AUTH_TRACE"
+echo '{"loggedIn":true}'
+`
+	if err := os.WriteFile(claude, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	primeTestExecutable(t, claude, "AUTH_TRACE="+os.DevNull)
+	initial := DiscoveryResult{Diagnostics: []RuntimeDiagnostic{{
+		Type: "claude", Status: "ready", Protocol: "stream-json", Version: "2.1.284", ExecutablePath: claude,
+	}}}
+	var allowed atomic.Bool
+	var fullRefreshes atomic.Int32
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Millisecond)
+	defer cancel()
+	err := MonitorRuntimeDiagnostics(ctx, RuntimeMonitorOptions{
+		Initial: initial, RefreshInterval: 5 * time.Millisecond, FullRefreshEveryTicks: 2,
+		RefreshAllowed: func() bool { return allowed.Load() },
+		Discovery: DiscoveryOptions{
+			Timeout: 5 * time.Second,
+			Environment: map[string]string{
+				"HOME": root, "CLAUDE_CONFIG_DIR": root, "ANTHROPIC_API_KEY": "fixture", "AUTH_TRACE": authTrace,
+			},
+		},
+		Discover: func(context.Context, DiscoveryOptions) (DiscoveryResult, error) {
+			fullRefreshes.Add(1)
+			return initial, nil
+		},
+		OnChanged: func(DiscoveryResult) error { return nil },
+	})
+	if err != nil && !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal(err)
+	}
+	if fullRefreshes.Load() != 0 {
+		t.Fatalf("full refreshes = %d, want 0 while refresh is disallowed", fullRefreshes.Load())
+	}
+	if data, readErr := os.ReadFile(authTrace); !errors.Is(readErr, os.ErrNotExist) {
+		t.Fatalf("auth probe ran while refresh was disallowed: err=%v data=%q", readErr, data)
+	}
+}
