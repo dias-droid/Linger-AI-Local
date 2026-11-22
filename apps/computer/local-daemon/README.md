@@ -46,6 +46,10 @@ stops and names the open file.
 the `linger-computer login` flow. It discovers and version-gates the
 configured Codex, Claude, Pi, and Antigravity installations.
 It performs bounded protocol and authentication probes.
+A protocol probe passes once the Runtime answers the handshake, however the
+process exits after its input closes. When the handshake fails, the daemon log
+records `runner.runtime_probe.handshake_failed` with the exit status and the
+redacted end of stderr; the diagnostic sent to TeamHub stays categorical.
 It periodically refreshes authentication and unavailable Runtimes without a restart.
 The Claude check also probes idle Context homes, because each one can hold its
 own refreshed login. It reconciles only the four most recently used homes and
