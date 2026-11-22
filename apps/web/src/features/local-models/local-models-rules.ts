@@ -275,12 +275,67 @@ export function memoryReclaimable(
   ) {
     return false;
   }
+  if (reason.memory_kind === "ram") {
+    const systemPools = view.pools.filter((pool) => pool.kind === "system");
+    const ramCapacity = Math.max(
+      view.computer.host?.ram_total_bytes ?? 0,
+      ...systemPools.map((pool) => pool.total_bytes),
+      0,
+    );
+    return (
+      systemPools.some((pool) => poolOtherBytes(pool) > 0) &&
+      reason.need_bytes <= ramCapacity
+    );
+  }
   const gpus = view.pools.filter((pool) => pool.kind === "gpu");
   const pools = gpus.length ? gpus : view.pools;
   return (
     pools.some((pool) => poolOtherBytes(pool) > 0) &&
     reason.need_bytes <= maxHardwareCapacity(view)
   );
+}
+
+export type HostBlockerReason = NonNullable<
+  LocalModel["availability"]["reason"]
+> & {
+  code:
+    | "DRIVER_UPDATE_REQUIRED"
+    | "RUNTIME_DEPENDENCY_MISSING"
+    | "GPU_UNSUPPORTED";
+};
+
+const hostBlockerPriority = [
+  "DRIVER_UPDATE_REQUIRED",
+  "RUNTIME_DEPENDENCY_MISSING",
+  "GPU_UNSUPPORTED",
+] as const;
+
+/**
+ * Host-wide blocker explaining why no local model can be downloaded on this
+ * Computer right now (outdated NVIDIA driver, missing runtime library, or
+ * unsupported GPU). Null once any model is downloadable or active.
+ */
+export function hostBlocker(view: LocalModelsView): HostBlockerReason | null {
+  if (!view.available || !view.models.length) return null;
+  const hasDownloadableOrActive = view.models.some(({ model }) => {
+    const status = modelStatus(model);
+    return (
+      status === "available" ||
+      status === "loaded" ||
+      status === "loading" ||
+      status === "downloading"
+    );
+  });
+  if (hasDownloadableOrActive) return null;
+  for (const code of hostBlockerPriority) {
+    const match = view.models.find(
+      ({ model }) => model.availability.reason?.code === code,
+    )?.model.availability.reason;
+    if (match && match.code === code) {
+      return match as HostBlockerReason;
+    }
+  }
+  return null;
 }
 
 /**
@@ -328,22 +383,26 @@ export function memoryGuidance(view: LocalModelsView): MemoryGuidance | null {
     }
   }
 
-  const primary = groups[0]!;
-  const primaryStats = summarizePools(primary.pools, primary.gpu);
-  if (
-    primaryStats.otherBytes > 0 &&
-    entries.some(
-      (entry) =>
-        entry.status === "unavailable" && memoryReclaimable(view, entry.model),
-    )
-  ) {
-    return {
-      freeBytes: primaryStats.freeBytes,
-      gpu: primary.gpu,
-      kind: "blocked_download",
-      otherBytes: primaryStats.otherBytes,
-      totalBytes: primaryStats.totalBytes,
-    };
+  for (const group of groups) {
+    const stats = summarizePools(group.pools, group.gpu);
+    if (stats.otherBytes <= 0) continue;
+    const blockedDownload = entries.some((entry) => {
+      if (entry.status !== "unavailable") return false;
+      const reason = entry.model.availability.reason;
+      const isRamMiss = reason?.memory_kind === "ram";
+      if (group.gpu && isRamMiss) return false;
+      if (!group.gpu && gpus.length > 0 && !isRamMiss) return false;
+      return memoryReclaimable(view, entry.model);
+    });
+    if (blockedDownload) {
+      return {
+        freeBytes: stats.freeBytes,
+        gpu: group.gpu,
+        kind: "blocked_download",
+        otherBytes: stats.otherBytes,
+        totalBytes: stats.totalBytes,
+      };
+    }
   }
 
   const twoGigabytes = 2 * 1024 ** 3;

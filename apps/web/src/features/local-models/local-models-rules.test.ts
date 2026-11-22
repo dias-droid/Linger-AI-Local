@@ -3,6 +3,15 @@ import { describe, expect, it } from "vitest";
 import { translate } from "@/i18n/language";
 
 import {
+  actionErrorCopy,
+  debugBannerCopy,
+  hostBlockerCopy,
+  modelErrorCopy,
+  modelErrorShortCopy,
+  unavailableCopy,
+  unavailableShortCopy,
+} from "./local-models-copy";
+import {
   collapsedRowBadges,
   contextLabel,
   downloadPercent,
@@ -10,6 +19,7 @@ import {
   downloadStopped,
   featuredInklingEntry,
   formatGigabytes,
+  hostBlocker,
   isModelOnComputer,
   loadCheck,
   localSwitchTargets,
@@ -844,6 +854,216 @@ describe("featured Inkling 2 Mini rules", () => {
     });
     expect(featuredInklingEntry(modelEntries(iq3Loaded))?.model.id).toBe(
       "inkling-2-mini:UD-IQ3_S",
+    );
+  });
+});
+
+describe("hostBlocker, RAM reclaimability, and diagnostics copy", () => {
+  it("picks the highest-priority host blocker only when no model is downloadable or active", () => {
+    const blocked = (
+      id: string,
+      reason: NonNullable<
+        ReturnType<typeof localModel>["availability"]["reason"]
+      >,
+    ) =>
+      modelView(
+        localModel({
+          availability: { downloadable: false, reason },
+          fit: "none",
+          id,
+          name: id,
+          pool: undefined,
+        }),
+      );
+
+    const mixedView = labView({
+      models: [
+        blocked("m1", { code: "GPU_UNSUPPORTED", gpu_vendor: "amd" }),
+        blocked("m2", {
+          code: "DRIVER_UPDATE_REQUIRED",
+          detected_cuda: "11.8",
+          required_cuda: "12.4",
+        }),
+      ],
+    });
+    expect(hostBlocker(mixedView)).toEqual({
+      code: "DRIVER_UPDATE_REQUIRED",
+      detected_cuda: "11.8",
+      required_cuda: "12.4",
+    });
+
+    // Once any model can be downloaded, no global host blocker banner is shown.
+    const partialView = labView({
+      models: [
+        modelView(localModel({ id: "ok", name: "OK" })),
+        blocked("m1", { code: "GPU_UNSUPPORTED", gpu_vendor: "amd" }),
+      ],
+    });
+    expect(hostBlocker(partialView)).toBeNull();
+
+    // Pure MEMORY_INSUFFICIENT does not trigger a host blocker.
+    const memoryOnlyView = labView({
+      models: [
+        blocked("huge", {
+          code: "MEMORY_INSUFFICIENT",
+          have_bytes: gb(8),
+          need_bytes: gb(40),
+        }),
+      ],
+    });
+    expect(hostBlocker(memoryOnlyView)).toBeNull();
+  });
+
+  it("evaluates memory_kind=ram against system pools instead of GPU pools", () => {
+    const busyRamModel = localModel({
+      availability: {
+        downloadable: false,
+        reason: {
+          code: "MEMORY_INSUFFICIENT",
+          have_bytes: gb(4),
+          memory_kind: "ram",
+          need_bytes: gb(20),
+        },
+      },
+      fit: "none",
+      id: "ram-tight:Q4",
+      name: "RAM Tight",
+      pool: undefined,
+    });
+    const busySystemPool = {
+      ...memoryPool("system", 32),
+      used_bytes: gb(28),
+    };
+    const view = labView({
+      models: [modelView(busyRamModel)],
+      pools: [gpuPool(0, 24), busySystemPool],
+    });
+    expect(memoryReclaimable(view, busyRamModel)).toBe(true);
+    expect(memoryGuidance(view)).toMatchObject({
+      gpu: false,
+      kind: "blocked_download",
+      otherBytes: gb(28),
+    });
+
+    // Clean system pool with busy GPU does not mark a RAM shortfall reclaimable.
+    const cleanRamBusyGpu = labView({
+      models: [modelView(busyRamModel)],
+      pools: [
+        { ...gpuPool(0, 24), used_bytes: gb(20) },
+        memoryPool("system", 32),
+      ],
+    });
+    expect(memoryReclaimable(cleanRamBusyGpu, busyRamModel)).toBe(false);
+  });
+
+  it("formats actionable copy for GPU, driver, runtime, RAM, debug, and unknown fallback codes", () => {
+    expect(
+      unavailableShortCopy(
+        { code: "GPU_UNSUPPORTED", gpu_vendor: "amd" },
+        translate,
+      ),
+    ).toBe("GPU not supported");
+    expect(
+      unavailableCopy(
+        { code: "GPU_UNSUPPORTED", gpu_vendor: "amd" },
+        false,
+        translate,
+      ),
+    ).toContain("AMD GPUs");
+    expect(
+      unavailableCopy(
+        {
+          code: "DRIVER_UPDATE_REQUIRED",
+          detected_cuda: "11.8",
+          required_cuda: "12.4",
+        },
+        false,
+        translate,
+      ),
+    ).toContain("CUDA 11.8");
+    expect(
+      unavailableCopy(
+        {
+          code: "RUNTIME_DEPENDENCY_MISSING",
+          missing_libraries: ["libgomp.so.1"],
+        },
+        false,
+        translate,
+      ),
+    ).toContain("libgomp.so.1");
+    expect(
+      unavailableCopy(
+        {
+          code: "RUNTIME_DEPENDENCY_MISSING",
+          detected_glibc: "2.28",
+          required_glibc: "2.35",
+        },
+        false,
+        translate,
+      ),
+    ).toContain("2.28");
+    expect(
+      unavailableShortCopy(
+        {
+          code: "MEMORY_INSUFFICIENT",
+          memory_kind: "ram",
+          need_bytes: gb(16),
+        },
+        translate,
+      ),
+    ).toBe("needs 16 GB RAM");
+    expect(
+      unavailableCopy(
+        {
+          code: "MEMORY_INSUFFICIENT",
+          have_bytes: gb(8),
+          memory_kind: "ram",
+          need_bytes: gb(16),
+        },
+        false,
+        translate,
+      ),
+    ).toContain("system memory (RAM)");
+    expect(unavailableShortCopy({ code: "UNAVAILABLE" }, translate)).toBe(
+      "unavailable",
+    );
+    expect(
+      hostBlockerCopy(
+        {
+          code: "DRIVER_UPDATE_REQUIRED",
+          detected_cuda: "11.8",
+          required_cuda: "12.4",
+        },
+        translate,
+      ).body,
+    ).toContain("CUDA 12.4");
+    expect(
+      debugBannerCopy({ mode: "tiny", source: "env" }, translate),
+    ).toMatchObject({
+      title: "Debug mode active (tiny)",
+    });
+    expect(
+      debugBannerCopy(
+        {
+          config_path: "/home/u/.config/localmodels/debug.json",
+          mode: "simulate",
+          source: "user_config",
+        },
+        translate,
+      ).body,
+    ).toContain("/home/u/.config/localmodels/debug.json");
+    expect(
+      debugBannerCopy({ mode: "simulate", source: "user_config" }, translate)
+        .body,
+    ).not.toContain("debug.json");
+    expect(actionErrorCopy("LOCAL_MODEL_GPU_UNSUPPORTED", translate)).toContain(
+      "supported GPU",
+    );
+    expect(modelErrorShortCopy({ code: "UNKNOWN_ERROR" }, translate)).toBe(
+      "unexpected error",
+    );
+    expect(modelErrorCopy({ code: "UNKNOWN_ERROR" }, translate)).toContain(
+      "Something went wrong",
     );
   });
 });

@@ -334,6 +334,12 @@ export const localModelsMessages = defineMessages("localModels", {
   refusalNoRoom:
     "There isn't enough free memory to load it. Close memory-heavy apps or unload another model, then recheck memory.",
   refusalPlatformUnsupported: "This model doesn't run on this computer.",
+  refusalGpuUnsupported:
+    "This computer doesn't have a supported GPU for local models.",
+  refusalDriverUpdateRequired:
+    "Update the NVIDIA driver on this computer before downloading or loading local models.",
+  refusalRuntimeDependencyMissing:
+    "This computer is missing a system runtime library required for local models.",
   refusalModelUnknown: "The computer doesn't have this model anymore.",
   refusalServiceUnavailable:
     "Linger couldn't reach the computer right now. Try again.",
@@ -349,9 +355,13 @@ export const localModelsMessages = defineMessages("localModels", {
     "The downloaded files were damaged. Remove the model and download it again.",
   errorDiskInsufficient: "There wasn't enough free disk.",
   errorDownloadFailed: "The download didn't finish.",
+  errorDriverUpdateRequired:
+    "The NVIDIA driver on this computer is too old for the local model engine. Update the driver, then try again.",
   errorEngineStartFailed: "The model engine didn't start.",
   errorGatewayRegistrationFailed:
     "It loaded, but Agents couldn't be given access to it.",
+  errorGpuUnsupported:
+    "This computer doesn't have a supported GPU for local models.",
   errorHealthCheckFailed: "The model started but didn't answer.",
   errorInvalidState: "The model was busy with another step.",
   errorJobRunning: "Another step was still running.",
@@ -362,6 +372,9 @@ export const localModelsMessages = defineMessages("localModels", {
   errorModelUnknown: "The computer doesn't know this model anymore.",
   errorNetworkUnavailable: "The computer couldn't reach the network.",
   errorOutOfMemory: "It ran out of memory while loading.",
+  errorRuntimeDependencyMissing:
+    "A required system runtime library is missing on this computer.",
+  errorUnknownError: "Something went wrong on this computer. Try again.",
   errorGatewayHomeNotPrivate:
     "It loaded, but Agents couldn't be given access to it: a Linger folder on the computer belongs to another account.",
   errorGatewayHomeNotPrivatePath:
@@ -369,8 +382,10 @@ export const localModelsMessages = defineMessages("localModels", {
   shortCancelled: "loading stopped",
   shortChecksumMismatch: "files damaged",
   shortDiskInsufficient: "not enough disk",
+  shortDriverUpdateRequired: "driver update needed",
   shortEngineStartFailed: "engine didn't start",
   shortGatewayRegistrationFailed: "Agents couldn't reach it",
+  shortGpuUnsupported: "GPU not supported",
   shortHealthCheckFailed: "model didn't answer",
   shortBusy: "busy with another step",
   shortLoadNoRoom: "not enough free memory",
@@ -380,6 +395,8 @@ export const localModelsMessages = defineMessages("localModels", {
   shortNetworkUnavailable: "network unavailable",
   shortOutOfMemory: "ran out of memory",
   shortNotForComputer: "not for this computer",
+  shortRuntimeDependencyMissing: "missing runtime library",
+  shortUnknownError: "unexpected error",
   noteNoRoomToLoad:
     "It downloaded, but there wasn't enough free {place} to load it. Load it when there is room.",
 
@@ -388,6 +405,9 @@ export const localModelsMessages = defineMessages("localModels", {
   shortNeedsMemory: "needs more memory",
   shortNeedsDiskSize: "needs {need} of disk",
   shortNeedsSize: "needs {need}",
+  shortNeedsSystemMemory: "needs more system memory",
+  shortNeedsSystemMemorySize: "needs {need} RAM",
+  shortUnavailable: "unavailable",
   unavailableMemory: "This computer doesn't have enough memory for it.",
   unavailableMemoryReclaimable:
     "This computer doesn't have enough memory for it. Close memory-heavy apps and recheck memory.",
@@ -395,8 +415,70 @@ export const localModelsMessages = defineMessages("localModels", {
     "Needs {need} of memory; this computer has {have} for models.",
   unavailableMemorySizesReclaimable:
     "Needs {need} of memory; this computer has {have} for models. Close memory-heavy apps and recheck memory.",
+  unavailableSystemMemory:
+    "This computer doesn't have enough system memory (RAM) for it.",
+  unavailableSystemMemoryReclaimable:
+    "This computer doesn't have enough system memory (RAM) for it. Close memory-heavy apps and recheck memory.",
+  unavailableSystemMemorySizes:
+    "Needs {need} of system memory (RAM); this computer has {have} available.",
+  unavailableSystemMemorySizesReclaimable:
+    "Needs {need} of system memory (RAM); this computer has {have} available. Close memory-heavy apps and recheck memory.",
   unavailableDisk: "There isn't enough free disk for it.",
   unavailableDiskSizes: "Needs {need} of disk; {have} is free.",
+  unavailableGpuAmd:
+    "AMD GPUs aren't supported for local models yet. Local models require an NVIDIA GPU or Apple Silicon Mac; use BYOK on this computer instead.",
+  unavailableGpuIntel:
+    "Intel GPUs aren't supported for local models yet. Local models require an NVIDIA GPU or Apple Silicon Mac; use BYOK on this computer instead.",
+  unavailableGpuNone:
+    "No supported GPU was detected on this computer. Local models require an NVIDIA GPU or Apple Silicon Mac; use BYOK instead.",
+  unavailableDriverUpdateVersions:
+    "Update your NVIDIA driver: the current driver supports CUDA {detected}, but local models require CUDA {required} or newer.",
+  unavailableDriverUpdateRequiredOnly:
+    "Update your NVIDIA driver: local models require CUDA {required} or newer.",
+  unavailableDriverUpdateUnknown:
+    "Update your NVIDIA driver to run local models on this computer.",
+  unavailableMissingLibraries:
+    "Install the missing system library ({libraries}) on this computer, then click Recheck memory.",
+  unavailableGlibcVersions:
+    "This system's glibc ({detected}) is older than the {required} required by the local model engine.",
+  unavailableRuntimeDependency:
+    "This computer is missing a system runtime library required by the local model engine.",
+  unavailableGeneric: "This model isn't available on this computer right now.",
+
+  // Host-level blockers and debug mode notices.
+  hostBlockerRegion: "Local model requirements",
+  hostBlockerGpuTitle: "Local models need an NVIDIA GPU or Apple Silicon Mac",
+  hostBlockerGpuAmdBody:
+    "This computer has an AMD GPU, which isn't supported for local models yet. Switch to BYOK to connect your own API endpoint instead.",
+  hostBlockerGpuIntelBody:
+    "This computer has an Intel GPU, which isn't supported for local models yet. Switch to BYOK to connect your own API endpoint instead.",
+  hostBlockerGpuNoneBody:
+    "No supported GPU was found on this computer. Switch to BYOK to connect your own API endpoint instead.",
+  switchToByok: "Switch to BYOK",
+  hostBlockerDriverTitle: "Update the NVIDIA driver to use local models",
+  hostBlockerDriverBody:
+    "The installed driver supports CUDA {detected}, while the local model engine requires CUDA {required} or newer. Update the driver, then click Recheck memory.",
+  hostBlockerDriverRequiredOnlyBody:
+    "The local model engine requires an NVIDIA driver with CUDA {required} or newer. Update the driver, then click Recheck memory.",
+  hostBlockerDriverUnknownBody:
+    "The installed NVIDIA driver is too old for the local model engine. Update the driver, then click Recheck memory.",
+  hostBlockerRuntimeTitle:
+    "Install missing runtime dependencies to use local models",
+  hostBlockerRuntimeLibrariesBody:
+    "This computer is missing {libraries}, required by the local model engine. Install it (for example, libgomp1 on Ubuntu/Debian), then click Recheck memory.",
+  hostBlockerRuntimeGlibcBody:
+    "This system has glibc {detected}, while the local model engine requires glibc {required} or newer.",
+  hostBlockerRuntimeGenericBody:
+    "This computer is missing a required system library for the local model engine. Install the missing runtime dependency, then click Recheck memory.",
+  debugBannerRegion: "Debug mode active",
+  debugBannerTinyTitle: "Debug mode active (tiny)",
+  debugBannerSimulateTitle: "Debug mode active (simulate)",
+  debugBannerEnvBody:
+    "LOCALMODELS_DEBUG is set on this computer, overriding the normal model catalog for testing. Unset LOCALMODELS_DEBUG and restart Linger to restore the standard catalog.",
+  debugBannerConfigBody:
+    "A local debug config ({path}) is overriding the normal model catalog for testing. Run localmodels debug off or delete that file, then click Recheck memory.",
+  debugBannerConfigBodyHidden:
+    "A local debug config file on this computer is overriding the normal model catalog for testing. Turn off debug mode on that computer to restore the standard catalog.",
 
   // A Computer that reports no model library.
   libraryNotReportedTitle: "{computer} hasn't reported local models yet",

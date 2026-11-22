@@ -91,7 +91,9 @@ const familyBrands: Record<NonNullable<LocalModel["family"]>, FamilyBrand> = {
 
 function modelBrand(model: LocalModel): FamilyBrand {
   if (isInkling2MiniModelId(model.id)) return featuredInklingBrand;
-  return model.family ? familyBrands[model.family] : defaultBrand;
+  return model.family && Object.hasOwn(familyBrands, model.family)
+    ? familyBrands[model.family]
+    : defaultBrand;
 }
 
 function cardTone(

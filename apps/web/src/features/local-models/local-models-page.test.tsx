@@ -3578,6 +3578,184 @@ describe("Model source", () => {
       resetLanguageForTest();
     }
   });
+
+  it("shows a host blocker banner with Switch to BYOK when the Computer has an unsupported GPU", async () => {
+    const amdView = labView({
+      models: [
+        modelView(
+          localModel({
+            availability: {
+              downloadable: false,
+              reason: { code: "GPU_UNSUPPORTED", gpu_vendor: "amd" },
+            },
+            fit: "none",
+            id: "qwen3.8-27b:UD-IQ3_S",
+            name: "Qwen3.8 27B",
+            pool: undefined,
+          }),
+        ),
+      ],
+      pools: [],
+    });
+    const fixture = setup([amdView]);
+    withSource(fixture, { ...byokStatus, mode: "local", runtime: "pi" });
+    await renderPage(fixture);
+
+    const banner = await screen.findByRole("complementary", {
+      name: "Local model requirements",
+    });
+    expect(banner).toHaveTextContent(
+      "Local models need an NVIDIA GPU or Apple Silicon Mac",
+    );
+    expect(banner).toHaveTextContent("AMD GPU");
+    expect(statusOf("Qwen3.8 27B")).toBe("Can't download · GPU not supported");
+
+    fireEvent.click(
+      within(banner).getByRole("button", { name: "Switch to BYOK" }),
+    );
+    expect(
+      await screen.findByRole("button", { name: "Save & Switch to BYOK" }),
+    ).toBeVisible();
+  });
+
+  it("shows driver update and missing runtime banners with Recheck memory and RAM detail copy", async () => {
+    const driverView = labView({
+      models: [
+        modelView(
+          localModel({
+            availability: {
+              downloadable: false,
+              reason: {
+                code: "DRIVER_UPDATE_REQUIRED",
+                detected_cuda: "11.8",
+                driver_version: "525.60",
+                required_cuda: "12.4",
+              },
+            },
+            fit: "none",
+            id: "qwen3.8-27b:UD-IQ3_S",
+            name: "Qwen3.8 27B",
+            pool: undefined,
+          }),
+        ),
+      ],
+      pools: [],
+    });
+    const fixture = setup([driverView]);
+    await renderPage(fixture);
+
+    const banner = await screen.findByRole("complementary", {
+      name: "Local model requirements",
+    });
+    expect(banner).toHaveTextContent(
+      "Update the NVIDIA driver to use local models",
+    );
+    expect(banner).toHaveTextContent("CUDA 11.8");
+    expect(banner).toHaveTextContent("CUDA 12.4");
+    fireEvent.click(
+      within(banner).getByRole("button", { name: "Recheck memory" }),
+    );
+    await waitFor(() => expect(fixture.refreshes).toEqual(["computer-lab"]));
+
+    cleanup();
+    const runtimeView = labView({
+      models: [
+        modelView(
+          localModel({
+            availability: {
+              downloadable: false,
+              reason: {
+                code: "RUNTIME_DEPENDENCY_MISSING",
+                missing_libraries: ["libgomp.so.1"],
+              },
+            },
+            fit: "none",
+            id: "qwen3.8-27b:UD-IQ3_S",
+            name: "Qwen3.8 27B",
+            pool: undefined,
+          }),
+        ),
+      ],
+      pools: [],
+    });
+    await renderPage(setup([runtimeView]));
+    const runtimeBanner = await screen.findByRole("complementary", {
+      name: "Local model requirements",
+    });
+    expect(runtimeBanner).toHaveTextContent("libgomp.so.1");
+    expect(statusOf("Qwen3.8 27B")).toBe(
+      "Can't download · missing runtime library",
+    );
+
+    cleanup();
+    const ramShortView = labView({
+      models: [
+        modelView(
+          localModel({
+            availability: {
+              downloadable: false,
+              reason: {
+                code: "MEMORY_INSUFFICIENT",
+                have_bytes: gb(8),
+                memory_kind: "ram",
+                need_bytes: gb(16),
+              },
+            },
+            fit: "none",
+            id: "qwen3.8-27b:UD-IQ3_S",
+            name: "Qwen3.8 27B",
+            pool: undefined,
+          }),
+        ),
+      ],
+    });
+    await renderPage(setup([ramShortView]));
+    await findModels();
+    expect(statusOf("Qwen3.8 27B")).toBe("Can't download · needs 16 GB RAM");
+    fireEvent.click(screen.getByRole("button", { name: "Qwen3.8 27B" }));
+    expect(
+      screen.getByRole("region", { name: "Qwen3.8 27B details" }),
+    ).toHaveTextContent(
+      "Needs 16 GB of system memory (RAM); this computer has 8 GB available.",
+    );
+  });
+
+  it("shows a prominent warning banner when localmodels debug mode is active, in English and Chinese", async () => {
+    const debugView = labView({
+      debug: {
+        config_path: "/home/ana/.config/localmodels/debug.json",
+        mode: "tiny",
+        source: "user_config",
+      },
+    });
+    await renderPage(setup([debugView]));
+    const banner = await screen.findByRole("complementary", {
+      name: "Debug mode active",
+    });
+    expect(banner).toHaveTextContent("Debug mode active (tiny)");
+    expect(banner).toHaveTextContent(
+      "/home/ana/.config/localmodels/debug.json",
+    );
+    expect(banner).toHaveTextContent("localmodels debug off");
+
+    cleanup();
+    try {
+      await setLanguage("zh-CN");
+      const zhDebugView = labView({
+        debug: { mode: "simulate", source: "env" },
+      });
+      await renderPage(setup([zhDebugView]));
+      const zhBanner = await screen.findByRole("complementary", {
+        name: zhCN.localModels.debugBannerRegion,
+      });
+      expect(zhBanner).toHaveTextContent(
+        zhCN.localModels.debugBannerSimulateTitle,
+      );
+      expect(zhBanner).toHaveTextContent(zhCN.localModels.debugBannerEnvBody);
+    } finally {
+      resetLanguageForTest();
+    }
+  });
 });
 
 describe("Featured Inkling 2 Mini spotlight", () => {
