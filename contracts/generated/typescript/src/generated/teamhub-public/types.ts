@@ -6851,6 +6851,16 @@ export interface components {
       transcript_recovery_progress_ms?: number;
       /** Format: int64 */
       transcript_recovery_total_ms?: number;
+      /**
+       * Format: int64
+       * @description The recovery attempt that is running or due next; once recovery failed, the attempts already made. Present with transcript_recovery_status.
+       */
+      transcript_recovery_attempt?: number;
+      /**
+       * Format: int64
+       * @description Attempts a recovery makes before it fails and waits for the account's retry.
+       */
+      transcript_recovery_max_attempts?: number;
       audio_document_version_id?: components["schemas"]["Id"];
       transcript_document_version_id?: components["schemas"]["Id"];
       id: components["schemas"]["Id"];

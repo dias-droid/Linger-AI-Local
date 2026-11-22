@@ -9440,10 +9440,16 @@ type VoiceCapture struct {
 	Status                       VoiceCaptureStatus `json:"status"`
 
 	// TranscriptDocumentVersionId Opaque, case-sensitive identifier. Clients must not infer type or time from it.
-	TranscriptDocumentVersionId  *Id                                   `json:"transcript_document_version_id,omitempty"`
-	TranscriptRecoveryProgressMs *int64                                `json:"transcript_recovery_progress_ms,omitempty"`
-	TranscriptRecoveryStatus     *VoiceCaptureTranscriptRecoveryStatus `json:"transcript_recovery_status,omitempty"`
-	TranscriptRecoveryTotalMs    *int64                                `json:"transcript_recovery_total_ms,omitempty"`
+	TranscriptDocumentVersionId *Id `json:"transcript_document_version_id,omitempty"`
+
+	// TranscriptRecoveryAttempt The recovery attempt that is running or due next; once recovery failed, the attempts already made. Present with transcript_recovery_status.
+	TranscriptRecoveryAttempt *int64 `json:"transcript_recovery_attempt,omitempty"`
+
+	// TranscriptRecoveryMaxAttempts Attempts a recovery makes before it fails and waits for the account's retry.
+	TranscriptRecoveryMaxAttempts *int64                                `json:"transcript_recovery_max_attempts,omitempty"`
+	TranscriptRecoveryProgressMs  *int64                                `json:"transcript_recovery_progress_ms,omitempty"`
+	TranscriptRecoveryStatus      *VoiceCaptureTranscriptRecoveryStatus `json:"transcript_recovery_status,omitempty"`
+	TranscriptRecoveryTotalMs     *int64                                `json:"transcript_recovery_total_ms,omitempty"`
 
 	// UpdatedAt UTC timestamp in RFC 3339 format with an explicit offset.
 	UpdatedAt Timestamp `json:"updated_at"`

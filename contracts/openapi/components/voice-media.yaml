@@ -407,6 +407,18 @@ components:
           type: integer
           format: int64
           minimum: 1
+        transcript_recovery_attempt:
+          type: integer
+          format: int64
+          minimum: 1
+          description: >-
+            The recovery attempt that is running or due next; once recovery failed, the attempts
+            already made. Present with transcript_recovery_status.
+        transcript_recovery_max_attempts:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Attempts a recovery makes before it fails and waits for the account's retry.
         audio_document_version_id:
           $ref: "./common.yaml#/components/schemas/Id"
         transcript_document_version_id:
