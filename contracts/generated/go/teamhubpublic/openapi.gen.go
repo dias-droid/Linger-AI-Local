@@ -4320,6 +4320,7 @@ const (
 	WebSearchBackendIdDuckduckgo WebSearchBackendId = "duckduckgo"
 	WebSearchBackendIdExa        WebSearchBackendId = "exa"
 	WebSearchBackendIdFirecrawl  WebSearchBackendId = "firecrawl"
+	WebSearchBackendIdKeenable   WebSearchBackendId = "keenable"
 	WebSearchBackendIdTavily     WebSearchBackendId = "tavily"
 	WebSearchBackendIdYou        WebSearchBackendId = "you"
 )
@@ -4336,6 +4337,8 @@ func (e WebSearchBackendId) Valid() bool {
 	case WebSearchBackendIdExa:
 		return true
 	case WebSearchBackendIdFirecrawl:
+		return true
+	case WebSearchBackendIdKeenable:
 		return true
 	case WebSearchBackendIdTavily:
 		return true
@@ -4387,6 +4390,7 @@ const (
 	WebSearchKeyBackendBrave     WebSearchKeyBackend = "brave"
 	WebSearchKeyBackendExa       WebSearchKeyBackend = "exa"
 	WebSearchKeyBackendFirecrawl WebSearchKeyBackend = "firecrawl"
+	WebSearchKeyBackendKeenable  WebSearchKeyBackend = "keenable"
 	WebSearchKeyBackendTavily    WebSearchKeyBackend = "tavily"
 	WebSearchKeyBackendYou       WebSearchKeyBackend = "you"
 )
@@ -4399,6 +4403,8 @@ func (e WebSearchKeyBackend) Valid() bool {
 	case WebSearchKeyBackendExa:
 		return true
 	case WebSearchKeyBackendFirecrawl:
+		return true
+	case WebSearchKeyBackendKeenable:
 		return true
 	case WebSearchKeyBackendTavily:
 		return true
@@ -4484,6 +4490,7 @@ const (
 	WebSearchSearchBackendDuckduckgo WebSearchSearchBackend = "duckduckgo"
 	WebSearchSearchBackendExa        WebSearchSearchBackend = "exa"
 	WebSearchSearchBackendFirecrawl  WebSearchSearchBackend = "firecrawl"
+	WebSearchSearchBackendKeenable   WebSearchSearchBackend = "keenable"
 	WebSearchSearchBackendTavily     WebSearchSearchBackend = "tavily"
 	WebSearchSearchBackendYou        WebSearchSearchBackend = "you"
 )
@@ -4498,6 +4505,8 @@ func (e WebSearchSearchBackend) Valid() bool {
 	case WebSearchSearchBackendExa:
 		return true
 	case WebSearchSearchBackendFirecrawl:
+		return true
+	case WebSearchSearchBackendKeenable:
 		return true
 	case WebSearchSearchBackendTavily:
 		return true
@@ -9842,7 +9851,7 @@ type VoiceTranscriptEventPage struct {
 	PartialTranscript    *string                `json:"partial_transcript,omitempty"`
 }
 
-// WebSearchBackend One backend with the static text a client shows for it and its live state. status is ready when a call would run now: DuckDuckGo and direct always, You.com also without a key, the others with a key that is not rejected.
+// WebSearchBackend One backend with the static text a client shows for it and its live state. status is ready when a call would run now: DuckDuckGo and direct always, You.com and Keenable also without a key, the others with a key that is not rejected.
 type WebSearchBackend struct {
 	Commands []WebSearchCommand `json:"commands"`
 
@@ -9879,7 +9888,7 @@ type WebSearchBackend struct {
 	Quota  *WebSearchQuota        `json:"quota,omitempty"`
 	Status WebSearchBackendStatus `json:"status"`
 
-	// Tier How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free: without a key, on a free service with limits that TeamHub does not count (DuckDuckGo, and You.com without a key); none: direct, which needs no account.
+	// Tier How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free: without a key, on a free service with limits that TeamHub does not count (DuckDuckGo, and You.com and Keenable without a key); none: direct, which needs no account.
 	Tier WebSearchBackendTier `json:"tier"`
 
 	// TierText A short display line for the tier, set for free.
@@ -9892,7 +9901,7 @@ type WebSearchBackendKeyState string
 // WebSearchBackendStatus defines model for WebSearchBackend.Status.
 type WebSearchBackendStatus string
 
-// WebSearchBackendTier How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free: without a key, on a free service with limits that TeamHub does not count (DuckDuckGo, and You.com without a key); none: direct, which needs no account.
+// WebSearchBackendTier How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free: without a key, on a free service with limits that TeamHub does not count (DuckDuckGo, and You.com and Keenable without a key); none: direct, which needs no account.
 type WebSearchBackendTier string
 
 // WebSearchBackendId A web search backend. duckduckgo searches without a key. direct opens pages only and is fetched by the Agent CLI on the Agent's computer; TeamHub never fetches a page itself.
@@ -9942,7 +9951,7 @@ type WebSearchQuota struct {
 	ObservedAt *Timestamp `json:"observed_at,omitempty"`
 	Plan       *string    `json:"plan,omitempty"`
 
-	// Reason no_key: no key is saved; not_reported: there is no usage endpoint to read (keyless You.com, DuckDuckGo, Exa, direct); not_observed: Brave has answered no call yet; key_rejected: the provider refused the saved key; provider_unavailable: the usage endpoint did not answer in time.
+	// Reason no_key: no key is saved; not_reported: there is no usage endpoint to read (keyless You.com, DuckDuckGo, Exa, Keenable, direct); not_observed: Brave has answered no call yet; key_rejected: the provider refused the saved key; provider_unavailable: the usage endpoint did not answer in time.
 	Reason    *WebSearchQuotaReason `json:"reason,omitempty"`
 	Remaining *float32              `json:"remaining,omitempty"`
 
@@ -9954,7 +9963,7 @@ type WebSearchQuota struct {
 // WebSearchQuotaFrom defines model for WebSearchQuota.From.
 type WebSearchQuotaFrom string
 
-// WebSearchQuotaReason no_key: no key is saved; not_reported: there is no usage endpoint to read (keyless You.com, DuckDuckGo, Exa, direct); not_observed: Brave has answered no call yet; key_rejected: the provider refused the saved key; provider_unavailable: the usage endpoint did not answer in time.
+// WebSearchQuotaReason no_key: no key is saved; not_reported: there is no usage endpoint to read (keyless You.com, DuckDuckGo, Exa, Keenable, direct); not_observed: Brave has answered no call yet; key_rejected: the provider refused the saved key; provider_unavailable: the usage endpoint did not answer in time.
 type WebSearchQuotaReason string
 
 // WebSearchQuotaUnit defines model for WebSearchQuota.Unit.

@@ -35,13 +35,14 @@ const (
 	Firecrawl  Backend = "firecrawl"
 	Exa        Backend = "exa"
 	You        Backend = "you"
+	Keenable   Backend = "keenable"
 	DuckDuckGo Backend = "duckduckgo"
 	Direct     Backend = "direct"
 )
 
 // keyOrder is TeamHub's default order: a search without a backend uses the
 // first one with a usable key, then DuckDuckGo.
-var keyOrder = []Backend{Tavily, Brave, Firecrawl, Exa, You}
+var keyOrder = []Backend{Tavily, Brave, Firecrawl, Exa, You, Keenable}
 
 // searchOrder is every backend that searches, in the order lists show them.
 var searchOrder = append(slices.Clone(keyOrder), DuckDuckGo)
@@ -101,8 +102,9 @@ type definition struct {
 }
 
 // definitions is the static text and capability of each backend. Firecrawl
-// and You.com take no site filter because their APIs document none. Brave and
-// Exa have no endpoint that checks a key or reports what is left on it.
+// and You.com take no site filter because their APIs document none. Brave,
+// Exa and Keenable have no endpoint that checks a key or reports what is left
+// on it.
 var definitions = map[Backend]definition{
 	Tavily: {name: "Tavily", description: "The real-time search engine for AI agents.",
 		commands: []string{CommandSearch, CommandOpen}, filters: []string{FilterRecency, FilterSite},
@@ -124,6 +126,11 @@ var definitions = map[Backend]definition{
 		commands: []string{CommandSearch, CommandOpen}, filters: []string{FilterRecency},
 		maxLimit: 20, keyless: true, officialCheck: true,
 		freeTier: "Works without a key, limited; a key gives full quality and higher limits.", keyURL: "https://you.com/platform"},
+	// Keenable's keyless routes take one site and a publish date.
+	Keenable: {name: "Keenable", description: "Web search engine built for AI agents.",
+		commands: []string{CommandSearch, CommandOpen}, filters: []string{FilterRecency, FilterSite},
+		maxLimit: 20, maxSites: 1, keyless: true,
+		freeTier: "Works without a key at 1,000 requests an hour; a free key gives 100,000 a month.", keyURL: "https://app.keenable.ai/console"},
 	// DuckDuckGo's results page holds about ten results and takes one site.
 	DuckDuckGo: {name: "DuckDuckGo", description: "Private search from the Internet privacy company.",
 		commands: []string{CommandSearch}, filters: []string{FilterRecency, FilterSite},
@@ -135,6 +142,7 @@ var definitions = map[Backend]definition{
 // The free tier lines; TeamHub counts nothing for either.
 const (
 	youFreeText        = "Free without a key: limited searches with lower quality results."
+	keenableFreeText   = "Free without a key: 1,000 searches and page reads an hour."
 	duckDuckGoFreeText = "Free, no key: DuckDuckGo blocks searches for a while when they come too often."
 )
 
@@ -332,7 +340,7 @@ func (k keyring) status(b Backend) string {
 		return "ready"
 	case ok && !saved.unusable && saved.state == "rejected":
 		return "key_rejected"
-	case b == You:
+	case b == You, b == Keenable:
 		return "ready"
 	default:
 		return "key_required"
@@ -390,7 +398,8 @@ func (s *Service) chosenDefault(ctx context.Context) (Backend, error) {
 // defaultSearch is the backend a search without one uses now: the chosen
 // default even when its key stopped working, so its failure asks for that
 // key instead of silently moving on; else the first backend with a usable
-// key, else DuckDuckGo. You.com runs without a key only when named or chosen.
+// key, else DuckDuckGo. You.com and Keenable run without a key only when named
+// or chosen.
 func defaultSearch(ring keyring, chosen Backend) Backend {
 	if chosen != "" {
 		return chosen
@@ -464,6 +473,8 @@ func (s *Service) view(ring keyring, b Backend) BackendView {
 		view.Tier, view.TierText, view.Quota.Reason = TierFree, duckDuckGoFreeText, "not_reported"
 	case b == You && !ring.usable(You) && view.Status == "ready":
 		view.Tier, view.TierText, view.Quota.Reason = TierFree, youFreeText, "not_reported"
+	case b == Keenable && !ring.usable(Keenable) && view.Status == "ready":
+		view.Tier, view.TierText, view.Quota.Reason = TierFree, keenableFreeText, "not_reported"
 	case view.KeyState == "rejected":
 		view.Quota.Reason = "key_rejected"
 	case b == Brave && ring.usable(Brave):
@@ -727,7 +738,7 @@ func (s *Service) Run(ctx context.Context, request Request) (Outcome, error) {
 	if !supports(b, request) {
 		return Outcome{}, &Failure{Code: CodeUnsupported, Backend: b}
 	}
-	keyless := b == DuckDuckGo || b == You && !ring.usable(You) && ring.status(You) == "ready"
+	keyless := b == DuckDuckGo || (b == You || b == Keenable) && !ring.usable(b) && ring.status(b) == "ready"
 	if !keyless && !ring.usable(b) {
 		code := CodeKeyRequired
 		if ring.status(b) == "key_rejected" {
@@ -740,6 +751,8 @@ func (s *Service) Run(ctx context.Context, request Request) (Outcome, error) {
 	switch {
 	case b == DuckDuckGo:
 		outcome, err = s.providers.duckDuckGoSearch(ctx, request)
+	case keyless && b == Keenable:
+		outcome, _, err = s.providers.run(ctx, Keenable, "", request)
 	case keyless:
 		outcome, err = s.providers.runKeyless(ctx, request)
 	default:

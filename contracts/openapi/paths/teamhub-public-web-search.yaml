@@ -40,7 +40,7 @@ backendKey:
       configured with this backend and that call's results or error code, so
       the Agent need not run it again. Otherwise TeamHub checks the key with
       the provider's official endpoint when it has one (Tavily usage, You.com
-      account balance, Firecrawl credit usage); a Brave key is saved
+      account balance, Firecrawl credit usage); a Brave, Exa or Keenable key is saved
       unverified and its first call proves it. Keys are stored encrypted with
       TEAMHUB_SECRET_ENCRYPTION_KEY and never returned; any signed-in Human
       may save one. Saving answers every other open search_key card

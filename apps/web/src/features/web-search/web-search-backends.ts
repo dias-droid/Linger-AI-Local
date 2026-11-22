@@ -46,6 +46,7 @@ const names: Record<TeamHubWebSearchKeyBackend, string> = {
   brave: "Brave Search",
   exa: "Exa",
   firecrawl: "Firecrawl",
+  keenable: "Keenable",
   tavily: "Tavily",
   you: "You.com",
 };

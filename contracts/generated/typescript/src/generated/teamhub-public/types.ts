@@ -2541,7 +2541,7 @@ export interface paths {
     get?: never;
     /**
      * Save the deployment's API key for one web search backend.
-     * @description From a search_key card (decision_id, its decision owner only), TeamHub first runs the search or page open the card was posted for against this backend with the new key. A provider refusing the key leaves it unsaved and the card open (400 WEB_SEARCH_KEY_REJECTED). Any other outcome saves the key, verified once the provider proved it, and answers the card configured with this backend and that call's results or error code, so the Agent need not run it again. Otherwise TeamHub checks the key with the provider's official endpoint when it has one (Tavily usage, You.com account balance, Firecrawl credit usage); a Brave key is saved unverified and its first call proves it. Keys are stored encrypted with TEAMHUB_SECRET_ENCRYPTION_KEY and never returned; any signed-in Human may save one. Saving answers every other open search_key card configured with this backend and wakes the waiting Agents. 400 carries INVALID_REQUEST or WEB_SEARCH_KEY_REJECTED, 403 FORBIDDEN, 404 NOT_FOUND for a card the caller cannot see, 503 WEB_SEARCH_KEY_STORAGE_UNAVAILABLE or WEB_SEARCH_PROVIDER_UNAVAILABLE.
+     * @description From a search_key card (decision_id, its decision owner only), TeamHub first runs the search or page open the card was posted for against this backend with the new key. A provider refusing the key leaves it unsaved and the card open (400 WEB_SEARCH_KEY_REJECTED). Any other outcome saves the key, verified once the provider proved it, and answers the card configured with this backend and that call's results or error code, so the Agent need not run it again. Otherwise TeamHub checks the key with the provider's official endpoint when it has one (Tavily usage, You.com account balance, Firecrawl credit usage); a Brave, Exa or Keenable key is saved unverified and its first call proves it. Keys are stored encrypted with TEAMHUB_SECRET_ENCRYPTION_KEY and never returned; any signed-in Human may save one. Saving answers every other open search_key card configured with this backend and wakes the waiting Agents. 400 carries INVALID_REQUEST or WEB_SEARCH_KEY_REJECTED, 403 FORBIDDEN, 404 NOT_FOUND for a card the caller cannot see, 503 WEB_SEARCH_KEY_STORAGE_UNAVAILABLE or WEB_SEARCH_PROVIDER_UNAVAILABLE.
      */
     put: operations["saveWebSearchKey"];
     post?: never;
@@ -5636,7 +5636,13 @@ export interface components {
      * @description A backend that takes an API key saved in the product.
      * @enum {string}
      */
-    WebSearchKeyBackend: "tavily" | "brave" | "firecrawl" | "exa" | "you";
+    WebSearchKeyBackend:
+      | "tavily"
+      | "brave"
+      | "firecrawl"
+      | "exa"
+      | "you"
+      | "keenable";
     /** @description A radio or checkbox answer names option ids. Any other value is the Human's own written answer, which every option question accepts, so a checkbox answer holds up to 20 options and one written answer. */
     DecisionAnswerValue: string | string[];
     /** @description Service-signed upload credential. It names the uploading Human, the Room, and the stored file, and it expires at the upload's expires_at; clients must not construct or parse it. */
@@ -7478,6 +7484,7 @@ export interface components {
       | "firecrawl"
       | "exa"
       | "you"
+      | "keenable"
       | "duckduckgo";
     /**
      * @description A web search backend. duckduckgo searches without a key. direct opens pages only and is fetched by the Agent CLI on the Agent's computer; TeamHub never fetches a page itself.
@@ -7489,6 +7496,7 @@ export interface components {
       | "firecrawl"
       | "exa"
       | "you"
+      | "keenable"
       | "duckduckgo"
       | "direct";
     /** @enum {string} */
@@ -7508,7 +7516,7 @@ export interface components {
       resets_at?: components["schemas"]["Timestamp"];
       observed_at?: components["schemas"]["Timestamp"];
       /**
-       * @description no_key: no key is saved; not_reported: there is no usage endpoint to read (keyless You.com, DuckDuckGo, Exa, direct); not_observed: Brave has answered no call yet; key_rejected: the provider refused the saved key; provider_unavailable: the usage endpoint did not answer in time.
+       * @description no_key: no key is saved; not_reported: there is no usage endpoint to read (keyless You.com, DuckDuckGo, Exa, Keenable, direct); not_observed: Brave has answered no call yet; key_rejected: the provider refused the saved key; provider_unavailable: the usage endpoint did not answer in time.
        * @enum {string}
        */
       reason?:
@@ -7518,14 +7526,14 @@ export interface components {
         | "key_rejected"
         | "provider_unavailable";
     };
-    /** @description One backend with the static text a client shows for it and its live state. status is ready when a call would run now: DuckDuckGo and direct always, You.com also without a key, the others with a key that is not rejected. */
+    /** @description One backend with the static text a client shows for it and its live state. status is ready when a call would run now: DuckDuckGo and direct always, You.com and Keenable also without a key, the others with a key that is not rejected. */
     WebSearchBackend: {
       id: components["schemas"]["WebSearchBackendId"];
       name: string;
       /** @description The provider's own one-line description of its product. */
       description: string;
       /**
-       * @description How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free: without a key, on a free service with limits that TeamHub does not count (DuckDuckGo, and You.com without a key); none: direct, which needs no account.
+       * @description How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free: without a key, on a free service with limits that TeamHub does not count (DuckDuckGo, and You.com and Keenable without a key); none: direct, which needs no account.
        * @enum {string}
        */
       tier: "key" | "free" | "none";

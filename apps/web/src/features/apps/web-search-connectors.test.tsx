@@ -27,6 +27,7 @@ describe("Web search connectors", () => {
       "Brave Search",
       "Firecrawl",
       "Exa",
+      "Keenable",
       "DuckDuckGo",
     ]);
     // Like an app card: the free tiers show a status line, a backend that
@@ -46,6 +47,13 @@ describe("Web search connectors", () => {
         name: "Connect You.com",
       }),
     ).toBeVisible();
+    // So does Keenable.
+    expect(card(section, "Keenable")).toHaveTextContent("Free, limited");
+    expect(
+      within(card(section, "Keenable")).getByRole("button", {
+        name: "Connect Keenable",
+      }),
+    ).toBeVisible();
     expect(card(section, "Tavily")).toHaveTextContent(
       "The real-time search engine for AI agents.",
     );
@@ -60,7 +68,7 @@ describe("Web search connectors", () => {
     ).toBeNull();
     expect(screen.queryByRole("heading", { level: 2 })).toBeNull();
     const searchOnly = screen.getByRole("region", { name: "Web search" });
-    expect(cardNames(searchOnly)).toHaveLength(6);
+    expect(cardNames(searchOnly)).toHaveLength(7);
     fireEvent.click(
       within(card(searchOnly, "Exa")).getByRole("button", {
         name: "Connect Exa",
@@ -260,7 +268,7 @@ describe("Web search connectors", () => {
     ).toEqual(["Gmail"]);
     expect(
       cardNames(screen.getByRole("region", { name: "Web search" })),
-    ).toEqual(["You.com", "Tavily", "Firecrawl", "DuckDuckGo"]);
+    ).toEqual(["You.com", "Tavily", "Firecrawl", "Keenable", "DuckDuckGo"]);
   });
 
   it("explains a server that cannot store keys instead of showing a field", async () => {

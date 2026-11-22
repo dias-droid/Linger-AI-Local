@@ -97,7 +97,7 @@ func TestDuckDuckGoChallengeIsARateLimit(t *testing.T) {
 			_, err := s.Run(t.Context(), request)
 			var failure *Failure
 			if !errors.As(err, &failure) || failure.Code != CodeRateLimited || failure.Backend != DuckDuckGo ||
-				!slices.Equal(failure.Ready, []Backend{You}) {
+				!slices.Equal(failure.Ready, []Backend{You, Keenable}) {
 				t.Fatalf("Run = %#v", err)
 			}
 		})

@@ -2877,6 +2877,7 @@
     "descriptionFirecrawl": "面向 AI Agent 的网页数据 API。",
     "descriptionExa": "面向需要实时网页数据的 AI Agent 的搜索 API。",
     "descriptionYou": "面向 AI Agent 和大语言模型的网页搜索 API。",
+    "descriptionKeenable": "面向 AI Agent 的网页搜索引擎。",
     "descriptionDuckDuckGo": "来自互联网隐私公司的私密搜索。",
     "descriptionDirect": "从 Agent 自己的电脑读取网页。",
     "freeTierTavily": "每月 1,000 个免费 API 额度。",
@@ -2884,7 +2885,9 @@
     "freeTierFirecrawl": "每月 1,000 个免费额度。",
     "freeTierExa": "每月 10 美元免费额度；无需绑卡。",
     "freeTierYou": "不填密钥也能用，但有限制；填写密钥可获得完整质量和更高额度。",
+    "freeTierKeenable": "不填密钥每小时可用 1,000 次请求；免费密钥每月可用 100,000 次。",
     "freeUseYou": "不填密钥即可免费使用：搜索次数有限，结果质量较低。",
+    "freeUseKeenable": "不填密钥即可免费使用：每小时 1,000 次搜索和网页读取。",
     "freeUseDuckDuckGo": "免费，无需密钥：搜索过于频繁时，DuckDuckGo 会暂时拦截。"
   },
   "appDescriptions": {

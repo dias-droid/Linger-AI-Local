@@ -119,9 +119,9 @@ func testBox(t *testing.T) *secretbox.Box {
 
 // seen is one request a fake provider received.
 type seen struct {
-	method, path, query, auth, apiKey, token string
-	body                                     map[string]any
-	form                                     url.Values
+	method, path, query, auth, apiKey, token, title string
+	body                                            map[string]any
+	form                                            url.Values
 }
 
 // fakeProviders serves every provider from one server; handle answers each
@@ -138,7 +138,7 @@ func newFakeProviders(t *testing.T, handle func(w http.ResponseWriter, r seen)) 
 	fake.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		raw, _ := io.ReadAll(r.Body)
 		request := seen{method: r.Method, path: r.URL.Path, query: r.URL.RawQuery, auth: r.Header.Get("Authorization"),
-			apiKey: r.Header.Get("X-API-Key"), token: r.Header.Get("X-Subscription-Token")}
+			apiKey: r.Header.Get("X-API-Key"), token: r.Header.Get("X-Subscription-Token"), title: r.Header.Get("X-Keenable-Title")}
 		_ = json.Unmarshal(raw, &request.body)
 		if r.Header.Get("Content-Type") == "application/x-www-form-urlencoded" {
 			request.form, _ = url.ParseQuery(string(raw))
@@ -155,7 +155,7 @@ func newFakeProviders(t *testing.T, handle func(w http.ResponseWriter, r seen)) 
 func (f *fakeProviders) endpoints() Endpoints {
 	return Endpoints{Tavily: f.server.URL + "/tavily", Brave: f.server.URL + "/brave", Firecrawl: f.server.URL + "/firecrawl",
 		YouAPI: f.server.URL + "/youapi", YouIndex: f.server.URL + "/youindex", YouMCP: f.server.URL + "/mcp/free",
-		DuckDuckGo: f.server.URL + "/ddg", Exa: f.server.URL + "/exa", Client: f.server.Client()}
+		DuckDuckGo: f.server.URL + "/ddg", Exa: f.server.URL + "/exa", Keenable: f.server.URL + "/keenable", Client: f.server.Client()}
 }
 
 func (f *fakeProviders) seen() []seen {
@@ -316,12 +316,12 @@ func TestRunClassifiesProviderRefusals(t *testing.T) {
 				t.Fatalf("state = %q", keys.rows[string(tc.backend)].State)
 			}
 			if tc.code == CodeQuotaExhausted || tc.code == CodeRateLimited {
-				wantReady := []Backend{Firecrawl, You, DuckDuckGo}
+				wantReady := []Backend{Firecrawl, You, Keenable, DuckDuckGo}
 				switch tc.backend {
 				case Firecrawl:
-					wantReady = []Backend{You, DuckDuckGo}
+					wantReady = []Backend{You, Keenable, DuckDuckGo}
 				case You:
-					wantReady = []Backend{Firecrawl, DuckDuckGo}
+					wantReady = []Backend{Firecrawl, Keenable, DuckDuckGo}
 				}
 				if !slices.Equal(failure.Ready, wantReady) {
 					t.Fatalf("ready = %v, want %v", failure.Ready, wantReady)
@@ -644,7 +644,7 @@ func TestListReportsTiersStatesAndLiveQuota(t *testing.T) {
 	saveRaw(t, s, keys, Tavily, "provider-secret", "rejected")
 	saveRaw(t, s, keys, Brave, "provider-secret", "unverified")
 	list, err := s.List(t.Context(), true)
-	if err != nil || list.DefaultSearch != Brave || list.DefaultOpen != Direct || !list.CanSaveKeys || len(list.Backends) != 7 {
+	if err != nil || list.DefaultSearch != Brave || list.DefaultOpen != Direct || !list.CanSaveKeys || len(list.Backends) != 8 {
 		t.Fatalf("List = %+v, %v", list, err)
 	}
 	byID := map[Backend]BackendView{}
@@ -690,7 +690,7 @@ func TestListWithoutQuotaCallsNoProvider(t *testing.T) {
 	saveRaw(t, s, keys, You, "provider-secret", "verified")
 	saveRaw(t, s, keys, Tavily, "provider-secret", "verified")
 	list, err := s.List(t.Context(), false)
-	if err != nil || len(list.Backends) != 7 || len(fake.seen()) != 0 {
+	if err != nil || len(list.Backends) != 8 || len(fake.seen()) != 0 {
 		t.Fatalf("List = %+v, %v, calls %d", list, err, len(fake.seen()))
 	}
 	for _, view := range list.Backends {

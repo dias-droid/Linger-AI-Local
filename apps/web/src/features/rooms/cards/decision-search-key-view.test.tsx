@@ -114,7 +114,7 @@ describe("Web search key card", () => {
     const box = await findBox();
     expect(within(box).getByText("Suggested")).toBeVisible();
     const toggle = await within(box).findByRole("button", {
-      name: "Other providers (4)",
+      name: "Other providers (5)",
     });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(within(box).queryByLabelText("Brave Search API key")).toBeNull();
@@ -129,9 +129,11 @@ describe("Web search key card", () => {
       within(others)
         .getAllByRole("listitem")
         .map((item) => within(item).getByRole("button", { name: "Save key" })),
-    ).toHaveLength(4);
+    ).toHaveLength(5);
     const you = within(others).getByText("You.com").closest("li")!;
     expect(you).toHaveTextContent("Free, limited");
+    const keenable = within(others).getByText("Keenable").closest("li")!;
+    expect(keenable).toHaveTextContent("Free, limited");
     expect(within(others).queryByText("DuckDuckGo")).toBeNull();
     expect(within(others).queryByText("Tavily")).toBeNull();
 
@@ -157,7 +159,7 @@ describe("Web search key card", () => {
     );
     const box = await findBox();
     fireEvent.click(
-      await within(box).findByRole("button", { name: "Other providers (4)" }),
+      await within(box).findByRole("button", { name: "Other providers (5)" }),
     );
     const brave = within(box).getByText("Brave Search").closest("li")!;
     fireEvent.change(within(brave).getByLabelText("Brave Search API key"), {

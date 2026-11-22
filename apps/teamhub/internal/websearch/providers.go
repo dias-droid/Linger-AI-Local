@@ -27,6 +27,7 @@ const (
 	DefaultYouMCPURL    = "https://api.you.com/mcp/free"
 	DefaultDuckDuckGo   = "https://html.duckduckgo.com"
 	DefaultExaURL       = "https://api.exa.ai"
+	DefaultKeenableURL  = "https://api.keenable.ai"
 )
 
 // Call budgets. A page read waits longer because the provider fetches and
@@ -42,8 +43,8 @@ const (
 // API. Client replaces the default client, which never follows a redirect so
 // a key never reaches another host.
 type Endpoints struct {
-	Tavily, Brave, Firecrawl, Exa, YouAPI, YouIndex, YouMCP, DuckDuckGo string
-	Client                                                              *http.Client
+	Tavily, Brave, Firecrawl, Exa, YouAPI, YouIndex, YouMCP, DuckDuckGo, Keenable string
+	Client                                                                        *http.Client
 }
 
 type providers struct {
@@ -60,6 +61,7 @@ func newProviders(endpoints Endpoints) *providers {
 		{&endpoints.Firecrawl, DefaultFirecrawlURL}, {&endpoints.YouAPI, DefaultYouAPIURL},
 		{&endpoints.YouIndex, DefaultYouIndexURL}, {&endpoints.YouMCP, DefaultYouMCPURL},
 		{&endpoints.DuckDuckGo, DefaultDuckDuckGo}, {&endpoints.Exa, DefaultExaURL},
+		{&endpoints.Keenable, DefaultKeenableURL},
 	} {
 		if *field.value == "" {
 			*field.value = field.fallback
@@ -202,6 +204,10 @@ func (p *providers) run(ctx context.Context, b Backend, key string, request Requ
 		outcome, err = p.youSearch(ctx, key, request)
 	case b == You:
 		outcome, err = p.youExtract(ctx, key, request.URL)
+	case b == Keenable && request.Command == CommandSearch:
+		outcome, err = p.keenableSearch(ctx, key, request)
+	case b == Keenable:
+		outcome, err = p.keenableFetch(ctx, key, request.URL)
 	default:
 		return Outcome{}, nil, &Failure{Code: CodeUnsupported, Backend: b}
 	}
