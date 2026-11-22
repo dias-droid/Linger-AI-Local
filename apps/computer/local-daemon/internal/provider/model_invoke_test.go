@@ -545,3 +545,68 @@ func TestCodexInvokeSandboxConfigKeepsWindowsUnelevated(t *testing.T) {
 		t.Fatalf("darwin args = %q", args)
 	}
 }
+
+func TestClaudeModelInvokeDisablesNonessentialTrafficAndPreservesOverride(t *testing.T) {
+	home := t.TempDir()
+	claudeDir := filepath.Join(home, ".claude")
+	if err := os.MkdirAll(claudeDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(claudeDir, ".credentials.json"), []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		name     string
+		override string
+		want     string
+	}{
+		{name: "default", want: "1"},
+		{name: "caller override", override: "0", want: "0"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			callerEnv := map[string]string{
+				"HOME":              home,
+				"CLAUDE_CONFIG_DIR": claudeDir,
+				"PATH":              "/usr/bin",
+			}
+			if test.override != "" {
+				callerEnv["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = test.override
+			}
+			var observed string
+			invoker := ModelInvoker{
+				TempBase: filepath.Join(t.TempDir(), "operation-tmp"),
+				Lookup: func(_ context.Context, runtimeType string) (ModelInvokeRuntime, bool, error) {
+					if runtimeType != "claude" {
+						return ModelInvokeRuntime{}, false, nil
+					}
+					return ModelInvokeRuntime{
+						ExecutablePath: "/fixture/claude",
+						Version:        "2.1.309",
+						Environment:    callerEnv,
+					}, true, nil
+				},
+				Run: func(_ context.Context, command *exec.Cmd) error {
+					observed = environmentMap(command)["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"]
+					_, _ = io.WriteString(command.Stdout, `{"type":"result","is_error":false,"result":"OK"}`)
+					return nil
+				},
+			}
+			result := invoker.Invoke(context.Background(), ModelInvokeRequest{
+				RuntimeType:     "claude",
+				Mode:            ModelInvokeText,
+				ReasoningEffort: "low",
+				Input:           "hello",
+				Timeout:         time.Minute,
+			})
+			if result.Outcome != ModelInvokeCompleted || observed != test.want {
+				t.Fatalf("outcome = %+v, observed = %q, want %q", result, observed, test.want)
+			}
+			if test.override == "" {
+				if _, mutated := callerEnv["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"]; mutated {
+					t.Fatal("claudeModelInvocation mutated caller environment map")
+				}
+			}
+		})
+	}
+}

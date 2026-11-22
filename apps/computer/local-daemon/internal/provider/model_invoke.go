@@ -652,6 +652,7 @@ func claudeModelInvocation(request ModelInvokeRequest, environment map[string]st
 	if err != nil {
 		return modelInvocation{}, fmt.Errorf("prepare Claude credentials: %w", err)
 	}
+	prepared = native.ClaudeEnvironment(prepared)
 	stdout := &boundedProbeBuffer{limit: modelInvokeMaxJSONOutputBytes}
 	var reported claudeInvokeOutput
 	parse := func() error {

@@ -27,7 +27,7 @@ func (r *claudeRuntime) prestart(ctx context.Context, spec RunSpec, resolved, ro
 		mcp: spec.MCPServers, root: root, fence: fence,
 		shape: &claudeShape{
 			execPath: resolved, cwd: spec.Dir, args: shaped,
-			env:        claudeShapeEnv(childEnvironment(r.profile.Env)),
+			env:        claudeShapeEnv(childEnvironment(ClaudeEnvironment(r.profile.Env))),
 			initialize: string(initialize), mcp: mcpShape,
 		},
 	}

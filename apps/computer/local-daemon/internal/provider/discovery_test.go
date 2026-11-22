@@ -569,3 +569,41 @@ func TestNormalizeRuntimeModelsSkipsInvalidAndDuplicateDefaults(t *testing.T) {
 		t.Fatalf("models = %+v, want %+v", models, want)
 	}
 }
+
+func TestDiscoverClaudeVersionProbeDisablesNonessentialTraffic(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture uses a POSIX script")
+	}
+	root := t.TempDir()
+	claude := filepath.Join(root, "claude")
+	script := `#!/bin/sh
+if [ "$CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC" != "1" ]; then
+  echo "missing CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC" >&2
+  exit 11
+fi
+case "$1" in
+  --version) echo "2.1.309 (Claude Code)" ;;
+  auth) echo '{"loggedIn":false}'; exit 1 ;;
+  *) exit 2 ;;
+esac
+`
+	if err := os.WriteFile(claude, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	callerEnv := map[string]string{"PATH": root, "HOME": root}
+	result, err := Discover(context.Background(), DiscoveryOptions{
+		ConfiguredPaths: map[string]string{"claude": claude},
+		Runtimes:        []string{"claude"},
+		Environment:     callerEnv,
+		Timeout:         5 * time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Diagnostics) != 1 || result.Diagnostics[0].Version != "2.1.309 (Claude Code)" {
+		t.Fatalf("Claude diagnostic = %+v, want version 2.1.309 (Claude Code)", result.Diagnostics)
+	}
+	if _, mutated := callerEnv["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"]; mutated {
+		t.Fatal("Discover mutated caller environment map")
+	}
+}
