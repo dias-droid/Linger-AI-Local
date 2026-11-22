@@ -353,9 +353,12 @@ Gateway and runs Agents. The daemon exits with the app.
   enrolled server in the hidden window without showing it, and `prewarmAssets`
   warms `/` and `/assets/*` in `session.defaultSession`'s HTTP cache. On
   launch the window loads `serverUrl` without a blocking HTTP probe; if
-  `did-fail-load` fires and `localServer.resumable(serverUrl)` sees an active
-  resume or a valid matching `local-server.json`, it shows the
-  Starting page instead of `offline.html`. `window.did_finish_load` logs
+  `did-fail-load` fires for the current `serverUrl` and
+  `localServer.isStarting(serverUrl)` sees an active resume (or a valid
+  matching `local-server.json` before `LocalServer.start()` runs), it shows the
+  Starting page instead of `offline.html`; stale failures from an older port
+  are ignored, and `setServer` pushes the updated origin to the title bar right
+  away. `window.did_finish_load` logs
   `{ reason, duration_ms, target }` with origin + pathname only (never query or
   hash), and `LocalServer` resume emits `local_server.resume_started`,
   `local_server.resume_stage` (`stage`, `ms`), `local_server.resume_succeeded`
@@ -466,7 +469,11 @@ Gateway and runs Agents. The daemon exits with the app.
   failed state with that reason, and Retry runs the migration again. There is
   no downgrade path: an older build reads neither the converted instances nor
   the moved data folder. The bundle ID and
-  Windows AppUserModelID are `com.simplexai.linger.desktop.preview`. The
+  Windows AppUserModelID are `com.simplexai.linger.desktop.preview`. On
+  Windows, `markStartMenuShortcut` (`src/main/start-menu-shortcut.ts`) updates
+  `Linger.lnk` only when `LINGER_DESKTOP_USER_DATA` is unset and the shortcut
+  already targets the current executable (after canonicalizing both absolute
+  paths); write failures log a warning without aborting startup. The
   Windows setup installs into `%LOCALAPPDATA%\Programs\Linger`; on upgrade it
   closes and removes `%LOCALAPPDATA%\Programs\Simplex` and moves the
   "Open at login" Run value from `ai.simplex.desktop.preview` to the new id.
