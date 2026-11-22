@@ -1978,6 +1978,27 @@ describe("LocalServerModule", () => {
     await f.host.stop("quit");
   });
 
+  it("does not replan on binding-unavailable and reports the structured reason", async () => {
+    const f = fixture(
+      withCheckout,
+      {},
+      checkout,
+      installerApi([], {
+        state: "waiting_user",
+        errorCode: "LOCAL_MODELS_RECOVERY_REQUIRED",
+        errorReasons: ["binding-unavailable"],
+        message:
+          "The upstream tool could not verify the local stack binding: Restore the existing install and try again.",
+      }),
+    );
+    await f.host.start();
+    await expect(f.module.begin({ runtime: "local" })).rejects.toThrow(
+      "The local model stack couldn't be checked. This computer can't run the local model right now. Choose another AI runtime and try again.",
+    );
+    expect(f.api.retried).toEqual([]);
+    await f.host.stop("quit");
+  });
+
   it("asks to free memory only when no local model fits", async () => {
     const f = fixture(
       withCheckout,

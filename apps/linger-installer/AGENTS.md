@@ -62,12 +62,17 @@ installed without extension support included) gets its approved plan applied
 again when the saved plan inputs still match the current choices; only a
 plan the person approved is ever applied, and a stack still not ready ends
 `LOCAL_MODELS_RECOVERY_REQUIRED` with the binding's reason codes in
-`details.reasons`. When the services already run, a local-models setup
+`details.reasons` (exposed on jobs as `errorReasons`). When the services already run, a local-models setup
 whose Computer still uses the local model source (`model-source.json` says
 `local` or does not exist yet) has its stack checked once
 (`restoreLocalModels`), since a quit stops the models but not the services: a
 stack that is not ready gets the same restore, then becomes the model source
-again. A source switched to a subscription or BYOK leaves the stack stopped;
+again; if that restore fails or throws (or a same-checkout cold resume cannot
+prepare the local model stack), the failure is logged and reported in the ready
+outcome's `details.localModelsDegraded` without failing the resume, so the
+person can still reach the workspace and the Models page. Resource-choice
+mismatches omit stale binding reason codes so Quick Install still triggers a
+replan. A source switched to a subscription or BYOK leaves the stack stopped;
 a saved BYOK source gets its Bifrost gateway mounted again from the saved
 configuration unless it already answers (`restoreByokSource`), and a failure
 is logged and reported in the ready outcome's `details.byokGateway`
