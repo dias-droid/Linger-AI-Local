@@ -43,7 +43,9 @@
     "languageDescription": "选择 Linger 界面使用的语言。",
     "interfaceLanguage": "界面语言",
     "interfaceLanguageHint": "仅保存在这台设备上。Agent 和其他人写的内容保持原样，不会被翻译。",
-    "languageUnavailable": "无法加载这种语言，请检查网络后重试。"
+    "languageUnavailable": "无法加载这种语言，请检查网络后重试。",
+    "saveDiagnostics": "保存诊断信息…",
+    "saveDiagnosticsFailed": "无法保存诊断信息，请重试。"
   },
   "navigation": {
     "sidebar": "协作侧边栏",
