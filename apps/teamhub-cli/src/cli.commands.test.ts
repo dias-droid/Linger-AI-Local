@@ -688,6 +688,25 @@ it("reads a real message Thread inside the configured Room Context without docum
   });
 });
 
+it.each([
+  [
+    ["message", "read", "--inbox", "room_one"],
+    "--inbox accepts only room:, thread:, task:, meta: or taskmeta: addresses.",
+  ],
+  [
+    ["room", "handoff", "--inbox", "room_two", "--content", "Hello"],
+    "--inbox accepts only a room: address.",
+  ],
+])("names the accepted --inbox addresses for %j", async (argv, message) => {
+  const f = fixture();
+  expect(await runCli([...argv, "--json"], f.dependencies)).toBe(2);
+  expect(JSON.parse(f.stderr.join("")).error).toMatchObject({
+    code: "usage",
+    message,
+  });
+  expect(f.fetcher).not.toHaveBeenCalled();
+});
+
 describe("caller Context comes only from config.json", () => {
   it.each([
     ["message", "send", "--room", "room_one", "--content", "Hello"],

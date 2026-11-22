@@ -426,8 +426,13 @@ async function normalizeRead(
       ) ||
       inbox.length > 512
     )
-      fail(
+      // The message names the accepted prefixes, not an Inbox address, so
+      // the routing-address filter in formatCommandError must not hide it.
+      throw new CliError(
+        "usage",
         "--inbox accepts only room:, thread:, task:, meta: or taskmeta: addresses.",
+        {},
+        true,
       );
     return {
       input: { inbox_id: inbox, ...paging(args) },

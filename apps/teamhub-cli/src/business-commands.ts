@@ -842,7 +842,15 @@ const roomHandoff = definition(
     const room = /^room:([A-Za-z0-9][A-Za-z0-9_-]*)$/u.exec(
       requiredOption(args, "--inbox"),
     );
-    if (!room) invalid("--inbox accepts only a room: address.");
+    // The message names the accepted prefix, not an Inbox address, so the
+    // routing-address filter in formatCommandError must not hide it.
+    if (!room)
+      throw new CliError(
+        "usage",
+        "--inbox accepts only a room: address.",
+        {},
+        true,
+      );
     return {
       input: await validate("hand_off_to_room", {
         room_id: room[1],
