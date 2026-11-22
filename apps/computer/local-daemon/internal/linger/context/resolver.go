@@ -27,6 +27,9 @@ type ProviderInstallation struct {
 	// ContextWindows maps a model ID to its discovered context length in
 	// tokens.
 	ContextWindows map[string]int
+	// DefaultModel is the model the Runtime's catalog marks as its default
+	// for the signed-in account; empty when it marks none.
+	DefaultModel string
 	// ModelGateway marks a Runtime whose model is served through the
 	// localmodels gateway (local models or BYOK). Those models have no
 	// provider-hosted web search, so the Runtime's own web tools stay off and

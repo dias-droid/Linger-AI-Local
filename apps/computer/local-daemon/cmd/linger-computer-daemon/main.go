@@ -422,6 +422,7 @@ func run(args []string) (resultErr error) {
 				installed, ok, err := providerCatalog.Lookup(ctx, runtimeType)
 				return provider.ModelInvokeRuntime{
 					ExecutablePath: installed.ExecutablePath, Environment: installed.Environment, Version: installed.Version,
+					DefaultModel: installed.DefaultModel,
 				}, ok, err
 			},
 		},
@@ -749,17 +750,21 @@ func providerInstallations(discovered provider.DiscoveryResult, environment map[
 			runtimeEnvironment["PATH"] = diagnostic.ExecutionPath
 		}
 		contextWindows := make(map[string]int, len(diagnostic.Models))
+		defaultModel := ""
 		for _, model := range diagnostic.Models {
 			if model.ContextWindow > 0 {
 				contextWindows[model.ID] = model.ContextWindow
+			}
+			if model.IsDefault && defaultModel == "" {
+				defaultModel = model.ID
 			}
 		}
 		gateway := localmodels.GatewayRuntime(environment, localModelsStateDir, runtimeType)
 		providers[runtimeType] = lingercontext.ProviderInstallation{
 			Type: runtimeType, ExecutablePath: diagnostic.ExecutablePath, EntryPath: diagnostic.EntryPath,
 			Environment: runtimeEnvironment, Version: diagnostic.Version, ContextWindows: contextWindows,
-			ModelGateway: gateway,
-			APILink:      gateway || slices.ContainsFunc(diagnostic.Models, provider.RuntimeModel.OnAPILink),
+			DefaultModel: defaultModel, ModelGateway: gateway,
+			APILink: gateway || slices.ContainsFunc(diagnostic.Models, provider.RuntimeModel.OnAPILink),
 		}
 		runtimes = append(runtimes, runtimeType)
 	}
