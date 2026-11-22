@@ -125,3 +125,31 @@ func TestDaemonEnsuresTheModelGatewayBeforeARun(t *testing.T) {
 		})
 	}
 }
+
+// A model call on a gateway that cannot be mounted again never reaches the
+// Runtime, and its receipt names the tool's code without calling the
+// Computer offline.
+func TestModelInvokeReportsAModelGatewayThatCannotStart(t *testing.T) {
+	for _, tc := range []struct {
+		code, outcome string
+	}{
+		{"BYOK_UNREACHABLE", "runtime_unavailable"},
+		{"BYOK_AUTH_FAILED", "auth_required"},
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			invoker := newFakeModelInvoker()
+			d, stream := modelInvokeFixture(t, invoker)
+			d.modelSource = &gatewayModelSource{err: &localmodels.ModelSourceError{Code: tc.code, Message: "The gateway did not start."}}
+			if err := d.handleModelInvoke(context.Background(), stream, modelInvokeCommand("invoke-1", nil)); err != nil {
+				t.Fatal(err)
+			}
+			payload := waitForModelInvoked(t, stream, "invoke-1")
+			if payload["outcome"] != tc.outcome || payload["reason"] != "The model gateway could not be started ("+tc.code+")" {
+				t.Fatalf("payload = %v", payload)
+			}
+			if invoker.calls() != 0 {
+				t.Fatalf("invoker calls = %d, want 0", invoker.calls())
+			}
+		})
+	}
+}

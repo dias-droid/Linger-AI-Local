@@ -28,6 +28,7 @@ func (m *ModelSource) EnsureGateway(ctx context.Context, runtimeType string) err
 	if _, healthURL := byokGateway(m.tool.StateDirectory, runtimeType); healthURL == "" || gatewayAnswers(ctx, healthURL) {
 		return nil
 	}
+	waitedFrom := time.Now()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	// Another Run or an Apply may have mounted the gateway, or switched the
@@ -36,7 +37,26 @@ func (m *ModelSource) EnsureGateway(ctx context.Context, runtimeType string) err
 	if healthURL == "" || gatewayAnswers(ctx, healthURL) {
 		return nil
 	}
+	// A remount that finished while this Run waited failed just now; running
+	// it again would probe the endpoint once more for each waiting Run.
+	if m.remountedAt.After(waitedFrom) {
+		return m.remountErr
+	}
 	slog.Info("model_source.gateway_remount", "phase", "started", "runtime_type", runtimeType)
+	err := m.remount(ctx, runtime)
+	if ctx.Err() == nil {
+		m.remountedAt, m.remountErr = time.Now(), err
+	}
+	if err == nil {
+		slog.Info("model_source.gateway_remount", "phase", "succeeded", "runtime_type", runtimeType)
+	} else if sourceErr := (*ModelSourceError)(nil); errors.As(err, &sourceErr) {
+		slog.Warn("model_source.gateway_remount", "phase", "failed", "runtime_type", runtimeType, "code", sourceErr.Code)
+	}
+	return err
+}
+
+// remount mounts the saved BYOK source on Bifrost again. The caller holds mu.
+func (m *ModelSource) remount(ctx context.Context, runtime string) error {
 	runCtx, cancel := context.WithTimeout(ctx, m.applyTimeout)
 	defer cancel()
 	stdout, exitCode, err := m.runTool(runCtx, "source_remount", m.applyArgs("byok", runtime, "", false), nil)
@@ -54,16 +74,10 @@ func (m *ModelSource) EnsureGateway(ctx context.Context, runtimeType string) err
 		if unsupported := unsupportedSourceCommand(exitCode, stdout); unsupported != nil {
 			return unsupported
 		}
-		failure := parseToolFailure(stdout, "BYOK_GATEWAY_FAILED", "The BYOK gateway could not be started on this Computer.")
-		var sourceErr *ModelSourceError
-		if errors.As(failure, &sourceErr) {
-			slog.Warn("model_source.gateway_remount", "phase", "failed", "runtime_type", runtimeType, "code", sourceErr.Code)
-		}
-		return failure
+		return parseToolFailure(stdout, "BYOK_GATEWAY_FAILED", "The BYOK gateway could not be started on this Computer.")
 	}
 	// The tool rewrites model-source.json without the Runtime paths.
 	m.persistRuntimePaths(stdout)
-	slog.Info("model_source.gateway_remount", "phase", "succeeded", "runtime_type", runtimeType)
 	return nil
 }
 

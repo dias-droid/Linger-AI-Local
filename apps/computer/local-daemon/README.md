@@ -201,7 +201,9 @@ first. A failed mount fails the Run before its Runtime starts, with the
 public failure code of the tool's structured code: `BYOK_UNREACHABLE` and
 `NETWORK_UNAVAILABLE` become `network_error`, `BYOK_AUTH_FAILED`
 `authentication_required`; any other stays `execution_failed`. Model calls
-answer `unavailable`.
+answer `auth_required` or `runtime_unavailable` with the tool's code in the
+reason. Runs that waited for a remount that failed meanwhile share its
+error instead of probing the endpoint again.
 
 ## Codex models cache
 

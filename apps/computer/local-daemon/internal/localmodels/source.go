@@ -258,6 +258,10 @@ type ModelSource struct {
 	applyTimeout  time.Duration
 	onApplied     func(context.Context) map[string][]RuntimeModelOption
 	mu            sync.Mutex
+	// remountedAt and remountErr are the last gateway remount's finish time
+	// and outcome, under mu, so Runs that waited for it share its outcome.
+	remountedAt time.Time
+	remountErr  error
 }
 
 // NewModelSource constructs a ModelSource controller for the given localmodels Tool.

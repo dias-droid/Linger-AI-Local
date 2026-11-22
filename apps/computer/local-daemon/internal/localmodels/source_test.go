@@ -18,6 +18,10 @@ func runFakeSourceTool(state string, args []string) int {
 	verb := args[0]
 	stdinBytes, _ := io.ReadAll(os.Stdin)
 	_ = os.WriteFile(filepath.Join(state, "source-args.txt"), []byte(strings.Join(args, " ")), 0o600)
+	if calls, err := os.OpenFile(filepath.Join(state, "source-calls.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
+		_, _ = calls.WriteString(strings.Join(args, " ") + "\n")
+		_ = calls.Close()
+	}
 	_ = os.WriteFile(filepath.Join(state, "source-stdin.json"), stdinBytes, 0o600)
 	out, err := os.ReadFile(filepath.Join(state, "source-"+verb+".json"))
 	if err != nil {

@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 )
 
 // A BYOK gateway that does not answer is mounted again from the saved
@@ -109,5 +111,63 @@ func TestEnsureGatewayMountsTheSavedByokSourceOnlyWhenItsGatewayIsDown(t *testin
 	}
 	if overlay := ReadOverlay(ft.state); overlay == nil || overlay.RuntimePaths["pi"] != "/opt/harness/bin/pi" {
 		t.Fatalf("overlay = %+v, want the Runtime paths kept", overlay)
+	}
+}
+
+// Runs that waited while a remount failed share its error rather than each
+// probing the unreachable endpoint again.
+func TestEnsureGatewaySharesARemountThatFailedWhileWaiting(t *testing.T) {
+	stopped := httptest.NewServer(http.NotFoundHandler())
+	stoppedURL := stopped.URL
+	stopped.Close()
+	ft := newFakeTool(t)
+	writeModelSourceJSON(t, ft.state, map[string]any{
+		"schema": modelSourceSchema, "mode": "byok", "runtime": "pi", "gateway_url": stoppedURL,
+		"environment": map[string]string{"PI_CODING_AGENT_DIR": filepath.Join(ft.state, "byok-home", ".pi", "agent")},
+	})
+	ft.write("source-apply.json", map[string]any{
+		"schema": modelSourceStatusSchema, "ok": false, "code": "BYOK_UNREACHABLE", "message": "Could not reach the endpoint.",
+	})
+	if err := os.WriteFile(filepath.Join(ft.state, "source-apply-exit"), []byte("1"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ms := NewModelSource(ModelSourceOptions{
+		Tool: &ft.tool, Environment: map[string]string{"LOCALMODELS_FAKE_TOOL": "1"},
+		JobDirectory: filepath.Join(t.TempDir(), "jobs"),
+	})
+
+	// An Apply holds the lock while three Runs arrive.
+	ms.mu.Lock()
+	var wg sync.WaitGroup
+	errs := make([]error, 3)
+	for i := range errs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs[i] = ms.EnsureGateway(t.Context(), "pi")
+		}()
+	}
+	time.Sleep(300 * time.Millisecond)
+	ms.mu.Unlock()
+	wg.Wait()
+
+	for i, err := range errs {
+		var sourceErr *ModelSourceError
+		if !errors.As(err, &sourceErr) || sourceErr.Code != "BYOK_UNREACHABLE" {
+			t.Fatalf("Run %d error = %v, want BYOK_UNREACHABLE", i, err)
+		}
+	}
+	calls, _ := os.ReadFile(filepath.Join(ft.state, "source-calls.log"))
+	if n := strings.Count(string(calls), "apply --mode byok"); n != 1 {
+		t.Fatalf("remounts = %d, want 1:\n%s", n, calls)
+	}
+
+	// A Run that arrives after the failure tries again.
+	if err := ms.EnsureGateway(t.Context(), "pi"); err == nil {
+		t.Fatal("EnsureGateway succeeded, want the endpoint still unreachable")
+	}
+	calls, _ = os.ReadFile(filepath.Join(ft.state, "source-calls.log"))
+	if n := strings.Count(string(calls), "apply --mode byok"); n != 2 {
+		t.Fatalf("remounts = %d, want 2", n)
 	}
 }
