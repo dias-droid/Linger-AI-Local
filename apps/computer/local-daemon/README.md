@@ -124,16 +124,20 @@ model.
   `LocalModelActionRefusal`. `localmodels` checks every precondition before
   it starts work, so a download or load runs as a child process whose first
   event line decides the answer: a progress or result line accepts it, and an
-  error line before any progress refuses it with the tool's code and its
-  `pool`, `need_bytes` and `free_bytes` (`have_bytes` for download
-  refusals). A job that exits without an event is `TOOL_FAILED`. `unload`,
-  `remove` and `cancel` are answered when the tool finishes; `refresh` after a
-  status read. If the command's `expires_at` passes before the tool decides,
-  the Daemon sends no answer (the Gateway, waiting for the same deadline,
-  reports the action as unconfirmed) and the outcome reaches the owner only
-  through snapshots: an accepted job publishes its progress, and a late
-  refusal publishes a fresh status read. Command handling runs off the
-  connection loop.
+  error line before any progress refuses it with the tool's code (unknown
+  future codes degrade to `UNKNOWN_ERROR` rather than failing the action as
+  `TOOL_FAILED`) and its `pool`, `need_bytes` and `free_bytes` (`have_bytes`
+  for download refusals). Extended refusal codes (`GPU_UNSUPPORTED`,
+  `DRIVER_UPDATE_REQUIRED`, `RUNTIME_DEPENDENCY_MISSING`, `UNKNOWN_ERROR`)
+  are downgraded to legacy codes unless `runner.welcome`'s `service_features`
+  names `local_models_diagnostics`. A job that exits without an event is
+  `TOOL_FAILED`. `unload`, `remove` and `cancel` are answered when the tool
+  finishes; `refresh` after a status read. If the command's `expires_at`
+  passes before the tool decides, the Daemon sends no answer (the Gateway,
+  waiting for the same deadline, reports the action as unconfirmed) and the
+  outcome reaches the owner only through snapshots: an accepted job publishes
+  its progress, and a late refusal publishes a fresh status read. Command
+  handling runs off the connection loop.
 - Jobs. A download or load runs in its own process group and writes its event
   lines to a file under `state/local-models/jobs`, which the Daemon tails, so
   a Daemon restart neither signals the job nor breaks its output. `cancel` is
@@ -146,12 +150,24 @@ model.
   one after connecting) is retried with backoff up to one minute until a read
   succeeds, so a transient failure never ends the watch.
 - Snapshots. `runner.local_models` carries `library-status/v1` mapped to
-  `LocalModelsSnapshot` (pools gain `kind` and `gpu_index`; a value outside
-  the contract's closed sets makes the read `TOOL_FAILED`). Optional model-card
-  fields (`family`, `publisher`, `architecture`, `parameters`,
-  `active_parameters`, `capabilities`, `license`, HTTPS `source_url`,
-  `prompt_tokens_per_second`) follow the same closed-set validation and
-  display-string clipping. It is sent after
+  `LocalModelsSnapshot` (pools gain `kind` and `gpu_index`). Structural and
+  security invariants (`id`, unique model IDs, `fit`, `state`, `pool`,
+  `pi_model` length, non-negative speeds, HTTPS `source_url`) still fail
+  closed as `TOOL_FAILED`, while extensible display and diagnostic enums
+  degrade gracefully so newer `localmodels` releases do not break the Models
+  page: unknown `family` becomes `other`, unknown `architecture` is omitted,
+  unknown `capabilities` are dropped and deduplicated, unknown
+  `availability.reason.code` becomes `UNAVAILABLE`, unknown `error.code`
+  becomes `UNKNOWN_ERROR` (with `cause`/`path` cleared; unknown `error.cause`
+  is cleared), unknown `note.code` is dropped, unknown `download.step`
+  becomes `download`, and unknown `pool.holders[].kind` becomes `component`.
+  Optional model-card strings (`publisher`, `parameters`, `active_parameters`,
+  `license`) and diagnostic metadata are clipped to contract bounds. Extended
+  diagnostics (`GPU_UNSUPPORTED`, `DRIVER_UPDATE_REQUIRED`,
+  `RUNTIME_DEPENDENCY_MISSING`, `UNAVAILABLE`, `UNKNOWN_ERROR`, `memory_kind`,
+  driver/runtime fields) and optional `debug` metadata are sent only when
+  `runner.welcome`'s `service_features` names `local_models_diagnostics` and
+  are downgraded otherwise. It is sent after
   every welcome, after every action or job end, and at most every 2 seconds
   for progress. When a job enters a phase (download, verify, load, warm) the
   Daemon rereads the status, which carries what the phase reserved or freed
