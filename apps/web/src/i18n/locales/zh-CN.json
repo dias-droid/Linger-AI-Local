@@ -2139,7 +2139,7 @@
     "updateFailed": "Wiki 更新失败",
     "updateFailedComputerOffline": "Wiki 更新失败：你的电脑当时处于离线状态。",
     "updateFailedSignIn": "Wiki 更新失败：需要登录 Runtime。",
-    "updateFailedIncompatible": "Wiki 更新失败：Runtime 不兼容。请更新本地的 CLI 或 Linger。",
+    "updateFailedIncompatible": "Wiki 更新失败：Runtime 不兼容，或你的账号不能使用它的模型。请更新本地的 CLI 或 Linger，或检查它的模型设置。",
     "updateFailedRuntimeUnavailable": "Wiki 更新失败：本地 Runtime 不可用。",
     "notWrittenYet": "这个页面还没有写好。",
     "notPublished": "这个页面没有发布。",
