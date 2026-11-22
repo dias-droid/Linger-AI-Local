@@ -75,6 +75,16 @@ export function VoiceRecoveryPanel({
       <p className="mt-1 text-app-muted">
         {failed ? t(m.recoveryPausedBody) : t(m.recoveringBody, { progress })}
       </p>
+      {!failed &&
+      capture.transcript_recovery_attempt &&
+      capture.transcript_recovery_max_attempts ? (
+        <p className="mt-1 text-app-muted">
+          {t(m.recoveringAttempt, {
+            attempt: capture.transcript_recovery_attempt,
+            max: capture.transcript_recovery_max_attempts,
+          })}
+        </p>
+      ) : null}
       <div className="mt-2 flex items-center gap-3">
         {download ? (
           <a

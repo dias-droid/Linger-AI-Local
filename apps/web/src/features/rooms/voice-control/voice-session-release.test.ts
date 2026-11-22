@@ -12,7 +12,7 @@ import type {
   TeamHubVoiceCapture,
   TeamHubVoiceSession,
 } from "@/features/teamhub/teamhub-types";
-import { releaseVoiceSession } from "./voice-session-release";
+import { releaseVoiceSession, VoiceStopError } from "./voice-session-release";
 
 const session = { id: "voice-old", room_id: "room-old" } as TeamHubVoiceSession;
 const recording = {
@@ -121,6 +121,39 @@ describe("Voice page release", () => {
     const fixture = clientFixture();
     fixture.stop.mockReturnValueOnce(missing());
     await releaseVoiceSession(fixture.client, session, recording);
+    expect(fixture.close).toHaveBeenCalledOnce();
+  });
+
+  it("gives up after three Stops that leave the Capture recording", async () => {
+    vi.useFakeTimers();
+    const fixture = clientFixture();
+    fixture.stop.mockReturnValue(
+      teamHubErrorResponse(503, "UNAVAILABLE", "Unavailable"),
+    );
+    const pending = releaseVoiceSession(
+      fixture.client,
+      session,
+      recording,
+    ).catch((error: unknown) => error);
+    await vi.runAllTimersAsync();
+    expect(await pending).toBeInstanceOf(VoiceStopError);
+    expect(fixture.stop).toHaveBeenCalledTimes(3);
+    expect(fixture.close).not.toHaveBeenCalled();
+  });
+
+  it("keeps stopping a Capture it could not read after a failed Stop", async () => {
+    vi.useFakeTimers();
+    const fixture = clientFixture();
+    fixture.stop.mockReturnValueOnce(
+      teamHubErrorResponse(503, "UNAVAILABLE", "Unavailable"),
+    );
+    fixture.active.mockReturnValueOnce(
+      teamHubErrorResponse(503, "UNAVAILABLE", "Unavailable"),
+    );
+    const pending = releaseVoiceSession(fixture.client, session, recording);
+    await vi.runAllTimersAsync();
+    await pending;
+    expect(fixture.stop).toHaveBeenCalledTimes(2);
     expect(fixture.close).toHaveBeenCalledOnce();
   });
 

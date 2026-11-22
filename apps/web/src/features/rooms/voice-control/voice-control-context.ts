@@ -72,6 +72,8 @@ export interface VoiceControlContextValue {
   listenerStatus: VoiceListenerStatus;
   microphoneMuted: boolean;
   partialTranscript?: string;
+  /** Present once Stop gave up with the Capture still recording; tries again. */
+  retryStop?(): Promise<void>;
   selectedDeviceId: string;
   setMicrophoneMuted(muted: boolean): Promise<void>;
   selectDevice(deviceId: string): Promise<void>;

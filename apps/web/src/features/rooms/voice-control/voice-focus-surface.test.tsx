@@ -45,7 +45,10 @@ describe("RecordingEntry", () => {
     );
     const meetings = screen.getByRole("button", { name: "Meetings" });
     expect(meetings).toBeEnabled();
-    expect(meetings).toHaveAttribute("title", "Meetings");
+    expect(meetings).toHaveAttribute(
+      "title",
+      "Transcript recovery failed. Open to retry.",
+    );
     expect(meetings).toHaveTextContent("Meetings");
     expect(document.querySelector(".animate-spin")).toBeNull();
   });
