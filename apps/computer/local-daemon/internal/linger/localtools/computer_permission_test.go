@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 )
 
 type fakeLingerBridge struct {
@@ -168,6 +169,9 @@ func TestComputerPermissionsReportBothSubjectsOnMacOS(t *testing.T) {
 
 func TestComputerPermissionsRestartCuaAfterMissingScreenRecording(t *testing.T) {
 	fixture := newPermissionFixture("darwin", true, true)
+	// The Desktop app sees the grant while CuaDriver still reads its cached
+	// denial: the stale grant a restart can clear.
+	fixture.linger.granted[PermissionScreenRecording] = true
 	fixture.cua.reading = CuaPermissionReading{Accessibility: true}
 	status, err := fixture.service.ComputerPermission(t.Context(), "status", "", "")
 	if err != nil {
@@ -209,6 +213,75 @@ func TestComputerPermissionsRestartCuaAfterMissingScreenRecording(t *testing.T) 
 	}
 	if !slices.Equal(fixture.opened, []string{"x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"}) {
 		t.Fatalf("opened = %v", fixture.opened)
+	}
+}
+
+func TestComputerPermissionsDoesNotRestartCuaWithoutAStaleGrant(t *testing.T) {
+	fixture := newPermissionFixture("darwin", true, true)
+	fixture.cua.reading = CuaPermissionReading{Accessibility: true}
+	for range 3 {
+		if _, err := fixture.service.ComputerPermission(t.Context(), "status", "", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if fixture.cua.restarts != 0 {
+		t.Fatalf("a plain denied reading restarted the shared service: restarts=%d", fixture.cua.restarts)
+	}
+}
+
+func TestComputerPermissionsThrottlesCuaRestart(t *testing.T) {
+	fixture := newPermissionFixture("darwin", true, true)
+	fixture.linger.granted[PermissionScreenRecording] = true
+	now := time.Unix(1_700_000_000, 0)
+	fixture.service.now = func() time.Time { return now }
+	fixture.cua.reading = CuaPermissionReading{Accessibility: true}
+	for range 3 {
+		if _, err := fixture.service.ComputerPermission(t.Context(), "status", "", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if fixture.cua.restarts != 1 {
+		t.Fatalf("a polled status restart storm: restarts=%d", fixture.cua.restarts)
+	}
+	now = now.Add(cuaRestartInterval)
+	if _, err := fixture.service.ComputerPermission(t.Context(), "status", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.cua.restarts != 2 {
+		t.Fatalf("the interval did not allow a new restart: restarts=%d", fixture.cua.restarts)
+	}
+}
+
+func TestComputerPermissionsRestartsCuaAfterAPrompt(t *testing.T) {
+	fixture := newPermissionFixture("darwin", true, true)
+	now := time.Unix(1_700_000_000, 0)
+	fixture.service.now = func() time.Time { return now }
+	fixture.cua.reading = CuaPermissionReading{Accessibility: true}
+	if _, err := fixture.service.ComputerPermission(t.Context(), "status", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.cua.restarts != 0 {
+		t.Fatalf("an unprompted reading restarted the service: restarts=%d", fixture.cua.restarts)
+	}
+	if _, err := fixture.service.ComputerPermission(t.Context(), "prompt", "computer_use", "screen_recording"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fixture.service.ComputerPermission(t.Context(), "status", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.cua.restarts != 1 {
+		t.Fatalf("the prompted stale grant was not restarted: restarts=%d", fixture.cua.restarts)
+	}
+}
+
+func TestComputerPermissionsDoesNotRestartCuaWhenGranted(t *testing.T) {
+	fixture := newPermissionFixture("darwin", true, true)
+	fixture.cua.reading = CuaPermissionReading{Accessibility: true, ScreenRecording: true}
+	if _, err := fixture.service.ComputerPermission(t.Context(), "status", "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.cua.restarts != 0 {
+		t.Fatalf("a granted reading restarted the service: restarts=%d", fixture.cua.restarts)
 	}
 }
 
