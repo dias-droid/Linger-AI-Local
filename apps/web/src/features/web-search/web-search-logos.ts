@@ -4,6 +4,7 @@ import braveLogo from "./logos/brave.svg";
 import duckDuckGoLogo from "./logos/duckduckgo.svg";
 import exaLogo from "./logos/exa.svg";
 import firecrawlLogo from "./logos/firecrawl.svg";
+import keenableLogo from "./logos/keenable.svg";
 import tavilyLogo from "./logos/tavily.svg";
 import youLogo from "./logos/you.svg";
 
@@ -14,6 +15,7 @@ const logos: Record<TeamHubWebSearchSearchBackend, string> = {
   duckduckgo: duckDuckGoLogo,
   exa: exaLogo,
   firecrawl: firecrawlLogo,
+  keenable: keenableLogo,
   tavily: tavilyLogo,
   you: youLogo,
 };

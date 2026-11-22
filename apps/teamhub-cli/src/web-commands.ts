@@ -9,9 +9,23 @@ import { CliError, ConnectorError } from "./errors.js";
 import { teamHubData } from "./http-client.js";
 
 type Json = Record<string, unknown>;
-const keyBackends = ["tavily", "brave", "firecrawl", "exa", "you"] as const;
+const keyBackends = [
+  "tavily",
+  "brave",
+  "firecrawl",
+  "exa",
+  "you",
+  "keenable",
+] as const;
 const searchBackends = [...keyBackends, "duckduckgo"] as const;
-const openBackends = ["tavily", "firecrawl", "exa", "you", "direct"] as const;
+const openBackends = [
+  "tavily",
+  "firecrawl",
+  "exa",
+  "you",
+  "keenable",
+  "direct",
+] as const;
 const recencies = ["day", "week", "month", "year"] as const;
 const names: Record<string, string> = {
   tavily: "Tavily",
@@ -19,6 +33,7 @@ const names: Record<string, string> = {
   firecrawl: "Firecrawl",
   exa: "Exa",
   you: "You.com",
+  keenable: "Keenable",
   duckduckgo: "DuckDuckGo",
   direct: "Direct",
 };
@@ -157,12 +172,12 @@ const webSearch: CommandDefinition = {
     "Search the web through a provider with the deployment's saved API key.",
   readOnly: true,
   usage: [
-    "teamhub web search <query> [--backend tavily|brave|firecrawl|exa|you|duckduckgo] [--limit 1-20] [--recency day|week|month|year] [--site <domain>]...",
+    "teamhub web search <query> [--backend tavily|brave|firecrawl|exa|you|keenable|duckduckgo] [--limit 1-20] [--recency day|week|month|year] [--site <domain>]...",
   ],
   arguments: ["<query>  What to search for; 1-400 characters."],
   options: {
     "--backend": flag(
-      "tavily, brave, firecrawl, exa, you or duckduckgo. Without it the user's default runs, else the first backend with a key, else duckduckgo, which needs none.",
+      "tavily, brave, firecrawl, exa, you, keenable or duckduckgo. Without it the user's default runs, else the first backend with a key, else duckduckgo, which needs none.",
     ),
     "--limit": flag(
       "Results to return; 1-20 up to the backend's max_limit, default 10.",
@@ -271,12 +286,12 @@ const webOpen: CommandDefinition = {
     "Read one web page as Markdown, from this computer or through a provider.",
   readOnly: true,
   usage: [
-    "teamhub web open <url> [--backend direct|tavily|firecrawl|exa|you] [--output <file>]",
+    "teamhub web open <url> [--backend direct|tavily|firecrawl|exa|you|keenable] [--output <file>]",
   ],
   arguments: ["<url>  An absolute http or https URL."],
   options: {
     "--backend": flag(
-      "direct (default) fetches the page from this computer; tavily, firecrawl, exa or you read it through the provider, which helps with pages that need JavaScript or block plain requests.",
+      "direct (default) fetches the page from this computer; tavily, firecrawl, exa, you or keenable read it through the provider, which helps with pages that need JavaScript or block plain requests.",
     ),
     "--output": flag(
       "Save the Markdown to this new file instead of printing it; never overwrites.",
@@ -394,7 +409,7 @@ const webList: CommandDefinition = {
   usage: ["teamhub web list [--backend <backend>]"],
   options: {
     "--backend": flag(
-      "Show only this backend: tavily, brave, firecrawl, exa, you, duckduckgo or direct.",
+      "Show only this backend: tavily, brave, firecrawl, exa, you, keenable, duckduckgo or direct.",
     ),
   },
   inputSchema: {
@@ -471,8 +486,8 @@ const webConnect: CommandDefinition = {
   // Like apps connect it only requests a card; TeamHub reuses a pending one,
   // so a repeated call needs no receipt.
   readOnly: true,
-  usage: ["teamhub web connect <tavily|brave|firecrawl|exa|you>"],
-  arguments: ["<backend>  tavily, brave, firecrawl, exa or you."],
+  usage: ["teamhub web connect <tavily|brave|firecrawl|exa|you|keenable>"],
+  arguments: ["<backend>  tavily, brave, firecrawl, exa, you or keenable."],
   options: {},
   notes: [
     "When it posts the card, end your turn. The card's result wakes you when the user adds a key or declines. Never ask for an API key in a message.",

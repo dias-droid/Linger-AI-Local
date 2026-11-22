@@ -13,6 +13,7 @@ const descriptions: Partial<Record<BackendId, Message<string>>> = {
   firecrawl: m.descriptionFirecrawl,
   exa: m.descriptionExa,
   you: m.descriptionYou,
+  keenable: m.descriptionKeenable,
   duckduckgo: m.descriptionDuckDuckGo,
   direct: m.descriptionDirect,
 };
@@ -23,10 +24,12 @@ const freeTiers: Partial<Record<BackendId, Message<string>>> = {
   firecrawl: m.freeTierFirecrawl,
   exa: m.freeTierExa,
   you: m.freeTierYou,
+  keenable: m.freeTierKeenable,
 };
 
 const freeUses: Partial<Record<BackendId, Message<string>>> = {
   you: m.freeUseYou,
+  keenable: m.freeUseKeenable,
   duckduckgo: m.freeUseDuckDuckGo,
 };
 

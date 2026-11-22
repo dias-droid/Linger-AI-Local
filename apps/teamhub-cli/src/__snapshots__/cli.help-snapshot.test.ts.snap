@@ -3475,11 +3475,11 @@ LEARN MORE
   },
   "web connect": {
     "help": "exit 0
-teamhub web connect <tavily|brave|firecrawl|exa|you>
+teamhub web connect <tavily|brave|firecrawl|exa|you|keenable>
 Ask the user for a web search backend's API key: posts a key card in this chat unless the backend is already ready.
 
 Arguments:
-  <backend>  tavily, brave, firecrawl, exa or you.
+  <backend>  tavily, brave, firecrawl, exa, you or keenable.
 
 Options:
   --json  Return machine-readable JSON.
@@ -3489,7 +3489,7 @@ Options:
 When it posts the card, end your turn. The card's result wakes you when the user adds a key or declines. Never ask for an API key in a message.
 ",
     "schema": "exit 0
-{"command":["web","connect"],"description":"Ask the user for a web search backend's API key: posts a key card in this chat unless the backend is already ready.","read_only":true,"input_schema":{"type":"object","properties":{"backend":{"enum":["tavily","brave","firecrawl","exa","you"]}},"required":["backend"],"additionalProperties":false},"output_schema":{"type":"object","properties":{"status":{"enum":["ready","connection_requested"]},"backend":{"type":"object"},"message_id":{"type":"string"},"interaction_id":{"type":"string"}},"required":["status"]},"cli":{"usage":["teamhub web connect <tavily|brave|firecrawl|exa|you>"],"arguments":["<backend>  tavily, brave, firecrawl, exa or you."],"options":{"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true}},"notes":["When it posts the card, end your turn. The card's result wakes you when the user adds a key or declines. Never ask for an API key in a message."]}}
+{"command":["web","connect"],"description":"Ask the user for a web search backend's API key: posts a key card in this chat unless the backend is already ready.","read_only":true,"input_schema":{"type":"object","properties":{"backend":{"enum":["tavily","brave","firecrawl","exa","you","keenable"]}},"required":["backend"],"additionalProperties":false},"output_schema":{"type":"object","properties":{"status":{"enum":["ready","connection_requested"]},"backend":{"type":"object"},"message_id":{"type":"string"},"interaction_id":{"type":"string"}},"required":["status"]},"cli":{"usage":["teamhub web connect <tavily|brave|firecrawl|exa|you|keenable>"],"arguments":["<backend>  tavily, brave, firecrawl, exa, you or keenable."],"options":{"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true}},"notes":["When it posts the card, end your turn. The card's result wakes you when the user adds a key or declines. Never ask for an API key in a message."]}}
 ",
   },
   "web list": {
@@ -3498,26 +3498,26 @@ teamhub web list [--backend <backend>]
 List the web search backends with what each supports, whether it is ready, and its quota.
 
 Options:
-  --backend <value>  Show only this backend: tavily, brave, firecrawl, exa, you, duckduckgo or direct.
+  --backend <value>  Show only this backend: tavily, brave, firecrawl, exa, you, keenable, duckduckgo or direct.
   --json  Return machine-readable JSON.
   --help  Show this offline command reference.
   -h  Show help.
   --schema  Show offline input and output schemas.
 ",
     "schema": "exit 0
-{"command":["web","list"],"description":"List the web search backends with what each supports, whether it is ready, and its quota.","read_only":true,"input_schema":{"type":"object","properties":{"backend":{"enum":["tavily","brave","firecrawl","exa","you","duckduckgo","direct"]}},"additionalProperties":false},"output_schema":{"type":"object","properties":{"default_search":{"type":"string"},"chosen_default_search":{"type":"string"},"default_open":{"type":"string"},"can_save_keys":{"type":"boolean"},"backends":{"type":"array","items":{"type":"object"}}},"required":["default_search","default_open","backends"]},"cli":{"usage":["teamhub web list [--backend <backend>]"],"arguments":[],"options":{"--backend":{"description":"Show only this backend: tavily, brave, firecrawl, exa, you, duckduckgo or direct."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true}},"notes":[]}}
+{"command":["web","list"],"description":"List the web search backends with what each supports, whether it is ready, and its quota.","read_only":true,"input_schema":{"type":"object","properties":{"backend":{"enum":["tavily","brave","firecrawl","exa","you","keenable","duckduckgo","direct"]}},"additionalProperties":false},"output_schema":{"type":"object","properties":{"default_search":{"type":"string"},"chosen_default_search":{"type":"string"},"default_open":{"type":"string"},"can_save_keys":{"type":"boolean"},"backends":{"type":"array","items":{"type":"object"}}},"required":["default_search","default_open","backends"]},"cli":{"usage":["teamhub web list [--backend <backend>]"],"arguments":[],"options":{"--backend":{"description":"Show only this backend: tavily, brave, firecrawl, exa, you, keenable, duckduckgo or direct."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true}},"notes":[]}}
 ",
   },
   "web open": {
     "help": "exit 0
-teamhub web open <url> [--backend direct|tavily|firecrawl|exa|you] [--output <file>]
+teamhub web open <url> [--backend direct|tavily|firecrawl|exa|you|keenable] [--output <file>]
 Read one web page as Markdown, from this computer or through a provider.
 
 Arguments:
   <url>  An absolute http or https URL.
 
 Options:
-  --backend <value>  direct (default) fetches the page from this computer; tavily, firecrawl, exa or you read it through the provider, which helps with pages that need JavaScript or block plain requests.
+  --backend <value>  direct (default) fetches the page from this computer; tavily, firecrawl, exa, you or keenable read it through the provider, which helps with pages that need JavaScript or block plain requests.
   --output <value>  Save the Markdown to this new file instead of printing it; never overwrites.
   --json  Return machine-readable JSON.
   --help  Show this offline command reference.
@@ -3529,19 +3529,19 @@ teamhub web open https://www.postgresql.org/about/news/
 teamhub web open https://example.com/report --backend firecrawl --output report.md
 ",
     "schema": "exit 0
-{"command":["web","open"],"description":"Read one web page as Markdown, from this computer or through a provider.","read_only":true,"input_schema":{"type":"object","properties":{"url":{"type":"string","minLength":1,"maxLength":2048},"backend":{"enum":["tavily","firecrawl","exa","you","direct"]},"output":{"type":"string"}},"required":["url"],"additionalProperties":false},"output_schema":{"type":"object","properties":{"url":{"type":"string"},"title":{"type":"string"},"markdown":{"type":"string","description":"The page as Markdown; absent when saved with --output."},"path":{"type":"string","description":"The file written with --output."},"truncated":{"type":"boolean","description":"True when the page was longer than 20,000 characters."}},"required":["url","truncated"]},"cli":{"usage":["teamhub web open <url> [--backend direct|tavily|firecrawl|exa|you] [--output <file>]"],"arguments":["<url>  An absolute http or https URL."],"options":{"--backend":{"description":"direct (default) fetches the page from this computer; tavily, firecrawl, exa or you read it through the provider, which helps with pages that need JavaScript or block plain requests."},"--output":{"description":"Save the Markdown to this new file instead of printing it; never overwrites."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true}},"notes":["The Markdown is cut at 20,000 characters; truncated says when it was."]}}
+{"command":["web","open"],"description":"Read one web page as Markdown, from this computer or through a provider.","read_only":true,"input_schema":{"type":"object","properties":{"url":{"type":"string","minLength":1,"maxLength":2048},"backend":{"enum":["tavily","firecrawl","exa","you","keenable","direct"]},"output":{"type":"string"}},"required":["url"],"additionalProperties":false},"output_schema":{"type":"object","properties":{"url":{"type":"string"},"title":{"type":"string"},"markdown":{"type":"string","description":"The page as Markdown; absent when saved with --output."},"path":{"type":"string","description":"The file written with --output."},"truncated":{"type":"boolean","description":"True when the page was longer than 20,000 characters."}},"required":["url","truncated"]},"cli":{"usage":["teamhub web open <url> [--backend direct|tavily|firecrawl|exa|you|keenable] [--output <file>]"],"arguments":["<url>  An absolute http or https URL."],"options":{"--backend":{"description":"direct (default) fetches the page from this computer; tavily, firecrawl, exa, you or keenable read it through the provider, which helps with pages that need JavaScript or block plain requests."},"--output":{"description":"Save the Markdown to this new file instead of printing it; never overwrites."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true}},"notes":["The Markdown is cut at 20,000 characters; truncated says when it was."]}}
 ",
   },
   "web search": {
     "help": "exit 0
-teamhub web search <query> [--backend tavily|brave|firecrawl|exa|you|duckduckgo] [--limit 1-20] [--recency day|week|month|year] [--site <domain>]...
+teamhub web search <query> [--backend tavily|brave|firecrawl|exa|you|keenable|duckduckgo] [--limit 1-20] [--recency day|week|month|year] [--site <domain>]...
 Search the web through a provider with the deployment's saved API key.
 
 Arguments:
   <query>  What to search for; 1-400 characters.
 
 Options:
-  --backend <value>  tavily, brave, firecrawl, exa, you or duckduckgo. Without it the user's default runs, else the first backend with a key, else duckduckgo, which needs none.
+  --backend <value>  tavily, brave, firecrawl, exa, you, keenable or duckduckgo. Without it the user's default runs, else the first backend with a key, else duckduckgo, which needs none.
   --limit <value>  Results to return; 1-20 up to the backend's max_limit, default 10.
   --recency <value>  Only results from the past day, week, month or year.
   --site <value>  Only results from this domain; repeat up to the backend's max_sites (teamhub web list).
@@ -3555,7 +3555,7 @@ teamhub web search "rust 2026 edition release date"
 teamhub web search "postgres 19 features" --recency month --site postgresql.org
 ",
     "schema": "exit 0
-{"command":["web","search"],"description":"Search the web through a provider with the deployment's saved API key.","read_only":true,"input_schema":{"type":"object","properties":{"query":{"type":"string","minLength":1,"maxLength":400},"backend":{"enum":["tavily","brave","firecrawl","exa","you","duckduckgo"]},"limit":{"type":"integer","minimum":1,"maximum":20},"recency":{"enum":["day","week","month","year"]},"sites":{"type":"array","maxItems":10,"items":{"type":"string","minLength":3,"maxLength":253}}},"required":["query"],"additionalProperties":false},"output_schema":{"type":"object","properties":{"results":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string"},"url":{"type":"string"},"snippet":{"type":"string"},"published_at":{"type":"string"}},"required":["title","url","snippet"]}}},"required":["results"]},"cli":{"usage":["teamhub web search <query> [--backend tavily|brave|firecrawl|exa|you|duckduckgo] [--limit 1-20] [--recency day|week|month|year] [--site <domain>]..."],"arguments":["<query>  What to search for; 1-400 characters."],"options":{"--backend":{"description":"tavily, brave, firecrawl, exa, you or duckduckgo. Without it the user's default runs, else the first backend with a key, else duckduckgo, which needs none."},"--limit":{"description":"Results to return; 1-20 up to the backend's max_limit, default 10."},"--recency":{"description":"Only results from the past day, week, month or year."},"--site":{"description":"Only results from this domain; repeat up to the backend's max_sites (teamhub web list).","repeatable":true},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true}},"notes":["A backend never falls back to another one. When it needs an API key, TeamHub posts a card asking the user for it; end your turn and the card's result wakes you with the results."]}}
+{"command":["web","search"],"description":"Search the web through a provider with the deployment's saved API key.","read_only":true,"input_schema":{"type":"object","properties":{"query":{"type":"string","minLength":1,"maxLength":400},"backend":{"enum":["tavily","brave","firecrawl","exa","you","keenable","duckduckgo"]},"limit":{"type":"integer","minimum":1,"maximum":20},"recency":{"enum":["day","week","month","year"]},"sites":{"type":"array","maxItems":10,"items":{"type":"string","minLength":3,"maxLength":253}}},"required":["query"],"additionalProperties":false},"output_schema":{"type":"object","properties":{"results":{"type":"array","items":{"type":"object","properties":{"title":{"type":"string"},"url":{"type":"string"},"snippet":{"type":"string"},"published_at":{"type":"string"}},"required":["title","url","snippet"]}}},"required":["results"]},"cli":{"usage":["teamhub web search <query> [--backend tavily|brave|firecrawl|exa|you|keenable|duckduckgo] [--limit 1-20] [--recency day|week|month|year] [--site <domain>]..."],"arguments":["<query>  What to search for; 1-400 characters."],"options":{"--backend":{"description":"tavily, brave, firecrawl, exa, you, keenable or duckduckgo. Without it the user's default runs, else the first backend with a key, else duckduckgo, which needs none."},"--limit":{"description":"Results to return; 1-20 up to the backend's max_limit, default 10."},"--recency":{"description":"Only results from the past day, week, month or year."},"--site":{"description":"Only results from this domain; repeat up to the backend's max_sites (teamhub web list).","repeatable":true},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true}},"notes":["A backend never falls back to another one. When it needs an API key, TeamHub posts a card asking the user for it; end your turn and the card's result wakes you with the results."]}}
 ",
   },
 }

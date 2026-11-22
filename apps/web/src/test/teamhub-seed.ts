@@ -1750,7 +1750,8 @@ export function createExternalSourceSeed() {
 
 /**
  * The web search backends TeamHub lists before any key is saved: DuckDuckGo
- * is the default, You.com also works without a key, and direct opens pages.
+ * is the default, You.com and Keenable also work without a key, and direct
+ * opens pages.
  */
 export function createWebSearchSeed(): TeamHubWebSearchBackendList {
   const keyed: Omit<TeamHubWebSearchBackend, "description" | "id" | "name"> = {
@@ -1815,6 +1816,21 @@ export function createWebSearchSeed(): TeamHubWebSearchBackendList {
         key_url: "https://dashboard.exa.ai/api-keys",
         name: "Exa",
         official_key_check: false,
+      },
+      {
+        ...keyed,
+        description: "Web search engine built for AI agents.",
+        free_tier: "100,000 requests a month",
+        id: "keenable",
+        key_url: "https://app.keenable.ai/console",
+        keyless: true,
+        max_sites: 1,
+        name: "Keenable",
+        official_key_check: false,
+        quota: { from: "unavailable", reason: "not_reported" },
+        status: "ready",
+        tier: "free",
+        tier_text: "1,000 searches and page reads an hour",
       },
       {
         ...keyed,

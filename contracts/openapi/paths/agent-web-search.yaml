@@ -8,8 +8,8 @@ search:
       Without backend, TeamHub uses the default a Human chose exactly as if
       the request named it, even when its key stopped working; without a
       chosen default it uses the first ready backend in the order tavily,
-      brave, firecrawl, exa, you (with a key), then DuckDuckGo, which needs no key,
-      and details.origin is suggested. You.com without a key runs only when
+      brave, firecrawl, exa, you, keenable (with a key), then DuckDuckGo, which needs no key,
+      and details.origin is suggested. You.com and Keenable without a key run only when
       named or chosen. A filter the backend cannot honor is
       refused before any call. There is no automatic fallback to another
       backend. When the backend needs a key the deployment lacks, or the

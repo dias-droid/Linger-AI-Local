@@ -53,9 +53,10 @@ or Codex that reaches its model through an API endpoint set up in its own
 configuration keeps its web tools, but agents are told to use the `teamhub web`
 commands instead, since those tools may not work through that API. The
 commands use the web search providers set up on the server (Tavily, Brave
-Search, Firecrawl, Exa or You.com).
+Search, Firecrawl, Exa, You.com or Keenable).
 Without any key they search DuckDuckGo, which is free but blocks searches that
-come too often; You.com also works without a key, with lower quality. Pages are
+come too often; You.com also works without a key, with lower quality, and so does
+Keenable, at 1,000 searches and page reads an hour. Pages are
 read from this computer by default. When a provider needs a key, a card in the
 chat asks for it.
 

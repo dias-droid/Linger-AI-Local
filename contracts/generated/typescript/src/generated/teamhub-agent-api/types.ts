@@ -860,7 +860,7 @@ export interface paths {
     put?: never;
     /**
      * Search the web through one backend with the deployment's saved key.
-     * @description Without backend, TeamHub uses the default a Human chose exactly as if the request named it, even when its key stopped working; without a chosen default it uses the first ready backend in the order tavily, brave, firecrawl, exa, you (with a key), then DuckDuckGo, which needs no key, and details.origin is suggested. You.com without a key runs only when named or chosen. A filter the backend cannot honor is refused before any call. There is no automatic fallback to another backend. When the backend needs a key the deployment lacks, or the provider refused the saved one, or the keyless You.com searches are used up, TeamHub posts (or reuses) a search_key card in the chat and answers 409 search_key_requested; details names the card and the backend it shows. Saving any web search key answers the card and wakes the Agent with the backend to use.
+     * @description Without backend, TeamHub uses the default a Human chose exactly as if the request named it, even when its key stopped working; without a chosen default it uses the first ready backend in the order tavily, brave, firecrawl, exa, you, keenable (with a key), then DuckDuckGo, which needs no key, and details.origin is suggested. You.com and Keenable without a key run only when named or chosen. A filter the backend cannot honor is refused before any call. There is no automatic fallback to another backend. When the backend needs a key the deployment lacks, or the provider refused the saved one, or the keyless You.com searches are used up, TeamHub posts (or reuses) a search_key card in the chat and answers 409 search_key_requested; details names the card and the backend it shows. Saving any web search key answers the card and wakes the Agent with the backend to use.
      */
     post: operations["searchAgentWeb"];
     delete?: never;
@@ -2711,6 +2711,7 @@ export interface components {
       | "firecrawl"
       | "exa"
       | "you"
+      | "keenable"
       | "duckduckgo";
     /** @enum {string} */
     WebSearchRecency: "day" | "week" | "month" | "year";
@@ -2741,7 +2742,7 @@ export interface components {
        * @description A backend that opens pages; direct is fetched by the CLI.
        * @enum {string}
        */
-      backend: "tavily" | "firecrawl" | "exa" | "you";
+      backend: "tavily" | "firecrawl" | "exa" | "you" | "keenable";
     };
     WebOpenResponse: {
       /**
@@ -2764,6 +2765,7 @@ export interface components {
       | "firecrawl"
       | "exa"
       | "you"
+      | "keenable"
       | "duckduckgo"
       | "direct";
     WebBackendsQuery: {
@@ -2786,7 +2788,7 @@ export interface components {
       resets_at?: components["schemas"]["Timestamp"];
       observed_at?: components["schemas"]["Timestamp"];
       /**
-       * @description no_key: no key is saved; not_reported: there is no usage endpoint to read (keyless You.com, DuckDuckGo, Exa, direct); not_observed: Brave has answered no call yet; key_rejected: the provider refused the saved key; provider_unavailable: the usage endpoint did not answer in time.
+       * @description no_key: no key is saved; not_reported: there is no usage endpoint to read (keyless You.com, DuckDuckGo, Exa, Keenable, direct); not_observed: Brave has answered no call yet; key_rejected: the provider refused the saved key; provider_unavailable: the usage endpoint did not answer in time.
        * @enum {string}
        */
       reason?:
@@ -2796,14 +2798,14 @@ export interface components {
         | "key_rejected"
         | "provider_unavailable";
     };
-    /** @description One backend with the static text a client shows for it and its live state. status is ready when a call would run now: DuckDuckGo and direct always, You.com also without a key, the others with a key that is not rejected. */
+    /** @description One backend with the static text a client shows for it and its live state. status is ready when a call would run now: DuckDuckGo and direct always, You.com and Keenable also without a key, the others with a key that is not rejected. */
     WebSearchBackend: {
       id: components["schemas"]["WebSearchBackendId"];
       name: string;
       /** @description The provider's own one-line description of its product. */
       description: string;
       /**
-       * @description How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free: without a key, on a free service with limits that TeamHub does not count (DuckDuckGo, and You.com without a key); none: direct, which needs no account.
+       * @description How a call to the backend runs now. key: with an API key saved in the product (or one it still needs); free: without a key, on a free service with limits that TeamHub does not count (DuckDuckGo, and You.com and Keenable without a key); none: direct, which needs no account.
        * @enum {string}
        */
       tier: "key" | "free" | "none";
@@ -2848,7 +2850,13 @@ export interface components {
      * @description A backend that takes an API key saved in the product.
      * @enum {string}
      */
-    WebSearchKeyBackend: "tavily" | "brave" | "firecrawl" | "exa" | "you";
+    WebSearchKeyBackend:
+      | "tavily"
+      | "brave"
+      | "firecrawl"
+      | "exa"
+      | "you"
+      | "keenable";
     WebConnectRequest: {
       backend: components["schemas"]["WebSearchKeyBackend"];
     };

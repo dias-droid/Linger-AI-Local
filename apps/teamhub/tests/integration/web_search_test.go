@@ -119,7 +119,7 @@ func TestWebSearchAsksForAKeyAndReplaysTheSearchWithIt(t *testing.T) {
 	code, _, listed := env.request(alice, http.MethodGet, "/v0/web-search/backends", nil, "")
 	var list websearch.List
 	decode(t, listed, &list)
-	if code != http.StatusOK || list.DefaultSearch != websearch.DuckDuckGo || !list.CanSaveKeys || len(list.Backends) != 7 ||
+	if code != http.StatusOK || list.DefaultSearch != websearch.DuckDuckGo || !list.CanSaveKeys || len(list.Backends) != 8 ||
 		list.Backends[4].ID != websearch.You || list.Backends[4].Tier != websearch.TierFree {
 		t.Fatalf("backends: %d %s", code, listed)
 	}
@@ -181,5 +181,15 @@ func TestWebSearchAsksForAKeyAndReplaysTheSearchWithIt(t *testing.T) {
 	}
 	if code, body := saveKey("exa", "exa-key", ""); code != http.StatusOK || !strings.Contains(string(body), `"key_state":"unverified"`) {
 		t.Fatalf("Exa key from Connectors: %d %s", code, body)
+	}
+
+	// Keenable searches without a key, so it can be the chosen default before
+	// one is saved; its optional key is saved unverified without a call.
+	code, _, chosen = env.request(alice, http.MethodPut, "/v0/web-search/default", map[string]any{"backend": "keenable"}, "")
+	if code != http.StatusOK || !strings.Contains(string(chosen), `"chosen_default_search":"keenable"`) {
+		t.Fatalf("Keenable as the default: %d %s", code, chosen)
+	}
+	if code, body := saveKey("keenable", "keenable-key", ""); code != http.StatusOK || !strings.Contains(string(body), `"key_state":"unverified"`) {
+		t.Fatalf("Keenable key from Connectors: %d %s", code, body)
 	}
 }
