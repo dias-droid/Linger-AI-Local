@@ -257,8 +257,35 @@ test("reports why a deployment stopped, from output that is not captured", async
   expect(result).toMatchObject({
     details: { code: "LOCAL_MODELS_RECOVERY_REQUIRED" },
     message:
-      "Local model installation or verification did not finish: stack: port 8080 is held by another program Existing resources were preserved.",
+      "Local model installation or verification did not finish: stack: port 8080 is held by another program. Existing resources were preserved.",
   });
+});
+test("normalizes refused() punctuation across missing periods, trailing periods, and empty causes", async () => {
+  for (const [stderr, want] of [
+    [
+      "stack: port 8080 is held by another program\n",
+      "The upstream planner could not create a local model plan: stack: port 8080 is held by another program. Existing resources were preserved.",
+    ],
+    [
+      "stack: no verified LLM fits this computer.\n",
+      "The upstream planner could not create a local model plan: stack: no verified LLM fits this computer. Existing resources were preserved.",
+    ],
+    [
+      "",
+      "The upstream planner could not create a local model plan. Existing resources were preserved.",
+    ],
+  ] as const) {
+    const f = await fixture();
+    f.call.mockImplementation(async () => ({ code: 2, stdout: "", stderr }));
+    const result = await prepareLocalModels(f.instance, f.options, {
+      localmodels: f.call,
+    });
+    expect(result).toMatchObject({
+      details: { code: "LOCAL_MODELS_UNAVAILABLE" },
+      message: want,
+    });
+    expect(result?.message).not.toContain("..");
+  }
 });
 test("forwards actual split JSONL byte counters but never raw output", async () => {
   const f = await fixture();
@@ -646,6 +673,34 @@ test("a stack still not ready after applying the approved plan again asks for re
       ),
     ),
   ).toEqual(f.ready);
+});
+test("normalizes terminal punctuation when binding verification fails with a sentence ending in a period", async () => {
+  const f = await fixture();
+  await prepareLocalModels(f.instance, f.options, { localmodels: f.call });
+  f.binding.ready = false;
+  f.binding.pi = null as never;
+  f.binding.reasons = [
+    {
+      code: "binding-unavailable",
+      message:
+        "Pi's configuration or this computer's state cannot be read safely. Restore the existing install and try again.",
+    },
+  ] as never;
+  const result = await prepareLocalModels(
+    f.instance,
+    { ...f.options, localModelsApproval: f.id },
+    { localmodels: f.call },
+  );
+  expect(result).toMatchObject({
+    state: "action_required",
+    details: {
+      code: "LOCAL_MODELS_RECOVERY_REQUIRED",
+      reasons: ["binding-unavailable"],
+    },
+    message:
+      "The upstream tool could not verify the local stack binding: Pi's configuration or this computer's state cannot be read safely. Restore the existing install and try again. Existing resources were preserved.",
+  });
+  expect(result?.message).not.toContain("..");
 });
 test("a failed re-apply of the approved plan reports the upstream cause", async () => {
   const f = await deployedThenNotReady("deployment-unavailable");

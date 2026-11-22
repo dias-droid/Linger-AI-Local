@@ -18,7 +18,10 @@ import {
   readByokEnvironment,
   type ByokGatewayFailure,
 } from "./byok-source.js";
-import { localmodelsFailure } from "./localmodels-failure.js";
+import {
+  formatLocalmodelsFailureMessage,
+  localmodelsFailure,
+} from "./localmodels-failure.js";
 import { runLocalmodels } from "./localmodels-tool.js";
 import {
   readSetupChoice,
@@ -271,11 +274,11 @@ function reasonCodes(observed: Binding | null): string[] {
   );
 }
 // The first reason's upstream message, for display only.
-function reasonText(observed: Binding | null): string {
+function reasonMessage(observed: Binding | null): string | undefined {
   const message = observed?.reasons?.[0]?.message;
   return typeof message === "string" && message.trim()
-    ? `: ${message.trim().replace(/\s+/g, " ").slice(0, 300)}`
-    : "";
+    ? message.trim()
+    : undefined;
 }
 export async function localModelsEnvironment(
   instance: Instance,
@@ -433,7 +436,11 @@ export async function prepareLocalModels(
         options.onEvent({ kind: "log", stage: "runtime", message });
       return action(
         code,
-        `${text}${cause ? `: ${cause}` : "."} Existing resources were preserved.`,
+        formatLocalmodelsFailureMessage(
+          text,
+          cause,
+          "Existing resources were preserved.",
+        ),
         { causeCode },
       );
     };
@@ -675,7 +682,11 @@ export async function prepareLocalModels(
     if (!observed?.ready)
       return action(
         "LOCAL_MODELS_RECOVERY_REQUIRED",
-        `The upstream tool could not verify the local stack binding${reasonText(observed)}. Existing resources were preserved.`,
+        formatLocalmodelsFailureMessage(
+          "The upstream tool could not verify the local stack binding",
+          reasonMessage(observed),
+          "Existing resources were preserved.",
+        ),
       );
     await atomicPrivate(bindFile, JSON.stringify(observed));
     options.onEvent({

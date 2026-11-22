@@ -1,6 +1,8 @@
 import { expect, it } from "vitest";
 import {
+  formatLocalmodelsFailureMessage,
   localmodelsFailure,
+  normalizeFailurePunctuation,
   redactLocalmodelsOutput,
 } from "./localmodels-failure.js";
 
@@ -256,4 +258,55 @@ it("extracts structured causeCode from localmodels.stack-plan-error/v1 while kee
       "stack: cannot reach huggingface.co (timed out) or hf-mirror.com (SSL EOF) to look up the model files",
   });
   expect(failure.log.join("")).toContain("HUB_UNREACHABLE");
+});
+
+it("collapses accidental double periods while preserving ellipses", () => {
+  expect(
+    normalizeFailurePunctuation(
+      "  Restore the existing install and try again.. Existing resources were preserved.  ",
+    ),
+  ).toBe(
+    "Restore the existing install and try again. Existing resources were preserved.",
+  );
+  expect(normalizeFailurePunctuation("Waiting...")).toBe("Waiting...");
+  expect(normalizeFailurePunctuation("Failed..")).toBe("Failed.");
+});
+
+it("joins failure messages with single terminal punctuation and redacts secrets", () => {
+  expect(
+    formatLocalmodelsFailureMessage(
+      "The upstream tool could not verify the local stack binding",
+      "Pi's configuration or this computer's state cannot be read safely. Restore the existing install and try again.",
+      "Existing resources were preserved.",
+    ),
+  ).toBe(
+    "The upstream tool could not verify the local stack binding: Pi's configuration or this computer's state cannot be read safely. Restore the existing install and try again. Existing resources were preserved.",
+  );
+  expect(
+    formatLocalmodelsFailureMessage(
+      "The upstream tool could not verify the local stack binding.",
+      "upstream text",
+      "Existing resources were preserved.",
+    ),
+  ).toBe(
+    "The upstream tool could not verify the local stack binding: upstream text. Existing resources were preserved.",
+  );
+  expect(
+    formatLocalmodelsFailureMessage(
+      "The upstream tool could not verify the local stack binding",
+      undefined,
+      "Existing resources were preserved.",
+    ),
+  ).toBe(
+    "The upstream tool could not verify the local stack binding. Existing resources were preserved.",
+  );
+  expect(
+    formatLocalmodelsFailureMessage(
+      "The upstream tool could not verify the local stack binding",
+      "Restore the existing install and try again.. Bearer secret-token-123",
+      "Existing resources were preserved.",
+    ),
+  ).toBe(
+    "The upstream tool could not verify the local stack binding: Restore the existing install and try again. Bearer [REDACTED]. Existing resources were preserved.",
+  );
 });

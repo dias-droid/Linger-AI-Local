@@ -238,7 +238,11 @@ after the process closes; later output is not delivered to a failed callback.
 
 Each native service runs under a detached supervisor
 (`native-process-worker.mjs`) whose record holds its PID, birth and an
-unguessable lease. POSIX finds the service's processes by process group and
+unguessable lease. On Linux, the supervisor and spawned installer Node
+processes (`linuxNodeFdHygieneArgs` in `native-process-fds.ts`) close inherited
+non-`O_CLOEXEC` descriptors and listening TCP or Unix sockets >= 3 (keeping the
+active IPC channel) so detached services cannot hold parent Electron sockets
+open after quit. POSIX finds the service's processes by process group and
 the lease in their environment. Windows has neither: the lease is in the
 supervisor's command line (its job file name) and the tree follows parent
 links (`windowsLeaseTree`), which break when a parent dies first. So on
