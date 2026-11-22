@@ -211,6 +211,23 @@ export function ComputerPermissionDecision({
     id,
     entry: liveEntries.find((entry) => entry.id === id),
   }));
+  // An update replaces the app bundle, so a grant recorded for the previous
+  // build stops matching while System Settings keeps the switch on: Linger
+  // reads granted from the stale record, and the CuaDriver reading stays
+  // denied until the grant is recorded again. Only the refused reading
+  // counts: "denied" means CuaDriver was prompted in this daemon process
+  // and is still missing, while a reading that was never asked for beside
+  // a granted Linger record is an ordinary first install.
+  const staleGrant =
+    subject === "computer_use" &&
+    rows.some(
+      ({ id, entry }) =>
+        entry !== undefined &&
+        entry.state === "denied" &&
+        status.data?.subjects
+          .find((item) => item.subject === "linger")
+          ?.permissions.find((item) => item.id === id)?.state === "granted",
+    );
   const state = cardState(
     card,
     rows.flatMap(({ entry }) => (entry ? [entry] : [])),
@@ -302,6 +319,11 @@ export function ComputerPermissionDecision({
           />
         ) : (
           <>
+            {interactive && staleGrant ? (
+              <p className="pb-1 [overflow-wrap:anywhere] text-xs text-app-muted">
+                {t(cardsMessages.staleGrantHint)}
+              </p>
+            ) : null}
             {interactive && offline ? (
               <p className="pb-1 text-xs text-app-muted">
                 {t(cardsMessages.openLingerOnThatMac)}

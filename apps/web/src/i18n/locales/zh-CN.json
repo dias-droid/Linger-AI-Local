@@ -731,6 +731,7 @@
     "stepDidNotRun": "这一步没有执行。",
     "permissionsUnreadable": "无法读取这台 Mac 的权限。",
     "relaunchToApply": "重新启动 Linger 后生效",
+    "staleGrantHint": "如果系统设置里 Linger 的开关已经打开，macOS 在更新后仍可能拒绝该权限：该授权来自旧版本构建。请将 Linger 的开关关闭再开启，然后重启 Linger 重试。",
     "openLingerOnThatMac": "请在那台 Mac 上打开 Linger 来授予这些权限。",
     "opensOn": "将在 {name} 上打开",
     "opensOnThatMac": "将在那台 Mac 上打开",

@@ -286,6 +286,77 @@ describe("Computer permission card", () => {
     expect(screen.queryByText(/^Opens on/)).not.toBeInTheDocument();
   });
 
+  it("explains a stale grant when Settings says on but the driver is refused", async () => {
+    desktopOn("computer-mac");
+    setup({
+      next: {
+        ...card,
+        computer_permission: {
+          computer_id: "computer-mac",
+          subject: "computer_use",
+          permissions: ["screen_recording"],
+        },
+      },
+      live: {
+        platform: "darwin",
+        host: "desktop",
+        subjects: [
+          {
+            subject: "linger",
+            permissions: [entry("screen_recording", "granted")],
+          },
+          {
+            subject: "computer_use",
+            permissions: [entry("screen_recording", "denied")],
+          },
+        ],
+      },
+    });
+    expect(
+      await screen.findByText(/recorded for an older build/),
+    ).toBeVisible();
+  });
+
+  it.each([
+    ["not_determined", "Request"],
+    ["unknown", "Open Settings"],
+  ] as const)(
+    "keeps the stale-grant hint out of an ordinary %s computer_use reading",
+    async (state, button) => {
+      desktopOn("computer-mac");
+      setup({
+        next: {
+          ...card,
+          computer_permission: {
+            computer_id: "computer-mac",
+            subject: "computer_use",
+            permissions: ["screen_recording"],
+          },
+        },
+        live: {
+          platform: "darwin",
+          host: "desktop",
+          subjects: [
+            {
+              subject: "linger",
+              permissions: [entry("screen_recording", "granted")],
+            },
+            {
+              subject: "computer_use",
+              permissions: [entry("screen_recording", state)],
+            },
+          ],
+        },
+      });
+      // A computer_use reading that was never asked for beside a granted
+      // Linger record is an ordinary first install, not a stale grant.
+      expect(await screen.findByRole("button", { name: button })).toBeVisible();
+      expect(
+        screen.queryByText(/recorded for an older build/),
+      ).not.toBeInTheDocument();
+    },
+  );
+
   it("sends CuaDriver's prompt to the daemon even in the desktop app", async () => {
     const act = vi.fn().mockResolvedValue(undefined);
     desktopOn("computer-mac", act);

@@ -243,6 +243,8 @@ export const cardsMessages = defineMessages("cards", {
   stepDidNotRun: "The step did not run.",
   permissionsUnreadable: "The Mac's permissions could not be read.",
   relaunchToApply: "Relaunch Linger to apply",
+  staleGrantHint:
+    "If Linger's switch is already on in System Settings, macOS may still refuse the permission after an update: the grant was recorded for an older build. Turn Linger's switch off and back on, restart Linger, then try again.",
   openLingerOnThatMac: "Open Linger on that Mac to grant these permissions.",
   opensOn: "Opens on {name}",
   opensOnThatMac: "Opens on that Mac",
