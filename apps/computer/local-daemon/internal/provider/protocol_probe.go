@@ -134,8 +134,10 @@ func logProbeExit(event, runtimeType string, err error, stderr string) {
 			attributes = append(attributes, "signal", signal)
 		}
 	}
-	if tail := []rune(strings.TrimSpace(stderr)); len(tail) > 0 {
-		attributes = append(attributes, "stderr_tail", redact.Text(string(tail[max(0, len(tail)-maxProbeStderrTail):])))
+	// Redact before cutting: a cut through a credential's name or prefix
+	// would leave its value unrecognizable to redact.Text.
+	if tail := []rune(strings.TrimSpace(redact.Text(stderr))); len(tail) > 0 {
+		attributes = append(attributes, "stderr_tail", string(tail[max(0, len(tail)-maxProbeStderrTail):]))
 	}
 	slog.Warn(event, attributes...)
 }

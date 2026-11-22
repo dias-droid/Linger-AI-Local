@@ -5,6 +5,7 @@ package provider
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -65,5 +66,17 @@ exit 2
 	}
 	if strings.Contains(output, "sk-secret-value") {
 		t.Fatalf("log kept a credential: %s", output)
+	}
+}
+
+func TestProtocolProbeRedactsACredentialTheStderrTailCutsThrough(t *testing.T) {
+	logged := captureProbeLog(t)
+	// The name ends just before the tail starts, so only its value would be
+	// left inside the tail if stderr were cut before it was redacted.
+	value := "abcdefghijklmnopqrstuvwxyz0123456789"
+	filler := strings.Repeat("x", maxProbeStderrTail-len(value)-1)
+	logProbeExit("runner.runtime_probe.handshake_failed", "codex", errors.New("exit status 1"), "OPENAI_API_KEY="+value+" "+filler)
+	if strings.Contains(logged.String(), value) {
+		t.Fatalf("log kept a credential cut by the tail: %s", logged)
 	}
 }
