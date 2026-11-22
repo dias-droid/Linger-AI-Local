@@ -7,9 +7,11 @@ import { downloadInRegion, resolveRegion } from "./region.js";
 import {
   atomicPrivate,
   privateDirectory,
+  readPrivate,
   withInstanceLock,
   type Instance,
 } from "./instance.js";
+import { freePort, portFree } from "./ports.js";
 import { runProcess, type ProcessOptions } from "./process.js";
 import {
   validatePublishedServiceSource,
@@ -478,6 +480,41 @@ export async function ensureLocalmodelsTool(
     preparing.delete(key);
   }
 }
+const DEFAULT_BIFROST_HOST = "127.0.0.1";
+const DEFAULT_BIFROST_PORT = 18480;
+const DEFAULT_BIFROST_ADDR = `${DEFAULT_BIFROST_HOST}:${DEFAULT_BIFROST_PORT}`;
+const MAX_OWNED_MANIFEST_BYTES = 1024 * 1024;
+
+interface LoopbackBifrostAddress {
+  addr: string;
+  port: number;
+}
+
+interface BifrostAddressDependencies {
+  portFree?: (port: number) => Promise<boolean>;
+  freePort?: (
+    reserved: Set<number>,
+    options?: { preferred?: number },
+  ) => Promise<number>;
+}
+
+interface RunCommandControl extends BifrostAddressDependencies {
+  allocateBifrostAddr?: boolean;
+}
+
+const STRIPPED_LOCALMODELS_ENVIRONMENT = new Set([
+  "PYTHONHOME",
+  "PYTHONSTARTUP",
+  "PYTHONINSPECT",
+  "PYTHONPATH",
+  "LOCALMODELS_STATE",
+  "LOCALMODELS_TOOLS_DIR",
+  "LOCALMODELS_BIFROST_DIR",
+  "LOCALMODELS_BIFROST_ADDR",
+]);
+
+const resolvingBifrostAddr = new Map<string, Promise<string>>();
+
 /** LOCALMODELS_STATE of every call for this home. */
 export function localmodelsStateDirectory(home: string): string {
   return path.join(path.resolve(home), "runtime", "localmodels", "state");
@@ -485,6 +522,142 @@ export function localmodelsStateDirectory(home: string): string {
 /** Where this home's models live: every call's --base-dir. */
 export function localmodelsBaseDirectory(home: string): string {
   return path.join(path.resolve(home), "runtime", "localmodels", "models");
+}
+/** LOCALMODELS_TOOLS_DIR of every call for this home. */
+export function localmodelsToolsDirectory(home: string): string {
+  return path.join(path.resolve(home), "runtime", "localmodels", "tools");
+}
+/** LOCALMODELS_BIFROST_DIR of every call for this home. */
+export function localmodelsBifrostDirectory(home: string): string {
+  return path.join(path.resolve(home), "runtime", "localmodels", "bifrost");
+}
+/** Persisted loopback Bifrost address file for this home. */
+export function localmodelsBifrostAddrFile(home: string): string {
+  return path.join(
+    path.resolve(home),
+    "runtime",
+    "localmodels",
+    "bifrost-addr",
+  );
+}
+function parseLoopbackBifrostAddress(
+  raw: unknown,
+): LoopbackBifrostAddress | undefined {
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  const match = /^127\.0\.0\.1:([1-9][0-9]{0,4})$/.exec(trimmed);
+  if (!match) return undefined;
+  const port = Number(match[1]);
+  if (!Number.isSafeInteger(port) || port < 1 || port > 65535) return undefined;
+  return { addr: `${DEFAULT_BIFROST_HOST}:${port}`, port };
+}
+// owned.json is written by localmodels with the process umask rather than 0600,
+// inside this home's private tools directory.
+async function readOwnedBifrostAddress(
+  toolsDir: string,
+): Promise<LoopbackBifrostAddress | undefined> {
+  const ownedPath = path.join(toolsDir, "owned.json");
+  try {
+    const info = await lstat(ownedPath);
+    if (
+      !info.isFile() ||
+      info.isSymbolicLink() ||
+      info.size > MAX_OWNED_MANIFEST_BYTES ||
+      (process.platform !== "win32" && info.uid !== process.getuid?.())
+    )
+      return undefined;
+    const parsed: unknown = JSON.parse(await readFile(ownedPath, "utf8"));
+    if (!parsed || typeof parsed !== "object") return undefined;
+    const gateway = "gateway" in parsed ? parsed.gateway : undefined;
+    if (!gateway || typeof gateway !== "object") return undefined;
+    const bifrost = "bifrost" in gateway ? gateway.bifrost : undefined;
+    if (!bifrost || typeof bifrost !== "object") return undefined;
+    return parseLoopbackBifrostAddress(
+      "addr" in bifrost ? bifrost.addr : undefined,
+    );
+  } catch {
+    return undefined;
+  }
+}
+async function readSavedBifrostAddress(
+  addrFile: string,
+): Promise<LoopbackBifrostAddress | undefined> {
+  try {
+    const raw = await readPrivate(addrFile);
+    return raw ? parseLoopbackBifrostAddress(raw) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+function isReadOnlyOrStopCommand(args: readonly string[]): boolean {
+  const [group, verb] = args;
+  if (group === "harness" || group === "debug") return true;
+  if (group === "stack") return verb === "down" || verb === "remove";
+  if (group === "library")
+    return (
+      verb === "status" ||
+      verb === "unload" ||
+      verb === "remove" ||
+      verb === "cancel"
+    );
+  if (group === "foundations") return verb === "stop";
+  if (group === "gateway") return verb === "stop";
+  if (group === "source")
+    return verb === "status" || verb === "check" || verb === "models";
+  if (group === "setup")
+    return verb === "inspect" || verb === "review" || verb === "binding";
+  return false;
+}
+function stripInheritedEnvironment(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const cleaned: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(base)) {
+    if (!STRIPPED_LOCALMODELS_ENVIRONMENT.has(key.toUpperCase()))
+      cleaned[key] = value;
+  }
+  return cleaned;
+}
+/**
+ * Resolves the per-home loopback Bifrost address: prefers this home's owned
+ * gateway record, then its persisted bifrost-addr file, and on allocating
+ * calls picks 127.0.0.1:18480 when free or persists an ephemeral free port
+ * when another process holds 18480. Read-only and stop calls never probe or
+ * persist a port.
+ */
+export async function resolveLocalmodelsBifrostAddr(
+  home: string,
+  options: { allocate?: boolean } = {},
+  dependencies: BifrostAddressDependencies = {},
+): Promise<string> {
+  const allocate = options.allocate ?? true;
+  const toolsDir = localmodelsToolsDirectory(home);
+  const addrFile = localmodelsBifrostAddrFile(home);
+  const checkFree = dependencies.portFree ?? ((port: number) => portFree(port));
+  const pickFree = dependencies.freePort ?? freePort;
+  const resolveOnce = async (): Promise<string> => {
+    const owned = await readOwnedBifrostAddress(toolsDir);
+    if (owned) return owned.addr;
+    const saved = await readSavedBifrostAddress(addrFile);
+    if (saved && (!allocate || (await checkFree(saved.port))))
+      return saved.addr;
+    if (!allocate) return DEFAULT_BIFROST_ADDR;
+    const port = await pickFree(new Set(), { preferred: DEFAULT_BIFROST_PORT });
+    const addr = `${DEFAULT_BIFROST_HOST}:${port}`;
+    await privateDirectory(path.dirname(addrFile));
+    await atomicPrivate(addrFile, `${addr}\n`);
+    return addr;
+  };
+  if (!allocate || dependencies.portFree || dependencies.freePort)
+    return resolveOnce();
+  const key = path.resolve(home);
+  const pending = resolvingBifrostAddr.get(key);
+  if (pending) return pending;
+  const task = resolveOnce();
+  resolvingBifrostAddr.set(key, task);
+  try {
+    return await task;
+  } finally {
+    resolvingBifrostAddr.delete(key);
+  }
 }
 function formatDownloadedBytes(bytes: number): string {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -495,7 +668,7 @@ export async function runLocalmodels(
   home: string,
   args: string[],
   options: Options = {},
-  dependencies: { run?: typeof runProcess } = {},
+  dependencies: { run?: typeof runProcess } & BifrostAddressDependencies = {},
 ) {
   return runLocalmodelsCommand(
     home,
@@ -503,6 +676,11 @@ export async function runLocalmodels(
     options,
     () => ensureLocalmodelsTool(home, options),
     dependencies.run,
+    {
+      allocateBifrostAddr: !isReadOnlyOrStopCommand(args),
+      portFree: dependencies.portFree,
+      freePort: dependencies.freePort,
+    },
   );
 }
 // Hosts come from the kit's mirror list; anything else is not shown.
@@ -539,20 +717,34 @@ async function runLocalmodelsCommand(
   options: Options,
   loadTool: () => Promise<ToolLocation | undefined>,
   run: typeof runProcess = runProcess,
+  control: RunCommandControl = {},
 ) {
   const startedAt = Date.now();
   const tool = await loadTool();
   if (!tool) throw new Error("The installed localmodels tool kit is missing.");
   const checkedAt = Date.now();
   const state = localmodelsStateDirectory(home);
+  const tools = localmodelsToolsDirectory(home);
+  const bifrost = localmodelsBifrostDirectory(home);
   await privateDirectory(state);
+  await privateDirectory(tools);
+  await privateDirectory(bifrost);
+  const allocateBifrostAddr =
+    control.allocateBifrostAddr ?? !isReadOnlyOrStopCommand(args);
+  const bifrostAddr = await resolveLocalmodelsBifrostAddr(
+    home,
+    { allocate: allocateBifrostAddr },
+    control,
+  );
   const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    ...options.env,
+    ...stripInheritedEnvironment({ ...process.env, ...options.env }),
     // localmodels downloads from the same region and does not probe again.
     SIMPLEX_REGION: await resolveRegion(home, { signal: options.signal }),
     PYTHONPATH: tool.moduleDir,
     LOCALMODELS_STATE: state,
+    LOCALMODELS_TOOLS_DIR: tools,
+    LOCALMODELS_BIFROST_DIR: bifrost,
+    LOCALMODELS_BIFROST_ADDR: bifrostAddr,
     PYTHONNOUSERSITE: "1",
     PYTHONDONTWRITEBYTECODE: "1",
   };
@@ -687,6 +879,7 @@ export async function stopLocalmodels(
   },
   dependencies: {
     run?: typeof runLocalmodels;
+    runProcess?: typeof runProcess;
     installed?: (home: string) => Promise<boolean>;
   } = {},
 ): Promise<void> {
@@ -707,8 +900,13 @@ export async function stopLocalmodels(
   const run =
     dependencies.run ??
     ((home, args, options = {}) =>
-      runLocalmodelsCommand(home, args, options, () =>
-        installedPinnedTool(home),
+      runLocalmodelsCommand(
+        home,
+        args,
+        options,
+        () => installedPinnedTool(home),
+        dependencies.runProcess,
+        { allocateBifrostAddr: false },
       ));
   const base = localmodelsBaseDirectory(home);
   const failed: string[] = [];

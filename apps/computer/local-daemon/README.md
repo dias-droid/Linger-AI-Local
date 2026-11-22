@@ -112,9 +112,14 @@ The Daemon runs the model library of the installer's `localmodels` tool for
 the Local models page. The Computer config's `local_models` section names the
 tool: `python`, `module_directory` (the sealed kit, used as `PYTHONPATH` and
 working directory), `state_directory` (`LOCALMODELS_STATE`) and
-`base_directory` (`--base-dir`). `packages/local-installation` writes it for
-the CLI Computer and the Desktop app for its own; a Computer without it, or
-whose interpreter is gone, reports `available: false` with
+`base_directory` (`--base-dir`). From `state_directory`, the Daemon derives
+sibling `tools` (`LOCALMODELS_TOOLS_DIR`), `bifrost`
+(`LOCALMODELS_BIFROST_DIR`), and `bifrost-addr` (`LOCALMODELS_BIFROST_ADDR`,
+preferring `<tools>/owned.json`'s `gateway.bifrost.addr` and allocating a free
+loopback port on start/apply calls when `127.0.0.1:18480` is occupied) while
+stripping inherited `LOCALMODELS_*` overrides. `packages/local-installation`
+writes it for the CLI Computer and the Desktop app for its own; a Computer
+without it, or whose interpreter is gone, reports `available: false` with
 `TOOL_NOT_INSTALLED`. `internal/localmodels` owns the tool calls; the Daemon
 only routes `execute` (kind `local_models`) to it and sends what it publishes.
 The Daemon executes the actions the Computer owner chose; it never picks a

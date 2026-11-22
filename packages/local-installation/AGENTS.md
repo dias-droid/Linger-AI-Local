@@ -172,7 +172,16 @@ library (`localmodels-computer.ts`). A fresh login passes it as
 `--localmodels-*` options; it is part of the managed-runtime fingerprint, so an
 existing Computer is rebound once on its next connect. A distribution without
 the tool writes none. External Computers (the Desktop's) get the same paths as
-the `LINGER_LOCALMODELS_*` keys of the installer's instance runtime.
+the `LINGER_LOCALMODELS_*` keys of the installer's instance runtime. Every
+`localmodels` invocation in both the installer and the Daemon also isolates
+`LOCALMODELS_TOOLS_DIR` (`<home>/runtime/localmodels/tools`),
+`LOCALMODELS_BIFROST_DIR` (`<home>/runtime/localmodels/bifrost`), and
+`LOCALMODELS_BIFROST_ADDR` per installation home, stripping inherited values.
+The Bifrost address comes from `<tools>/owned.json` (`gateway.bifrost.addr`)
+when present, else `<home>/runtime/localmodels/bifrost-addr`, and on commands
+that may plan or start Bifrost defaults to `127.0.0.1:18480` when free or
+allocates and persists a free loopback port when `127.0.0.1:18480` is held by
+another process; stop and read-only calls never probe or allocate a port.
 
 Setup sets the Computer's model source through `localmodels source apply`
 (`byok-source.ts`): BYOK after the Runtime is ready, a local model after the
