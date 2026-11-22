@@ -12,7 +12,6 @@ import { Link, useParams, useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { FormFeedback } from "@/components/ui/form-feedback";
 import { Icon } from "@/components/ui/icon";
-import { Select, SelectItem } from "@/components/ui/select";
 import { relativeTime } from "@/features/local-computer/computer-relative-time";
 import { useDesktopComputer } from "@/features/local-computer/desktop-computer";
 import { localComputersQueryOptions } from "@/features/local-computer/local-computer-queries";
@@ -36,6 +35,11 @@ import { commonMessages } from "@/i18n/common.messages";
 import { translate } from "@/i18n/language";
 import { RichMessage, useT, useTranslation } from "@/i18n/use-translation";
 
+import { ComputerPicker, type ComputerPickerOption } from "./computer-picker";
+import {
+  readLastModelsComputer,
+  writeLastModelsComputer,
+} from "./last-models-computer";
 import {
   type AssignableLocalModelAgent,
   assignableLocalModelAgents,
@@ -136,16 +140,35 @@ export function ModelsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const computers = inventory.items;
   const linkedId = searchParams.get("computer");
-  const requestedId = linkedId ?? desktop?.status?.computerId;
-  const owned = computers.find((item) => item.computer_id === requestedId);
+  const linkedOwned = linkedId
+    ? computers.find((item) => item.computer_id === linkedId)
+    : undefined;
+  const savedId = readLastModelsComputer(tenantId);
+  const savedOwned = savedId
+    ? computers.find((item) => item.computer_id === savedId)
+    : undefined;
+  const desktopOwned = desktop?.status?.computerId
+    ? computers.find((item) => item.computer_id === desktop.status?.computerId)
+    : undefined;
   const defaultComputer =
     computers.find((item) => item.status === "online") ?? computers[0];
   // A linked Computer the viewer does not own may be another member's: the
   // library API, not the owned inventory, decides whether they may read it.
-  const sharedId = linkedId && !owned ? linkedId : undefined;
-  const computer = sharedId ? undefined : (owned ?? defaultComputer);
+  const sharedId = linkedId && !linkedOwned ? linkedId : undefined;
+  const computer = sharedId
+    ? undefined
+    : (linkedOwned ?? savedOwned ?? desktopOwned ?? defaultComputer);
+
+  useEffect(() => {
+    if (linkedOwned) {
+      writeLastModelsComputer(tenantId, linkedOwned.computer_id);
+    }
+  }, [linkedOwned, tenantId]);
 
   function select(computerId: string) {
+    if (computers.some((item) => item.computer_id === computerId)) {
+      writeLastModelsComputer(tenantId, computerId);
+    }
     setSearchParams(
       (current) => {
         const next = new URLSearchParams(current);
@@ -359,28 +382,28 @@ function ComputerModels({
     displayName !== undefined
       ? ownedComputers.length > 1
       : Boolean(view && ownedComputers.length > 0);
+  const computerPickerOptions: ComputerPickerOption[] = [
+    ...(displayName === undefined && view
+      ? [
+          {
+            computerId,
+            displayName: view.computer.display_name,
+            online: view.computer.status === "online",
+          },
+        ]
+      : []),
+    ...ownedComputers.map((item) => ({
+      computerId: item.computer_id,
+      displayName: item.display_name,
+      online: item.status === "online",
+    })),
+  ];
   const computerPicker = showComputerPicker ? (
-    <Select
-      aria-label={t(m.computerPicker)}
-      onValueChange={onSelectComputer}
+    <ComputerPicker
+      onSelect={onSelectComputer}
+      options={computerPickerOptions}
       value={computerId}
-      variant="pill"
-    >
-      {displayName === undefined && view ? (
-        <SelectItem value={computerId}>
-          {view.computer.status === "online"
-            ? view.computer.display_name
-            : t(m.computerOffline, { name: view.computer.display_name })}
-        </SelectItem>
-      ) : null}
-      {ownedComputers.map((item) => (
-        <SelectItem key={item.computer_id} value={item.computer_id}>
-          {item.status === "online"
-            ? item.display_name
-            : t(m.computerOffline, { name: item.display_name })}
-        </SelectItem>
-      ))}
-    </Select>
+    />
   ) : null;
 
   function changeTab(next: ModelSourceMode) {

@@ -1353,6 +1353,106 @@ describe("LocalModelsPage", () => {
     );
   });
 
+  it("prefers the saved browser choice over the desktop app's own Computer when both are present", async () => {
+    window.localStorage.setItem(
+      `linger.models.lastComputer:${tenantId}`,
+      "computer-mac",
+    );
+    (window as { lingerDesktop?: unknown }).lingerDesktop = {
+      computer: {
+        enroll: () => Promise.reject(new Error("not used")),
+        getStatus: () =>
+          Promise.resolve({
+            activeOperations: 0,
+            bridge: "connected",
+            computerId: "computer-lab",
+            runtime: "ready",
+          }),
+        onStatus: () => () => undefined,
+      },
+    };
+    await renderPage(setup());
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("combobox", { name: "Computer" }),
+      ).toHaveTextContent("Mac Studio"),
+    );
+    await waitFor(() =>
+      expect(statuses()[0]).toBe("GPT-OSS 20B: Loaded · Memory · 14.3 GB"),
+    );
+  });
+
+  it("remembers the last selected Computer in browser storage and reopens it when returning without a query param", async () => {
+    const fixture = setup();
+    await renderPage(fixture);
+    await findModels();
+
+    // First visit defaults to the first online Computer (lab-118).
+    expect(
+      screen.getByRole("combobox", { name: "Computer" }),
+    ).toHaveTextContent("lab-118");
+
+    // Switching to Mac Studio persists the choice for this tenant.
+    fireEvent.click(screen.getByRole("combobox", { name: "Computer" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Mac Studio" }));
+    await waitFor(() =>
+      expect(statuses()[0]).toBe("GPT-OSS 20B: Loaded · Memory · 14.3 GB"),
+    );
+    expect(
+      window.localStorage.getItem(`linger.models.lastComputer:${tenantId}`),
+    ).toBe("computer-mac");
+
+    // Re-entering Settings > Models with no ?computer= reopens Mac Studio.
+    cleanup();
+    await renderPage(fixture);
+    await findModels();
+    expect(
+      screen.getByRole("combobox", { name: "Computer" }),
+    ).toHaveTextContent("Mac Studio");
+    expect(statuses()[0]).toBe("GPT-OSS 20B: Loaded · Memory · 14.3 GB");
+
+    // A stale stored ID that is no longer owned falls back to the first online Computer.
+    cleanup();
+    window.localStorage.setItem(
+      `linger.models.lastComputer:${tenantId}`,
+      "computer-removed",
+    );
+    await renderPage(fixture);
+    await findModels();
+    expect(
+      screen.getByRole("combobox", { name: "Computer" }),
+    ).toHaveTextContent("lab-118");
+  });
+
+  it("does not overwrite the remembered owned Computer when viewing a shared Computer link", async () => {
+    const shared = labView({
+      computer: {
+        ...labView().computer,
+        computer_id: "computer-teammate",
+        display_name: "Teammate Rig",
+      },
+      viewer_is_owner: false,
+    });
+    const fixture = setup(
+      [labView(), macView(), shared],
+      [inventoryComputer(labView()), inventoryComputer(macView())],
+    );
+    window.localStorage.setItem(
+      `linger.models.lastComputer:${tenantId}`,
+      "computer-mac",
+    );
+
+    await renderPage(fixture, "?computer=computer-teammate");
+    await findModels();
+    expect(
+      screen.getByRole("combobox", { name: "Computer" }),
+    ).toHaveTextContent("Teammate Rig");
+    expect(
+      window.localStorage.getItem(`linger.models.lastComputer:${tenantId}`),
+    ).toBe("computer-mac");
+  });
+
   it("shows rich model card icons, capability badges, and expanded metadata", async () => {
     const richLab = withModel(labView(), "qwen3-coder-30b:Q4_K_M", {
       active_parameters: "3B",

@@ -67,8 +67,13 @@ build:assets` to check the initial JS budget.
   `local-model-agents.ts` (`Use with <Another Me>`, `Open chat`,
   `Switch Agent…` in `Used by`, and `Make room` automatic Agent handoff once
   the replacement model loads when `Pi` is ready), and maps every code and enum
-  label to English in `local-models-copy.ts`. Without `?computer=` the desktop
-  app opens its own Computer and a browser prefers an online Computer. Only the
+  label to English in `local-models-copy.ts`. Without `?computer=` the page
+  reopens the last owned Computer chosen in this browser
+  (`last-models-computer.ts`, cleared on logout), else the desktop app opens its
+  own Computer and a browser prefers an online Computer. The header
+  `ComputerPicker` (`computer-picker.tsx`) shows connection dots and orders
+  online Computers first, and once more than 10 Computers exist it adds
+  in-popover search plus `All` / `Online` / `Offline` status filtering. Only the
   Computer's owner can act; actions return at once and progress arrives as
   `local-models` invalidation hints (while `directory` hints and model-source
   switches keep `Used by` and Agent registrations synchronized). From the click
