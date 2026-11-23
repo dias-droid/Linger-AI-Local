@@ -29,7 +29,7 @@ export interface MemoryTaskRuntime {
   ) => Promise<void>;
   /** The task is a rebuild step; see WikiSyncRuntime.subjectResult. */
   rebuild?: boolean;
-  /** The scheduled midnight slot, including delayed or recovered attempts. */
+  /** The scheduled day-closing task, including delayed or recovered attempts. */
   nightly?: boolean;
   /** Serializes each fanned-out subject with that subject's other work. */
   subjectLane?: SubjectLane;

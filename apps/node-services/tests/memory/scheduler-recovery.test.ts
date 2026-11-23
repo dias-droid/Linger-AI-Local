@@ -15,6 +15,7 @@ import {
 
 const config: MemoryScheduleConfig = {
   concurrency: 1,
+  dailyHour: 0,
   weeklyDay: 1,
   timeZone: "Asia/Shanghai",
 };
@@ -56,6 +57,77 @@ describe("durable Wiki calendar", () => {
     scheduler.runDueTasks(new Date("2026-09-28T15:58:00+08:00"));
     await scheduler.idle();
     expect(calls).toHaveLength(4);
+  });
+
+  it("catches up a missed configured hour after restart only once", async () => {
+    const schedule = { ...config, dailyHour: 23 };
+    const store = await checkpoint();
+    const before = vi.fn<Runner>(async () => {});
+    const first = new MemoryScheduler(schedule, before, [], store);
+    first.runDueTasks(new Date("2026-09-28T22:05:00+08:00"));
+    await first.idle();
+
+    const calls: MemoryScheduledTask[] = [];
+    const run: Runner = async (task) => {
+      calls.push(task);
+    };
+    const restarted = new MemoryScheduler(schedule, run, [], store);
+    restarted.runDueTasks(new Date("2026-09-29T00:20:00+08:00"));
+    await restarted.idle();
+    expect(summary(calls)).toEqual([
+      "wiki:2026-09-27",
+      "daily:2026-09-27",
+      "weekly:2026-09-21",
+      "wiki:2026-09-29",
+    ]);
+    expect(summary(before.mock.calls.map(([task]) => task))).toEqual([
+      "wiki:2026-09-28",
+    ]);
+
+    const sameHour = new MemoryScheduler(schedule, run, [], store);
+    sameHour.runDueTasks(new Date("2026-09-29T00:30:00+08:00"));
+    await sameHour.idle();
+    expect(calls).toHaveLength(4);
+  });
+
+  it("closes the day once when the configured hour moves behind the cursor", async () => {
+    const store = await checkpoint();
+    const first = new MemoryScheduler(
+      { ...config, dailyHour: 23 },
+      async () => {},
+      [],
+      store,
+    );
+    first.runDueTasks(new Date("2026-09-29T18:05:00+08:00"));
+    await first.idle();
+
+    const calls: MemoryScheduledTask[] = [];
+    const run: Runner = async (task) => {
+      calls.push(task);
+    };
+    const earlier = new MemoryScheduler(
+      { ...config, dailyHour: 18 },
+      run,
+      [],
+      store,
+    );
+    earlier.runDueTasks(new Date("2026-09-29T18:20:00+08:00"));
+    await earlier.idle();
+    expect(summary(calls)).toEqual(["wiki:2026-09-28", "daily:2026-09-28"]);
+
+    const later = new MemoryScheduler(
+      { ...config, dailyHour: 23 },
+      run,
+      [],
+      store,
+    );
+    later.runDueTasks(new Date("2026-09-29T23:20:00+08:00"));
+    await later.idle();
+    expect(summary(calls)).toEqual([
+      "wiki:2026-09-28",
+      "daily:2026-09-28",
+      "wiki:2026-09-29",
+    ]);
   });
 
   it("keeps completed receipts across restart and catches closed dates in order", async () => {

@@ -14,6 +14,7 @@ const roots: string[] = [];
 const schedule: MemoryScheduleConfig = {
   concurrency: 1,
   timeZone: "Asia/Shanghai",
+  dailyHour: 0,
   weeklyDay: 1,
 };
 

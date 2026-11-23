@@ -29,8 +29,8 @@
     },
     "memory": {
       "owner": "docs",
-      "description": "Role selection for node-services; see apps/node-services/AGENTS.md. The default value runs as-is, and it is not listed in .env.example.",
-      "names": ["NODE_SERVICES_ROLES"]
+      "description": "Role selection for Node Services and the Memory calendar's closing hour. Code defaults apply; see apps/node-services/AGENTS.md and apps/node-services/src/memory/README.md.",
+      "names": ["NODE_SERVICES_ROLES", "MEMORY_DAILY_HOUR"]
     },
     "web": {
       "owner": "code-default",

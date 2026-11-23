@@ -10,6 +10,7 @@ import { MemoryCalendarFixture } from "./scheduler-state-fixture.js";
 
 const config: MemoryScheduleConfig = {
   concurrency: 1,
+  dailyHour: 0,
   weeklyDay: 1,
   timeZone: "Asia/Shanghai",
 };

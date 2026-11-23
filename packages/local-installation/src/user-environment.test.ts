@@ -32,6 +32,7 @@ describe("readUserEnvironment", () => {
       SONIOX_API_KEY: "",
       XAI_API_KEY: "",
       TZ: "",
+      MEMORY_DAILY_HOUR: "",
     });
     if (process.platform !== "win32")
       expect((await stat(file)).mode & 0o777).toBe(0o600);

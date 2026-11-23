@@ -19,6 +19,8 @@ export type MemoryScheduledTask =
       readonly roomId?: string;
       readonly recordingId?: string;
       readonly resumeDownstream?: boolean;
+      /** Calendar tasks persist this when the slot differs from the midnight layout. */
+      readonly closesDay?: boolean;
     }
   | {
       readonly task: "daily";
@@ -82,6 +84,18 @@ export type MemorySchedulerReason =
   | "idle"
   | "recording"
   | "rebuild";
+
+export function isClosingWiki(
+  input: MemoryScheduledTask,
+  reason: MemorySchedulerReason,
+  period: string,
+): boolean {
+  return (
+    reason === "hourly" &&
+    input.task === "wiki" &&
+    (input.closesDay ?? period.endsWith("T00"))
+  );
+}
 
 // Provider outages are usually brief: retry fast first, then back off.
 const CALENDAR_RETRY_DELAYS_MS = [15_000, 60_000, 180_000, 600_000, 3_600_000];
@@ -550,14 +564,20 @@ export class MemoryScheduler {
       this.#pending.delete(key);
       this.#schedule(retry);
     }
-    for (const due of dueTasks(local, this.#config)) this.#schedule(due);
+    for (const due of dueTasks(
+      local,
+      this.#config,
+      local.hour === this.#config.dailyHour,
+    ))
+      this.#schedule(due);
   }
 
   #scheduleDurableCalendar(local: ReturnType<typeof zonedDate>): void {
     const hour =
       Date.UTC(local.year, local.month - 1, local.day, local.hour) / 3_600_000;
-    const newHour =
-      hour > (this.#calendarHour ?? -Infinity) || this.#restorePending;
+    const cursor = this.#calendarHour;
+    const restoring = this.#restorePending;
+    const newHour = hour > (cursor ?? -Infinity) || restoring;
     this.#restorePending = false;
     for (const due of this.#pending.values()) {
       if (due.reason === "rebuild") continue;
@@ -572,15 +592,19 @@ export class MemoryScheduler {
       this.#schedule(due);
     }
     if (!newHour) return;
-    const first =
-      this.#calendarHour === undefined
-        ? hour - local.hour
-        : this.#calendarHour + 1;
-    for (let slot = first; slot <= hour; slot += 1) {
+    const first = cursor === undefined ? hour - local.hour : cursor + 1;
+    // A changed hour may put an unplanned closure behind the saved cursor.
+    const start =
+      restoring && cursor !== undefined
+        ? Math.min(first, Math.floor(cursor / 24) * 24 + this.#config.dailyHour)
+        : first;
+    for (let slot = start; slot <= hour; slot += 1) {
       const date = new Date(slot * 3_600_000);
+      const current = slot === hour && slot >= first;
+      const scheduledClose = date.getUTCHours() === this.#config.dailyHour;
       // Intermediate hourly scans add no evidence; closed dates still require
       // their own Session -> Daily -> Weekly dependency chain in date order.
-      if (date.getUTCHours() !== 0 && slot !== hour) continue;
+      if (!scheduledClose && !current) continue;
       const missed = {
         year: date.getUTCFullYear(),
         month: date.getUTCMonth() + 1,
@@ -589,7 +613,15 @@ export class MemoryScheduler {
         minute: 0,
         weekday: ((date.getUTCDay() + 6) % 7) + 1,
       };
-      for (const due of dueTasks(missed, this.#config)) this.#schedule(due);
+      const dailyKey = `daily:${previousDate(missed)}`;
+      const closesDay =
+        scheduledClose &&
+        !this.#completed.has(dailyKey) &&
+        !this.#pending.has(dailyKey) &&
+        !this.#failed.has(dailyKey);
+      if (!closesDay && !current) continue;
+      for (const due of dueTasks(missed, this.#config, closesDay))
+        this.#schedule(due);
     }
     this.#calendarHour = Math.max(hour, this.#calendarHour ?? hour);
     void this.#track(this.#persistCalendar()).catch(() => {
@@ -1054,23 +1086,24 @@ function isDate(value: string): boolean {
 function dueTasks(
   local: ReturnType<typeof zonedDate>,
   config: MemoryScheduleConfig,
+  closesDay: boolean,
 ): DueTask[] {
   const date = formatDate(local);
   const closedDate = previousDate(local);
   const hourPeriod = `${date}T${pad(local.hour)}`;
-  const tasks: DueTask[] = [
-    {
-      // The midnight slot closes yesterday; 01:00 resumes today's sessions.
-      input: {
-        task: "wiki",
-        date: local.hour === 0 ? closedDate : date,
-        concurrency: config.concurrency,
-      },
-      period: hourPeriod,
-      reason: "hourly",
+  const wiki: DueTask = {
+    input: {
+      task: "wiki",
+      date: closesDay ? closedDate : date,
+      concurrency: config.concurrency,
+      // Keep existing keys for ordinary hours and midnight closures.
+      ...(closesDay === (local.hour === 0) ? {} : { closesDay }),
     },
-  ];
-  if (local.hour !== 0) return tasks;
+    period: hourPeriod,
+    reason: "hourly",
+  };
+  const tasks = [wiki];
+  if (!closesDay) return tasks;
   tasks.push({
     input: {
       task: "daily",
@@ -1079,7 +1112,7 @@ function dueTasks(
     },
     period: closedDate,
     reason: "daily",
-    dependsOn: `wiki:${hourPeriod}`,
+    dependsOn: taskKey(wiki),
   });
   if (local.weekday === config.weeklyDay) {
     const start = previousWeekStart(local);
@@ -1107,7 +1140,10 @@ function attachRunTelemetry(
 }
 
 function taskKey(task: DueTask): string {
-  return `${task.input.task}:${task.period}`;
+  const key = `${task.input.task}:${task.period}`;
+  if (task.input.task === "wiki" && task.input.closesDay !== undefined)
+    return `${key}:${task.input.closesDay ? "close" : "current"}`;
+  return key;
 }
 
 function zonedDate(now: Date, timeZone: string) {

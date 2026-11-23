@@ -35,16 +35,16 @@ Record the existing published output so an older page cannot satisfy the new ref
 **When a refresh happens:** Read the scheduled sync in the [Memory README](../../../../apps/node-services/src/memory/README.md).
 There is no manual refresh, no Wiki Upload or Refresh control, and no public refresh route.
 
-- My pages edits and uploads, mail text and the 23:30 mail sync only produce and index text. They wait for the nightly refresh at 00:00.
+- My pages edits and uploads, mail text and the 23:30 mail sync only produce and index text. They wait for the scheduled nightly refresh.
 - A recording's final transcript starts a meeting refresh that admits only that meeting's Sessions.
 - A connected mailbox's first completed snapshot starts a nightly-kind refresh about one minute later.
 - Room messages start no Wiki refresh. A quiet Room's Session is indexed 10 to 11 minutes after its last message and becomes searchable; the Wiki takes it in at night.
 
 **Journey:** Add the source through My pages with Import, drop or New file, then read back that source Document.
 Wait until its text is ready; a source whose text is not ready at admission waits for the next night.
-Choose one trigger and record it: the scheduled 00:00 refresh, a meeting refresh, a first mailbox snapshot, or an operator request.
+Choose one trigger and record it: the scheduled nightly refresh, a meeting refresh, a first mailbox snapshot, or an operator request.
 For an operator request on an owned environment, run `pnpm --filter @linger/node-services memory:wiki-sync --date <date>` in the Memory role's environment.
-It sends the same internal nightly request that Memory sends at 00:00.
+It sends the same internal request as the scheduled nightly refresh.
 TeamHub keys its replay by date, the Session set, the current revision and the latest failed refresh, not by My pages changes.
 Use a date not yet requested for this Wiki, and require a new refresh ID. A replayed `already_latest` does not admit the new source.
 Report an operator request separately from the automatic schedule.
@@ -197,7 +197,7 @@ Memory runs in the process time zone:
 
 - Every hour, the Wiki task compares the current Profile Revision with the one memory.md last absorbed. It calls the model only when they differ.
 - At 23:30 TeamHub reads new mail for each connected mailbox. It requests no refresh.
-- At 00:00 the nightly run reads the closed day. It proposes memory.md edits, writes the Daily report and Tracking Items, and requests the nightly Wiki refresh.
+- At `MEMORY_DAILY_HOUR` (00:00 by default), the nightly run reads the closed day. It proposes memory.md edits, writes the Daily report and Tracking Items, and requests the nightly Wiki refresh.
 - Weekly maintenance writes the Weekly report from that week's Daily reports.
 
 Report each scheduled step separately from an explicitly invoked command such as `memory:daily`, `memory:weekly` or `memory:wiki-sync`.

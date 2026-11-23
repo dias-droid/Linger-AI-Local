@@ -15,6 +15,7 @@ import {
 const config: MemoryScheduleConfig = {
   concurrency: 3,
   timeZone: "Asia/Shanghai",
+  dailyHour: 0,
   weeklyDay: 1,
 };
 
