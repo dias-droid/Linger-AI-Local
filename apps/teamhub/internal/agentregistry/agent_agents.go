@@ -84,14 +84,13 @@ func NormalizedAgentText(value *string) *string {
 	return &normalized
 }
 
-// MaxNameRunes is the contract's Agent and template name bound in characters.
-const MaxNameRunes = 120
-
-// MaxDescriptionRunes is the contract's Agent and template description bound in characters.
-const MaxDescriptionRunes = 1000
-
-// MaxInstructionsRunes is the contract's Agent and template instructions bound in characters.
-const MaxInstructionsRunes = 50000
+// The Agent text bounds, in characters: a CJK name of 120 characters is 360
+// bytes and still fits.
+const (
+	MaxNameRunes         = 120
+	MaxDescriptionRunes  = 1000
+	MaxInstructionsRunes = 50000
+)
 
 // ValidAgentProfileChange enforces the contract limits on provided fields.
 func ValidAgentProfileChange(change AgentProfileChange) bool {

@@ -18,6 +18,13 @@ import (
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/tenantmembership"
 )
 
+// The Room name and description bounds, in characters: a CJK name of 120
+// characters is 360 bytes and still fits.
+const (
+	MaxNameRunes        = 120
+	MaxDescriptionRunes = 2000
+)
+
 var (
 	ErrNotFound             = errors.New("room creation authority or member not found")
 	ErrInvalid              = errors.New("invalid room creation input")
@@ -213,7 +220,7 @@ func Create(ctx context.Context, queries *store.Queries, spec Spec) (Result, err
 
 func validateAndResolveMembers(ctx context.Context, queries *store.Queries, input Spec) (map[string]store.Actor, error) {
 	if input.TenantID == "" || input.Name == "" || strings.TrimSpace(input.Name) != input.Name ||
-		utf8.RuneCountInString(input.Name) > 120 || input.Description != nil && utf8.RuneCountInString(*input.Description) > 2000 ||
+		utf8.RuneCountInString(input.Name) > MaxNameRunes || input.Description != nil && utf8.RuneCountInString(*input.Description) > MaxDescriptionRunes ||
 		input.Creator.ID == "" || input.Creator.TenantID != input.TenantID ||
 		input.Owner.ID == "" || input.Owner.TenantID != input.TenantID || input.Owner.Kind != "human" ||
 		!input.Owner.AccountID.Valid || input.Owner.AccountID.String == "" || len(input.MemberActorIDs) > 100 {
