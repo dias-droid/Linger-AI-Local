@@ -55,4 +55,42 @@ Runtime runs still resolve through the user's environment. Pi starts through
 its `cli.js` instead of its PowerShell launcher, which drops the empty
 `--system-prompt` value the Daemon's probe sends.
 
+### Antigravity
+
+`agy` runs through its Agent Client Protocol server, `agy acp`, and signs in to
+its own account instead of taking models from the local gateway or a BYOK
+endpoint. Install it on the computer the Agent runs on:
+
+```bash
+# Linux and macOS
+curl -fsSL https://antigravity.google/cli/install.sh | bash
+# Windows PowerShell
+irm https://antigravity.google/cli/install.ps1 | iex
+```
+
+Sign in with Google, or export `GEMINI_API_KEY` in the environment the Daemon
+starts in, then check it:
+
+```bash
+linger-computer runtime login antigravity   # persists runtime_paths when given --antigravity-path
+linger-computer runtime check antigravity
+```
+
+`runtime check antigravity` answers `READY`, `AUTH_REQUIRED` (exit 11) when the
+Runtime runs but is signed out — the first state a new install shows —
+`INCOMPATIBLE` below 1.5.12, `NOT_INSTALLED` with the platform's install
+command, or `ERROR`. An `agy` outside `PATH` goes in with
+`--antigravity-path <path>`, which persists into `runtime_paths` when it is
+passed to `runtime login` (on `runtime check` it applies to that check only).
+A Desktop installation cannot choose the runtime from its setup page; the
+embedded Web Computer page shows it.
+
+What Antigravity shares with the other ACP runtimes and what it does not is in
+[local-daemon/README.md](./local-daemon/README.md#antigravity): it loads the
+user's own rules, skills and MCP config, it gets no `teamhub` command checks,
+model errors arrive as reply text, and it runs no local models. It also has no
+`model.invoke`, so background Memory and Wiki calls fall back to Claude Code on
+the same computer, or to Codex when only Codex is ready, and a computer with
+only `agy` installed sees those calls fail.
+
 Conventions and boundaries are in [AGENTS.md](./AGENTS.md).
