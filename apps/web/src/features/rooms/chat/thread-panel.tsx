@@ -54,7 +54,6 @@ import {
   createRoomProjection,
   replaceLoadedRoomMessage,
 } from "./room-projection";
-import { SharedStreamingStatus } from "./shared-streaming-status";
 import { useRoomChatNavigation } from "./use-room-chat-navigation";
 import {
   orderRoomMessages,
@@ -403,9 +402,7 @@ function ThreadReplyDock({
           {outboxError}
         </p>
       ) : null}
-      <SharedStreamingStatus surface="thread">
-        {dock ? <AgentStreamingStatusDock {...dock} /> : null}
-      </SharedStreamingStatus>
+      {dock ? <AgentStreamingStatusDock {...dock} /> : null}
       {children}
     </div>
   );
