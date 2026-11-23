@@ -419,6 +419,23 @@ export function architectureCopy(
     : architecture;
 }
 
+const pressureLabels: Record<
+  Schemas["LocalModelMemoryPressure"],
+  Message<string>
+> = {
+  critical: m.pressureCritical,
+  normal: m.pressureNormal,
+  warn: m.pressureWarn,
+};
+
+/** Human-readable macOS memory pressure label. */
+export function memoryPressureCopy(
+  pressure: Schemas["LocalModelMemoryPressure"],
+  t: Translate,
+) {
+  return t(pressureLabels[pressure]);
+}
+
 const modelSourceRefusals: Record<
   Schemas["ModelSourceErrorCode"],
   Message<string>

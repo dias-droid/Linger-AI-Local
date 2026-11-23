@@ -41,6 +41,7 @@ import type {
 } from "./local-models-queries";
 import {
   collapsedRowBadges,
+  downloadMemoryShortfall,
   downloadPercent,
   downloadStatusDetail,
   downloadStopped,
@@ -224,6 +225,7 @@ function OpenChatLink({
 function RowStatusLine({
   detail,
   download,
+  lowMemoryNeedBytes,
   recommended,
   slower,
   status,
@@ -231,12 +233,24 @@ function RowStatusLine({
 }: {
   detail: string | null;
   download: string;
+  lowMemoryNeedBytes?: number;
   recommended: boolean;
   slower: boolean;
   status: ModelStatus;
   tag: { dot?: string; label: Message<string>; working?: boolean };
 }) {
   const t = useT();
+  const lowMemoryNotice =
+    lowMemoryNeedBytes !== undefined ? (
+      <>
+        {" · "}
+        <span className="text-app-warning">
+          {t(m.needsFreeToLoad, {
+            need: formatGigabytes(lowMemoryNeedBytes, t),
+          })}
+        </span>
+      </>
+    ) : null;
   return (
     <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
       {tag.dot ? (
@@ -272,6 +286,7 @@ function RowStatusLine({
             <span className="font-medium text-app-info">
               {t(m.recommended)}
             </span>
+            {lowMemoryNotice}
           </>
         ) : slower ? (
           <>
@@ -279,10 +294,16 @@ function RowStatusLine({
             {download}
             {" · "}
             <span className="text-app-warning">{t(m.runsSlower)}</span>
+            {lowMemoryNotice}
           </>
         ) : detail ? (
-          ` · ${detail}`
-        ) : null}
+          <>
+            {` · ${detail}`}
+            {lowMemoryNotice}
+          </>
+        ) : (
+          lowMemoryNotice
+        )}
       </span>
     </span>
   );
@@ -445,6 +466,8 @@ export function ModelRow({
   const showFeaturedPill = featured && !inSpotlight;
   const slower =
     status === "available" && !model.recommended && model.fit === "system";
+  const lowMemory =
+    status === "available" ? downloadMemoryShortfall(view, model) : null;
   const brand = modelBrand(model);
   const computerId = view.computer.computer_id;
   const usedNames = usedByAgentNames(entry, assignableAgents, computerId);
@@ -585,6 +608,7 @@ export function ModelRow({
             <RowStatusLine
               detail={ending ? null : detail}
               download={download}
+              lowMemoryNeedBytes={lowMemory?.needBytes}
               recommended={recommended}
               slower={slower}
               status={status}
