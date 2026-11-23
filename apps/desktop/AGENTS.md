@@ -252,7 +252,9 @@ Gateway and runs Agents. The daemon exits with the app.
   `errorReasons` skips blind replanning and surfaces the structured reason copy;
   transient apply failures (`STACK_COMPONENT_FAILED`, `STACK_APPLY_INTERRUPTED`)
   after a plan was approved in the same run retry that approved plan once to
-  resume downloads instead of forcing a replan, while `LOCAL_MODELS_UNAVAILABLE`
+  resume downloads instead of forcing a replan, while other
+  `LOCAL_MODELS_RECOVERY_REQUIRED` causes (including ones without a prior
+  approval in the same run) still replan once, and `LOCAL_MODELS_UNAVAILABLE`
   selects user guidance by `errorCauseCode` (`HUB_UNREACHABLE`,
   `DISK_INSUFFICIENT`, `GPU_CONFLICT`, `STACK_PLAN_FAILED`, or memory when
   `MEMORY_INSUFFICIENT`/absent). While installing or resuming, `LocalServer`

@@ -3465,12 +3465,9 @@ export class InstallerApi {
         plan.runtime === "local" &&
         !job.errorReasons?.includes("binding-unavailable")
       ) {
-        if (
-          approved &&
-          !retriedApply &&
-          job.errorCauseCode &&
-          RETRY_APPLY_CAUSES.has(job.errorCauseCode)
-        ) {
+        const retryableApply =
+          !!job.errorCauseCode && RETRY_APPLY_CAUSES.has(job.errorCauseCode);
+        if (approved && !retriedApply && retryableApply) {
           retriedApply = true;
           onStep("services", 0, "Deploying the local model");
           job = await this.#json<Job>(
@@ -3479,10 +3476,7 @@ export class InstallerApi {
           );
           continue;
         }
-        if (
-          !replanned &&
-          (!job.errorCauseCode || REPLAN_ONLY_CAUSES.has(job.errorCauseCode))
-        ) {
+        if (!replanned && !(retriedApply && retryableApply)) {
           replanned = true;
           onStep("services", 0, "Deploying the local model");
           job = await this.#json<Job>(

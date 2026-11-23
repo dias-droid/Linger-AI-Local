@@ -2130,9 +2130,50 @@ describe("LocalServerModule", () => {
     await f.host.stop("quit");
   });
 
-  it("still replans once when an approved plan fails with a replan-only guard code", async () => {
-    const firstPlan = "a".repeat(64);
-    const secondPlan = "b".repeat(64);
+  it("still replans once when an approved plan fails with a non-retryable recovery cause", async () => {
+    for (const causeCode of ["STACK_PLAN_CHANGED", "SEARCH_UNAVAILABLE"]) {
+      const firstPlan = "a".repeat(64);
+      const secondPlan = "b".repeat(64);
+      const f = fixture(
+        withCheckout,
+        {},
+        checkout,
+        installerApi(
+          [],
+          [
+            {
+              state: "waiting_user",
+              errorCode: "LOCAL_MODELS_APPROVAL_REQUIRED",
+              localModelsPlan: { planId: firstPlan },
+            },
+            {
+              state: "waiting_user",
+              errorCode: "LOCAL_MODELS_RECOVERY_REQUIRED",
+              errorCauseCode: causeCode,
+            },
+            {
+              state: "waiting_user",
+              errorCode: "LOCAL_MODELS_APPROVAL_REQUIRED",
+              localModelsPlan: { planId: secondPlan },
+            },
+            DONE,
+          ],
+        ),
+      );
+      await f.host.start();
+      await f.module.begin({ runtime: "local" });
+      expect(f.api.retried).toEqual([
+        { localModelsApproval: firstPlan },
+        { localModelsReplan: true },
+        { localModelsApproval: secondPlan },
+      ]);
+      expect(f.module.status().phase).toBe("ready");
+      await f.host.stop("quit");
+    }
+  });
+
+  it("replans once when STACK_COMPONENT_FAILED arrives without a prior approval in this run", async () => {
+    const replannedPlan = "c".repeat(64);
     const f = fixture(
       withCheckout,
       {},
@@ -2142,18 +2183,14 @@ describe("LocalServerModule", () => {
         [
           {
             state: "waiting_user",
-            errorCode: "LOCAL_MODELS_APPROVAL_REQUIRED",
-            localModelsPlan: { planId: firstPlan },
-          },
-          {
-            state: "waiting_user",
             errorCode: "LOCAL_MODELS_RECOVERY_REQUIRED",
-            errorCauseCode: "STACK_PLAN_CHANGED",
+            errorCauseCode: "STACK_COMPONENT_FAILED",
+            message: "Local model setup failed at: llm.",
           },
           {
             state: "waiting_user",
             errorCode: "LOCAL_MODELS_APPROVAL_REQUIRED",
-            localModelsPlan: { planId: secondPlan },
+            localModelsPlan: { planId: replannedPlan },
           },
           DONE,
         ],
@@ -2162,9 +2199,8 @@ describe("LocalServerModule", () => {
     await f.host.start();
     await f.module.begin({ runtime: "local" });
     expect(f.api.retried).toEqual([
-      { localModelsApproval: firstPlan },
       { localModelsReplan: true },
-      { localModelsApproval: secondPlan },
+      { localModelsApproval: replannedPlan },
     ]);
     expect(f.module.status().phase).toBe("ready");
     await f.host.stop("quit");
