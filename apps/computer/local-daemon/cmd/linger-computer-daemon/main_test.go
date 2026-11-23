@@ -294,6 +294,26 @@ func TestByokRuntimeCatalogsShowTheEnteredModel(t *testing.T) {
 	}
 }
 
+func TestByokRuntimeCatalogsRemainScopedAfterPeriodicRefresh(t *testing.T) {
+	route := "localmodels/localmodels-byok"
+	models := make([]provider.RuntimeModel, 100)
+	models[0] = provider.RuntimeModel{ID: route, Label: route, IsDefault: true, ContextWindow: 1048576}
+	for i := 1; i < len(models); i++ {
+		models[i] = provider.RuntimeModel{ID: "vendor/other"}
+	}
+	diagnostics := []provider.RuntimeDiagnostic{{Type: "pi", Models: models}}
+	source := &localmodels.OverlayState{Mode: "byok", RuntimeModel: route, ModelLabel: "volcengine/kimi-k3-1-pro-261024"}
+	for range 3 {
+		diagnostics = byokRuntimeCatalogs(diagnostics, source)
+		if len(diagnostics[0].Models) != 1 || diagnostics[0].Models[0].ID != route || diagnostics[0].Models[0].Label != source.ModelLabel || diagnostics[0].Models[0].ContextWindow != 1048576 {
+			t.Fatalf("periodic BYOK catalog escaped its source: %+v", diagnostics[0].Models)
+		}
+	}
+	if len(models) != 100 || models[0].Label != route {
+		t.Fatal("periodic shaping modified the input catalog")
+	}
+}
+
 func TestWithManagedPiPathRespectsConfiguredPiAndClonesSafely(t *testing.T) {
 	if got := withManagedPiPath(nil, ""); got != nil {
 		t.Fatalf("empty managed path returned %v", got)

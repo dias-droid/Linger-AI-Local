@@ -358,6 +358,7 @@ func run(args []string) (resultErr error) {
 	})
 	defer localModels.Close()
 	applyDiscovered := func(publishCtx context.Context, next provider.DiscoveryResult) error {
+		next.Diagnostics = byokRuntimeCatalogs(next.Diagnostics, localmodels.ReadOverlay(localModelsStateDir))
 		logRuntimeDiagnostics(next.Diagnostics)
 		nextProviders, nextRuntimes := providerInstallations(next, currentProviderEnvironment(), localModelsStateDir)
 		providerCatalog.Replace(nextProviders)
