@@ -279,10 +279,10 @@ export function ByokPanel({
   return (
     <form
       aria-label={t(m.modeByok)}
-      className="mt-6 rounded-xl border border-border"
+      className="mt-5 rounded-xl border border-border bg-card"
       onSubmit={save}
     >
-      <div className="grid grid-cols-1 gap-4 px-4 py-4">
+      <div className="grid grid-cols-1 gap-5 px-5 py-5">
         <div>
           <p className="mb-1.5 text-sm font-medium text-foreground">
             {t(m.aiRuntime)}
@@ -308,7 +308,7 @@ export function ByokPanel({
           <legend className="mb-1.5 text-sm font-medium text-foreground">
             {t(m.byokApiAddress)}
           </legend>
-          <div className="grid grid-cols-2 gap-x-1.5 gap-y-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+          <div className="grid grid-cols-[minmax(5.5rem,2fr)_minmax(0,3fr)] gap-x-2 gap-y-2.5 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
             <div className="col-span-2 min-w-0 sm:col-span-1">
               <AddressLabel htmlFor={`${ids}-base`}>
                 {t(m.baseUrl)}
@@ -343,7 +343,7 @@ export function ByokPanel({
                 heading={t(m.byokPathHeading)}
                 menuClassName="-left-px sm:left-auto sm:-right-px"
                 id={`${ids}-path`}
-                inputClassName="font-mono text-[13px] sm:w-(--byok-fit) sm:flex-none"
+                inputClassName="font-mono text-xs sm:w-(--byok-fit) sm:flex-none"
                 inputStyle={fittedWidth(path)}
                 label={t(m.byokPath)}
                 onCommit={() => setPath(normalizeByokPath)}
@@ -377,7 +377,7 @@ export function ByokPanel({
                 heading={t(m.byokEndpointHeading)}
                 menuClassName="-right-px"
                 id={`${ids}-endpoint`}
-                inputClassName="font-mono text-[13px] sm:w-(--byok-fit) sm:flex-none"
+                inputClassName="font-mono text-xs sm:w-(--byok-fit) sm:flex-none"
                 inputStyle={fittedWidth(endpoint ?? runtimeEndpoint)}
                 label={t(m.byokEndpoint)}
                 onCommit={() =>
@@ -410,7 +410,7 @@ export function ByokPanel({
             </div>
           </div>
           <div
-            className="mt-1.5 grid gap-0.5 text-xs text-muted-foreground"
+            className="mt-2 grid gap-1 text-xs text-muted-foreground"
             id={addressHintId}
           >
             <p>{t(m.byokAddressHint)}</p>
@@ -422,7 +422,7 @@ export function ByokPanel({
                   message={
                     format.fromUrl ? m.byokSendsTo : m.byokSendsToRuntimeFormat
                   }
-                  tags={{ url: (text) => <Url>{text}</Url> }}
+                  tags={{ url: (text) => <UrlChip>{text}</UrlChip> }}
                   values={{
                     protocol: byokProtocolLabels[format.protocol],
                     runtime: modelSourceRuntimeLabels[runtime],
@@ -467,7 +467,7 @@ export function ByokPanel({
           >
             {t(m.model)}
           </label>
-          <div className="relative flex gap-1.5">
+          <div className="relative flex gap-2">
             <ByokCombobox
               aria-describedby={modelHintId}
               className="min-w-0 flex-1"
@@ -546,7 +546,7 @@ export function ByokPanel({
           </p>
         </div>
       </div>
-      <footer className="flex flex-wrap items-center justify-end gap-2 rounded-b-xl border-t border-border bg-muted/40 px-4 py-3">
+      <footer className="flex flex-wrap items-center justify-end gap-2 rounded-b-xl border-t border-border bg-muted/35 px-5 py-3">
         <Button
           disabled={disabled || !complete}
           loading={switcher.pending?.mode === "byok"}
@@ -578,18 +578,26 @@ function AddressLabel({
   );
 }
 
+function UrlChip({ children }: { children: string }) {
+  return (
+    <code className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground [overflow-wrap:anywhere]">
+      {children}
+    </code>
+  );
+}
+
 function Url({ children }: { children: string }) {
   return (
-    <span className="font-mono text-[0.95em] [overflow-wrap:anywhere]">
+    <span className="font-mono text-xs [overflow-wrap:anywhere]">
       {children}
     </span>
   );
 }
 
 /**
- * A test result floating under the Test button. A success fades on its own
- * unless the pointer rests on it; a failure stays until dismissed, a click
- * elsewhere, or a changed input. A click on Test replaces it.
+ * A test result floating above the Test button so it never obscures the form
+ * footer action below. A success fades on its own unless the pointer rests on
+ * it; a failure stays until dismissed, a click elsewhere, or a changed input.
  */
 function TestToast({
   children,
@@ -631,7 +639,7 @@ function TestToast({
   return (
     <div
       className={cn(
-        "absolute right-0 top-full z-40 mt-2 grid w-[min(22rem,100%)] grid-cols-[16px_minmax(0,1fr)_20px] items-start gap-2 rounded-lg bg-primary py-2.5 pl-3 pr-2 text-left text-xs text-primary-foreground/80 shadow-lg before:absolute before:-top-1 before:right-6 before:size-2.5 before:rotate-45 before:rounded-[2px] before:bg-primary before:content-[''] motion-reduce:animate-none",
+        "absolute right-0 bottom-full z-40 mb-2 grid w-[min(22rem,100%)] grid-cols-[16px_minmax(0,1fr)_20px] items-start gap-2 rounded-lg bg-primary py-2.5 pr-2 pl-3 text-left text-xs text-primary-foreground/80 shadow-lg before:absolute before:right-6 before:-bottom-1 before:size-2.5 before:rotate-45 before:bg-primary before:content-[''] motion-reduce:animate-none",
         leaving
           ? "animate-[town-dropdown-out_200ms_ease_both]"
           : "animate-[town-dropdown-in_var(--app-floating-duration)_ease_both]",
@@ -653,9 +661,7 @@ function TestToast({
         size={16}
       />
       <div className="min-w-0">
-        <p className="text-[13px] font-medium text-primary-foreground">
-          {title}
-        </p>
+        <p className="text-sm font-medium text-primary-foreground">{title}</p>
         <p className="mt-0.5 [overflow-wrap:anywhere]">{children}</p>
       </div>
       <button

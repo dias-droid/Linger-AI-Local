@@ -4797,4 +4797,50 @@ describe("Featured Inkling 2 Mini spotlight", () => {
       }),
     ).toBeEnabled();
   });
+
+  it("supports keyboard arrow switching on ModelSourceTabs and keeps BYOK focused without memory clutter", async () => {
+    const fixture = setup([labView()]);
+    fixture.runtime.server.on("GET", switchPath, ({ params }) =>
+      Response.json({
+        computer_id: params.computerId,
+        online: true,
+        status: {
+          byok: { configured: false, key_saved: false },
+          mode: "local",
+          runtime: "pi",
+          runtime_model: "localmodels-library/qwen3-coder-30b",
+        },
+        viewer_is_owner: true,
+      }),
+    );
+    await renderPage(fixture);
+
+    const localTab = await screen.findByRole("tab", {
+      name: /Local model/u,
+      selected: true,
+    });
+    expect(
+      screen.getByText("22.5 GB of 48 GB GPU memory in use"),
+    ).toBeVisible();
+
+    localTab.focus();
+    fireEvent.keyDown(localTab, { key: "ArrowRight" });
+    const byokTab = await screen.findByRole("tab", {
+      name: /BYOK/u,
+      selected: true,
+    });
+    expect(byokTab).toHaveFocus();
+    expect(screen.getByRole("form", { name: "BYOK" })).toBeVisible();
+    expect(
+      screen.queryByText("22.5 GB of 48 GB GPU memory in use"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.keyDown(byokTab, { key: "ArrowLeft" });
+    expect(
+      await screen.findByRole("tab", { name: /Local model/u, selected: true }),
+    ).toHaveFocus();
+    expect(
+      screen.getByText("22.5 GB of 48 GB GPU memory in use"),
+    ).toBeVisible();
+  });
 });
