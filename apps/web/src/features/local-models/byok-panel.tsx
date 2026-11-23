@@ -422,7 +422,7 @@ export function ByokPanel({
                   message={
                     format.fromUrl ? m.byokSendsTo : m.byokSendsToRuntimeFormat
                   }
-                  tags={{ url: (text) => <UrlChip>{text}</UrlChip> }}
+                  tags={{ url: (text) => <Url chip>{text}</Url> }}
                   values={{
                     protocol: byokProtocolLabels[format.protocol],
                     runtime: modelSourceRuntimeLabels[runtime],
@@ -578,20 +578,21 @@ function AddressLabel({
   );
 }
 
-function UrlChip({ children }: { children: string }) {
-  return (
-    <code className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground [overflow-wrap:anywhere]">
-      {children}
-    </code>
-  );
-}
-
-function Url({ children }: { children: string }) {
-  return (
-    <span className="font-mono text-xs [overflow-wrap:anywhere]">
-      {children}
-    </span>
-  );
+function Url({ children, chip = false }: { children: string; chip?: boolean }) {
+  const baseClassName = "font-mono text-xs [overflow-wrap:anywhere]";
+  if (chip) {
+    return (
+      <code
+        className={cn(
+          baseClassName,
+          "rounded-sm bg-muted px-1.5 py-0.5 text-foreground",
+        )}
+      >
+        {children}
+      </code>
+    );
+  }
+  return <span className={baseClassName}>{children}</span>;
 }
 
 /**

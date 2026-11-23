@@ -93,11 +93,11 @@ import {
   loadCheck,
   localSwitchTargets,
   memoryGuidance,
+  memorySegments,
   memorySummary,
   modelEntries,
   poolFreeBytes,
   poolOf,
-  poolOtherBytes,
   type ModelEntry,
   type ModelStatus,
 } from "./local-models-rules";
@@ -333,27 +333,7 @@ function MemorySummaryCard({
 }) {
   const translation = useTranslation();
   const { t } = translation;
-  const gpus = view.pools.filter((pool) => pool.kind === "gpu");
-  const activePools = gpus.length ? gpus : view.pools;
-  const modelTotals = new Map<string, { bytes: number; name: string }>();
-  let componentBytes = 0;
-  let otherBytes = 0;
-  for (const pool of activePools) {
-    otherBytes += poolOtherBytes(pool);
-    for (const holder of pool.holders) {
-      if (holder.bytes <= 0) continue;
-      if (holder.kind === "model") {
-        const prev = modelTotals.get(holder.id);
-        modelTotals.set(holder.id, {
-          bytes: (prev?.bytes ?? 0) + holder.bytes,
-          name: holder.name,
-        });
-      } else {
-        componentBytes += holder.bytes;
-      }
-    }
-  }
-  const modelSegments = [...modelTotals.entries()];
+  const { componentBytes, models, otherBytes } = memorySegments(view);
   const pct = (bytes: number) =>
     `${summary.totalBytes ? Math.min(100, (bytes / summary.totalBytes) * 100) : 0}%`;
 
@@ -394,13 +374,13 @@ function MemorySummaryCard({
         aria-hidden
         className="mt-3 flex h-1.5 w-full overflow-hidden rounded-full bg-muted"
       >
-        {modelSegments.map(([id, item], index) => (
+        {models.map((item, index) => (
           <span
             className={cn(
               "h-full border-r-2 border-card transition-[width] duration-200 last:border-r-0 motion-reduce:transition-none",
               memorySegmentColors[index % memorySegmentColors.length],
             )}
-            key={id}
+            key={item.id}
             style={{ width: pct(item.bytes) }}
             title={`${item.name} · ${formatGigabytes(item.bytes, t)}`}
           />
