@@ -50,14 +50,20 @@ scripts/ci/desktop-release.sh publish desktop-v0.16.36 --notes-file notes.md
 ## How the workflow runs
 
 The workflow runs for `desktop-v*` tags and from Actions → Desktop release →
-Run workflow. Its `build` jobs
-run on `ubuntu-24.04` (the macOS and Windows runners have no Docker) and keep
+Run workflow. Its `build` (`darwin-arm64`, `linux-x64`) and `build-win32`
+(`win32-x64`) jobs run on `ubuntu-24.04` (the macOS and Windows runners have no
+Docker), pull the prebuilt `dmgtool` and `wintool` images from GHCR (published
+by [`.github/workflows/desktop-packaging-images.yml`](../.github/workflows/desktop-packaging-images.yml)
+whenever a packaging Dockerfile changes, with automatic fallback to local
+`docker build`), and keep
 the files as workflow artifacts for 14 days: `desktop-<target>`, a zip of
 every file for the platform (with the Windows portable archive split into
 `desktop-win32-x64-portable` so `desktop-win32-x64` carries only the Setup and
 its `windows-setup.sha256` digest), and the installer on its own, not zipped
 (the `.dmg`, the `-setup.exe`, the Linux `.tar.gz`), for testers to download
-directly. `windows-smoke` downloads `desktop-win32-x64`, verifies the Setup
+directly. `windows-smoke` depends only on `prepare` and `build-win32`, so it
+starts as soon as `win32-x64` finishes without waiting for `darwin-arm64`; it
+downloads `desktop-win32-x64`, verifies the Setup
 against `windows-setup.sha256`, and installs those bytes silently under a fresh
 standard user on `windows-2022`. It requests only packaged Pi preparation and
 checks the real Pi RPC handshake (`get_state`, `get_commands`) and the

@@ -166,7 +166,11 @@ func diagnose(ctx context.Context, kind, executable, protocol string, options Di
 	}
 	observation.EntryPath, observation.ExecutablePath = entry, canonical
 	observation.ExecutionPath = options.Environment["PATH"]
-	command := native.NewInvocation(canonical, nil).WithEnvironment(options.Environment)
+	versionEnv := options.Environment
+	if kind == "claude" {
+		versionEnv = native.ClaudeEnvironment(options.Environment)
+	}
+	command := native.NewInvocation(canonical, nil).WithEnvironment(versionEnv)
 	version, err := discoverRuntimeVersion(ctx, command, budget)
 	if err != nil {
 		return reject("error", "RUNTIME_DIAGNOSTIC_FAILED", "Runtime version probe failed")

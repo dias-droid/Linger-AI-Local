@@ -36,6 +36,7 @@ export type ServiceFeature =
   | "local_models"
   | "byok_endpoint"
   | "local_models_diagnostics"
+  | "model_invoke_outcomes"
   | "local_models_engine";
 export type JsonValue =
   | null
@@ -2189,6 +2190,9 @@ export interface ModelInvoked {
   command_id: Id;
   runner_id: Id;
   invoke_id: Id;
+  /**
+   * context_too_long and unsupported are sent only after a runner.welcome whose service_features names model_invoke_outcomes; otherwise the Daemon downgrades them to failed and runtime_unavailable.
+   */
   outcome:
     | "completed"
     | "timed_out"
@@ -2198,6 +2202,8 @@ export interface ModelInvoked {
     | "runtime_unavailable"
     | "auth_required"
     | "runtime_incompatible"
+    | "context_too_long"
+    | "unsupported"
     | "failed";
   /**
    * The reply of a completed call. For a session call that timed_out, was output_limited or canceled, what the model had streamed so far, when anything.

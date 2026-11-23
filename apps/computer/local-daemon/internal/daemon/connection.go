@@ -338,6 +338,7 @@ func (d *Daemon) acceptRunnerWelcome(ctx, connectionCtx context.Context, stream 
 	d.byokEndpoint.Store(slices.Contains(command.ServiceFeatures, serviceFeatureByokEndpoint))
 	d.localModelsDiagnostics.Store(slices.Contains(command.ServiceFeatures, serviceFeatureLocalModelsDiagnostics))
 	d.localModelsEngine.Store(slices.Contains(command.ServiceFeatures, serviceFeatureLocalModelsEngine))
+	d.modelInvokeOutcomes.Store(slices.Contains(command.ServiceFeatures, serviceFeatureModelInvokeOutcomes))
 	localModels := slices.Contains(command.ServiceFeatures, serviceFeatureLocalModels)
 	if err := d.activateStreamAndReplay(ctx, stream, command.ReconcileOperationIDs, localModels); err != nil {
 		return err
@@ -419,6 +420,7 @@ func (d *Daemon) clearDiagnosticsStream(stream transport.Stream) {
 	d.connectionMu.Lock()
 	if d.diagnosticsStream == stream {
 		d.diagnosticsStream = nil
+		d.modelInvokeOutcomes.Store(false)
 	}
 	if d.localModelsStream == stream {
 		d.localModelsStream = nil

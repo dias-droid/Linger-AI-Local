@@ -93,6 +93,24 @@ Claude uses the fixed `model-invoke/claude/.claude` under the state directory as
 next one. A model call does not enter the Operation ledger and takes no
 execution slot.
 
+A call that ends `failed` or `timed_out` is checked against the network its
+model needs (`internal/daemon/model_network.go`), and reported `unavailable`
+when this Computer cannot reach it, so the Agent side waits for the Computer as
+it does for a disconnected one instead of spending attempts. The endpoints come
+from the Runtime's own configuration (`internal/provider/model_endpoints.go`):
+the active Codex custom provider's `base_url`, else Codex's `chatgpt.com` and
+`api.openai.com` or the `chatgpt_base_url` and `openai_base_url` overriding
+them; Claude's `ANTHROPIC_BASE_URL`, else `api.anthropic.com`; for Pi, the base
+URL of the custom provider in `models.json` that its default model is on. The
+call is unavailable only when none of them, nor the proxy `HTTPS_PROXY`,
+`HTTP_PROXY` and `NO_PROXY` choose for each, accepts a TCP connection. A BYOK
+gateway, whose endpoint the tool probes when it mounts, and a Runtime whose
+endpoints are unknown, such as Pi on a built-in provider, need a route out of
+the machine, tested with UDP sockets connected to documentation addresses,
+which send nothing; local models need nothing. The check sends no data, waits
+at most 3 s per connection, and never runs for a call that completed or failed
+for another reason.
+
 Codex's workspace mode turns off the shell and unified exec and keeps only the
 code-mode host's `apply_patch`, with the working directory as the only writable
 root. It therefore reads no files, and the Daemon appends the workspace files'
@@ -221,19 +239,28 @@ model.
 
 `internal/localmodels/source.go` runs `localmodels source status|check|models|apply`
 for `execute` commands of kind `model_source`, on their own goroutine so they
-never block Operation commands; `apply` is serialized, maps apply timeouts to
-`MODEL_SOURCE_TIMEOUT`, scrubs any submitted BYOK API key from tool error
-messages before they leave the Computer, and logs structured refusal codes. A BYOK key reaches the
-tool on stdin, never in argv or logs, together with the address as base URL,
-path and endpoint and the protocol the owner's client chose; `check` sends one
-request there and `models` lists base URL + path + `/models`. The BYOK summary
-carries `path` and `endpoint` only after a `runner.welcome` that names the
-`byok_endpoint` service feature. `localmodels` writes
+never block Operation commands; `apply` is serialized, maps timeouts to
+`MODEL_SOURCE_TIMEOUT`, scrubs submitted BYOK API keys and recognizable
+credentials (`redact.Text`) from tool error messages before they leave the
+Computer, and logs structured refusal codes. Read-only `status`, `check`, and
+`models` calls use 40 s budgets inside the Runner Gateway's 45 s timeout, and
+`apply` fits inside a 165 s total budget under the Gateway's 180 s timeout
+(giving `source apply` up to 150 s while reserving 15 s for synchronous
+post-apply Runtime discovery, or up to 30 s when `source apply` finishes
+earlier). Output decoding scans sequential JSON documents so
+JSONL progress lines followed by pretty-printed JSON parse reliably. A BYOK key
+reaches the tool on stdin, never in argv or logs, together with the address as
+base URL, path and endpoint and the protocol the owner's client chose; `check`
+sends one request there and `models` lists base URL + path + `/models`. The BYOK
+summary carries `path` and `endpoint` only after a `runner.welcome` that names
+the `byok_endpoint` service feature. `localmodels` writes
 `<state>/model-source.json`; the Daemon only adds the `runtime_paths` that the
 same `apply` reported. It re-reads the file on every discovery tick to overlay
 the Runtimes' environment (`OverlayEnvironment`) and executable paths
-(`OverlayRuntimePaths`), and under BYOK lists only the BYOK model in each
-Runtime's catalog.
+(`OverlayRuntimePaths`), dropping any stale `byok-home` entry in `local` mode
+in favor of the managed `gateway-home` Pi profile, never falling back to cloud
+models in `local` mode (`agentRuntimeModel`), and under BYOK listing only the
+BYOK model in each Runtime's catalog.
 
 Before a Run or model call on a Runtime whose profile is the BYOK source's,
 the Daemon checks the saved loopback gateway's `/health` (`EnsureGateway` in
@@ -245,8 +272,9 @@ first. A failed mount fails the Run before its Runtime starts, with the
 public failure code of the tool's structured code: `BYOK_UNREACHABLE` and
 `NETWORK_UNAVAILABLE` become `network_error`, `BYOK_AUTH_FAILED`
 `authentication_required`; any other stays `execution_failed`. Model calls
-answer `auth_required` or `runtime_unavailable` with the tool's code in the
-reason. Runs that waited for a remount that failed meanwhile share its
+answer `unavailable` for the two network codes, `auth_required` for
+`BYOK_AUTH_FAILED` and `runtime_unavailable` for any other, with the tool's
+code in the reason. Runs that waited for a remount that failed meanwhile share its
 error instead of probing the endpoint again.
 
 ## Codex models cache

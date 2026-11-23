@@ -41,6 +41,7 @@ import (
 )
 
 func main() {
+	closeInheritedFDs()
 	// Codex runs this before every shell command, and the managed Pi
 	// extension before a bash call that may need it.
 	if len(os.Args) == 2 && os.Args[1] == "shell-text-hook" {

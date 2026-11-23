@@ -109,7 +109,7 @@ Progress and outcomes travel back only as snapshots:
    Per-model inference engine metadata (`engine`, `engine_label`, `concurrency`,
    `host_ram_bytes`) is sent only when `runner.welcome`'s `service_features`
    declares `local_models_engine` (`FIRST_LOCAL_MODELS_ENGINE_COMPUTER_VERSION`,
-   `0.60.0`); otherwise the Daemon strips those fields for older Agent Services.
+   `0.61.0`); otherwise the Daemon strips those fields for older Agent Services.
 2. Agent Service records it through TeamHub `recordAgentRuntimeLocalModels`
    (`POST /v0/agent-runtime/local-computers/local-models`). TeamHub keeps the
    latest snapshot per Computer, so an offline Computer shows what it last
@@ -186,3 +186,13 @@ Agent Service before finishing a turn:
    Codex via their native `Stop` hooks; Pi via a follow-up `prompt` RPC on the
    bound process). Timeout, disconnect, or an invalid decision fails open to
    `allow`.
+
+## Model invocation outcomes
+
+`executed` `model_invoke` reports `context_too_long` (prompt exceeded the
+model's context window) and `unsupported` (the target Runtime does not support
+the requested mode, such as Pi workspace calls) only after `runner.welcome`'s
+`service_features` names `model_invoke_outcomes`
+(`FIRST_MODEL_INVOKE_OUTCOMES_COMPUTER_VERSION`, `0.60.0`); otherwise the
+Daemon downgrades them to `failed` and `runtime_unavailable` for older Agent
+Services.
