@@ -25,11 +25,8 @@ func PiRPCResourceArgs(systemPrompt string) []string {
 }
 
 type piCatalogState struct {
-	Model struct {
-		ID       string `json:"id"`
-		Provider string `json:"provider"`
-	} `json:"model"`
-	ThinkingLevel string `json:"thinkingLevel"`
+	Model         piCatalogModel `json:"model"`
+	ThinkingLevel string         `json:"thinkingLevel"`
 }
 
 type piCatalogModel struct {
@@ -175,17 +172,5 @@ func piEffortSupport(levels map[string]json.RawMessage, defaultLevel string) *Ef
 		}
 		efforts.add(level.value, "")
 	}
-	support := efforts.support(defaultLevel)
-	if support == nil {
-		return nil
-	}
-	for i := range support.Options {
-		if support.Options[i].Value == "off" {
-			support.Options[i].Value = "none"
-		}
-	}
-	if support.Default == "off" {
-		support.Default = "none"
-	}
-	return support
+	return finalizeEffortSupport(efforts, defaultLevel)
 }

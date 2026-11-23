@@ -21,6 +21,10 @@ type piRuntime struct{ profile Profile }
 
 func newPiRuntime(profile Profile) Runtime { return &piRuntime{profile: profile} }
 
+// ErrPiUnsupportedEffort reports that a requested reasoning effort is outside
+// Pi's supported --thinking vocabulary.
+var ErrPiUnsupportedEffort = errors.New("Pi reasoning effort is unsupported")
+
 // piThinkingLevel maps a product effort to Pi's --thinking value. An empty
 // effort leaves Pi's own level in place.
 func piThinkingLevel(effort string) (string, error) {
@@ -32,7 +36,7 @@ func piThinkingLevel(effort string) (string, error) {
 	case "off", "minimal", "low", "medium", "high", "xhigh", "max":
 		return effort, nil
 	}
-	return "", fmt.Errorf("Pi reasoning effort %q is unsupported", effort)
+	return "", fmt.Errorf("%w: %q", ErrPiUnsupportedEffort, effort)
 }
 
 // piLaunchPlan is everything Start resolved before it takes or spawns a
@@ -242,6 +246,7 @@ func (p *piRuntime) spawn(ctx context.Context, plan piLaunchPlan, lock *os.File)
 
 	runCtx, cancel := budgetContext(ctx, spec.Budget)
 	turn := newPiTurn(runCtx, cancel, proc, false, plan.fence, p.profile.Logger)
+	turn.requestedThinking = plan.thinking
 	turn.readiness = plan.spec.Readiness
 	turn.reviewer, turn.dir = spec.PermissionReviewer, spec.Dir
 	turn.stopHook = plan.spec.StopHook

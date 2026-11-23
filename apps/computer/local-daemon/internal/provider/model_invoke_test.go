@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/simplexai-labs/linger/apps/computer/local-daemon/internal/provider/native"
 )
 
 func TestModelInvokeTimeoutAllowsWikiRefreshDeadline(t *testing.T) {
@@ -164,6 +166,23 @@ func TestClaudeModelInvokeArgsDisableToolsAndCustomizations(t *testing.T) {
 		argValue(workspace, "--permission-mode") != "acceptEdits" {
 		t.Fatalf("workspace args = %q", workspace)
 	}
+
+	noneArgs := claudeModelInvokeArgs(ModelInvokeText, "none", nil)
+	if slices.Contains(noneArgs, "--effort") || argValue(noneArgs, "--thinking") != "disabled" {
+		t.Fatalf("none args = %q; want --thinking disabled without --effort", noneArgs)
+	}
+
+	emptyArgs := claudeModelInvokeArgs(ModelInvokeText, "", nil)
+	if slices.Contains(emptyArgs, "--effort") || slices.Contains(emptyArgs, "--thinking") {
+		t.Fatalf("empty effort args = %q; want neither --effort nor --thinking", emptyArgs)
+	}
+
+	codexEmpty := codexModelInvokeArgs("", ModelInvokeText, "", "", "/w", "", "/l")
+	for _, arg := range codexEmpty {
+		if strings.HasPrefix(arg, "model_reasoning_effort=") {
+			t.Fatalf("codex empty effort included reasoning override: %q", codexEmpty)
+		}
+	}
 }
 
 type codexInvokeFixture struct {
@@ -309,6 +328,9 @@ func TestModelInvokerClassifiesFailures(t *testing.T) {
 		// so it is not reported as a transient failure.
 		{event: modelNotFoundEvent, outcome: ModelInvokeRuntimeIncompatible},
 		{stderr: "Error: stream disconnected before completion\n", outcome: ModelInvokeFailed},
+		{event: `{"type":"turn.failed","error":{"message":"context window exceeded","codexErrorInfo":"contextWindowExceeded"}}`, outcome: ModelInvokeContextTooLong},
+		{event: `{"type":"turn.failed","error":{"message":"{\"error\":{\"type\":\"exceed_context_size_error\",\"message\":\"request exceeds context\"}}"}}`, outcome: ModelInvokeContextTooLong},
+		{event: `{"type":"turn.failed","error":{"message":"upstream unavailable","codexErrorInfo":{"internalServerError":{"httpStatusCode":503}}}}`, outcome: ModelInvokeRuntimeUnavailable},
 	} {
 		fixture := newCodexInvokeFixture(t, func(_ context.Context, command *exec.Cmd) error {
 			_, _ = io.WriteString(command.Stderr, test.stderr)
@@ -321,6 +343,15 @@ func TestModelInvokerClassifiesFailures(t *testing.T) {
 		if result.Outcome != test.outcome || result.Reason == "" {
 			t.Fatalf("%q: result = %+v", test.stderr+test.event, result)
 		}
+	}
+
+	// Claude structured terminal_reason=prompt_too_long maps to context_too_long
+	// without matching error prose.
+	claudePromptTooLong := classifyModelInvokeFailureWithDiagnostics(
+		context.Background(), context.Background(), "claude", errors.New("exit status 1"), "", "Prompt is too long", "context_too_long", native.RuntimeFailureDiagnostics{},
+	)
+	if claudePromptTooLong.Outcome != ModelInvokeContextTooLong {
+		t.Fatalf("claude prompt_too_long = %+v", claudePromptTooLong)
 	}
 }
 
