@@ -4,7 +4,6 @@ import {
 } from "@hugeicons/core-free-icons";
 import { use, useEffect, useEffectEvent, useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
-import type { TeamHubVoiceCapture } from "@/features/teamhub/teamhub-types";
 import { useT } from "@/i18n/use-translation";
 
 import { roomListMessages } from "../room-list.messages";
@@ -13,6 +12,7 @@ import { LazyVoiceKeyDialog } from "./lazy-voice-key-dialog";
 import { openRecordingWindow } from "./recording-window-store";
 import {
   isTranscriptRecoveryPaused,
+  transcriptRecoveryPercent,
   useOptionalVoiceControl,
   VoiceCapabilitiesContext,
   VoiceConnectionRetryContext,
@@ -105,7 +105,9 @@ export function RecordingEntry({
                     ? t(roomListMessages.recoveringAttemptHint, attempt)
                     : recovering
                       ? t(roomListMessages.recoveringProgressHint, {
-                          progress: recoveryProgress(capture),
+                          progress: capture
+                            ? transcriptRecoveryPercent(capture)
+                            : 0,
                         })
                       : label);
   function start() {
@@ -224,16 +226,5 @@ export function RecordingEntry({
         />
       ) : null}
     </>
-  );
-}
-
-function recoveryProgress(capture: TeamHubVoiceCapture | undefined) {
-  return Math.min(
-    100,
-    Math.floor(
-      ((capture?.transcript_recovery_progress_ms ?? 0) /
-        Math.max(1, capture?.transcript_recovery_total_ms ?? 1)) *
-        100,
-    ),
   );
 }

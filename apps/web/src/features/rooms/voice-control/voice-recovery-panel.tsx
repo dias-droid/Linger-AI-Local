@@ -7,6 +7,7 @@ import { VoiceRequestScope } from "@/features/teamhub/voice-request-scope";
 import { translate } from "@/i18n/language";
 import { useT } from "@/i18n/use-translation";
 import { recordingMessages as m } from "./recording.messages";
+import { transcriptRecoveryPercent } from "./voice-control-context";
 
 export function VoiceRecoveryPanel({
   capture,
@@ -55,14 +56,7 @@ export function VoiceRecoveryPanel({
       dispose?.();
     };
   }, [capture.id, client, version]);
-  const progress = Math.min(
-    100,
-    Math.floor(
-      ((capture.transcript_recovery_progress_ms ?? 0) /
-        Math.max(1, capture.transcript_recovery_total_ms ?? 1)) *
-        100,
-    ),
-  );
+  const progress = transcriptRecoveryPercent(capture);
   const failed = capture.transcript_recovery_status === "failed";
   const pending = pendingCaptureId === capture.id;
   return (
