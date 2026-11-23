@@ -24,6 +24,17 @@ async function fixture() {
   return root;
 }
 it.skipIf(process.platform !== "win32")(
+  "passes a literal path through stdin to both PowerShell launch modes",
+  { timeout: 60_000 },
+  async () => {
+    const root = await fixture();
+    const target = path.join(root, "spaces and 'quotes' \u6587");
+    await mkdir(target);
+    await windowsPrivatePath(target, "directory", true);
+    await windowsPrivatePath(target, "directory", false, runProcess);
+  },
+);
+it.skipIf(process.platform !== "win32")(
   "restores write access to a private directory with a read-only owner rule",
   { timeout: 30_000 },
   async () => {

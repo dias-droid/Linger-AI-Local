@@ -214,8 +214,8 @@ function spawnDefaultWorker(): WorkerProcess {
       "-NoLogo",
       "-NoProfile",
       "-NonInteractive",
-      "-EncodedCommand",
-      Buffer.from(WINDOWS_PRIVATE_WORKER_SCRIPT, "utf16le").toString("base64"),
+      "-Command",
+      WINDOWS_PRIVATE_WORKER_SCRIPT,
     ],
     {
       stdio: ["pipe", "pipe", "ignore"],
@@ -405,8 +405,8 @@ export async function windowsPrivatePath(
           "-NoLogo",
           "-NoProfile",
           "-NonInteractive",
-          "-EncodedCommand",
-          Buffer.from(WINDOWS_PRIVATE_SCRIPT, "utf16le").toString("base64"),
+          "-Command",
+          WINDOWS_PRIVATE_SCRIPT,
         ],
         {
           input: payload,
