@@ -66,7 +66,10 @@ export function useVoiceSessionLifecycle(
       setVoiceSessionId(undefined);
       setListenerStatus("disabled");
       setPartialTranscript(undefined);
+      // Only a session to release sends Stop; without one the recording is
+      // not shown as saving, which nothing would end.
       if (
+        session &&
         capture &&
         (capture.status === "starting" || capture.status === "recording")
       ) {
