@@ -174,9 +174,13 @@ async function resume(options: ReturnType<typeof parseInstallerArguments>) {
   const runtime =
     outcome.code === 0 && options.externalComputer
       ? await import("./server/instance-runtime.js")
-          .then(({ instanceRuntime }) =>
+          .then(({ formatRuntimeLookupTimings, instanceRuntime }) =>
             instanceRuntime(options.home, options.instanceName!, {
               runtimeDescriptors,
+              onTimings: (timings) =>
+                process.stderr.write(
+                  formatRuntimeLookupTimings(options.instanceName!, timings),
+                ),
             }),
           )
           .catch(() => undefined)

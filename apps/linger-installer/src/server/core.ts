@@ -29,7 +29,10 @@ import { publicComputer } from "./public.js";
 import { prepareDependencies } from "@linger/local-installation/dependencies";
 import { readManagedModel } from "@linger/local-installation/managed-codex";
 import type { RunInstallation } from "./jobs.js";
-import { instanceRuntime } from "./instance-runtime.js";
+import {
+  formatRuntimeLookupTimings,
+  instanceRuntime,
+} from "./instance-runtime.js";
 export function coreAdapter(
   home: string,
   sourceRepo: string,
@@ -180,7 +183,10 @@ export function coreAdapter(
     runtime(
       name: string,
     ): Promise<components["schemas"]["InstanceRuntime"] | undefined> {
-      return instanceRuntime(home, name);
+      return instanceRuntime(home, name, {
+        onTimings: (timings) =>
+          process.stderr.write(formatRuntimeLookupTimings(name, timings)),
+      });
     },
     async login(name: string) {
       const value = await instance(name);

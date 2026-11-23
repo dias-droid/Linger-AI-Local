@@ -94,6 +94,24 @@ import type {
   SetupReason,
 } from "../shared/setup.js";
 
+const RUNTIME_TIMING_PREFIX = "Runtime lookup timings (ms)";
+
+// The installer's stderr carries both failures and the steady-state timing
+// line. Keep the timing line at info so a successful lookup does not look
+// like a fault during triage.
+function logInstallerStderr(
+  log: Logger | undefined,
+  event: string,
+  text: string,
+): void {
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const level = trimmed.startsWith(RUNTIME_TIMING_PREFIX) ? "info" : "warn";
+    log?.[level](event, { line: trimmed.slice(0, 1500) });
+  }
+}
+
 // The pinned linger source this build installs, written by the release build:
 // downloaded from `url` (or a mirror of it), or bundled in the app at `file`.
 export type SourceArchive =
@@ -2384,7 +2402,7 @@ export class LocalServerModule implements Module {
     child.stderr.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf8");
       reason = text.trim().slice(0, 1500) || reason;
-      log?.warn("local_server.installer_stderr", { line: text.slice(0, 1500) });
+      logInstallerStderr(log, "local_server.installer_stderr", text);
     });
     const origin = await new Promise<string>((resolve, reject) => {
       let output = "";
@@ -2750,7 +2768,7 @@ export class LocalServerModule implements Module {
           "--resume",
         ],
         {
-          stdio: ["ignore", "pipe", "ignore"],
+          stdio: ["ignore", "pipe", "pipe"],
           // The pinned Node is a console program; without this Windows
           // opens a console window for it.
           windowsHide: true,
@@ -2759,8 +2777,24 @@ export class LocalServerModule implements Module {
         },
       );
       let output = "";
+      let stderr = "";
       child.stdout.on("data", (chunk: Buffer) => {
         output += chunk.toString("utf8");
+      });
+      // Drain stderr so a chatty installer cannot fill the pipe, and keep
+      // its timing line in the same log the serving path writes to.
+      child.stderr.on("data", (chunk: Buffer) => {
+        const text = chunk.toString("utf8");
+        for (const line of text.split("\n")) {
+          const trimmed = line.trim();
+          if (trimmed && !trimmed.startsWith(RUNTIME_TIMING_PREFIX))
+            stderr = trimmed.slice(0, 1500) || stderr;
+        }
+        logInstallerStderr(
+          this.#ctx?.log,
+          "local_server.installer_resume_stderr",
+          text,
+        );
       });
       child.once("error", reject);
       child.once("close", (code) => {
@@ -2768,7 +2802,11 @@ export class LocalServerModule implements Module {
           const last = output.trim().split("\n").at(-1) ?? "";
           resolve(JSON.parse(last) as ResumeOutcome);
         } catch {
-          reject(new Error(`The installer exited with code ${code}`));
+          reject(
+            new Error(
+              `The installer exited with code ${code}${stderr ? `: ${stderr}` : ""}`,
+            ),
+          );
         }
       });
     });
