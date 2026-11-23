@@ -4,13 +4,27 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/agentregistry"
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/collaboration"
+	"github.com/simplexai-labs/linger/apps/teamhub/internal/platform/agenttemplates"
 	httpapi "github.com/simplexai-labs/linger/contracts-go/teamhubpublic"
 )
+
+// validAgentTemplateText reports whether a template's name and instructions
+// fit their bounds in characters: the contract states both as maxLength, and
+// the catalog next to it counts the same way.
+func validAgentTemplateText(name, instructions string) bool {
+	return strings.TrimSpace(name) != "" &&
+		len([]rune(name)) <= agentTemplateNameRunes &&
+		strings.TrimSpace(instructions) != "" &&
+		utf8.RuneCountInString(instructions) <= agenttemplates.MaxInstructionsRunes
+}
+
+const agentTemplateNameRunes = 120
 
 func (a *App) listAgentTemplates(c *gin.Context) {
 	if _, ok := a.spaceHuman(c, c.Param("tenantId")); !ok {
@@ -39,7 +53,7 @@ func (a *App) publishAgentTemplate(c *gin.Context) {
 	}
 	request.Name = strings.TrimSpace(request.Name)
 	request.Instructions = strings.TrimSpace(request.Instructions)
-	if !validAgentText(request.Name, request.Instructions) {
+	if !validAgentTemplateText(request.Name, request.Instructions) {
 		a.writeError(c, http.StatusBadRequest, "INVALID_REQUEST", "Agent template name and instructions are required")
 		return
 	}
