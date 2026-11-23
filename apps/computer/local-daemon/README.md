@@ -65,6 +65,11 @@ the configured Linger Runner Gateway. Runtime executable paths, process
 environment, and physical workspace paths are resolved locally and never come
 from an Operation wire request.
 
+The Daemon pings the Runner Gateway connection every 10 seconds with WebSocket
+control frames and drops it when no data or Pong arrives for 30 seconds, then
+reconnects with the usual backoff, so a half-open connection never leaves Runs
+waiting on TCP retransmission.
+
 Opening the local Registration store deletes records of retired Runtimes such as
 Hermes; connecting and reconnecting report Registration observations only for
 Codex, Claude, Pi and Antigravity.
