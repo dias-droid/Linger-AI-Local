@@ -633,8 +633,13 @@ export async function resolveLocalmodelsBifrostAddr(
   const allocate = options.allocate ?? true;
   const toolsDir = localmodelsToolsDirectory(home);
   const addrFile = localmodelsBifrostAddrFile(home);
-  const checkFree = dependencies.portFree ?? ((port: number) => portFree(port));
-  const pickFree = dependencies.freePort ?? freePort;
+  const checkFree =
+    dependencies.portFree ??
+    ((port: number) => portFree(port, "tcp", { allInterfaces: true }));
+  const pickFree =
+    dependencies.freePort ??
+    ((reserved: Set<number>, opts?: { preferred?: number }) =>
+      freePort(reserved, { ...opts, allInterfaces: true }));
   const resolveOnce = async (): Promise<string> => {
     const owned = await readOwnedBifrostAddress(toolsDir);
     if (owned) return owned.addr;

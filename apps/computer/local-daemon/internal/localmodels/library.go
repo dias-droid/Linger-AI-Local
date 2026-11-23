@@ -684,12 +684,18 @@ func (l *Library) superviseJob(action Action, events <-chan libraryEvent, ended 
 	}
 	l.mu.Lock()
 	delete(l.jobs, action.Model)
+	rotateGatewayAddr := false
 	if final != nil && final.Event == "error" {
 		if cause := final.cause(); cause != nil {
 			l.causes[action.Model] = cause
+		} else if final.Code == "GATEWAY_REGISTRATION_FAILED" && final.Cause == "" {
+			rotateGatewayAddr = true
 		}
 	}
 	l.mu.Unlock()
+	if rotateGatewayAddr && l.tool != nil {
+		l.tool.rotateUnownedBifrostAddr()
+	}
 	l.Refresh(l.ctx)
 	if action.Name == ActionLoad {
 		l.runtimeChanged()
