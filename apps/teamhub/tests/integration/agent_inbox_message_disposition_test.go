@@ -181,6 +181,7 @@ INSERT INTO task_meta_callback_messages(id,task_id,tenant_id,generation,meta_seq
 		{"AnotherMe skips an unmentioned Thread message", env.contextKey, thread, "d-thread-plain", "skip", false},
 		{"AnotherMe hears a Thread mention", env.contextKey, thread, "d-thread-mention", "notify", true},
 		{"AnotherMe hears a mention", env.contextKey, room, "d-mention", "notify", true},
+		{"AnotherMe's Human in its direct chat is a mention", env.contextKey, direct, "d-direct-plain", "notify", true},
 		{"AnotherMe hears its Human in a direct chat's Thread", env.contextKey, directThread, "d-direct-thread-plain", "notify", true},
 		{"AnotherMe skips a decision result in its direct chat", env.contextKey, direct, "d-direct-decision", "skip", false},
 	})
