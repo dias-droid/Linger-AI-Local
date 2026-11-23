@@ -287,18 +287,18 @@ func (l *Library) Refresh(ctx context.Context) wire.LocalModelsSnapshot {
 		l.loaded = &key
 	}
 	l.mu.Unlock()
-	l.commit(snapshot)
+	committed := l.commit(snapshot)
 	// localmodels registers a loaded model with Pi and unregisters it on
 	// unload; the Runtime diagnostics must be read again to list it.
 	if changed {
 		l.runtimeChanged()
 	}
-	l.reconcile(snapshot)
+	l.reconcile(committed)
 	l.refreshMu.Unlock()
 	if hasLoaded {
 		l.scheduleEnsurePi()
 	}
-	return cloneSnapshot(snapshot)
+	return committed
 }
 
 func (l *Library) read(ctx context.Context) wire.LocalModelsSnapshot {
@@ -348,14 +348,17 @@ func loadedKey(snapshot wire.LocalModelsSnapshot) string {
 	return strings.Join(loaded, "\x01")
 }
 
-func (l *Library) commit(snapshot wire.LocalModelsSnapshot) {
+func (l *Library) commit(snapshot wire.LocalModelsSnapshot) wire.LocalModelsSnapshot {
 	l.publishMu.Lock()
 	defer l.publishMu.Unlock()
 	l.mu.Lock()
 	l.current = &snapshot
+	// Progress lines edit current in place; receivers get their own copy
+	// cloned before mu is released.
+	published := cloneSnapshot(snapshot)
 	l.mu.Unlock()
-	// Progress lines edit current in place; receivers get their own copy.
-	l.publish(cloneSnapshot(snapshot))
+	l.publish(published)
+	return cloneSnapshot(published)
 }
 
 // Act starts one action and returns the tool's answer: accepted (nil) or
@@ -631,6 +634,12 @@ func (l *Library) superviseJob(action Action, events <-chan libraryEvent, ended 
 			reply(nil)
 			if event.Phase != phase {
 				phase = event.Phase
+				if event.Phase == "download" {
+					// Publish downloading right away so refreshes do not see the
+					// stale absent state while library status runs. Loads wait for
+					// phaseStarted so pool reservations and unloads appear atomically.
+					l.progress(event)
+				}
 				l.phaseStarted(event)
 			} else {
 				l.progress(event)

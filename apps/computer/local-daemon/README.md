@@ -174,10 +174,13 @@ model.
   `runner.welcome`'s `service_features` names `local_models_diagnostics` and
   are downgraded otherwise. It is sent after
   every welcome, after every action or job end, and at most every 2 seconds
-  for progress. When a job enters a phase (download, verify, load, warm) the
-  Daemon rereads the status, which carries what the phase reserved or freed
-  (pool use, placement, models unloaded first), and applies the job's line on
-  top; later lines of the phase update that snapshot without another read.
+  for progress. When a job enters the `download` phase, the Daemon publishes
+  that progress line onto the current snapshot right away so refreshes do not
+  see the stale `absent` state while `library status` runs, then rereads the
+  status and applies the line on top; entering `verify`, `load`, or `warm`
+  rereads the status first so pool use, placement, and unloaded models appear
+  atomically before publishing. Later lines of the phase update that snapshot
+  without another read.
 - Error causes. `library status` keeps only a failed row's `code` and
   `detail`; the `cause` and `path` of a `GATEWAY_REGISTRATION_FAILED` reach
   the Daemon only on the job's error line (`GATEWAY_HOME_NOT_PRIVATE`: the
