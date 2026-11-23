@@ -301,8 +301,8 @@ def check_bundled_archives(app):
             unsigned = unsigned_archive_files(os.path.join(native, name))
             if unsigned:
                 sys.exit(f"{name} holds {len(unsigned)} Mach-O files without a Developer ID signature "
-                         f"(first: {unsigned[0]}); sign it with packaging/mac/sign_native_archives.py "
-                         "(docs/desktop-release.md)")
+                         f"(first: {unsigned[0]}); run the Sign macOS native archives workflow on this "
+                         "branch and commit the pins it produces (docs/desktop-release.md#bundled-archives)")
 
 
 def signing_scopes(app, path):

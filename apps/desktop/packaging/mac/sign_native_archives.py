@@ -10,13 +10,15 @@ change the archive's sha256 each time, and installs unpack each new digest
 into a folder of its own.
 
     python3 packaging/mac/sign_native_archives.py --developer-id P12
-        [--distribution distribution/darwin-arm64.json] [--dir DIR] [--rcodesign PATH]
+        [--password-file FILE] [--distribution distribution/darwin-arm64.json]
+        [--dir DIR] [--rcodesign PATH]
 
 It reads each `file` source of the distribution from DIR (LINGER_NATIVE_POSTGRES_DIR,
 default ~/.cache/linger-desktop), checks it against its pin, signs every
 Mach-O member in place of the old bytes, writes the archive to DIR under the
 name with the new sha256 and updates the pin. Archives already signed are left
-as they are. It asks for the .p12 password once.
+as they are. Without --password-file it asks for the .p12 password once. The
+Sign macOS native archives workflow runs it with the release's signing secrets.
 """
 import argparse
 import getpass
@@ -55,6 +57,7 @@ def sign_archive(source, output, sign):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--developer-id", required=True, help="Developer ID Application certificate and key (.p12)")
+    parser.add_argument("--password-file", help="file holding the .p12 password; asked for when absent")
     parser.add_argument("--distribution", default=os.path.join(DESKTOP, "distribution", "darwin-arm64.json"))
     parser.add_argument("--dir", default=os.environ.get("LINGER_NATIVE_POSTGRES_DIR")
                         or os.path.expanduser("~/.cache/linger-desktop"))
@@ -79,9 +82,11 @@ def main():
     if not pending:
         return
     with tempfile.TemporaryDirectory() as work:
-        password = os.path.join(work, "password")
-        with open(os.open(password, os.O_WRONLY | os.O_CREAT, 0o600), "w") as out:
-            out.write(getpass.getpass(f"Password of {args.developer_id}: "))
+        password = args.password_file
+        if password is None:
+            password = os.path.join(work, "password")
+            with open(os.open(password, os.O_WRONLY | os.O_CREAT, 0o600), "w") as out:
+                out.write(getpass.getpass(f"Password of {args.developer_id}: "))
 
         def sign(name, data):
             binary = os.path.join(work, "binary")

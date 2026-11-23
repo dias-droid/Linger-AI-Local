@@ -122,22 +122,33 @@ gh release upload native-deps <archive> --repo simplexai-labs/linger
 Apple inspects the archives inside a notarized app, so the macOS archives
 (PostgreSQL and the voice tools) carry a Developer ID signature with the
 hardened runtime on every Mach-O file inside them. Their builds leave only the
-linker's ad-hoc signature, so sign a new macOS archive once, on a Mac with the
-Developer ID `.p12`, before uploading it:
+linker's ad-hoc signature, so after pinning a new macOS archive (uploaded as
+above), sign it once with Actions → Sign macOS native archives → Run workflow
+on the branch that pins it
+([`.github/workflows/sign-macos-native-archives.yml`](../.github/workflows/sign-macos-native-archives.yml)).
+It uses the `MACOS_DEVELOPER_ID_*` secrets, uploads each signed archive to
+`native-deps` beside the original under the name with its new sha256, and
+keeps the updated `distribution/darwin-arm64.json` as the `distribution`
+artifact. Commit that file on the branch; the run's summary gives the command:
+
+```sh
+gh run download <run-id> -n distribution -D apps/desktop/distribution
+```
+
+The workflow pushes nothing, because a commit pushed with its token would not
+start the pull request's checks. Archives already signed are left alone. The
+archive is signed once rather than at every release because installs unpack
+each new sha256 into a folder of its own. A release with `MACOS_NOTARY_KEY_JSON`
+stops before signing the app when a bundled archive still holds an unsigned
+Mach-O file, and names this workflow.
+
+On a Mac with the Developer ID `.p12`, the same signing runs locally (it asks
+for the password; upload the new archives yourself):
 
 ```sh
 scripts/ci/desktop-release.sh fetch-native darwin-arm64
 cd apps/desktop && python3 packaging/mac/sign_native_archives.py --developer-id DeveloperID.p12
 ```
-
-It asks for the `.p12` password, writes each signed archive beside the
-original in `LINGER_NATIVE_POSTGRES_DIR` under the name with its new sha256,
-and updates the pins in `distribution/darwin-arm64.json`; archives already
-signed are left alone. Upload the new archives and commit the pins. The
-archive is signed once rather than at every release because installs unpack
-each new sha256 into a folder of its own. A release with `MACOS_NOTARY_KEY_JSON`
-stops before signing the app when a bundled archive still holds an unsigned
-Mach-O file.
 
 ### First release in simplexai-labs/linger
 

@@ -26,8 +26,9 @@ Gateway and runs Agents. The daemon exits with the app.
   `--developer-id P12 --developer-id-password FILE` for a Developer ID
   signature with the hardened runtime, and `--notary-key JSON` to notarize and
   staple; see the script's docstring. Notarizing needs the bundled macOS
-  archives Developer ID signed first (`packaging/mac/sign_native_archives.py`,
-  see [Bundled archives](../../docs/desktop-release.md#bundled-archives)).
+  archives Developer ID signed first: the Sign macOS native archives workflow
+  runs `packaging/mac/sign_native_archives.py` with the release secrets (see
+  [Bundled archives](../../docs/desktop-release.md#bundled-archives)).
 - `python3 packaging/win/package.py`: build
   `out/Linger-<version>-x64-setup.exe` (per-user NSIS installer) and
   `out/Linger-<version>-x64.zip` on Linux after `node build.mjs` with the
