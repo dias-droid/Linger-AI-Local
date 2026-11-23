@@ -276,9 +276,23 @@ func catalogModels(catalog native.ModelList, err error) ([]RuntimeModel, string)
 }
 
 func normalizeRuntimeModels(catalog []native.ModelOption) []RuntimeModel {
+	// The Runtime's default may be a custom gateway model at the end of
+	// a large native catalog. Retain it before applying the wire limit so
+	// BYOK catalog shaping can still find the configured model.
+	ordered := make([]native.ModelOption, 0, len(catalog))
+	for _, entry := range catalog {
+		if entry.Default {
+			ordered = append(ordered, entry)
+		}
+	}
+	for _, entry := range catalog {
+		if !entry.Default {
+			ordered = append(ordered, entry)
+		}
+	}
 	result := make([]RuntimeModel, 0, min(100, len(catalog)))
 	seen := make(map[string]bool)
-	for _, entry := range catalog {
+	for _, entry := range ordered {
 		id := strings.TrimSpace(entry.ID)
 		if id == "" || len([]rune(id)) > 160 || seen[id] {
 			continue
