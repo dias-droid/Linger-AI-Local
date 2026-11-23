@@ -178,6 +178,27 @@ describe("prepareNativeDatabase initdb", () => {
     ).toBeGreaterThan(run.mock.invocationCallOrder[initdb]!);
   });
 
+  it("says what the program reported, without the password", async () => {
+    run.mockImplementation(async (command) =>
+      path.basename(command) === "initdb"
+        ? {
+            code: 1,
+            stdout: "",
+            stderr:
+              "initdb: error: could not change permissions of directory\nsecret\n",
+          }
+        : ok(),
+    );
+    const failure = await prepareNativeDatabase(options).catch(
+      (error: unknown) => error,
+    );
+    expect(failure).toBeInstanceOf(Error);
+    const message = (failure as Error).message;
+    expect(message).toContain("could not change permissions");
+    expect(message).toContain("Inspect the instance log.");
+    expect(message).not.toContain("secret");
+  });
+
   // A killed initdb has already written PG_VERSION; publishing it would make
   // every later attempt skip initdb and fail on an incomplete cluster.
   it("leaves the data directory alone when initdb fails", async () => {
