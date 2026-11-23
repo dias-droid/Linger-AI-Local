@@ -457,9 +457,9 @@ var (
 
 // simpleCommands splits a script into its simple commands, for display
 // only. Lists, pipelines, subshells and substitutions separate commands;
-// heredoc bodies, leading keywords such as `do`, and variable assignments are
-// dropped, and redirections are kept apart from the words. An unclosed quote
-// runs to the end.
+// the text of comment lines, heredoc bodies, leading keywords such as `do`,
+// and variable assignments are dropped, and redirections are kept apart from
+// the words. An unclosed quote runs to the end.
 func simpleCommands(script string) []shellCommand {
 	var commands []shellCommand
 	var current shellCommand
@@ -467,6 +467,9 @@ func simpleCommands(script string) []shellCommand {
 	// groups holds the open parentheses; true marks a command substitution.
 	var groups []bool
 	var word strings.Builder
+	// blankLine is set while the current line has only blanks so far; a
+	// line continuation does not start a line.
+	blankLine := true
 	inWord, dropWord, writeWord, backtick := false, false, false, false
 	nested := func() bool { return backtick || slices.Contains(groups, true) }
 	endWord := func() {
@@ -494,9 +497,26 @@ func simpleCommands(script string) []shellCommand {
 	}
 	for index := 0; index < len(script); index++ {
 		char := script[index]
+		atLineStart := blankLine
+		blankLine = blankLine && (char == ' ' || char == '\t')
 		switch {
 		case char == ' ' || char == '\t':
 			endWord()
+		case char == '#' && atLineStart:
+			// A line that starts with # is a comment: its text is dropped, so
+			// a quote, a link or a heredoc operator in it changes no step. The
+			// line still gives a command named #, which names no step, even
+			// after a redirection the line before left without a target. A #
+			// later in a line stays text: this reader does not follow every
+			// quote and substitution the shell nests, as in
+			// "$(echo "fix #42")", and for the same reason it can take a line
+			// inside such a quote for a comment.
+			dropWord, writeWord = false, false
+			word.WriteByte('#')
+			inWord = true
+			for index+1 < len(script) && script[index+1] != '\n' {
+				index++
+			}
 		case char == '\n':
 			endCommand()
 			for _, delimiter := range heredocs {
@@ -516,6 +536,7 @@ func simpleCommands(script string) []shellCommand {
 				}
 			}
 			heredocs = nil
+			blankLine = true
 		case char == '\'':
 			closing := strings.IndexByte(script[index+1:], '\'')
 			if closing < 0 {
