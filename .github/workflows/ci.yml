@@ -260,11 +260,15 @@ jobs:
         run: |
           echo "GOCACHE=$RUNNER_TEMP/go-build" >>"$GITHUB_ENV"
           echo "GOMODCACHE=$RUNNER_TEMP/go-mod" >>"$GITHUB_ENV"
+      - id: gomod
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ runner.temp }}/go-mod
+          key: gomod-Windows-${{ runner.arch }}-${{ hashFiles('apps/computer/local-daemon/go.sum') }}
+          restore-keys: gomod-Windows-${{ runner.arch }}-
       - uses: actions/cache/restore@v6
         with:
-          path: |
-            ${{ runner.temp }}/go-build
-            ${{ runner.temp }}/go-mod
+          path: ${{ runner.temp }}/go-build
           key: go-computer-go-windows-${{ hashFiles('apps/computer/local-daemon/go.sum') }}-${{ github.sha }}
           restore-keys: |
             go-computer-go-windows-${{ hashFiles('apps/computer/local-daemon/go.sum') }}-
@@ -289,9 +293,12 @@ jobs:
             find "$cache" -type f -mmin +60 -delete
           fi
       - uses: actions/cache/save@v6
+        if: success() && github.event_name == 'push' && steps.gomod.outputs.cache-hit != 'true'
+        with:
+          path: ${{ runner.temp }}/go-mod
+          key: ${{ steps.gomod.outputs.cache-primary-key }}
+      - uses: actions/cache/save@v6
         if: always() && github.event_name == 'push'
         with:
-          path: |
-            ${{ runner.temp }}/go-build
-            ${{ runner.temp }}/go-mod
+          path: ${{ runner.temp }}/go-build
           key: go-computer-go-windows-${{ hashFiles('apps/computer/local-daemon/go.sum') }}-${{ github.sha }}
