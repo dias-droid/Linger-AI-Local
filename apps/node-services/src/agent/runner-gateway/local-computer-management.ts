@@ -60,6 +60,10 @@ export const FIRST_LOCAL_MODELS_DIAGNOSTICS_COMPUTER_VERSION = "0.58.0";
 // feature and emits `context_too_long` and `unsupported` on executed
 // `model_invoke`.
 export const FIRST_MODEL_INVOKE_OUTCOMES_COMPUTER_VERSION = "0.60.0";
+// The first release that understands the `local_models_engine` welcome feature
+// and gates per-model engine, engine_label, concurrency, and host_ram_bytes
+// fields behind it.
+export const FIRST_LOCAL_MODELS_ENGINE_COMPUTER_VERSION = "0.61.0";
 
 const COMPUTER_RELEASE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
