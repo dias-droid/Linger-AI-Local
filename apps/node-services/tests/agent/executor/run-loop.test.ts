@@ -310,7 +310,7 @@ describe("RunLoop", () => {
   describe("Room reply delivery", () => {
     const messageWrite = (
       id: string,
-      outcome: "succeeded" | "failed",
+      outcome: "succeeded" | "failed" | "declined",
     ): RunEvent[] => [
       {
         type: "activity.started",
@@ -396,6 +396,41 @@ describe("RunLoop", () => {
         expect.objectContaining({
           runId: run?.runId,
           failedMessageWrites: 2,
+          deliveredMessageWrites: 0,
+          failedMessageReads: 1,
+          replyUndelivered: true,
+        }),
+      );
+    });
+
+    it("fails a Room Run whose only message write was declined as reply_undelivered", async () => {
+      const { log, run } = await finishRun([
+        ...messageWrite("send-1", "declined"),
+        {
+          type: "activity.started",
+          activityId: "read-1",
+          kind: "message_read",
+          title: "bash",
+        },
+        {
+          type: "activity.finished",
+          activityId: "read-1",
+          outcome: "declined",
+        },
+      ]);
+
+      expect(run).toMatchObject({
+        status: "failed",
+        terminal: {
+          type: "failed",
+          failure: { code: "reply_undelivered", runtime_type: "pi" },
+        },
+      });
+      expect(log).toHaveBeenCalledWith(
+        "warn",
+        "local_run.teamhub_messages_failed",
+        expect.objectContaining({
+          failedMessageWrites: 1,
           deliveredMessageWrites: 0,
           failedMessageReads: 1,
           replyUndelivered: true,

@@ -5,9 +5,9 @@ import type { Message } from "./types.js";
 /**
  * The Run's TeamHub message calls, as the Computer classifies them: a
  * `message` activity is a message write (`teamhub message send` and its
- * siblings), `message_read` any other `teamhub message` call, and a command
- * that exits non-zero finishes as failed. An emoji Reaction is a message
- * write too.
+ * siblings), `message_read` any other `teamhub message` call, a command
+ * that exits non-zero finishes as failed, and one the Runtime refused
+ * finishes as declined. An emoji Reaction is a message write too.
  */
 export class ReplyDelivery {
   readonly #started = new Map<string, "message" | "message_read">();
@@ -34,10 +34,12 @@ export class ReplyDelivery {
     if (!kind) return;
     this.#started.delete(event.activityId);
     if (kind === "message_read") {
-      if (event.outcome === "failed") this.#failedReads += 1;
+      if (event.outcome === "failed" || event.outcome === "declined")
+        this.#failedReads += 1;
     } else if (event.outcome === "succeeded") {
       this.#deliveredWrites += 1;
-    } else if (event.outcome === "failed") {
+    } else if (event.outcome === "failed" || event.outcome === "declined") {
+      // Like a failed write, a declined one did not reach the Room.
       this.#failedWrites += 1;
     }
   }
