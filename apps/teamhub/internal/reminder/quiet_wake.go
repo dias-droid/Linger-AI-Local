@@ -33,7 +33,8 @@ const Window = 3 * time.Minute
 // renamed meeting, and every new item becomes its own event job; delivered
 // separately, the later wake can miss the Run the first one starts and
 // AnotherMe acts on half the facts. Waiting lets the events of the same polls
-// reach the queue, so one delivery sends them together into one Run.
+// reach the queue, so one delivery sends them together into one Run. Urgent
+// events wait too: a cancellation often comes with a mail explaining it.
 const EventSettle = time.Minute
 
 // Sources of a wake. Every source but Scheduled is proactive: its answer is
