@@ -161,8 +161,10 @@ build:assets` to check the initial JS budget.
   window placement remains under browser control. Stop preserves the current
   recording view and window dimensions. A minimized window, in the page
   (including the desktop app) or picture-in-picture, shows the confirmation
-  actions side by side within its control row, so they stay on screen wherever
-  the row sits; an open window keeps the vertical confirmation card.
+  actions side by side within its control row in place of Pause and Stop, so
+  they stay on screen wherever the row sits and never draw over the controls;
+  the timer stays beside them while it fits. An open window keeps the vertical
+  confirmation card. Escape or Keep recording returns focus to Stop.
 - Recording and Voice Mode distinguish the native window's close action from
   back to tab through the shared PiP return detection. Back to tab keeps the
   session running in the page and exposes a Float action; close ends it.
