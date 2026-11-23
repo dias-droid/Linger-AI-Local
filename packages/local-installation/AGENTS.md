@@ -29,6 +29,10 @@ directory, or FullControl to both on a file. Private paths with partial rights
 still receive the full repair. Rewriting a directory DACL propagates to its
 existing children and can time out on a large cache tree.
 
+Launch the fixed private-path scripts with PowerShell `-Command`. Encoding
+the whole script lengthens the Windows command line and can stall startup.
+Keep paths and operation parameters in the JSON sent over stdin only.
+
 `atomicPrivate` closes and removes its temporary file on failed writes or
 syncs as well as failed publication. A failed replacement keeps the previous
 private file available, without leaving partial configuration copies behind.
