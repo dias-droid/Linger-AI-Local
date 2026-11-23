@@ -232,10 +232,16 @@ func claudeBuildArgv(logger *slog.Logger, spec RunSpec) (shaped, launch []string
 // exact bytes are part of the resident shape. systemPrompt replaces Claude
 // Code's own prompt, which describes a Claude coding assistant and lists
 // Claude model IDs, so a non-Claude model would take it for its identity.
-// Claude still sends its one-line SDK preamble ahead of it; an empty value
-// sends nothing more.
+// Claude still sends its one-line SDK preamble ahead of it. The prompt ends
+// with the working directory, as Pi's does: Claude 2.1.322 also sends it in
+// a separate environment message, but an older supported release may give
+// it only inside the prompt this replaces.
 func claudeInitializeFrame(spec RunSpec) []byte {
 	skills := append([]string{}, spec.ClaudePolicy.SkillNames...)
+	systemPrompt := spec.SystemPrompt
+	if spec.Dir != "" {
+		systemPrompt = strings.TrimSpace(systemPrompt + "\n\nCurrent working directory: " + spec.Dir)
+	}
 	encoded, _ := json.Marshal(map[string]any{
 		"type":       "control_request",
 		"request_id": claudeInitializeRequestID,
@@ -248,7 +254,7 @@ func claudeInitializeFrame(spec RunSpec) []byte {
 				"PostToolUseFailure": []any{map[string]any{"hookCallbackIds": []string{claudeSteerHookID}}},
 				"Stop":               []any{map[string]any{"hookCallbackIds": []string{claudeStopHookID}}},
 			},
-			"systemPrompt":         spec.SystemPrompt,
+			"systemPrompt":         systemPrompt,
 			"systemPromptSnapshot": false,
 		},
 	})

@@ -271,9 +271,12 @@ model it is:
 - Claude takes them as the initialize request's `systemPrompt`. Claude Code's
   own prompt lists Claude model IDs and names a Claude model, which a
   non-Claude model behind BYOK or a local model takes for its identity. Claude
-  still sends its one-line Agent SDK preamble first. The Claude settings also
-  set an empty `attribution`, so Claude does not tell the model to sign commits
-  and pull requests as Claude Code.
+  still sends its one-line Agent SDK preamble first. The Daemon ends the prompt
+  with the working directory: Claude 2.1.322 also sends its environment
+  (working directory, platform, date) as a separate system message, but an
+  older supported release may put it only in its own prompt. The Claude
+  settings also set an empty `attribution`, so Claude does not tell the model
+  to sign commits and pull requests as Claude Code.
 - Pi takes them as `--system-prompt`, which drops its built-in
   coding-assistant prompt, tool list and pointers to Pi's own docs.
 - Antigravity appends them; see [Antigravity](#antigravity).
