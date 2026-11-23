@@ -176,9 +176,9 @@ func (p *piRuntime) spawn(ctx context.Context, plan piLaunchPlan, lock *os.File)
 	}()
 	spec := plan.spec
 	instructions := ""
-	if spec.AppendPrompt != "" {
+	if spec.SystemPrompt != "" {
 		instructions = filepath.Join(plan.sessionDir, piInstructionsName)
-		if err := piWritePrivate(instructions, []byte(spec.AppendPrompt)); err != nil {
+		if err := piWritePrivate(instructions, []byte(spec.SystemPrompt)); err != nil {
 			return nil, fmt.Errorf("Pi instructions could not be written: %w", err)
 		}
 	}
@@ -259,7 +259,11 @@ func (p *piRuntime) spawn(ctx context.Context, plan piLaunchPlan, lock *os.File)
 // instruction path, or empty when there are none.
 func (p *piRuntime) args(plan piLaunchPlan, instructions string, wired bool) []string {
 	spec := plan.spec
-	args := append([]string{"--mode", "rpc"}, PiRPCResourceArgs()...)
+	prompt := ""
+	if spec.SystemPrompt != "" {
+		prompt = instructions
+	}
+	args := append([]string{"--mode", "rpc"}, PiRPCResourceArgs(prompt)...)
 	if spec.Model != "" && spec.Model != piDefaultModel {
 		args = append(args, "--model", spec.Model)
 	}
@@ -268,9 +272,6 @@ func (p *piRuntime) args(plan piLaunchPlan, instructions string, wired bool) []s
 	}
 	if spec.Title != "" {
 		args = append(args, "--name", spec.Title)
-	}
-	if spec.AppendPrompt != "" {
-		args = append(args, "--append-system-prompt", instructions)
 	}
 	if skills := filepath.Join(spec.Dir, ".agents", "skills"); spec.Dir != "" {
 		if info, err := os.Stat(skills); err == nil && info.IsDir() {

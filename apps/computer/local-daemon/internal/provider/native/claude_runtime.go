@@ -239,7 +239,7 @@ func (r *claudeRuntime) spawn(callerCtx, runCtx context.Context, runCancel conte
 	spec.Readiness.spawned()
 	spec.Readiness.session(spec.ResumeID != "")
 	if launch.identity != "" && launch.root != "" {
-		if err := claudeWriteMarker(launch.root, launch.identity, spec.AppendPrompt); err != nil {
+		if err := claudeWriteMarker(launch.root, launch.identity, spec.SystemPrompt); err != nil {
 			return nil, claudeAbandonSpawn(proc, fmt.Errorf("write Claude instruction marker: %w", err))
 		}
 	}

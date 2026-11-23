@@ -261,6 +261,23 @@ background as soon as it starts, so the stamp only saves the blocking fetch.
 API-key and signed-out homes have no account identity and are not seeded;
 Codex does not fetch the catalog for them.
 
+## Runtime system prompts
+
+An Agent's instructions replace each Runtime's own system prompt, which would
+otherwise tell the model it is a coding assistant and, for Claude, which Claude
+model it is:
+
+- Codex takes them as `baseInstructions`.
+- Claude takes them as the initialize request's `systemPrompt`. Claude Code's
+  own prompt lists Claude model IDs and names a Claude model, which a
+  non-Claude model behind BYOK or a local model takes for its identity. Claude
+  still sends its one-line Agent SDK preamble first. The Claude settings also
+  set an empty `attribution`, so Claude does not tell the model to sign commits
+  and pull requests as Claude Code.
+- Pi takes them as `--system-prompt`, which drops its built-in
+  coding-assistant prompt, tool list and pointers to Pi's own docs.
+- Antigravity appends them; see [Antigravity](#antigravity).
+
 ## Personal instructions
 
 An Agent run follows only the instructions the Daemon gives it, never the
@@ -275,8 +292,9 @@ Computer user's own instruction files:
   projection left is removed. `instructions`, `developer_instructions`,
   `model_instructions_file` and `experimental_instructions_file` are dropped
   from the projected `config.toml` and its profiles.
-- Pi runs with `--no-context-files` and an empty `--system-prompt`, so it keeps
-  its built-in prompt instead of the user's `SYSTEM.md`.
+- Pi runs with `--no-context-files`, and it always gets `--system-prompt` and
+  `--append-system-prompt`, empty when there is nothing to pass, so it reads
+  neither the user's `SYSTEM.md` nor their `APPEND_SYSTEM.md`.
 - Antigravity is the exception: its ACP server has no switch that turns off
   the user's own rules, skills and `~/.gemini/config/mcp_config.json`, so an
   Antigravity run sees them next to the Daemon's instructions and servers.

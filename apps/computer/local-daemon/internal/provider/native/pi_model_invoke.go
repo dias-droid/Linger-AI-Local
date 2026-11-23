@@ -15,10 +15,7 @@ func InvokePiModel(ctx context.Context, profile Profile, dir, instructionsFile, 
 	if err != nil {
 		return Outcome{}, "", err
 	}
-	args := append([]string{"--mode", "rpc", "--no-session", "--no-tools"}, PiRPCResourceArgs()...)
-	if instructionsFile != "" {
-		args = append(args, "--append-system-prompt", instructionsFile)
-	}
+	args := append([]string{"--mode", "rpc", "--no-session", "--no-tools"}, PiRPCResourceArgs(instructionsFile)...)
 	if thinking != "" {
 		args = append(args, "--thinking", thinking)
 	}

@@ -71,7 +71,7 @@ func probeRuntimeProtocol(ctx context.Context, runtimeType, executable string, e
 	var payload string
 	switch runtimeType {
 	case "pi":
-		args = append([]string{"--mode", "rpc", "--no-session"}, native.PiRPCResourceArgs()...)
+		args = append([]string{"--mode", "rpc", "--no-session"}, native.PiRPCResourceArgs("")...)
 		payload = `{"id":"linger-probe","type":"get_state"}` + "\n"
 	case "codex":
 		args = codexProbeArgs(version)

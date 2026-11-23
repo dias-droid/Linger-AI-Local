@@ -113,7 +113,7 @@ func (r *claudeRuntime) attach(ctx context.Context, p *claudeProcess, spec RunSp
 		p.mu.Lock()
 		session := p.sessionID
 		p.mu.Unlock()
-		if err = claudeWriteMarker(launch.root, session, spec.AppendPrompt); err != nil {
+		if err = claudeWriteMarker(launch.root, session, spec.SystemPrompt); err != nil {
 			return fmt.Errorf("write Claude instruction marker: %w", err)
 		}
 	}
