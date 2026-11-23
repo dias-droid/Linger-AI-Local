@@ -83,10 +83,22 @@ export async function prepareNativeDatabase(options: {
       timeoutMs,
       onOutput: options.onOutput,
     });
-    if (result.code !== 0)
+    if (result.code !== 0) {
+      // The program's own last lines are what the person and the report need:
+      // "inspect the log" alone sends them looking for a file in a directory
+      // they were never told about. The password never appears here.
+      const detail = result.stderr
+        .replaceAll(password, "[redacted]")
+        .trim()
+        .split(/\r?\n/u)
+        .filter(Boolean)
+        .slice(-3)
+        .join(" ")
+        .replace(/[.;]+$/u, "");
       throw new Error(
-        `Native PostgreSQL ${name} failed; inspect the instance log.`,
+        `Native PostgreSQL ${name} failed${detail ? `: ${detail}` : ""}. Inspect the instance log.`,
       );
+    }
     return result;
   };
   const open = async () => {
