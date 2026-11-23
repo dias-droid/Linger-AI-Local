@@ -28,6 +28,7 @@ import {
   FIRST_PI_MODEL_INVOKE_COMPUTER_VERSION,
   FIRST_BYOK_ENDPOINT_COMPUTER_VERSION,
   FIRST_LOCAL_MODELS_DIAGNOSTICS_COMPUTER_VERSION,
+  FIRST_LOCAL_MODELS_ENGINE_COMPUTER_VERSION,
   FIRST_SERVICE_FEATURES_COMPUTER_VERSION,
   type LocalPlacementRequirement,
   type LocalReasoningEffort,
@@ -472,6 +473,12 @@ export class RunnerConnections {
                 FIRST_LOCAL_MODELS_DIAGNOSTICS_COMPUTER_VERSION,
               )
                 ? (["local_models_diagnostics"] as const)
+                : []),
+              ...(isComputerVersionAtLeast(
+                connection.hello.daemon_version,
+                FIRST_LOCAL_MODELS_ENGINE_COMPUTER_VERSION,
+              )
+                ? (["local_models_engine"] as const)
                 : []),
             ],
           }

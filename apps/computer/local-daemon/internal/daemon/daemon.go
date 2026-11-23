@@ -122,12 +122,15 @@ type Daemon struct {
 	// localModelsDiagnostics holds whether the current Agent Service declared
 	// serviceFeatureLocalModelsDiagnostics in its welcome.
 	localModelsDiagnostics atomic.Bool
-	welcomeSeen            bool
-	prewarmOnce            sync.Once
-	welcomedAt             time.Time
-	daemonID               string
-	activeMu               sync.Mutex
-	admissionMu            sync.Mutex
+	// localModelsEngine holds whether the current Agent Service declared
+	// serviceFeatureLocalModelsEngine in its welcome.
+	localModelsEngine atomic.Bool
+	welcomeSeen       bool
+	prewarmOnce       sync.Once
+	welcomedAt        time.Time
+	daemonID          string
+	activeMu          sync.Mutex
+	admissionMu       sync.Mutex
 	// authorityRevision counts, under admissionMu, the commands that can change
 	// what an accepted Operation may start with: Registration snapshots, Agent
 	// Runner commands and Context commands. A start whose revision is unchanged
