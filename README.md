@@ -95,7 +95,7 @@ One command detects your hardware, recommends the best model, installs it and ch
 
 <a href="docs/wiki-and-memory.md"><img src="assets/feature-locomo.webp" width="100%" alt="Wiki and memory: 95% on the LoCoMo memory benchmark, tied for first. LoCoMo accuracy on questions about long conversations, higher is better, decimals dropped: tied for first, EverOS (EverMemOS) 95% and Linger 95%; then Zep 94%, Mem0 92%, Hindsight 92%, Backboard 90%, MemOS 88%, Memobase 75%, Letta 74%, GPT-4o-mini Full Context 72%, OpenAI Memory 52%"></a>
 
-<sub>The chart drops decimals instead of rounding. EverOS (EverMemOS): 95.78% is its latest result, which <a href="https://x.com/search?q=from%3AElliotChen%20Linger">Elliot Chen of EverMind posted on X</a> in November 2026; the <a href="https://evermind.ai/everos">EverOS website</a> publishes 94.74%. The other scores come from public reports and were not rerun under one setup, so test configurations differ.</sub>
+<sub>The chart drops decimals instead of rounding. EverOS (EverMemOS): 95.78% is its latest result, which Elliot Chen of EverMind posted on X in November 2026; the <a href="https://evermind.ai/everos">EverOS website</a> publishes 94.74%. The other scores come from public reports and were not rerun under one setup, so test configurations differ.</sub>
 
 Tell one agent, and every agent knows. Another Me reads back through your inbox, then each night files your mail, chats and meetings into wiki pages that every agent can search. It keeps the information, preferences and decisions that matter across conversations, on your device instead of in a provider's account.
 
