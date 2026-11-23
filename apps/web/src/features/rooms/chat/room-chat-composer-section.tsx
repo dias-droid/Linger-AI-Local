@@ -125,6 +125,7 @@ export function RoomChatComposerSection({
           ),
         }))}
         documentOptionsReady={roomDocuments.isSuccess && !documentsPending}
+        historyScope={draftScope}
         initialDocumentContexts={initialDraft.documentContexts}
         initialDocumentReferences={initialDraft.documentReferences}
         initialMentions={initialDraft.mentions}

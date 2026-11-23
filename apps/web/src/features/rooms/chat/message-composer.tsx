@@ -62,6 +62,7 @@ import type {
 import type {
   RoomComposerDocumentContext,
   RoomComposerDocumentReference,
+  RoomDraftScope,
   VoiceDocumentSelection,
 } from "../room-drafts";
 import type { ComposerAttachment } from "./composer-attachment-drafts";
@@ -102,6 +103,7 @@ import {
   TEAMHUB_MESSAGE_MAX_LENGTH,
   useComposerDraft,
 } from "./use-composer-draft";
+import { useComposerHistory } from "./use-composer-history";
 import { useComposerKeyDown } from "./use-composer-keydown";
 import {
   adjacentMentionTab,
@@ -173,6 +175,8 @@ export interface MessageComposerProps {
   documentMentionsEnabled?: boolean;
   documentOptions?: MessageDocumentOption[];
   documentOptionsReady?: boolean;
+  /** Where sent messages are kept for ArrowUp and ArrowDown to bring back. */
+  historyScope?: RoomDraftScope;
   initialDocumentReferences?: RoomComposerDocumentReference[];
   initialDocumentContexts?: RoomComposerDocumentContext[];
   initialMentions?: TeamHubActorRef[];
@@ -267,6 +271,7 @@ function useMessageComposer(
     documentMentionsEnabled = true,
     documentOptions: catalogDocumentOptions = [],
     documentOptionsReady,
+    historyScope,
     initialDocumentReferences = [],
     initialDocumentContexts = [],
     initialMentions = [],
@@ -343,10 +348,12 @@ function useMessageComposer(
     picker,
     resolveDocumentLink,
   });
+  const history = useComposerHistory({ draft, scope: historyScope });
   const sending = useComposerSend({
     attachments,
     disabled,
     draft,
+    history,
     onSend,
     onStageAttachment,
     picker,
@@ -356,6 +363,7 @@ function useMessageComposer(
   });
   const { handleKeyDown } = useComposerKeyDown({
     draft,
+    history,
     insertion,
     picker,
     sending,
@@ -405,6 +413,7 @@ function useMessageComposer(
     handleKeyDown,
     handlePaste,
     highlightContentRef: draft.highlightContentRef,
+    historyPosition: history.position,
     insertAtPickerItem: insertion.insertAtPickerItem,
     insertSkill: insertion.insertSkill,
     isComposing: draft.isComposing,
@@ -463,6 +472,7 @@ function MessageComposerView({
     attachmentError,
     documentContexts,
     body,
+    historyPosition,
     lengthStatusId,
     mentions,
     messageError,
@@ -548,6 +558,11 @@ function MessageComposerView({
           onRemove={removeAttachment}
           onRetry={retryAttachment}
         />
+        {historyPosition ? (
+          <p className="message-composer-history px-2 text-[12px] leading-4 text-app-placeholder">
+            {t(composerMessages.historyPosition, historyPosition)}
+          </p>
+        ) : null}
         <ComposerEditor controller={controller} peek={peek} />
         <MessageLengthStatus
           bodyLength={body.length}

@@ -776,6 +776,7 @@
     "messagePeer": "给 {name} 发消息",
     "sendMessage": "发送消息",
     "lengthCount": "{count} / {limit}",
+    "historyPosition": "历史 {index}/{total}",
     "messageTooLong": "消息不能超过 {limit} 个字符。",
     "messageNotSent": "消息发送失败",
     "listSeparator": "、",

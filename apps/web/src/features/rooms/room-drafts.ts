@@ -7,6 +7,9 @@ import { isRecord } from "@linger/service-kit";
 
 const roomComposerDraftPrefix = "linger.room-composer-draft:";
 const composerDraftFormat = "linger-composer-draft-v3";
+const roomComposerHistoryPrefix = "linger.room-composer-history:";
+const composerHistoryFormat = "linger-composer-history-v1";
+const composerHistoryLimit = 50;
 
 export interface RoomDraftScope {
   accountId: string;
@@ -18,6 +21,15 @@ export interface RoomDraftScope {
 export interface RoomComposerDraft {
   voiceMaterials?: VoiceDocumentSelection[];
   documentContexts: RoomComposerDocumentContext[];
+  body: string;
+  documentReferences: RoomComposerDocumentReference[];
+  mentions: TeamHubActorRef[];
+  skillReferences: TeamHubMessageSkillReference[];
+}
+
+/** A sent message the composer can bring back: its text and the references
+ * it carried, without attachments, voice materials or Document contexts. */
+export interface RoomComposerHistoryEntry {
   body: string;
   documentReferences: RoomComposerDocumentReference[];
   mentions: TeamHubActorRef[];
@@ -109,7 +121,10 @@ export function clearRoomDrafts() {
     for (let index = storage.length - 1; index >= 0; index -= 1) {
       const key = storage.key(index);
 
-      if (key?.startsWith(roomComposerDraftPrefix)) {
+      if (
+        key?.startsWith(roomComposerDraftPrefix) ||
+        key?.startsWith(roomComposerHistoryPrefix)
+      ) {
         storage.removeItem(key);
       }
     }
@@ -119,14 +134,76 @@ export function clearRoomDrafts() {
   notifyDraftListeners();
 }
 
+/** Sent messages in this scope, oldest first. */
+export function readRoomComposerHistory(
+  scope: RoomDraftScope,
+): RoomComposerHistoryEntry[] {
+  try {
+    const stored = resolveLocalStorage()?.getItem(
+      roomScopeKey(roomComposerHistoryPrefix, scope),
+    );
+    if (!stored) return [];
+    const candidate: unknown = JSON.parse(stored);
+    if (!isRecord(candidate) || candidate.format !== composerHistoryFormat) {
+      return [];
+    }
+    return Array.isArray(candidate.entries)
+      ? candidate.entries.flatMap((entry: unknown) => {
+          if (!isRecord(entry) || typeof entry.body !== "string") return [];
+          return [
+            {
+              body: entry.body,
+              documentReferences: Array.isArray(entry.documentReferences)
+                ? entry.documentReferences.filter(isDocumentReference)
+                : [],
+              mentions: Array.isArray(entry.mentions)
+                ? entry.mentions.filter(isActorReference)
+                : [],
+              skillReferences: Array.isArray(entry.skillReferences)
+                ? entry.skillReferences.filter(isSkillReference)
+                : [],
+            },
+          ];
+        })
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Records a sent message; repeating the latest one adds nothing. */
+export function appendRoomComposerHistory(
+  scope: RoomDraftScope,
+  entry: RoomComposerHistoryEntry,
+) {
+  if (!entry.body.trim()) return;
+  const entries = readRoomComposerHistory(scope);
+  if (entries.at(-1)?.body === entry.body) return;
+  try {
+    resolveLocalStorage()?.setItem(
+      roomScopeKey(roomComposerHistoryPrefix, scope),
+      JSON.stringify({
+        entries: [...entries, entry].slice(-composerHistoryLimit),
+        format: composerHistoryFormat,
+      }),
+    );
+  } catch {
+    // Without browser storage the composer simply has no history.
+  }
+}
+
 function roomComposerDraftKey(scope: RoomDraftScope) {
+  return roomScopeKey(roomComposerDraftPrefix, scope);
+}
+
+function roomScopeKey(prefix: string, scope: RoomDraftScope) {
   const segments = [scope.accountId, scope.tenantId, scope.roomId];
 
   if (scope.threadId) {
     segments.push(scope.threadId);
   }
 
-  return `${roomComposerDraftPrefix}${segments.map(encodeURIComponent).join(":")}`;
+  return `${prefix}${segments.map(encodeURIComponent).join(":")}`;
 }
 
 function resolveLocalStorage() {

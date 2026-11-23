@@ -363,6 +363,7 @@ function ThreadPanelContent({
         <MessageComposer
           ariaLabel={t(chatMessages.replyInThread)}
           disabled={!threadRoomId}
+          historyScope={draftScope}
           initialMentions={initialDraft.mentions}
           initialValue={initialDraft.body}
           mentionOptions={mentionOptions}

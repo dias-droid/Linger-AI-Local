@@ -239,6 +239,12 @@ build:assets` to check the initial JS budget.
 - Input hints use `--app-placeholder` / `text-app-placeholder` across native
   fields, chat composers, select prompts, and editable empty states. Keep
   entered text and adjacent labels on their own text tokens.
+- The Room and Thread composers keep the last 50 sent messages per draft
+  scope in this browser's `localStorage` (`room-drafts.ts`); local sign-out
+  clears them with the drafts. ArrowUp on the first line and ArrowDown on the
+  last line step through them, with a `History n/N` label, unless a picker is
+  open or an input method is composing. Stepping past the newest message
+  restores the unsent draft; editing a recalled message makes it the draft.
 - Room avatar stacks give each tile an opaque surface behind the member's
   portrait or initials so overlapping members never show through one another.
 - Compose conditional class names with `cn` from `src/lib/cn.ts`.
