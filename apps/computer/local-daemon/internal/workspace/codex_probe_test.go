@@ -29,6 +29,8 @@ func TestCodexProbeEnvironmentPreservesSelectedProviderAndPrivateLifetime(t *tes
 			t.Fatal(err)
 		}
 	}
+	projectionWrite(t, filepath.Join(source, "skills", "fixture", "SKILL.md"), "---\nname: fixture\ndescription: Probe fixture\n---\n")
+	projectionWrite(t, filepath.Join(source, "plugins", "cache", "fixture"), "probe fixture")
 	environment := map[string]string{"HOME": root, "CODEX_HOME": source, "PATH": "/selected/bin"}
 	before := maps.Clone(environment)
 	prepared, release, err := CodexProbeEnvironment(context.Background(), environment, "0.150.1", nil)
@@ -43,6 +45,11 @@ func TestCodexProbeEnvironmentPreservesSelectedProviderAndPrivateLifetime(t *tes
 	info, err := os.Stat(home)
 	if err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o700) {
 		t.Fatalf("probe home is not private: %v, %v", info, err)
+	}
+	for _, name := range []string{"skills", "plugins"} {
+		if _, err := os.Lstat(filepath.Join(home, name)); !os.IsNotExist(err) {
+			t.Errorf("probe home contains %s: stat error = %v", name, err)
+		}
 	}
 	data, err := os.ReadFile(filepath.Join(home, "config.toml"))
 	if err != nil {

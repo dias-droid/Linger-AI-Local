@@ -28,6 +28,7 @@ func CodexProbeEnvironment(ctx context.Context, environment map[string]string, v
 	// Introspection starts no turn, so execution-only sandbox overrides are unused.
 	if _, err := PrepareCodexHome(home, CodexHomeOptions{
 		SharedHome: source, UserHome: environment["HOME"], CodexVersion: version, ModelsCache: modelsCache,
+		probeOnly: true,
 	}, nil); err != nil {
 		release()
 		return nil, nil, err

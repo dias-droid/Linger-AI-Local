@@ -25,6 +25,7 @@ type CodexHomeOptions struct {
 	// ModelsCache names the homes a models cache is seeded from; nil seeds
 	// nothing.
 	ModelsCache *CodexModelsCachePeers
+	probeOnly   bool
 }
 
 const projectionState = ".linger-projection.json"
@@ -201,29 +202,32 @@ func PrepareCodexHome(home string, opts CodexHomeOptions, logger *slog.Logger) (
 			return CodexProjection{}, err
 		}
 	}
-	userHome := opts.UserHome
-	if userHome == "" {
-		userHome = filepath.Dir(opts.SharedHome)
-	}
-	if err := localProjectionDirectory(root, "skills"); err != nil {
-		return CodexProjection{}, err
-	}
-	skillDigest, err := syncCodexSkills(home, opts.SharedHome, userHome)
-	if err != nil {
-		if logger != nil {
-			logger.Warn("Codex Skill projection unavailable", "error", err)
+	var skillDigest string
+	if !opts.probeOnly {
+		userHome := opts.UserHome
+		if userHome == "" {
+			userHome = filepath.Dir(opts.SharedHome)
 		}
-		// Skills that could not be projected stay unprojected the same way for
-		// every Operation until the source is fixed, so the identity does too.
-		skillDigest = "unavailable"
-	}
-	// Plugins reference installed files through their cache. Do not create or
-	// mutate anything in the user's source home when the cache is absent.
-	if err := localProjectionDirectory(root, "plugins"); err != nil {
-		return CodexProjection{}, err
-	}
-	if err := ensureSymlink(filepath.Join(opts.SharedHome, "plugins", "cache"), filepath.Join(home, "plugins", "cache")); err != nil {
-		return CodexProjection{}, err
+		if err := localProjectionDirectory(root, "skills"); err != nil {
+			return CodexProjection{}, err
+		}
+		skillDigest, err = syncCodexSkills(home, opts.SharedHome, userHome)
+		if err != nil {
+			if logger != nil {
+				logger.Warn("Codex Skill projection unavailable", "error", err)
+			}
+			// Skills that could not be projected stay unprojected the same way for
+			// every Operation until the source is fixed, so the identity does too.
+			skillDigest = "unavailable"
+		}
+		// Plugins reference installed files through their cache. Do not create or
+		// mutate anything in the user's source home when the cache is absent.
+		if err := localProjectionDirectory(root, "plugins"); err != nil {
+			return CodexProjection{}, err
+		}
+		if err := ensureSymlink(filepath.Join(opts.SharedHome, "plugins", "cache"), filepath.Join(home, "plugins", "cache")); err != nil {
+			return CodexProjection{}, err
+		}
 	}
 	encoded, err = json.Marshal(record)
 	if err != nil {
