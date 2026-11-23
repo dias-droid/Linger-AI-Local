@@ -2,6 +2,7 @@ import type { TeamHubLocalRuntimeType } from "@/features/teamhub/teamhub-types";
 
 import { type ComputerPlatform, computerCommand } from "./computer-platform";
 import { compareComputerVersion } from "./computer-version";
+import type { DesktopComputer } from "./desktop-computer";
 
 /**
  * The command that signs in to each AI app; Pi signs in with /login inside it,
@@ -26,12 +27,15 @@ export interface SignInComputer {
 
 // On Windows a bare command can start on an older system Node, so a CLI that
 // has `runtime login` signs in exactly as the Daemon starts the Runtime. The
-// Desktop app's own Computer has no such CLI on PATH and no bundled Node.
+// Desktop app's own Computer has no such CLI on PATH and no bundled Node, and
+// until Desktop reports which Computer is its own, any Computer may be it.
+// `desktop` is `useDesktopComputer()`: undefined in a browser.
 export function signInCommand(
   runtimeType: TeamHubLocalRuntimeType,
   computer: SignInComputer | undefined,
-  desktopComputerId?: string,
+  desktop?: Pick<DesktopComputer, "status">,
 ): string {
+  if (desktop && !desktop.status) return loginCommands[runtimeType];
   const order = computer?.daemon_version
     ? compareComputerVersion(
         computer.daemon_version,
@@ -42,7 +46,7 @@ export function signInCommand(
     computer?.platform === "win32" &&
     order !== undefined &&
     order >= 0 &&
-    computer.computer_id !== desktopComputerId
+    computer.computer_id !== desktop?.status?.computerId
   )
     return `${computerCommand()} runtime login ${runtimeType}`;
   return loginCommands[runtimeType];

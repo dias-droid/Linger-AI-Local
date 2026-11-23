@@ -2,6 +2,15 @@
 import { expect, it } from "vitest";
 import { loginCommands, signInCommand } from "./local-runtime-commands";
 
+const desktop = {
+  status: {
+    bridge: "ok",
+    runtime: "ok",
+    computerId: "desktop",
+    activeOperations: 0,
+  },
+};
+
 it.each([
   ["codex", "0.59.0"],
   ["claude", "0.60.1"],
@@ -14,7 +23,7 @@ it.each([
       signInCommand(
         runtimeType,
         { computer_id: "c1", platform: "win32", daemon_version: version },
-        "desktop",
+        desktop,
       ),
     ).toBe(`linger-computer-local-3000 runtime login ${runtimeType}`);
   },
@@ -33,11 +42,31 @@ it.each([
     { computer_id: "desktop", platform: "win32", daemon_version: "0.59.0" },
   ],
 ] as const)("keeps the native %s command for %o", (runtimeType, computer) => {
-  expect(signInCommand(runtimeType, computer, "desktop")).toBe(
+  expect(signInCommand(runtimeType, computer, desktop)).toBe(
     loginCommands[runtimeType],
   );
 });
 
 it("keeps the native command without a Computer", () => {
   expect(signInCommand("codex", undefined)).toBe("codex login");
+});
+
+it("signs in through the CLI from a browser, where there is no Desktop", () => {
+  expect(
+    signInCommand("pi", {
+      computer_id: "c1",
+      platform: "win32",
+      daemon_version: "0.59.0",
+    }),
+  ).toBe("linger-computer-local-3000 runtime login pi");
+});
+
+it("keeps the native command inside Desktop until it reports its Computer", () => {
+  const computer = {
+    computer_id: "desktop",
+    platform: "win32",
+    daemon_version: "0.59.0",
+  };
+  expect(signInCommand("pi", computer, { status: undefined })).toBe("pi");
+  expect(signInCommand("pi", computer, desktop)).toBe("pi");
 });

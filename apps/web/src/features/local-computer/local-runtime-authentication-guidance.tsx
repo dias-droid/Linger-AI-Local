@@ -16,7 +16,7 @@ export function LocalRuntimeAuthenticationGuidance({
   computer?: SignInComputer;
 }) {
   const t = useT();
-  const desktopComputerId = useDesktopComputer()?.status?.computerId;
+  const desktop = useDesktopComputer();
   const app = appNames[runtimeType];
   return (
     <>
@@ -29,7 +29,7 @@ export function LocalRuntimeAuthenticationGuidance({
           tags={{ code: (text) => <code className="font-mono">{text}</code> }}
           values={{
             app,
-            command: signInCommand(runtimeType, computer, desktopComputerId),
+            command: signInCommand(runtimeType, computer, desktop),
             computer: computerName,
           }}
         />
