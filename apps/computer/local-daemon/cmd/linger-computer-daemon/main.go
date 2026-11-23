@@ -486,6 +486,9 @@ func run(args []string) (resultErr error) {
 			Shape:                 shapeDiscovered,
 			RefreshInterval:       15 * time.Second,
 			FullRefreshEveryTicks: 4,
+			RefreshAllowed: func() bool {
+				return runtimeRefreshAllowed(localDaemon.GatewayState())
+			},
 			FullRefreshAllowed: func() bool {
 				return localDaemon.ActiveOperationCount() == 0
 			},
@@ -625,6 +628,17 @@ func (c *controlController) Shutdown() {
 
 func (c *controlController) ShutdownIfIdle() int {
 	return c.daemon.DrainIfIdle()
+}
+
+// runtimeRefreshAllowed stops periodic CLI probes once the daemon is parked in
+// a terminal Gateway state and will not reconnect until restarted.
+func runtimeRefreshAllowed(gatewayState string) bool {
+	switch gatewayState {
+	case "upgrade-required", "authentication-failed", "identity-conflict":
+		return false
+	default:
+		return true
+	}
 }
 
 // runtimeInventory publishes the discovered Runtimes to the Gateway without
