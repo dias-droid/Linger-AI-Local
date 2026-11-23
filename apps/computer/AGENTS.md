@@ -78,6 +78,10 @@
   on and never picks among models. Codex's built-in default may be one the
   account cannot use. A call the provider rejects with `model_not_found` is
   reported as `runtime_incompatible`, not as a transient failure.
+- Codex turn cleanup keeps receiving a process's notifications after its
+  Operation detaches, so a retried stop sees the turn complete. After an
+  invalid-request interrupt rejection the Daemon also accepts an idle status on
+  the same thread. Terminal cleanup and process exit checks still apply.
 
 - Default tests use deterministic providers and real fixture child processes;
   they never call a live model.
