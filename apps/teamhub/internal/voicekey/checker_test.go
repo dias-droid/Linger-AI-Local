@@ -98,7 +98,7 @@ func TestHTTPCheckerProbesTheSonioxRealtimeStream(t *testing.T) {
 		{"rejected key", `{"tokens":[],"error_code":401,"error_type":"unauthenticated"}`, ErrRejected},
 		{"no balance", `{"tokens":[],"error_code":402,"error_type":"organization_balance_exhausted"}`, ErrNoBalance},
 		{"no realtime permission", `{"tokens":[],"error_code":403,"error_type":"permission_denied"}`, ErrNoRealtime},
-		{"rate limited", `{"tokens":[],"error_code":429,"error_type":"limit_exceeded"}`, ErrProviderUnavailable},
+		{"stream limit reached", `{"tokens":[],"error_code":429,"error_type":"limit_exceeded"}`, nil},
 		{"unavailable", `{"tokens":[],"error_code":503,"error_type":"service_unavailable"}`, ErrProviderUnavailable},
 		{"hung up", "", ErrProviderUnavailable},
 		{"not json", "not json", ErrProviderUnavailable},

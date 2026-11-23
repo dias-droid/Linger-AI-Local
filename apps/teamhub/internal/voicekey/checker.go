@@ -141,8 +141,9 @@ func (c *HTTPChecker) probeSonioxRealtime(ctx context.Context, key string) error
 		switch {
 		// Soniox authenticates the key and checks balance and permission
 		// before it runs the stream, so a 400 for the stream itself (no
-		// audio) means the key passed every check.
-		case reply.ErrorCode != nil && *reply.ErrorCode == http.StatusBadRequest:
+		// audio) means the key passed every check. A 429 for the
+		// organization's concurrent streams also comes after authentication.
+		case reply.ErrorCode != nil && (*reply.ErrorCode == http.StatusBadRequest || *reply.ErrorCode == http.StatusTooManyRequests):
 			return nil
 		case reply.ErrorCode != nil:
 			return sonioxRefusal(*reply.ErrorCode)
