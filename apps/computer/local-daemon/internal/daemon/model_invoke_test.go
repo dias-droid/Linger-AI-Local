@@ -63,6 +63,9 @@ func modelInvokeFixture(t *testing.T, invoker ModelInvoker) (*Daemon, *fakeStrea
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Tests never touch the real network; a failed call finds it reachable
+	// unless the test says otherwise.
+	d.dialNetwork = func(context.Context, string, string) error { return nil }
 	t.Cleanup(d.WaitForOperations)
 	return d, stream
 }

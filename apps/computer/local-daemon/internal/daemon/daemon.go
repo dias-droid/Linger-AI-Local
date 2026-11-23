@@ -149,6 +149,9 @@ type Daemon struct {
 	modelInvokes       map[string]*modelInvoke
 	localModels        LocalModelLibrary
 	modelSource        ModelSourceManager
+	// dialNetwork opens and closes one connection for the reachability check
+	// after a failed model call; nil dials for real.
+	dialNetwork func(ctx context.Context, network, address string) error
 	// localModelsMu orders runner.local_models sends with their revision.
 	localModelsMu       sync.Mutex
 	localModelsRevision uint64

@@ -155,6 +155,7 @@ func (d *Daemon) runModelInvoke(ctx context.Context, stream transport.Stream, co
 			WorkspaceFiles: request.WorkspaceFiles, Timeout: time.Duration(request.TimeoutMS) * time.Millisecond,
 			SessionKey: request.SessionKey, MaxOutputChars: request.MaxOutputChars,
 		})
+		result = d.networkUnavailableModelInvoke(ctx, entry.id, command.RuntimeType, result)
 	}
 	entry.cancel()
 	d.modelInvokeMu.Lock()
@@ -168,8 +169,10 @@ func (d *Daemon) runModelInvoke(ctx context.Context, stream transport.Stream, co
 }
 
 // modelGatewayInvokeFailure answers a model call whose Runtime's gateway
-// could not be mounted: the Computer is online, its Runtime cannot run the
-// call, and the reason names the tool's code.
+// could not be mounted. When the tool could not reach the endpoint or the
+// network, the call is unavailable, so the caller waits for this Computer as
+// it does for a disconnected one; otherwise the Computer is online, its
+// Runtime cannot run the call, and the reason names the tool's code.
 func modelGatewayInvokeFailure(ctx context.Context, failureCode string, err error) provider.ModelInvokeResult {
 	if ctx.Err() != nil {
 		return provider.ModelInvokeResult{Outcome: provider.ModelInvokeCanceled, Reason: "Model invocation was canceled"}
@@ -179,8 +182,11 @@ func modelGatewayInvokeFailure(ctx context.Context, failureCode string, err erro
 	if errors.As(err, &sourceErr) {
 		reason += " (" + sourceErr.Code + ")"
 	}
-	if failureCode == "authentication_required" {
+	switch failureCode {
+	case "authentication_required":
 		return provider.ModelInvokeResult{Outcome: provider.ModelInvokeAuthRequired, Reason: reason}
+	case "network_error":
+		return provider.ModelInvokeResult{Outcome: provider.ModelInvokeUnavailable, Reason: reason}
 	}
 	return provider.ModelInvokeResult{Outcome: provider.ModelInvokeRuntimeUnavailable, Reason: reason}
 }
