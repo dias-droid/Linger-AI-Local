@@ -30,13 +30,13 @@ import {
   FIRST_LOCAL_MODELS_DIAGNOSTICS_COMPUTER_VERSION,
   FIRST_MODEL_INVOKE_OUTCOMES_COMPUTER_VERSION,
   FIRST_SERVICE_FEATURES_COMPUTER_VERSION,
+  resolveSupportedReasoningEffort,
   type LocalPlacementRequirement,
   type LocalReasoningEffort,
   type LocalRuntimeModelDefinition,
 } from "./local-computer-management.js";
 import { computerTargetRelease } from "./computer-release.js";
 import { runtimeRegistrationId } from "./local-computer-registry.js";
-import { assertReasoningEffort } from "./runner-operation-preparation.js";
 import { isAgentCliCredentialOutcome } from "./runner-cli-credentials.js";
 import { isDebugInspectionOutcome } from "./runner-debug-inspection.js";
 import type {
@@ -970,7 +970,24 @@ export class RunnerConnections {
     if (!model) {
       throw new LocalComputerModelError(requirement.runtimeType);
     }
-    assertReasoningEffort(model, reasoningEffort, requirement.runtimeType);
+    const resolvedEffort = resolveSupportedReasoningEffort(
+      model,
+      reasoningEffort,
+      requirement.runtimeType,
+    );
+    if (
+      reasoningEffort !== undefined &&
+      resolvedEffort !== undefined &&
+      resolvedEffort !== reasoningEffort
+    ) {
+      logAgentEvent("info", "runner.reasoning_effort_fallback", {
+        runner_id: requirement.computerId,
+        runtime_type: requirement.runtimeType,
+        model_id: model.id,
+        requested_reasoning_effort: reasoningEffort,
+        resolved_reasoning_effort: resolvedEffort,
+      });
+    }
     return model;
   }
 
