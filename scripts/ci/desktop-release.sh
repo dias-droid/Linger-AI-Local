@@ -122,7 +122,7 @@ native_dir() {
 # distribution/<target>.json pins by `file`; a download is checked against the
 # pinned size and sha256 before it is kept.
 cmd_fetch_native() {
-  local target="${1:-}" dir base name sha bytes path part pins header=()
+  local target="${1:-}" dir base name sha bytes path part pins curl_args=(-fsSL --retry 3)
   check_target "$target"
   dir="$(native_dir)"
   base="${LINGER_NATIVE_DEPS_URL:-}"
@@ -130,7 +130,7 @@ cmd_fetch_native() {
     base="$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/linger-native-deps/1"
   fi
   if [[ -n "${CI_JOB_TOKEN:-}" && -n "${CI_API_V4_URL:-}" && "$base" == "$CI_API_V4_URL"/* ]]; then
-    header=(--header "JOB-TOKEN: $CI_JOB_TOKEN")
+    curl_args+=(--header "JOB-TOKEN: $CI_JOB_TOKEN")
   fi
   pins="$(node -e '
     const d = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
@@ -150,7 +150,7 @@ cmd_fetch_native() {
     part="$path.part.$$"
     echo "desktop-release: downloading $name"
     # The folder's address stays out of the log, which a public repository shows to anyone.
-    curl -fsSL --retry 3 "${header[@]}" -o "$part" "${base%/}/$name" 2>/dev/null ||
+    curl "${curl_args[@]}" -o "$part" "${base%/}/$name" 2>/dev/null ||
       { rm -f "$part"; die "cannot download $name from LINGER_NATIVE_DEPS_URL (upload it there; see docs/desktop-release.md)"; }
     if [[ "$(wc -c <"$part" | tr -d ' ')" != "$bytes" || "$(sha256_of "$part")" != "$sha" ]]; then
       rm -f "$part"
