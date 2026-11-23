@@ -34,6 +34,10 @@
   with the Daemon), `internal/platform/privatefs`, `internal/provider`
   discovery, and `internal/linger/control` (control client and the Daemon
   owner record). It never re-implements a Daemon mechanism.
+- `runtime login <type>` opens an installed Runtime on the caller's terminal so
+  the user can sign in to it. It reuses the Daemon's discovery, Runtime
+  environment and launcher handling, so the user signs in to the process the
+  Daemon starts; only `process.PrepareForeground` skips the hidden window.
 - Native provider clients live in `internal/provider/native`; process-tree
   helpers live in `internal/process`; runtime-home helpers live in
   `internal/workspace`. Keep tests next to their implementation.
@@ -61,6 +65,9 @@
 
 ## Runtime And Safety
 
+- On Windows an npm-launched Runtime starts on the Node the bundle ships in
+  `runtime/bin`, so an engine requirement a Runtime declares is independent of
+  the Node installed on the machine; the machine's `PATH` stays the user's.
 - A Pi background model call uses one ephemeral RPC turn with no tools on
   whatever model Pi's profile selects by default, local or remote; the Daemon
   does not check which.
