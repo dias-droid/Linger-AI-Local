@@ -1113,4 +1113,45 @@ describe("Runner Gateway model invocation adapter", () => {
         (error as Error).message.startsWith(COMPUTER_OFFLINE_MESSAGE),
       ).toBe(true);
   });
+  it("sends a Codex session only the new input and every other Runtime the whole prompt", async () => {
+    const { modelCall, invokeModel } = setup();
+    const request = {
+      ...ask,
+      instructions: "Answer.",
+      input: "New results",
+      retryInput: "Whole task",
+      sessionKey: "session_1",
+    };
+    await modelCall.call({
+      ...request,
+      owner: { tenantId: "tenant_1", ownerActorId: "alice" },
+    });
+    await modelCall.call({
+      ...request,
+      owner: { tenantId: "tenant_1", ownerActorId: "bob" },
+    });
+    expect(invokeModel.mock.calls[0]![1].input).toBe("New results");
+    expect(invokeModel.mock.calls[0]![1].sessionKey).toBe("session_1");
+    expect(invokeModel.mock.calls[1]![1].input).toBe("Whole task");
+  });
+
+  it("gives a correction the whole prompt in a fresh session", async () => {
+    const { modelCall, invokeModel } = setup({
+      outcomes: [completed("not json"), completed('{"answer":"yes"}')],
+    });
+    await modelCall.call({
+      ...ask,
+      instructions: "Answer.",
+      input: "New results",
+      retryInput: "Whole task",
+      sessionKey: "session_1",
+      owner: { tenantId: "tenant_1", ownerActorId: "alice" },
+    });
+    expect(invokeModel.mock.calls[0]![1].input).toBe("New results");
+    expect(invokeModel.mock.calls[1]![1].input).toContain("Whole task");
+    expect(invokeModel.mock.calls[1]![1].input).toContain(
+      "## Required Correction",
+    );
+    expect(invokeModel.mock.calls[1]![1].sessionKey).toMatch(/^retry:/u);
+  });
 });
