@@ -203,6 +203,8 @@ if (args.includes("--resume")) {
   const origin = fs.existsSync(originFile) ? fs.readFileSync(originFile, "utf8") : "http://localhost:3000";
   const outcome = failure ? JSON.parse(failure) : { message: code ? "Native teamhub stopped" : "ok", details: { source, origin } };
   process.stdout.write("noise\n" + JSON.stringify({ code, ...outcome, ...(runtime ? { runtime } : {}) }) + "\n");
+  const stderrFile = path.join(home, "resume-stderr");
+  if (fs.existsSync(stderrFile)) process.stderr.write(fs.readFileSync(stderrFile, "utf8"));
   process.exit(code);
 }
 if (fs.existsSync(path.join(home, "start-refused"))) {
@@ -3043,6 +3045,23 @@ describe("LocalServerModule after a restart", () => {
     );
     expect(args[args.indexOf("--instance") + 1]).toBe(LOCAL_INSTANCE);
     expect(f.signIn).not.toHaveBeenCalled();
+    await f.host.stop("quit");
+  });
+
+  it("logs the timing line a resume writes to stderr", async () => {
+    const line =
+      "Runtime lookup timings (ms) for desktop: config=1 runtime=2 localModels=3 tool=4 total=10";
+    const f = fixture({}, enrolled, (home) => {
+      record(home);
+      writeFileSync(path.join(home, "resume-stderr"), `${line}\n`);
+    });
+    const info = vi.spyOn(silentLog, "info");
+    await f.host.start();
+    await waitForInstaller(() => expect(f.module.status().phase).toBe("ready"));
+    expect(info).toHaveBeenCalledWith("local_server.installer_resume_stderr", {
+      line,
+    });
+    info.mockRestore();
     await f.host.stop("quit");
   });
 

@@ -96,8 +96,10 @@ long for Pi without long paths; `RUNTIME_ACTION_FAILED`;
 `GET /api/instances/{name}/runtime` (runtime and localmodels tool paths), so
 the desktop's Computer follows them. That lookup logs one `Runtime lookup
 timings (ms)` line on stderr for config reads, runtime discovery, localmodels
-environment and tool paths; the desktop already captures that stream. Neither
-the route's response nor the resume outcome carries these timings.
+environment and tool paths; the desktop captures that stream on both the
+serving path and the `--resume` path, and logs timing lines at info rather
+than warn. Neither the route's response nor the resume outcome carries these
+timings.
 
 `--stop` (with `--instance`) is the desktop uninstall's and Windows setup's: it stops the
 manager the desktop started for that instance (its `/api/stop` cancels a

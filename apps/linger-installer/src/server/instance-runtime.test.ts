@@ -1,4 +1,5 @@
-import { beforeEach, expect, test, vi } from "vitest";
+import { performance } from "node:perf_hooks";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { Instance } from "@linger/local-installation/instance";
 import type { RuntimeDescriptor } from "@linger/local-installation/managed-runtimes";
 
@@ -38,8 +39,6 @@ import {
   type RuntimeLookupTimings,
 } from "./instance-runtime.js";
 
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(loadInstance).mockResolvedValue({
@@ -52,6 +51,10 @@ beforeEach(() => {
   vi.mocked(managedRuntimeEnvironment).mockResolvedValue({
     LINGER_PI_PATH: "/probed/pi",
   });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 test("reuses inspected runtime descriptors without re-probing managedRuntimeEnvironment", async () => {
@@ -92,35 +95,21 @@ test("falls back to managedRuntimeEnvironment when no descriptors are supplied",
 
 test("reports separate stage timings for a runtime lookup", async () => {
   const timings: RuntimeLookupTimings[] = [];
-  vi.mocked(readByokEnvironment).mockImplementation(async () => {
-    await delay(5);
-    return undefined;
-  });
-  vi.mocked(managedRuntimeEnvironment).mockImplementation(async () => {
-    await delay(10);
-    return { LINGER_PI_PATH: "/probed/pi" };
-  });
-  vi.mocked(localmodelsComputerTool).mockImplementation(async () => {
-    await delay(5);
-    return undefined as never;
-  });
+  // instanceRuntime reads the clock once at the start, twice per timed
+  // stage, and once for the total. Script it so the assertions are exact
+  // and independent of the test host's scheduler.
+  const now = vi.spyOn(performance, "now");
+  for (const value of [0, 0, 4, 4, 6, 6, 6, 6, 11, 11, 13, 13, 22, 25])
+    now.mockReturnValueOnce(value);
+  vi.mocked(localmodelsComputerTool).mockResolvedValue(undefined as never);
 
   await instanceRuntime("/home", "local", {
     onTimings: (value) => timings.push(value),
   });
 
-  expect(timings).toHaveLength(1);
-  expect(Object.keys(timings[0]!)).toEqual([
-    "config",
-    "runtime",
-    "localModels",
-    "tool",
-    "total",
+  expect(timings).toEqual([
+    { config: 6, runtime: 5, localModels: 2, tool: 9, total: 25 },
   ]);
-  expect(timings[0]!.config).toBeGreaterThanOrEqual(4);
-  expect(timings[0]!.runtime).toBeGreaterThanOrEqual(9);
-  expect(timings[0]!.tool).toBeGreaterThanOrEqual(4);
-  expect(timings[0]!.total).toBeGreaterThanOrEqual(timings[0]!.runtime);
 });
 
 test("formats runtime lookup timings as one log line", () => {
