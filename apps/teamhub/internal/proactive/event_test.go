@@ -71,10 +71,11 @@ func TestEventWakeNamesTheGrantedAccount(t *testing.T) {
 	for _, check := range []struct {
 		source, label, want string
 	}{
-		{reminder.ListenerOutlook, "work@example.com", "App: Outlook Mail\nAccount: work@example.com (Microsoft sign-in name; the mailbox address may differ)\n"},
-		{reminder.ListenerOutlookCalendar, "work@example.com", "App: Outlook Calendar\nAccount: work@example.com (Microsoft sign-in name; the mailbox address may differ)\n"},
-		{reminder.ListenerGmail, "work@example.com", "App: Gmail\nAccount: work@example.com\n"},
-		// Without a label the connection ID is the account; --account takes either.
+		{reminder.ListenerOutlook, "work@example.com", "App: Outlook Mail\nAccount: work@example.com (Microsoft sign-in name, the mailbox address may differ; connection ID external_connection_abc)\n"},
+		{reminder.ListenerOutlookCalendar, "work@example.com", "App: Outlook Calendar\nAccount: work@example.com (Microsoft sign-in name, the mailbox address may differ; connection ID external_connection_abc)\n"},
+		// A label can be shared (a Slack workspace two connections are in), so
+		// the connection ID that --account selects exactly stays next to it.
+		{reminder.ListenerSlack, "Acme", "App: Slack\nAccount: Acme (connection ID external_connection_abc)\n"},
 		{reminder.ListenerGmail, "", "App: Gmail\nAccount: external_connection_abc\n"},
 	} {
 		event.Source = check.source

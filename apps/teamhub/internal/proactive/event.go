@@ -139,7 +139,7 @@ func (s *Service) HandleEvent(ctx context.Context, event Event) (Outcome, error)
 		return Outcome{}, ErrNoJudge
 	}
 	// The account label lets the Agent tell the Human which mailbox; the
-	// connection ID stands in for it when the connection has none.
+	// connection ID still selects it when the connection has none.
 	accountLabel, err := queries.GetExternalConnectionIdentityLabel(ctx, event.Grant.ConnectionID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return Outcome{}, err
@@ -263,21 +263,26 @@ func (s *Service) wake(ctx context.Context, owner Owner, candidate Candidate, bo
 const eventTimeLayout = "2006-01-02 15:04 -07:00"
 
 // eventText fences the event and marks it as outside data, never instructions.
-// The block opens with the app, the account the Agent passes to --account (the
-// connection's label, or its ID when it has none) and when TeamHub received
-// the event. The wake normally follows within minutes of receipt, so the
-// Agent can compare the event's times with it as now.
+// The block opens with the app, the account and Received. The account's label
+// tells the Human which account; its connection ID follows because only the ID
+// selects exactly one connection with --account, while a label such as a
+// Slack workspace name can be shared. Received is when TeamHub took the event
+// up to judge it, right after the listener read it unless judging was retried.
+// The wake then waits until the Room has been quiet for three minutes, longer
+// while the Human is talking with AnotherMe, so the Agent reads it that much
+// later than Received.
 func eventText(label string, event Event, accountLabel string, receivedAt time.Time) string {
 	lines := []string{"App: " + appName(event.Source)}
 	if event.Grant != nil {
 		account := event.Grant.ConnectionID
 		if accountLabel != "" {
-			account = accountLabel
+			note := "connection ID " + event.Grant.ConnectionID
 			// An Outlook label is the Microsoft account's sign-in name, which can
 			// belong to another mail provider.
 			if event.Source == reminder.ListenerOutlook || event.Source == reminder.ListenerOutlookCalendar {
-				account += " (Microsoft sign-in name; the mailbox address may differ)"
+				note = "Microsoft sign-in name, the mailbox address may differ; " + note
 			}
+			account = accountLabel + " (" + note + ")"
 		}
 		lines = append(lines, "Account: "+account)
 	}
