@@ -12,7 +12,7 @@ import {
   normalizeByokPath,
   validByokPath,
 } from "@linger/service-kit/byok-endpoint";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   type CSSProperties,
   type FormEvent,
@@ -47,6 +47,7 @@ import {
   modelSourceRuntimeLabels,
 } from "./local-models-copy";
 import { localModelsMessages as m } from "./local-models.messages";
+import { invalidateOfflineComputer } from "./local-models-queries";
 import type { ModelSourceSwitcher } from "./model-source-panel";
 import {
   type ByokEndpointInput,
@@ -86,6 +87,11 @@ const failureCopy = (error: unknown, t: Translate) =>
     ? byokFailureCopy(error.code, error.message, t)
     : byokFailureCopy(undefined, "", t);
 
+function abortController(ref: { current: AbortController | null }) {
+  ref.current?.abort();
+  ref.current = null;
+}
+
 /**
  * The person's own endpoint, addressed as base URL + path + endpoint. The API
  * key goes to the Computer, which keeps it private; Linger never shows it
@@ -106,6 +112,7 @@ export function ByokPanel({
 }) {
   const t = useT();
   const { client } = useTeamHubRuntime();
+  const queryClient = useQueryClient();
   const saved = status.byok;
   const savedRuntime = status.mode === "byok" ? status.runtime : "claude";
   const [runtime, setRuntime] = useState<ModelSourceRuntime>(savedRuntime);
@@ -154,13 +161,71 @@ export function ByokPanel({
   const complete = base !== "" && input.model_id !== "" && addressValid;
   const active = status.mode === "byok";
 
+  const modelsAbortRef = useRef<AbortController | null>(null);
+  const testAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(
+    () => () => {
+      abortController(modelsAbortRef);
+      abortController(testAbortRef);
+    },
+    [],
+  );
+
+  function syncOfflineIfNeeded(error: unknown) {
+    if (
+      error instanceof TeamHubError &&
+      error.code === "LOCAL_COMPUTER_OFFLINE"
+    ) {
+      void invalidateOfflineComputer(queryClient, tenantId, computerId);
+    }
+  }
+
   const models = useMutation({
-    mutationFn: (body: ByokEndpointInput) =>
-      listByokModels(client, tenantId, computerId, body),
+    mutationFn: async (body: ByokEndpointInput) => {
+      abortController(modelsAbortRef);
+      const controller = new AbortController();
+      modelsAbortRef.current = controller;
+      try {
+        return await listByokModels(
+          client,
+          tenantId,
+          computerId,
+          body,
+          controller.signal,
+        );
+      } catch (error) {
+        if (!controller.signal.aborted) syncOfflineIfNeeded(error);
+        throw error;
+      } finally {
+        if (modelsAbortRef.current === controller) {
+          modelsAbortRef.current = null;
+        }
+      }
+    },
   });
   const test = useMutation({
-    mutationFn: (body: ByokTestRequest) =>
-      testByokEndpoint(client, tenantId, computerId, body),
+    mutationFn: async (body: ByokTestRequest) => {
+      abortController(testAbortRef);
+      const controller = new AbortController();
+      testAbortRef.current = controller;
+      try {
+        return await testByokEndpoint(
+          client,
+          tenantId,
+          computerId,
+          body,
+          controller.signal,
+        );
+      } catch (error) {
+        if (!controller.signal.aborted) syncOfflineIfNeeded(error);
+        throw error;
+      } finally {
+        if (testAbortRef.current === controller) {
+          testAbortRef.current = null;
+        }
+      }
+    },
   });
   const listed = models.data?.models ?? [];
   const modelOptions = listed.map((model) => ({
@@ -189,16 +254,22 @@ export function ByokPanel({
   // Changing the address or key makes listed models and a test result stale;
   // changing only the endpoint, model or Runtime keeps the listed models.
   function resetTest() {
+    abortController(testAbortRef);
     test.reset();
     setToastShown(false);
   }
   function resetAll() {
+    abortController(modelsAbortRef);
     models.reset();
     resetTest();
   }
 
   function save(event: FormEvent) {
     event.preventDefault();
+    abortController(modelsAbortRef);
+    if (models.isPending) models.reset();
+    abortController(testAbortRef);
+    if (test.isPending) test.reset();
     switcher.request({ byok: input, mode: "byok", runtime });
   }
 

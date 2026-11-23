@@ -67,6 +67,7 @@ import {
 import { localModelsMessages as m } from "./local-models.messages";
 import {
   actOnLocalComputerModel,
+  invalidateOfflineComputer,
   localModelActionMutationKey,
   localModelsQueryKey,
   localModelsQueryOptions,
@@ -74,6 +75,7 @@ import {
   refreshLocalComputerModels,
   type LocalModelAction,
   type LocalModelActionInput,
+  type LocalModelsRefreshAccepted,
   type LocalModelsView,
 } from "./local-models-queries";
 import {
@@ -104,7 +106,20 @@ import {
   modelSourceQueryKey,
   modelSourceQueryOptions,
   type ModelSourceStatus,
+  type ModelSourceView,
 } from "./model-source-queries";
+
+const offlinePollIntervalMs = 5_000;
+
+function isModelSourceOffline(
+  data: ModelSourceView | undefined,
+  error: Error | null,
+) {
+  return (
+    data?.online === false ||
+    (error instanceof TeamHubError && error.code === "LOCAL_COMPUTER_OFFLINE")
+  );
+}
 
 type Dialog =
   | { kind: "advanced" }
@@ -307,24 +322,65 @@ function ComputerModels({
   const { t } = translation;
   const { client } = useTeamHubRuntime();
   const queryClient = useQueryClient();
-  const query = useQuery(localModelsQueryOptions(client, tenantId, computerId));
+  // Only the owner switches sources, and only their own Computers carry a
+  // display name here.
+  const hasOwnedSource = displayName !== undefined;
+  const source = useQuery({
+    ...modelSourceQueryOptions(client, tenantId, computerId),
+    enabled: hasOwnedSource,
+    refetchInterval: (state) =>
+      isModelSourceOffline(state.state.data, state.state.error)
+        ? offlinePollIntervalMs
+        : false,
+  });
+  const sourceOffline = isModelSourceOffline(source.data, source.error);
+  const query = useQuery({
+    ...localModelsQueryOptions(client, tenantId, computerId),
+    refetchInterval: (state) =>
+      state.state.data?.computer.status === "offline" || sourceOffline
+        ? offlinePollIntervalMs
+        : false,
+  });
   const view = query.data;
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const summary = view?.available ? memorySummary(view) : undefined;
-  // Only the owner switches sources, and only their own Computers carry a
-  // display name here.
-  const source = useQuery({
-    ...modelSourceQueryOptions(client, tenantId, computerId),
-    enabled: displayName !== undefined,
-  });
-  const offline = view?.computer.status === "offline";
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const reportedOffline = view
+    ? view.computer.status === "offline"
+    : computer?.status === "offline";
+  const offline = reportedOffline || sourceOffline;
+  const [wasOffline, setWasOffline] = useState(offline);
+  if (wasOffline !== offline) {
+    setWasOffline(offline);
+    if (!offline) {
+      setRefreshError(null);
+    }
+  }
+  const previousInventoryStatusRef = useRef(computer?.status);
+  useEffect(() => {
+    const nextStatus = computer?.status;
+    if (
+      previousInventoryStatusRef.current !== undefined &&
+      nextStatus !== undefined &&
+      previousInventoryStatusRef.current !== nextStatus
+    ) {
+      void queryClient.invalidateQueries({
+        queryKey: localModelsQueryKey(tenantId, computerId),
+      });
+      if (hasOwnedSource) {
+        void queryClient.invalidateQueries({
+          queryKey: modelSourceQueryKey(tenantId, computerId),
+        });
+      }
+    }
+    previousInventoryStatusRef.current = nextStatus;
+  }, [computer?.status, computerId, hasOwnedSource, queryClient, tenantId]);
   const onlineRefetchTriggeredRef = useRef(false);
   useEffect(() => {
     if (
-      displayName !== undefined &&
-      view?.computer.status === "online" &&
-      source.data !== undefined &&
-      !source.data.online &&
+      hasOwnedSource &&
+      !reportedOffline &&
+      sourceOffline &&
       !source.isFetching &&
       !onlineRefetchTriggeredRef.current
     ) {
@@ -334,17 +390,18 @@ function ComputerModels({
       });
       return;
     }
-    if (source.data?.online || view?.computer.status === "offline") {
+    if ((!sourceOffline && source.data?.online) || reportedOffline) {
       onlineRefetchTriggeredRef.current = false;
     }
   }, [
     computerId,
-    displayName,
+    hasOwnedSource,
     queryClient,
-    source.data,
+    reportedOffline,
+    source.data?.online,
     source.isFetching,
+    sourceOffline,
     tenantId,
-    view?.computer.status,
   ]);
   const status = source.data?.status;
   const [tab, setTab] = useState<ModelSourceMode | null>(null);
@@ -360,25 +417,81 @@ function ComputerModels({
   });
   const switching = switcher.pending !== undefined;
   const switchTargets = view?.available ? localSwitchTargets(view) : [];
-  const [refreshError, setRefreshError] = useState<string | null>(null);
-  const refresh = useMutation({
+  const refresh = useMutation<
+    LocalModelsRefreshAccepted,
+    Error,
+    { automatic?: boolean; reconnected?: boolean } | undefined
+  >({
     mutationFn: () => refreshLocalComputerModels(client, tenantId, computerId),
     mutationKey: localModelsRefreshMutationKey(tenantId, computerId),
-    onError: (error) =>
-      setRefreshError(
-        error instanceof TeamHubError ? error.code : "REFRESH_FAILED",
-      ),
+    onError: (error, options) => {
+      const code =
+        error instanceof TeamHubError ? error.code : "REFRESH_FAILED";
+      if (!options?.automatic) {
+        setRefreshError(code);
+      }
+      if (code === "LOCAL_COMPUTER_OFFLINE") {
+        return invalidateOfflineComputer(queryClient, tenantId, computerId);
+      }
+      return undefined;
+    },
     onMutate: () => setRefreshError(null),
-    onSettled: () =>
-      queryClient.invalidateQueries({
+    onSettled: (_data, error) => {
+      if (
+        error instanceof TeamHubError &&
+        error.code === "LOCAL_COMPUTER_OFFLINE"
+      ) {
+        return undefined;
+      }
+      return queryClient.invalidateQueries({
         queryKey: localModelsQueryKey(tenantId, computerId),
-      }),
+      });
+    },
+    onSuccess: (_data, options) => {
+      if (options?.reconnected && hasOwnedSource) {
+        void queryClient.invalidateQueries({
+          queryKey: modelSourceQueryKey(tenantId, computerId),
+        });
+      }
+    },
   });
+  const { mutate: triggerRefresh } = refresh;
+  function recheckMemory() {
+    if (refresh.isPending) return;
+    triggerRefresh(undefined);
+  }
   const canRecheck = Boolean(
-    view?.available &&
-    view.viewer_is_owner &&
-    view.computer.status === "online",
+    view?.available && view.viewer_is_owner && !offline,
   );
+  const autoRefreshRef = useRef({
+    computerId,
+    didMountRefresh: false,
+    wasOffline: false,
+  });
+  useEffect(() => {
+    if (autoRefreshRef.current.computerId !== computerId) {
+      autoRefreshRef.current = {
+        computerId,
+        didMountRefresh: false,
+        wasOffline: false,
+      };
+    }
+    if (offline) {
+      autoRefreshRef.current.wasOffline = true;
+      return;
+    }
+    if (!canRecheck) return;
+    if (
+      autoRefreshRef.current.didMountRefresh &&
+      !autoRefreshRef.current.wasOffline
+    ) {
+      return;
+    }
+    const reconnected = autoRefreshRef.current.wasOffline;
+    autoRefreshRef.current.didMountRefresh = true;
+    autoRefreshRef.current.wasOffline = false;
+    triggerRefresh({ automatic: true, reconnected });
+  }, [canRecheck, computerId, offline, triggerRefresh]);
   const blocker = view?.available ? hostBlocker(view) : null;
   const guidance = view?.available && !blocker ? memoryGuidance(view) : null;
   const queryErrorCode =
@@ -456,7 +569,7 @@ function ComputerModels({
           {canRecheck ? (
             <Button
               loading={refresh.isPending}
-              onClick={() => refresh.mutate()}
+              onClick={recheckMemory}
               size="compact"
             >
               {t(m.recheckMemory)}
@@ -557,7 +670,8 @@ function ComputerModels({
             computer={computer}
             dialog={dialog}
             guidance={guidance}
-            onRefresh={() => refresh.mutate()}
+            offline={offline}
+            onRefresh={recheckMemory}
             onSwitchToByok={status ? () => changeTab("byok") : undefined}
             onUseForAgents={(modelId) =>
               switcher.request({ local_model_id: modelId, mode: "local" })
@@ -655,6 +769,7 @@ function Library({
   computer,
   dialog,
   guidance,
+  offline: computerOffline,
   onRefresh,
   onSwitchToByok,
   onUseForAgents,
@@ -670,6 +785,7 @@ function Library({
   computer?: InventoryComputer;
   dialog: Dialog | null;
   guidance: ReturnType<typeof memoryGuidance>;
+  offline: boolean;
   onRefresh: () => void;
   onSwitchToByok?: () => void;
   onUseForAgents: (modelId: string) => void;
@@ -686,7 +802,7 @@ function Library({
   const queryClient = useQueryClient();
   const computerId = view.computer.computer_id;
   const name = view.computer.display_name;
-  const offline = view.computer.status === "offline";
+  const offline = computerOffline || view.computer.status === "offline";
   const readOnly = !view.viewer_is_owner;
   const canManageAgents = !readOnly;
   const piReady =
