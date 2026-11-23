@@ -232,6 +232,10 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
   A missing start stays unconfirmed. Keep audio duration and transcript offsets
   on the confirmed timeline, and enqueue an already-requested Stop when the
   initial recorder becomes known, including after restart reconciliation.
+  Every voice job retries a failing step, so give each wait that a person sees
+  a terminal: after Stop, each failed reconciliation spends the epoch's
+  `stop_reconcile_failures` budget, and an exhausted budget fails the Capture
+  so its voice session can close. A not-yet-due deferral spends nothing.
 - Voice: `TEAMHUB_VOICE_MEDIA` (`on` by default) builds the voice media plane
   over LiveKit; `off`, a missing `LINGER_SECRET_SEED`, or missing ffmpeg keep
   voice off (the last two log `voice.media_unavailable`) without stopping

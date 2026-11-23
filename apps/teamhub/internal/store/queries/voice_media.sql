@@ -337,6 +337,24 @@ UPDATE voice_sessions voice SET status='closing',last_failure_code='egress_faile
 FROM failed_capture WHERE voice.id=failed_capture.voice_session_id
   AND voice.status IN ('provisioning','connected','reconnecting');
 
+-- name: FailUnsettledVoiceCapture :one
+-- Ends a stopped Capture whose recorder used up its settle budget. Its
+-- unsettled epochs fail with it, so its staging can be cleaned up and its
+-- voice session can close.
+WITH failed_capture AS (
+  UPDATE capture_sessions capture SET status='failed',updated_at=clock_timestamp()
+  WHERE capture.id=sqlc.arg(capture_session_id)::text AND capture.status='finalizing'
+  RETURNING capture.id,capture.tenant_id,capture.room_id,capture.created_by_actor_id
+), failed_epochs AS (
+  UPDATE voice_media_epochs epoch
+  SET desired_state='sealed',observed_state='failed',last_failure_code='stop_unsettled',
+      restart_retry_at=NULL,updated_at=clock_timestamp()
+  FROM failed_capture capture
+  WHERE epoch.capture_session_id=capture.id
+    AND epoch.observed_state IN ('requested','active','sealing','unknown')
+)
+SELECT * FROM failed_capture;
+
 -- name: RequestSealVoiceMediaEpoch :one
 UPDATE voice_media_epochs
 SET desired_state='sealed',observed_state=CASE WHEN observed_state='active' THEN 'sealing' ELSE observed_state END,

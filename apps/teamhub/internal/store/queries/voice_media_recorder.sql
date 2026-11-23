@@ -23,5 +23,11 @@ SELECT provider_room_name FROM voice_sessions WHERE id=$1;
 -- name: DeferVoiceMediaEpochReconcile :exec
 -- A reconciliation that fails moves its epoch to the back of the queue, so
 -- one epoch that keeps failing cannot hold every other Capture behind it.
-UPDATE voice_media_epochs SET updated_at=clock_timestamp() WHERE id=$1;
+-- A failure after the Capture's Stop also spends the epoch's settle budget.
+UPDATE voice_media_epochs epoch
+SET updated_at=clock_timestamp(),
+    stop_reconcile_failures=epoch.stop_reconcile_failures
+      +(sqlc.arg(failed)::boolean AND capture.status='finalizing')::int
+FROM capture_sessions capture
+WHERE epoch.id=sqlc.arg(id)::text AND capture.id=epoch.capture_session_id;
 
