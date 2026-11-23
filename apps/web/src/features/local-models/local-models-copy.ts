@@ -448,9 +448,10 @@ export function engineHintCopy(
     case "strata":
       return t(m.engineHintStrata);
     case "llama.cpp":
+      if (fit === "gpu") return t(m.engineHintLlamaCpp);
       if (fit === "unified") return t(m.engineHintLlamaCppUnified);
       if (fit === "system") return t(m.engineHintLlamaCppSystem);
-      return t(m.engineHintLlamaCpp);
+      return undefined;
     default:
       return undefined;
   }

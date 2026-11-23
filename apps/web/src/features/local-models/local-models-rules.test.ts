@@ -1094,6 +1094,7 @@ describe("hostBlocker, RAM reclaimability, and diagnostics copy", () => {
     expect(engineHintCopy("llama.cpp", "system", translate)).toBe(
       "System memory native engine",
     );
+    expect(engineHintCopy("llama.cpp", "none", translate)).toBeUndefined();
     expect(engineHintCopy(undefined, "gpu", translate)).toBeUndefined();
 
     expect(concurrencyCopy(1, translate)).toBe("1 request at a time");
