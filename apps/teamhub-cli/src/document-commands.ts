@@ -12,17 +12,19 @@ import {
   markdownBodySource,
   option,
   requiredOption,
+  oneOf,
 } from "./command-input.js";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 import { CliError } from "./errors.js";
 import {
+  conflictingFlags,
   fileFailure,
   fileSystemError,
   inputIssue,
   invalidInput,
 } from "./input-issues.js";
-import { parseActorReferences } from "./command-mentions.js";
+import { parseActorReferences } from "./content-segments.js";
 import { displayText } from "./display-text.js";
 
 const bodyOptions = {
@@ -409,7 +411,7 @@ export const documentCommandDefinitions: readonly CommandDefinition[] = [
       const output = option(args, "--output");
       const shortOutput = option(args, "-o");
       if (output !== undefined && shortOutput !== undefined)
-        throw new CliError("usage", "Choose --output or -o, not both.");
+        throw conflictingFlags(["--output", "-o"]);
       const format = option(args, "--format");
       if (
         format !== undefined &&
@@ -746,9 +748,11 @@ export const documentCommandDefinitions: readonly CommandDefinition[] = [
         option(args, "--segments") !== undefined ||
         option(args, "--segments-file") !== undefined;
       if (ordinary === structured)
-        throw new CliError(
-          "usage",
-          "Choose one body source: --content, --file, --segments or --segments-file.",
+        oneOf(
+          args,
+          ordinary
+            ? ["--content", "--segments", "--segments-file"]
+            : ["--content", "--file", "--segments", "--segments-file"],
         );
       const segments = ordinary
         ? parseActorReferences(

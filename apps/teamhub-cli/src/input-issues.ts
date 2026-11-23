@@ -40,6 +40,7 @@ function record(value: unknown): value is Json {
 export function invalidInput(
   message: string,
   issues: readonly InputIssue[],
+  details: Record<string, unknown> = {},
 ): CliError {
   const unique = issues.filter(
     (issue, index) =>
@@ -51,6 +52,7 @@ export function invalidInput(
       ) === index,
   );
   return new CliError("invalid_input", message, {
+    ...details,
     issues: unique.slice(0, listedIssueLimit),
     ...(unique.length > listedIssueLimit
       ? { issues_omitted: unique.length - listedIssueLimit }
@@ -934,6 +936,11 @@ export function fileSystemError(
   );
 }
 
+/** A byte limit as people read it: 5 MiB, 512 MiB, 1.5 MiB. */
+export function mebibytes(bytes: number): string {
+  return `${Number((bytes / 1024 / 1024).toFixed(1))} MiB`;
+}
+
 /**
  * A local file the command could not read or write, as one issue on the flag
  * that named it ("file" when none is known). `source` is the path as the
@@ -957,4 +964,202 @@ export function fileFailure(
       ),
     ],
   );
+}
+
+/** A malformed command line: `usage`, with what to change as issues. */
+export function usageError(
+  message: string,
+  issues: readonly InputIssue[] = [],
+): CliError {
+  return new CliError("usage", message, issues.length ? { issues } : {});
+}
+
+/** Flags that cannot be given together. */
+export function conflictingFlags(flags: readonly string[]): CliError {
+  return usageError(`${flags.join(", ")} cannot be used together.`, [
+    inputIssue(flags[0]!, "conflict", `give only one of ${flags.join(", ")}.`),
+  ]);
+}
+
+/** A required flag, or one of several alternatives, is absent. */
+export function missingFlag(flags: readonly string[]): CliError {
+  return usageError(
+    flags.length === 1
+      ? `${flags[0]} is required.`
+      : `One of ${flags.join(", ")} is required.`,
+    [
+      inputIssue(
+        flags[0]!,
+        "missing",
+        flags.length === 1
+          ? "required."
+          : `required; give one of ${flags.join(", ")}.`,
+      ),
+    ],
+  );
+}
+
+/** One flag's value is wrong: `invalid_input` with that one issue. */
+export function invalidFlag(
+  flag: string,
+  code: InputIssueCode,
+  message: string,
+): CliError {
+  return invalidInput(`${flag} has an invalid value.`, [
+    inputIssue(flag, code, message),
+  ]);
+}
+
+/** A flag value as the caller typed it: numbers bare, other text quoted. */
+export function echoFlag(value: string): string {
+  return /^-?\d+(?:\.\d+)?$/u.test(value) ? value : echo(value);
+}
+
+/** `--name must be an integer from 1 to 100; got 500.` as one issue. */
+export function flagOutOfRange(
+  flag: string,
+  min: number,
+  max: number,
+  value: string,
+): CliError {
+  return invalidFlag(
+    flag,
+    "out_of_range",
+    `must be an integer from ${min} to ${max}; got ${echoFlag(value)}.`,
+  );
+}
+
+/** A flag whose value must be one of a fixed set. */
+export function flagNotOneOf(
+  flag: string,
+  allowed: readonly string[],
+  value: string,
+): CliError {
+  return invalidFlag(
+    flag,
+    "invalid_value",
+    `must be one of ${allowed.join(", ")}; got ${echo(value)}.`,
+  );
+}
+
+class JsonSyntaxStop extends Error {
+  constructor(
+    readonly at: number,
+    readonly reason: string,
+  ) {
+    super(reason);
+  }
+}
+
+/** Where JSON text first breaks, as a 1-based line and column, and why. */
+export function jsonSyntaxError(
+  text: string,
+): { line: number; column: number; reason: string } | undefined {
+  let index = 0;
+  const stop = (reason: string): never => {
+    throw new JsonSyntaxStop(index, reason);
+  };
+  const space = () => {
+    while (" \t\n\r".includes(text[index] ?? "x")) index++;
+  };
+  const expect = (what: string): never =>
+    stop(
+      index >= text.length
+        ? `expected ${what}; the input ended`
+        : `expected ${what}`,
+    );
+  const string = () => {
+    index++;
+    for (;;) {
+      const char = text[index];
+      if (char === undefined) stop("unterminated string");
+      if (char === '"') {
+        index++;
+        return;
+      }
+      if (char === "\\") {
+        const escape = text[index + 1];
+        if (
+          escape === "u"
+            ? !/^[0-9a-fA-F]{4}$/u.test(text.slice(index + 2, index + 6))
+            : !'"\\/bfnrt'.includes(escape ?? "x")
+        )
+          stop("invalid escape sequence");
+        index += escape === "u" ? 6 : 2;
+        continue;
+      }
+      if (char! < " ")
+        stop("a line break or control character in a string must be escaped");
+      index++;
+    }
+  };
+  const number = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/uy;
+  const value = (depth: number): void => {
+    if (depth > 100) stop("nested deeper than 100 levels");
+    space();
+    const char = text[index];
+    if (char === "{") {
+      index++;
+      space();
+      if (text[index] === "}") return void index++;
+      for (;;) {
+        space();
+        if (text[index] !== '"') expect("a property name in double quotes");
+        string();
+        space();
+        if (text[index] !== ":") expect(": after the property name");
+        index++;
+        value(depth + 1);
+        space();
+        if (text[index] === ",") index++;
+        else if (text[index] === "}") return void index++;
+        else expect(", or } after the property value");
+      }
+    }
+    if (char === "[") {
+      index++;
+      space();
+      if (text[index] === "]") return void index++;
+      for (;;) {
+        value(depth + 1);
+        space();
+        if (text[index] === ",") index++;
+        else if (text[index] === "]") return void index++;
+        else expect(", or ] after the item");
+      }
+    }
+    if (char === '"') return string();
+    if (char === "-" || (char !== undefined && char >= "0" && char <= "9")) {
+      number.lastIndex = index;
+      if (!number.exec(text)) stop("invalid number");
+      index = number.lastIndex;
+      return;
+    }
+    for (const literal of ["true", "false", "null"])
+      if (text.startsWith(literal, index))
+        return void (index += literal.length);
+    if (char === "'") stop("strings need double quotes");
+    expect("a value");
+  };
+  try {
+    value(0);
+    space();
+    if (index < text.length) stop("unexpected text after the JSON value");
+    return undefined;
+  } catch (error) {
+    if (!(error instanceof JsonSyntaxStop)) throw error;
+    return { ...textPosition(text, error.at), reason: error.reason };
+  }
+}
+
+/** The 1-based line and column of a UTF-16 offset. */
+export function textPosition(
+  text: string,
+  at: number,
+): { line: number; column: number } {
+  const before = text.slice(0, at);
+  return {
+    line: before.split("\n").length,
+    column: at - before.lastIndexOf("\n"),
+  };
 }

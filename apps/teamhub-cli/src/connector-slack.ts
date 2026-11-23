@@ -433,7 +433,7 @@ async function resolveTarget(
     );
     if (matches.length !== 1)
       throw new CliError(
-        matches.length ? "ambiguous_target" : "not_found",
+        matches.length ? "target_ambiguous" : "not_found",
         "No unique accessible channel matches this current name; use --channel-id.",
       );
     channelId = requiredString(matches[0]!.id, "channel ID");
@@ -517,7 +517,7 @@ async function resolveTarget(
       }
       if (matches.length !== 1)
         throw new CliError(
-          matches.length ? "ambiguous_target" : "not_found",
+          matches.length ? "target_ambiguous" : "not_found",
           "No unique accessible existing DM was found; use --channel-id. No conversation was opened.",
         );
       channelId = requiredString(matches[0]!.id, "DM ID");

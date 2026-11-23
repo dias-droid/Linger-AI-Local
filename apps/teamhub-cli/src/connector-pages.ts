@@ -104,8 +104,8 @@ export async function sliceConnectorPage(
     );
     if (bytes.length > maxBytes)
       throw new CliError(
-        "too_large",
-        "The provider page exceeds the private pagination limit.",
+        "incomplete_response",
+        "The provider page is too large to keep for --cursor; use a smaller --limit.",
       );
     page = createHash("sha256").update(bytes).digest("hex");
     if (rows.length > limit) {

@@ -13,7 +13,11 @@ afterEach(async () => {
   );
 });
 
-async function run(args: readonly string[], response?: () => Response) {
+async function run(
+  args: readonly string[],
+  response?: () => Response,
+  configured = true,
+) {
   const cwd = await mkdtemp(path.join(tmpdir(), "teamhub-cli-errors-"));
   roots.push(cwd);
   const fetcher = vi.fn<typeof fetch>(async () => {
@@ -24,9 +28,11 @@ async function run(args: readonly string[], response?: () => Response) {
   const stderr: string[] = [];
   const code = await runCli(args, {
     cwd,
-    env: writeCliConfig(path.join(cwd, "config"), {
-      scope: { kind: "room", id: "room_fixture" },
-    }),
+    env: configured
+      ? writeCliConfig(path.join(cwd, "config"), {
+          scope: { kind: "room", id: "room_fixture" },
+        })
+      : { HOME: cwd },
     fetch: fetcher,
     stdout: (text) => {
       stdout.push(text);
@@ -100,7 +106,7 @@ describe("command errors name what to fix", () => {
     ]);
     expect(result.code).toBe(2);
     expect(result.stderr).toContain(
-      "teamhub: usage: --inbox accepts only a room: address.",
+      "teamhub: invalid_input: --inbox accepts only a room: address.",
     );
   });
 
@@ -179,5 +185,152 @@ describe("command errors name what to fix", () => {
       "Issue: actor_id: unknown_agent: No such Agent.",
     );
     expect(result.stderr).not.toContain("room_secret");
+  });
+
+  it("checks the input before the configuration", async () => {
+    const result = await run(
+      ["tracking-items", "add", "--item", '{"kind":"meeting","content":"x"}'],
+      undefined,
+      false,
+    );
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain(
+      "Issue: due_text: missing: required; use null if there is none.",
+    );
+  });
+
+  it("lists the commands of a group for an unknown subcommand", async () => {
+    const result = await run(["tracking-items", "ad", "--json"]);
+    expect(result.code).toBe(2);
+    expect(JSON.parse(result.stderr).error).toEqual({
+      code: "usage",
+      message: 'Unknown command "tracking-items ad".',
+      details: {
+        group: "tracking-items",
+        commands: ["list", "add", "update", "done"],
+      },
+    });
+    const text = await run(["tracking-items", "ad"]);
+    expect(text.stderr).toContain(
+      "Commands in tracking-items: list, add, update, done.",
+    );
+  });
+
+  it("lists the allowed flags and the usage for an unknown flag", async () => {
+    const result = await run(["tracking-items", "add", "--bogus"]);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toBe(
+      [
+        "teamhub: usage: Unknown flag --bogus.",
+        "Command: teamhub tracking-items add",
+        "Issue: --bogus: unknown_field: not allowed. Allowed: --item, --item-file, --json.",
+        "Usage: teamhub tracking-items add [flags]",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("names the flag, line and column of broken JSON", async () => {
+    const result = await run([
+      "tracking-items",
+      "add",
+      "--item",
+      '{\n  "kind": "meeting",\n  content: "x"\n}',
+    ]);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain(
+      "Issue: --item: invalid_json: line 3, column 3: expected a property name in double quotes.",
+    );
+  });
+
+  it("names a flag range with its bounds and the given value", async () => {
+    const result = await run(["tracking-items", "list", "--limit", "0"]);
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain(
+      "Issue: --limit: out_of_range: must be an integer from 1 to 200; got 0.",
+    );
+  });
+
+  it("reports a lost Tracking Item write as an unknown outcome", async () => {
+    const item = JSON.stringify({
+      kind: "todo",
+      content: "x",
+      due_at: null,
+      due_text: null,
+      source_ref: "message_1",
+      source_date: "2026-11-23",
+      source_timezone: "UTC",
+      idempotency_key: "key-1",
+    });
+    const result = await run([
+      "tracking-items",
+      "add",
+      "--item",
+      item,
+      "--json",
+    ]);
+    expect(result.code).toBe(1);
+    const error = JSON.parse(result.stderr).error;
+    expect(error.code).toBe("outcome_unknown");
+    expect(error.message).toContain("same idempotency_key");
+    expect(result.fetcher).toHaveBeenCalledTimes(1);
+    expect(
+      new Headers(result.fetcher.mock.calls[0]![1]!.headers).has(
+        "x-teamhub-operation-id",
+      ),
+    ).toBe(false);
+  });
+
+  it("names a response without TeamHub's envelope by its status", async () => {
+    const result = await run(
+      ["tracking-items", "list", "--json"],
+      () => new Response("denied", { status: 401 }),
+    );
+    expect(result.code).toBe(4);
+    expect(JSON.parse(result.stderr).error).toMatchObject({
+      code: "unauthenticated",
+      message: "The Agent identity credential is invalid or expired.",
+    });
+  });
+
+  it("treats a bare 429 as rate limiting and a bare 408 as a dependency failure", async () => {
+    const limited = await run(
+      ["tracking-items", "list", "--json"],
+      () => new Response("slow down", { status: 429 }),
+    );
+    expect(limited.code).toBe(1);
+    expect(JSON.parse(limited.stderr).error.code).toBe("provider_rate_limited");
+    const timedOut = await run(
+      ["tracking-items", "list", "--json"],
+      () => new Response("timeout", { status: 408 }),
+    );
+    expect(timedOut.code).toBe(1);
+    expect(JSON.parse(timedOut.stderr).error.code).toBe(
+      "dependency_unavailable",
+    );
+  });
+
+  it("lowercases a TeamHub code and shows its request ID", async () => {
+    const result = await run(["tracking-items", "list"], () =>
+      Response.json(
+        {
+          error: {
+            code: "DEPENDENCY_UNAVAILABLE",
+            message: "postgres timed out at 10.0.0.4",
+            request_id: "req_1",
+          },
+        },
+        { status: 503 },
+      ),
+    );
+    expect(result.code).toBe(1);
+    expect(result.stderr).toBe(
+      [
+        "teamhub: dependency_unavailable: A service TeamHub depends on is temporarily unavailable; run this command again later.",
+        "Command: teamhub tracking-items list",
+        "Request ID: req_1",
+        "",
+      ].join("\n"),
+    );
   });
 });

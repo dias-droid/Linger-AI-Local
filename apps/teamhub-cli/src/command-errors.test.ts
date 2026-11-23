@@ -61,7 +61,7 @@ it("keeps version-conflict guidance specific to the attempted resource", () => {
     command: "task create",
   });
   expect(task.message).not.toContain("Document");
-  expect(task.message).toContain("resource state");
+  expect(task.message).toContain("changed since it was read");
   const document = formatCommandError(error, {
     command: "docs replace",
   });
@@ -82,14 +82,15 @@ it("tells personal-profile write to reread and merge after a revision conflict",
   expect(formatted.message).toContain("teamhub personal-profile show");
 });
 
-it("exposes only bare Document IDs as ambiguous-name candidates", () => {
+it("exposes only bare object IDs as ambiguous-name candidates", () => {
   const error = formatCommandError(
     new CliError(
-      "ambiguous_name",
+      "target_ambiguous",
       "internal routing prose",
       {
         candidates: [
           "document_first",
+          "AAMkAGI2THVSAAA=",
           "room:secret",
           "document_bad\nInjected",
           { token: "secret" },
@@ -99,29 +100,19 @@ it("exposes only bare Document IDs as ambiguous-name candidates", () => {
     ),
     { command: "docs get" },
   );
-  expect(error.details).toEqual({ candidates: ["document_first"] });
-  expect(renderCommandError(error)).toContain("Candidates: document_first");
+  expect(error.details).toEqual({
+    candidates: ["document_first", "AAMkAGI2THVSAAA="],
+  });
+  expect(renderCommandError(error)).toContain(
+    "Candidates: document_first, AAMkAGI2THVSAAA=",
+  );
   expect(JSON.stringify(error)).not.toMatch(/secret|Injected|internal routing/);
 });
 
-it("tells every command to retry an unknown outcome with its operation ID", () => {
-  const error = new CliError(
-    "outcome_unknown",
-    "backend prose",
-    { operation_id: "operation-one" },
-    "remote",
-  );
-  for (const command of ["message send", "task create"]) {
-    const formatted = formatCommandError(error, { command });
-    expect(formatted.message).toContain("--operation-id");
-    expect(formatted.details).toEqual({ operation_id: "operation-one" });
-  }
-});
-
-it("exposes no ambiguous-name candidates when none is a bare Document ID", () => {
+it("exposes no ambiguous-name candidates when none is a bare object ID", () => {
   const error = formatCommandError(
     new CliError(
-      "ambiguous_name",
+      "target_ambiguous",
       "internal routing prose",
       {
         candidates: [
@@ -145,7 +136,7 @@ it("exposes no ambiguous-name candidates when none is a bare Document ID", () =>
 
 it("renders string candidates on one line", () => {
   const text = renderCommandError({
-    code: "ambiguous_name",
+    code: "target_ambiguous",
     message: "m",
     details: { candidates: ["document_a\nForged: line"] },
   });

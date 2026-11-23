@@ -494,9 +494,13 @@ describe("message card", () => {
     });
   });
   it("takes a bare Thread ID", async () => {
-    await expect(card([["--thread", "thread:thread_one"]])).rejects.toThrow(
-      "Provide a bare resource ID after --thread.",
-    );
+    await expect(
+      card([["--thread", "thread:thread_one"]]),
+    ).rejects.toMatchObject({
+      details: {
+        issues: [{ path: "--thread", code: "invalid_format" }],
+      },
+    });
   });
   it("marks a Personal Profile delivery with --kind profile", async () => {
     const normalized = await card([["--kind", "profile"]]);

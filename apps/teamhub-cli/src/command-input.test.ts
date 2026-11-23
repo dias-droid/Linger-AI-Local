@@ -209,7 +209,14 @@ describe("CLI input sources", () => {
     await writeFile(path.join(directory, "body"), Buffer.from([0xc3, 0x28]));
     await expect(
       createInputReader({ cwd: directory }).text("body"),
-    ).rejects.toThrow(/UTF-8/);
+    ).rejects.toMatchObject({
+      code: "invalid_input",
+      details: {
+        issues: [
+          { path: "--file", code: "unreadable", message: "body: not UTF-8." },
+        ],
+      },
+    });
   });
   it("reads stdin only once even when called by multiple field readers", async () => {
     const readInput = vi.fn(async () => "body");

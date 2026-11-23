@@ -7,6 +7,7 @@ import { slackCommandDefinitions } from "./connector-slack.js";
 import type {
   CommandDefinition,
   CommandArguments,
+  CommandOption,
   CommandTarget,
 } from "./command-definition.js";
 import {
@@ -62,6 +63,34 @@ export function findCommand(
     .find(({ command }) =>
       command.every((part, index) => args[index] === part),
     );
+}
+/** An unknown command, listing the commands of the group it starts with. */
+export function unknownCommand(args: readonly string[]): CliError {
+  const end = args.findIndex((arg) => arg.startsWith("-"));
+  const words = args.slice(0, end < 0 ? args.length : end);
+  for (let depth = words.length; depth > 0; depth--) {
+    const group = words.slice(0, depth);
+    const next = [
+      ...new Set(
+        commandDefinitions
+          .filter(
+            ({ command }) =>
+              command.length > depth &&
+              group.every((part, index) => command[index] === part),
+          )
+          .map(({ command }) => command[depth]!),
+      ),
+    ];
+    if (next.length)
+      return new CliError("usage", `Unknown command "${words.join(" ")}".`, {
+        group: group.join(" "),
+        commands: next,
+      });
+  }
+  return new CliError(
+    "usage",
+    `Unknown command "${words.join(" ")}". Run teamhub --help for the command list.`,
+  );
 }
 export function isDomainCommand(args: readonly string[]): boolean {
   return findCommand(args) !== undefined;
@@ -258,8 +287,7 @@ export async function parseDomainCommand(
   },
 ): Promise<DomainCommand> {
   const selected = findCommand(args);
-  if (!selected)
-    throw new CliError("usage", "Unknown command. Run teamhub --help.");
+  if (!selected) throw unknownCommand(args);
   const parsed = parseArguments(
     args.slice(selected.command.length),
     commandOptions(selected),
@@ -371,7 +399,12 @@ export async function commandSchema(
     cli: {
       usage: item.usage,
       arguments: item.arguments ?? [],
-      options: commandOptions(item),
+      // `json` only tells help which flag carries the JSON fields.
+      options: Object.fromEntries(
+        Object.entries(
+          commandOptions(item) as Record<string, CommandOption>,
+        ).map(([name, { json: _json, ...option }]) => [name, option]),
+      ),
       notes: item.notes ?? [],
     },
   };

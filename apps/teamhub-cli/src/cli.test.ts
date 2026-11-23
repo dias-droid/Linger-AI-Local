@@ -271,9 +271,9 @@ describe("standalone file CLI output", () => {
     ["forbidden", 4],
     ["not_found", 5],
     ["too_large", 2],
-    ["invalid_path", 2],
     ["invalid_input", 2],
-    ["ambiguous_name", 2],
+    // A code this build does not know exits by its HTTP status.
+    ["newer_server_code", 4],
   ] as const)("maps %s to exit %s", async (code, exitCode) => {
     const result = await run(
       ["message", "send", "--attach", "report.md", "--json"],

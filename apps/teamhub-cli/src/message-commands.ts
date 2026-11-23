@@ -1,5 +1,8 @@
 import { teamHubData } from "./http-client.js";
-import { decodeInlineEscapes } from "./content-segments.js";
+import {
+  decodeInlineEscapes,
+  parseActorReferences,
+} from "./content-segments.js";
 import type {
   CommandArguments,
   CommandDefinition,
@@ -18,7 +21,6 @@ import {
   targetFromFlags,
   values,
 } from "./command-input.js";
-import { parseActorReferences } from "./command-mentions.js";
 import { CliError } from "./errors.js";
 import {
   inputIssue,
@@ -324,7 +326,7 @@ async function ordinaryBodies(
     sources.map(async (item) =>
       string(
         item.name === "--file"
-          ? await reader.text(item.value)
+          ? await reader.text(item.value, "--file")
           : decodeInlineEscapes(item.value),
         "Message body",
       ),
@@ -831,7 +833,7 @@ export const messageCommandDefinitions: readonly CommandDefinition[] = [
           ...(thread ? { thread_id: thread.id } : {}),
           title: cardTitle(args),
           questions: askUserQuestions(
-            parseJsonValue(requiredOption(args, "--questions")),
+            parseJsonValue(requiredOption(args, "--questions"), "--questions"),
           ),
         },
       };

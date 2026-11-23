@@ -1,3 +1,4 @@
+import path from "node:path";
 import {
   operationHeaders,
   teamHubData,
@@ -18,7 +19,15 @@ import { connectorWriteApproval } from "./connector-approval.js";
 import { id, object, rootSchema } from "./connector-schemas.js";
 import { CliError } from "./errors.js";
 import type { ErrorObject } from "ajv";
-import { ajvInputIssues, flagPaths, invalidInput } from "./input-issues.js";
+import {
+  ajvInputIssues,
+  fileFailure,
+  fileSystemError,
+  flagPaths,
+  invalidFlag,
+  invalidInput,
+  mebibytes,
+} from "./input-issues.js";
 import type { ConnectorFile } from "./connector-files.js";
 import { accountIdentityText, displayText } from "./display-text.js";
 
@@ -345,27 +354,23 @@ export function connectorDefinition(spec: ConnectorSpec): CommandDefinition {
             await import("./connector-files.js")
           ).snapshotConnectorFiles(sourceFiles)
         : [];
-      if (
-        app === "gmail" &&
-        files.reduce(
-          (total, file) => total + Math.ceil(file.sizeBytes / 3) * 4 + 2048,
-          Math.ceil(Buffer.byteLength(displayText(body.content ?? "")) / 3) *
-            4 +
-            8192,
-        ) >
-          25 * 1024 * 1024
-      )
-        throw new CliError(
-          "too_large",
-          "The encoded Gmail message would exceed its 25 MiB limit.",
+      const encoded = files.reduce(
+        (total, file) => total + Math.ceil(file.sizeBytes / 3) * 4 + 2048,
+        Math.ceil(Buffer.byteLength(displayText(body.content ?? "")) / 3) * 4 +
+          8192,
+      );
+      if (app === "gmail" && encoded > 25 * 1024 * 1024)
+        throw invalidFlag(
+          "--attach",
+          "out_of_range",
+          `the encoded message must be at most 25 MiB; got ${mebibytes(encoded)}.`,
         );
-      if (
-        app === "outlook" &&
-        files.some((file) => file.sizeBytes > 150 * 1024 * 1024)
-      )
-        throw new CliError(
-          "too_large",
-          "An Outlook attachment exceeds 150 MiB.",
+      const large = files.find((file) => file.sizeBytes > 150 * 1024 * 1024);
+      if (app === "outlook" && large)
+        throw invalidFlag(
+          "--attach",
+          "unreadable",
+          `${large.name}: larger than 150 MiB.`,
         );
       return {
         ...body,
@@ -400,20 +405,15 @@ export function connectorDefinition(spec: ConnectorSpec): CommandDefinition {
         if (runtime.completedWrites)
           throw new CliError(
             "outcome_unknown",
-            "Part of this external operation completed. Check the original objects before submitting again.",
+            // The CLI's own reason for the failed step is safe to show;
+            // TeamHub's carries its issues in details instead.
+            `Part of this external operation completed${
+              error instanceof CliError && error.origin === "local"
+                ? `, then a later step failed with ${error.code}: ${error.message}`
+                : ""
+            }. Check the original objects before submitting again.`,
             {
               ...(error instanceof CliError ? error.details : {}),
-              // The CLI's own reason for the failed step; TeamHub's errors
-              // carry theirs in issues already.
-              ...(error instanceof CliError &&
-              error.origin === "local" &&
-              error.details.issues === undefined
-                ? {
-                    issues: [
-                      { path: "cli", code: error.code, message: error.message },
-                    ],
-                  }
-                : {}),
               // A later rejected step cannot undo an earlier external write.
               operation_rejected: false,
               partial_receipts: [
@@ -435,14 +435,28 @@ export function connectorDefinition(spec: ConnectorSpec): CommandDefinition {
         // Without a write attempt nothing reached the application, so a
         // local failure, such as an output path that cannot be written,
         // rejects the command instead of leaving its outcome unknown.
-        if (!runtime.writeAttempts)
-          throw new CliError(
-            "local_failure",
-            error instanceof Error
-              ? error.message
-              : "The command failed on this computer.",
-            { operation_rejected: true },
-          );
+        if (!runtime.writeAttempts) {
+          // A failed save names --output; any other file stays generic.
+          const output =
+            typeof input.output === "string" &&
+            fileSystemError(error) &&
+            error.path !== undefined &&
+            path
+              .resolve(error.path)
+              .startsWith(path.dirname(path.resolve(input.output)));
+          const failure = !fileSystemError(error)
+            ? new CliError(
+                "internal_error",
+                "The command failed on this computer before anything was sent.",
+              )
+            : output
+              ? fileFailure(error, "--output", undefined, true)
+              : fileFailure(error);
+          throw new CliError(failure.code, failure.message, {
+            ...failure.details,
+            operation_rejected: true,
+          });
+        }
         throw error;
       }
     },
@@ -490,7 +504,6 @@ export class ConnectorRuntime {
   async stageDownloadedFile(remote: Json, slug: string): Promise<Json> {
     const { randomUUID } = await import("node:crypto");
     const { mkdir, rm } = await import("node:fs/promises");
-    const path = await import("node:path");
     const { saveConnectorDownload, snapshotConnectorFiles } =
       await import("./connector-files.js");
     const directory = path.join(

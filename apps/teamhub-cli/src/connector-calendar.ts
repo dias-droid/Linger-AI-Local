@@ -5,6 +5,7 @@ import {
   option,
   values,
 } from "./command-input.js";
+import { conflictingFlags } from "./input-issues.js";
 import {
   booleanSchema,
   email,
@@ -294,7 +295,7 @@ export const calendarCommandDefinitions: CommandDefinition[] = (
         if (action === "create") {
           input.start = rfc3339(start, "--start");
           if (end !== undefined && duration !== undefined)
-            usage("Choose --end or --duration.");
+            throw conflictingFlags(["--end", "--duration"]);
           input.end =
             end === undefined
               ? new Date(
