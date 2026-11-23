@@ -60,10 +60,13 @@ func TestRuntimeLoginRechecksAfterAnInterruptLeavesTheRuntime(t *testing.T) {
 	}
 	calls := 0
 	f.deps.checkRuntime = func(ctx context.Context, runtimeType string, _ runtimeRequest) (runtimeCheck, error) {
-		if ctx.Err() != nil {
+		// Discovery reports a cancelled probe as an error diagnostic, not an error.
+		select {
+		case <-ctx.Done():
 			return runtimeCheck{diagnostic: runtimeDiagnostic{
 				Type: runtimeType, Status: "error", ErrorMessage: "Runtime version probe failed",
 			}}, nil
+		default:
 		}
 		calls++
 		status := "authentication_required"
@@ -95,10 +98,13 @@ func TestRuntimeLoginSkipsTheRowWhenAnInterruptStopsTheRecheck(t *testing.T) {
 	}
 	calls := 0
 	f.deps.checkRuntime = func(ctx context.Context, runtimeType string, _ runtimeRequest) (runtimeCheck, error) {
-		if ctx.Err() != nil {
+		// Discovery reports a cancelled probe as an error diagnostic, not an error.
+		select {
+		case <-ctx.Done():
 			return runtimeCheck{diagnostic: runtimeDiagnostic{
 				Type: runtimeType, Status: "error", ErrorMessage: "Runtime version probe failed",
 			}}, nil
+		default:
 		}
 		calls++
 		status := "authentication_required"

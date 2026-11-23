@@ -1,6 +1,7 @@
 import type { TeamHubLocalRuntimeType } from "@/features/teamhub/teamhub-types";
 
-import type { ComputerPlatform } from "./computer-platform";
+import { type ComputerPlatform, computerCommand } from "./computer-platform";
+import { compareComputerVersion } from "./computer-version";
 
 /**
  * The command that signs in to each AI app; Pi signs in with /login inside it,
@@ -12,6 +13,40 @@ export const loginCommands = {
   pi: "pi",
   antigravity: "agy",
 } satisfies Record<TeamHubLocalRuntimeType, string>;
+
+// The first Computer CLI with `runtime login`, which opens a Runtime with the
+// bundled Node and launcher the Daemon uses instead of whatever is on PATH.
+export const FIRST_RUNTIME_LOGIN_COMPUTER_VERSION = "0.59.0";
+
+export interface SignInComputer {
+  computer_id?: string;
+  platform?: string;
+  daemon_version?: string;
+}
+
+// On Windows a bare command can start on an older system Node, so a CLI that
+// has `runtime login` signs in exactly as the Daemon starts the Runtime. The
+// Desktop app's own Computer has no such CLI on PATH and no bundled Node.
+export function signInCommand(
+  runtimeType: TeamHubLocalRuntimeType,
+  computer: SignInComputer | undefined,
+  desktopComputerId?: string,
+): string {
+  const order = computer?.daemon_version
+    ? compareComputerVersion(
+        computer.daemon_version,
+        FIRST_RUNTIME_LOGIN_COMPUTER_VERSION,
+      )
+    : undefined;
+  if (
+    computer?.platform === "win32" &&
+    order !== undefined &&
+    order >= 0 &&
+    computer.computer_id !== desktopComputerId
+  )
+    return `${computerCommand()} runtime login ${runtimeType}`;
+  return loginCommands[runtimeType];
+}
 
 // Local Computer finds these installs in its default search folders
 // (%APPDATA%\npm and ~/.local/bin) without a restart.

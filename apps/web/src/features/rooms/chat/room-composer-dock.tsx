@@ -186,6 +186,7 @@ function LocalRuntimeAttentionNotice({
         <LocalRuntimeAuthenticationGuidance
           runtimeType={status.runtime_type}
           computerName={status.display_name}
+          computer={status}
         />
       ) : (
         <p className="mt-1 text-app-muted" title={status.message}>

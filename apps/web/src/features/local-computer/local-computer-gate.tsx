@@ -258,6 +258,7 @@ function AppSetup({
       {signIn.map((app) => (
         <div className="text-xs" key={app} role="status">
           <LocalRuntimeAuthenticationGuidance
+            computer={computer}
             computerName={computer.display_name}
             runtimeType={app}
           />
