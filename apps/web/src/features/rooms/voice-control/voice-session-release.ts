@@ -15,8 +15,9 @@ import { asError } from "@linger/service-kit";
 
 /** Stop attempts that leave the Capture recording before the release gives up. */
 const voiceStopAttempts = 3;
-// Spacing Stop attempts lets a blip of a few seconds pass unreported, while a
-// lasting failure is reported within about 30 seconds.
+// Stop attempts start at least this far apart, so a blip of a few seconds
+// passes unreported, while a lasting failure, even one whose requests hang
+// until they time out, is reported within about 30 seconds.
 const voiceStopRetryDelayMs = 5_000;
 
 /**
@@ -41,6 +42,7 @@ export async function releaseVoiceSession(
   const deadline = Date.now() + 60_000;
   let failure: unknown;
   let stopFailures = 0;
+  let stopStartedAt = 0;
   const recording = () =>
     capture?.voice_session_id === session.id &&
     (capture.status === "starting" || capture.status === "recording");
@@ -49,12 +51,13 @@ export async function releaseVoiceSession(
     if (Date.now() >= deadline) break;
     const wait =
       stopFailures > 0 && recording()
-        ? Math.max(delay, voiceStopRetryDelayMs)
+        ? Math.max(delay, stopStartedAt + voiceStopRetryDelayMs - Date.now())
         : delay;
     if (wait > 0) await waitForVoiceDelay(wait);
     try {
       if (capture && recording()) {
         stopping = true;
+        stopStartedAt = Date.now();
         try {
           const captureId = capture.id;
           capture = await requests.run((signal) =>

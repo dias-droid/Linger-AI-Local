@@ -144,6 +144,30 @@ describe("Voice page release", () => {
     expect(fixture.close).not.toHaveBeenCalled();
   });
 
+  it("reports Stops whose requests hang within about 30 seconds", async () => {
+    vi.useFakeTimers();
+    const fixture = clientFixture();
+    // Stop and the read both wait out the 5 s request timeout.
+    const hang: TestRouteHandler = ({ request }) =>
+      new Promise<never>((_resolve, reject) =>
+        request.signal.addEventListener("abort", () =>
+          reject(request.signal.reason),
+        ),
+      );
+    fixture.stop.mockImplementation(hang);
+    fixture.active.mockImplementation(hang);
+    let settled: unknown;
+    void releaseVoiceSession(fixture.client, session, recording).catch(
+      (error: unknown) => (settled = error),
+    );
+    await vi.advanceTimersByTimeAsync(29_000);
+    expect(fixture.stop).toHaveBeenCalledTimes(3);
+    expect(settled).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(settled).toBeInstanceOf(VoiceStopError);
+    expect(fixture.close).not.toHaveBeenCalled();
+  });
+
   it("stops without an error once a brief outage passes", async () => {
     vi.useFakeTimers();
     const fixture = clientFixture();
