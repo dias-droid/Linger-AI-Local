@@ -1105,3 +1105,68 @@ function subject(memorySubjectKey: string, representedHumanActorId: string) {
     representedHumanActorId,
   };
 }
+
+describe("a configured closing hour with the durable calendar", () => {
+  const evening: MemoryScheduleConfig = {
+    concurrency: 1,
+    weeklyDay: 1,
+    timeZone: "Asia/Shanghai",
+    dailyHour: 22,
+  };
+
+  it("replays the closing slot a suspend stepped over", async () => {
+    const calls: MemoryScheduledTask[] = [];
+    const store = await checkpoint();
+    const scheduler = new MemoryScheduler(
+      evening,
+      async (task) => {
+        calls.push(task);
+      },
+      undefined,
+      store,
+    );
+    // 21:59 is before the closing hour; the next tick is 23:10, so the 22:00
+    // slot was stepped over while the machine was suspended.
+    scheduler.runDueTasks(new Date("2026-09-28T21:59:00+08:00"));
+    await scheduler.idle();
+    calls.length = 0;
+    scheduler.runDueTasks(new Date("2026-09-28T23:10:00+08:00"));
+    await scheduler.idle();
+    expect(summary(calls)).toEqual([
+      "wiki:2026-09-27",
+      "daily:2026-09-27",
+      "weekly:2026-09-21",
+      "wiki:2026-09-28",
+    ]);
+  });
+
+  it("replays the closing slot after a restart on the next day", async () => {
+    const calls: MemoryScheduledTask[] = [];
+    const store = await checkpoint();
+    const before = new MemoryScheduler(
+      evening,
+      async () => {},
+      undefined,
+      store,
+    );
+    before.runDueTasks(new Date("2026-09-27T21:03:00+08:00"));
+    await before.idle();
+    const restarted = new MemoryScheduler(
+      evening,
+      async (task) => {
+        calls.push(task);
+      },
+      undefined,
+      store,
+    );
+    restarted.runDueTasks(new Date("2026-09-28T08:05:00+08:00"));
+    await restarted.idle();
+    // The 22:00 slot on 09-27 closed 09-26; the restart at 08:05 then only
+    // scans the hours it stepped through, so no second Daily is invented.
+    expect(summary(calls)).toEqual([
+      "wiki:2026-09-26",
+      "daily:2026-09-26",
+      "wiki:2026-09-28",
+    ]);
+  });
+});

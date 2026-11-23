@@ -12,6 +12,7 @@ import {
 // installer generates (ports, seeds, database addresses) or does not read.
 export const USER_ENVIRONMENT_KEYS = [
   "COMPOSIO_API_KEY",
+  "MEMORY_DAILY_HOUR",
   "SONIOX_API_KEY",
   "XAI_API_KEY",
   "TZ",
@@ -33,6 +34,9 @@ SONIOX_API_KEY=
 XAI_API_KEY=
 # Time zone of the services, for example America/New_York.
 TZ=
+# Hour the daily memory consolidation closes the previous day, 0-23; 0 is
+# midnight. A laptop that is asleep at midnight can consolidate at 22 instead.
+MEMORY_DAILY_HOUR=
 `;
 
 export function userEnvironmentFile(root: string): string {
@@ -177,8 +181,9 @@ export async function adoptUserEnvironment(
   return moved;
 }
 
-// The keys a person can type into the desktop app's setup page. TZ stays a
-// file-only setting.
+// The keys a person can type into the desktop app's setup page. `TZ` and
+// `MEMORY_DAILY_HOUR` stay file-only settings: they describe the instance rather
+// than a provider, so they are edited in user.env and read at startup.
 export const USER_KEY_NAMES = [
   "COMPOSIO_API_KEY",
   "SONIOX_API_KEY",

@@ -215,3 +215,40 @@ describe("MemoryScheduler", () => {
     ]);
   });
 });
+
+describe("a configured consolidation hour", () => {
+  const evening: MemoryScheduleConfig = {
+    concurrency: 3,
+    timeZone: "Asia/Shanghai",
+    weeklyDay: 1,
+    dailyHour: 22,
+  };
+
+  it("closes the day at that hour instead of midnight", async () => {
+    const invocations: MemoryScheduledTask[] = [];
+    const scheduler = new MemoryScheduler(evening, async (input) => {
+      invocations.push(input);
+    });
+    // 22:00 in Shanghai, one hour before midnight; the Monday weekly runs too.
+    scheduler.runDueTasks(new Date("2026-08-31T14:00:00.000Z"));
+    await scheduler.idle();
+    expect(invocations).toEqual([
+      { task: "wiki", date: "2026-08-30", concurrency: 3 },
+      { task: "daily", date: "2026-08-30", concurrency: 3 },
+      { task: "weekly", weekStart: "2026-08-24", concurrency: 3 },
+    ]);
+  });
+
+  it("keeps midnight to the hourly Wiki once the hour has passed", async () => {
+    const invocations: MemoryScheduledTask[] = [];
+    const scheduler = new MemoryScheduler(evening, async (input) => {
+      invocations.push(input);
+    });
+    scheduler.runDueTasks(new Date("2026-08-31T16:00:00.000Z"));
+    await scheduler.idle();
+    expect(invocations).toEqual([
+      // Midnight is already the next day here, and its day closed at 22:00.
+      { task: "wiki", date: "2026-09-01", concurrency: 3 },
+    ]);
+  });
+});

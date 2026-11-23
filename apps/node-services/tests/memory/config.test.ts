@@ -34,3 +34,33 @@ describe("readMemoryConfig", () => {
     );
   });
 });
+
+describe("the consolidation hour", () => {
+  it("closes the day at midnight unless the variable sets another hour", () => {
+    expect(
+      readMemoryConfig({ LINGER_SECRET_SEED: seed }).schedule.dailyHour,
+    ).toBe(0);
+    expect(
+      readMemoryConfig({
+        LINGER_SECRET_SEED: seed,
+        MEMORY_DAILY_HOUR: " 22 ",
+      }).schedule.dailyHour,
+    ).toBe(22);
+    expect(
+      readMemoryConfig({
+        LINGER_SECRET_SEED: seed,
+        MEMORY_DAILY_HOUR: "0",
+      }).schedule.dailyHour,
+    ).toBe(0);
+  });
+
+  it("refuses an hour that is not on a clock", () => {
+    for (const value of ["24", "7.5", "-1", "evening"])
+      expect(() =>
+        readMemoryConfig({
+          LINGER_SECRET_SEED: seed,
+          MEMORY_DAILY_HOUR: value,
+        }),
+      ).toThrow(/MEMORY_DAILY_HOUR/);
+  });
+});

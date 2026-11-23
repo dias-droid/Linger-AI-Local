@@ -564,7 +564,12 @@ The calendar saves its planning cursor, unfinished tasks and success receipts in
 `TEAMHUB_DATABASE_URL`. The first start checks from midnight of the current business day; after
 downtime the saved cursor catches up the missed closed dates in Session → Daily → Weekly order.
 Saved successes never rerun and failed tasks survive restarts. Missed ordinary hours are not
-rescanned one by one; only closed dates and the current hour are collected. A calendar saved in
+rescanned one by one; only the closing hour that turns a day over and the current hour are
+collected. The closing hour is `MEMORY_DAILY_HOUR` (0 by default, 0-23 in the process time
+zone), so with 22 the day that closes at 22:00 is replayed when a suspend or a restart stepped
+over it, and midnight is only an ordinary hour. Change the hour while the service is stopped,
+or expect one skipped close: lowering it and then restarting between the new and the old hour
+leaves the replay window behind the new hour, so that day's Daily waits for the next close. A calendar saved in
 another time zone is ignored and planning starts over in the current one.
 
 Memory has one in-process scheduler and one timer; there is no cron or extra background service.
@@ -633,15 +638,16 @@ The calendar tasks run each AnotherMe isolated and in parallel, at most 4 at onc
 subject's lane is free, so a subject still busy with its own earlier work does not hold one:
 
 - Hourly `wiki`: lists every authorized AnotherMe (a deployment usually has one) and runs each in isolation. The chain is Session Raw staging → indexing that Raw.
-  Only the 00:00 run that closes the previous day, and a meeting's recording, then ask TeamHub for a Wiki
-  refresh; the other hourly runs and a quiet Room only index (`--index-only`). At midnight each subject checks
+  Only the run in the closing hour (`MEMORY_DAILY_HOUR`, midnight by default) that closes the previous
+  day, and a meeting's recording, then ask TeamHub for a Wiki
+  refresh; the other hourly runs and a quiet Room only index (`--index-only`). In the closing hour each subject checks
   all changed sources, even if its conversations were already indexed or only My Pages changed. The nightly refresh is not
   awaited, so the Daily does not wait for the Wiki. A failure of one person leaves only that person's Wiki downstream
   pending and logs `memory_subject_refresh_failed`; it does not mark the whole `memory_schedule_run` failed or
   interrupt others. Only when every AnotherMe fails is the run `failed`, retried hourly.
   Each `(memory subject, Room)` saves the last successfully handled Message in
-  `evidence/<date>/sessions/.checkpoints/<roomId>.json`. The midnight run handles the previous day, catching up the
-  messages after the last read and the pending Wiki updates; from 01:00 runs handle the new day. Daytime runs without
+  `evidence/<date>/sessions/.checkpoints/<roomId>.json`. The run in the closing hour handles the previous day, catching
+  up the messages after the last read and the pending Wiki updates; the hours after it handle the new day. Daytime runs without
   new Room messages skip; whether the night generates is decided by TeamHub from changes across all sources. An
   explicitly named Room that does not match, a database failure and an attachment read failure still report errors.
   Raw is restaged only when new messages appear after that position; the input always holds the Session's full Room

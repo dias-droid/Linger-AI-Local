@@ -21,6 +21,19 @@ import {
 
 const root = () => mkdtemp(path.join(tmpdir(), "linger-user-env-"));
 
+describe("the consolidation hour for an instance", () => {
+  it("keeps MEMORY_DAILY_HOUR out of the services until a person sets it", async () => {
+    const directory = await root();
+    // Without the key in USER_ENVIRONMENT_KEYS a Desktop install could not set
+    // the hour at all, whatever the Memory service reads.
+    expect(await readUserEnvironment(directory)).toEqual({});
+    await writeFile(userEnvironmentFile(directory), "MEMORY_DAILY_HOUR=22\n");
+    expect(await readUserEnvironment(directory)).toEqual({
+      MEMORY_DAILY_HOUR: "22",
+    });
+  });
+});
+
 describe("readUserEnvironment", () => {
   it("creates a private commented template once and never rewrites it", async () => {
     const directory = await root();
@@ -29,6 +42,7 @@ describe("readUserEnvironment", () => {
     const template = await readFile(file, "utf8");
     expect(parseEnv(template)).toEqual({
       COMPOSIO_API_KEY: "",
+      MEMORY_DAILY_HOUR: "",
       SONIOX_API_KEY: "",
       XAI_API_KEY: "",
       TZ: "",

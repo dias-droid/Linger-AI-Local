@@ -32,6 +32,20 @@ import { syncProfileMemoryForOwner } from "./user-memory-sync.js";
 import type { HttpHost } from "../http-host.js";
 import { type JsonLogger } from "@linger/service-kit/node";
 
+/** Whether this run closes a day, so it asks TeamHub for a full Wiki refresh
+ * instead of an index-only pass: the hourly run whose period ends in the
+ * configured closing hour. */
+export function isNightlyRun(
+  reason: string,
+  period: string,
+  dailyHour: number | undefined,
+): boolean {
+  return (
+    reason === "hourly" &&
+    period.endsWith(`T${String(dailyHour ?? 0).padStart(2, "0")}`)
+  );
+}
+
 export async function startMemoryService({
   http,
   logger,
@@ -114,7 +128,7 @@ export async function startMemoryService({
         : runMemoryTask(config.dataRoot, input, undefined, undefined, {
             indexSessionRaw: (agentId) => chunkIndex.syncRawSources(agentId),
             rebuild: reason === "rebuild",
-            nightly: reason === "hourly" && period.endsWith("T00"),
+            nightly: isNightlyRun(reason, period, config.schedule.dailyHour),
             subjectLane,
             // The scheduler's periodic report reconciliation retries a
             // failure, so a failed index does not fail the report task.

@@ -580,7 +580,10 @@ export class MemoryScheduler {
       const date = new Date(slot * 3_600_000);
       // Intermediate hourly scans add no evidence; closed dates still require
       // their own Session -> Daily -> Weekly dependency chain in date order.
-      if (date.getUTCHours() !== 0 && slot !== hour) continue;
+      // The slot that closes a day is the configured one, so it is the only
+      // intermediate slot worth replaying.
+      const closeHour = this.#config.dailyHour ?? 0;
+      if (date.getUTCHours() !== closeHour && slot !== hour) continue;
       const missed = {
         year: date.getUTCFullYear(),
         month: date.getUTCMonth() + 1,
@@ -1056,21 +1059,23 @@ function dueTasks(
   config: MemoryScheduleConfig,
 ): DueTask[] {
   const date = formatDate(local);
+  // The hour that closes the previous day; midnight unless configured.
+  const closeHour = config.dailyHour ?? 0;
   const closedDate = previousDate(local);
   const hourPeriod = `${date}T${pad(local.hour)}`;
   const tasks: DueTask[] = [
     {
-      // The midnight slot closes yesterday; 01:00 resumes today's sessions.
+      // The closing slot closes yesterday; the next hour resumes today's.
       input: {
         task: "wiki",
-        date: local.hour === 0 ? closedDate : date,
+        date: local.hour === closeHour ? closedDate : date,
         concurrency: config.concurrency,
       },
       period: hourPeriod,
       reason: "hourly",
     },
   ];
-  if (local.hour !== 0) return tasks;
+  if (local.hour !== closeHour) return tasks;
   tasks.push({
     input: {
       task: "daily",
