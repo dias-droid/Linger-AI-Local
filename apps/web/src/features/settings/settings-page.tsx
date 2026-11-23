@@ -3,6 +3,7 @@ import {
   Key01Icon,
   LanguageSkillIcon,
   LaptopIcon,
+  Moon02Icon,
   UserIcon,
 } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
@@ -63,6 +64,11 @@ export function SettingsLayout() {
             icon={<Icon icon={LanguageSkillIcon} size={14} />}
             label={t(settingsMessages.language)}
             to="language"
+          />
+          <SettingsLink
+            icon={<Icon icon={Moon02Icon} size={14} />}
+            label={t(settingsMessages.appearance)}
+            to="appearance"
           />
         </nav>
       </aside>

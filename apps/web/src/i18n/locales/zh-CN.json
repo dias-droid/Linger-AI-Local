@@ -43,7 +43,14 @@
     "languageDescription": "选择 Linger 界面使用的语言。",
     "interfaceLanguage": "界面语言",
     "interfaceLanguageHint": "仅保存在这台设备上。Agent 和其他人写的内容保持原样，不会被翻译。",
-    "languageUnavailable": "无法加载这种语言，请检查网络后重试。"
+    "languageUnavailable": "无法加载这种语言，请检查网络后重试。",
+    "appearance": "外观",
+    "appearanceDescription": "选择 Linger 在这台设备上的外观。",
+    "interfaceTheme": "主题",
+    "interfaceThemeHint": "仅保存在这台设备上。“跟随系统”会使用操作系统的设置；当前是{current}。",
+    "light": "亮色",
+    "dark": "暗色",
+    "system": "跟随系统"
   },
   "navigation": {
     "sidebar": "协作侧边栏",

@@ -17,4 +17,12 @@ export const settingsMessages = defineMessages("settings", {
     "Saved on this device. Text written by Agents and other people stays as they wrote it.",
   languageUnavailable:
     "That language could not be loaded. Check your connection and try again.",
+  appearance: "Appearance",
+  appearanceDescription: "Choose how Linger looks on this device.",
+  interfaceTheme: "Theme",
+  interfaceThemeHint:
+    "Saved on this device. System follows your operating system; it is {current} now.",
+  light: "Light",
+  dark: "Dark",
+  system: "System",
 });
