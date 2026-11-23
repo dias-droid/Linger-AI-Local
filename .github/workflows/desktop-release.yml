@@ -51,22 +51,59 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       prerelease: ${{ steps.version.outputs.prerelease }}
       publish: ${{ steps.version.outputs.publish }}
+      require-signing: ${{ steps.version.outputs.require-signing }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - id: version
         shell: bash
         env:
           INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
           PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
           HAS_RELEASE_TOKEN: ${{ secrets.LINGER_RELEASE_TOKEN != '' }}
+          # Only the presence of each signing secret reaches this step; the
+          # values stay scoped to the build and release steps that use them.
+          HAS_MACOS_DEVELOPER_ID_P12: ${{ secrets.MACOS_DEVELOPER_ID_P12_BASE64 != '' }}
+          HAS_MACOS_DEVELOPER_ID_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_PASSWORD != '' }}
+          HAS_MACOS_NOTARY_KEY: ${{ secrets.MACOS_NOTARY_KEY_JSON != '' }}
+          HAS_WINDOWS_SIGNING_P12: ${{ secrets.WINDOWS_SIGNING_P12_BASE64 != '' }}
+          HAS_WINDOWS_SIGNING_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PASSWORD != '' }}
+          HAS_DESKTOP_UPDATE_KEY: ${{ secrets.DESKTOP_UPDATE_KEY_PEM != '' }}
         run: |
           set -euo pipefail
-          scripts/ci/desktop-release.sh version "$INPUT" | tee -a "$GITHUB_OUTPUT"
+          out="$(scripts/ci/desktop-release.sh version "$INPUT")"
+          printf '%s\n' "$out" | tee -a "$GITHUB_OUTPUT"
           echo "publish=$PUBLISH" >>"$GITHUB_OUTPUT"
           # Stop before an hour of building when the release could not be published.
           if [ "$PUBLISH" = true ] && [ "$RELEASE_REPO" != "$GITHUB_REPOSITORY" ] && [ "$HAS_RELEASE_TOKEN" != true ]; then
             echo "::error::Publishing to $RELEASE_REPO from $GITHUB_REPOSITORY needs the LINGER_RELEASE_TOKEN secret, a token with contents write access to $RELEASE_REPO (see docs/desktop-release.md)."
             exit 1
+          fi
+          # A published stable release is signed end to end; stop before an
+          # hour of building when a signing secret is missing. A prerelease
+          # or a manual build keeps the unsigned fallbacks of
+          # scripts/ci/desktop-release.sh, which DESKTOP_REQUIRE_SIGNING
+          # turns into errors again in the build and release jobs.
+          require_signing=false
+          if [ "$PUBLISH" = true ] && [ "$(sed -n 's/^prerelease=//p' <<<"$out")" != true ]; then
+            require_signing=true
+          fi
+          echo "require-signing=$require_signing" >>"$GITHUB_OUTPUT"
+          if [ "$require_signing" = true ]; then
+            missing=()
+            for pair in \
+              HAS_MACOS_DEVELOPER_ID_P12:MACOS_DEVELOPER_ID_P12_BASE64 \
+              HAS_MACOS_DEVELOPER_ID_PASSWORD:MACOS_DEVELOPER_ID_PASSWORD \
+              HAS_MACOS_NOTARY_KEY:MACOS_NOTARY_KEY_JSON \
+              HAS_WINDOWS_SIGNING_P12:WINDOWS_SIGNING_P12_BASE64 \
+              HAS_WINDOWS_SIGNING_PASSWORD:WINDOWS_SIGNING_PASSWORD \
+              HAS_DESKTOP_UPDATE_KEY:DESKTOP_UPDATE_KEY_PEM; do
+              flag="${pair%%:*}"
+              [ "${!flag:-}" = true ] || missing+=("${pair#*:}")
+            done
+            if [ ${#missing[@]} -gt 0 ]; then
+              echo "::error::A stable desktop release is signed end to end; set these secrets before tagging (see docs/desktop-release.md): ${missing[*]}"
+              exit 1
+            fi
           fi
           echo "Release repository: $RELEASE_REPO"
 
@@ -96,6 +133,7 @@ jobs:
             docker_file: apps/desktop/packaging/win/Dockerfile
     env:
       DESKTOP_VERSION: ${{ needs.prepare.outputs.version }}
+      DESKTOP_REQUIRE_SIGNING: ${{ needs.prepare.outputs.require-signing }}
       RELEASE_OUT: ${{ github.workspace }}/.linger-runtime/desktop-release
       LINGER_NATIVE_POSTGRES_DIR: ${{ github.workspace }}/.linger-runtime/native-deps
     steps:
@@ -105,7 +143,7 @@ jobs:
         run: >-
           sudo bash -c
           'rm -rf /usr/share/dotnet & rm -rf /usr/local/lib/android & rm -rf /opt/ghc & rm -rf /opt/hostedtoolcache/CodeQL & wait'
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - id: versions
         shell: bash
         run: |
@@ -113,31 +151,31 @@ jobs:
           go_ver=$(sed -n 's/^toolchain go//p' apps/teamhub/go.mod | head -n 1)
           [ -n "$go_ver" ] || go_ver=$(sed -n 's/^go //p' apps/teamhub/go.mod | head -n 1)
           echo "go=$go_ver" >>"$GITHUB_OUTPUT"
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ${{ runner.tool_cache }}/node/${{ steps.versions.outputs.node }}
           key: toolcache-node-${{ runner.os }}-${{ runner.arch }}-${{ steps.versions.outputs.node }}
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ${{ runner.tool_cache }}/go/${{ steps.versions.outputs.go }}
           key: toolcache-go-${{ runner.os }}-${{ runner.arch }}-${{ steps.versions.outputs.go }}
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version-file: .node-version
           cache: pnpm
       # Cache GOMODCACHE once across targets and GOCACHE per target so cross-
       # compiled stdlib and TeamHub packages stay warm for darwin-arm64 and win32-x64.
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7
         with:
           go-version-file: apps/teamhub/go.mod
           cache: false
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/go/pkg/mod
           key: desktop-gomod-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('apps/teamhub/go.sum', 'apps/computer/local-daemon/go.sum', 'contracts/generated/go/go.sum') }}
           restore-keys: desktop-gomod-${{ runner.os }}-${{ runner.arch }}-
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/go-build
           key: desktop-gobuild-${{ matrix.target }}-${{ steps.versions.outputs.go }}-${{ hashFiles('apps/teamhub/go.sum', 'apps/computer/local-daemon/go.sum', 'contracts/generated/go/go.sum') }}
@@ -145,7 +183,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # Pinned binary downloads reused across releases: Electron, Cua driver,
       # native PostgreSQL + voice tools, and the pinned Node.js distribution.
-      - uses: actions/cache@v6
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: |
             ~/.cache/linger-desktop
@@ -156,7 +194,7 @@ jobs:
           restore-keys: desktop-downloads-${{ matrix.target }}-
       - id: docker-cache
         if: matrix.docker_image != ''
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ~/.cache/linger-docker/${{ matrix.docker_image }}.tar
           key: desktop-docker-${{ matrix.docker_image }}-${{ hashFiles(matrix.docker_file) }}
@@ -184,8 +222,9 @@ jobs:
             exit 0
           fi
           sudo apt-get update -q && sudo apt-get install -y -q osslsigncode
-      # Optional signing material goes to files only rcodesign, openssl and
-      # osslsigncode read; each is skipped when its secret is empty.
+      # Signing material goes to files only rcodesign, openssl and
+      # osslsigncode read; each is skipped when its secret is empty, which a
+      # stable release cannot survive: desktop-release.sh then fails the build.
       - name: Write signing files
         shell: bash
         env:
@@ -235,7 +274,7 @@ jobs:
       - name: Remove signing files
         if: always()
         run: rm -rf "$RUNNER_TEMP/signing"
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: matrix.target != 'win32-x64'
         with:
           name: desktop-${{ matrix.target }}
@@ -243,7 +282,7 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: matrix.target == 'win32-x64'
         with:
           name: desktop-win32-x64
@@ -253,7 +292,7 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: matrix.target == 'win32-x64'
         with:
           name: desktop-win32-x64-portable
@@ -263,7 +302,7 @@ jobs:
           retention-days: 14
       # The installer again on its own, not zipped, so a tester downloads
       # only the file they run instead of every package for the platform.
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           path: ${{ env.RELEASE_OUT }}/assets/Linger-${{ env.DESKTOP_VERSION }}-${{ matrix.installer }}
           archive: false
@@ -275,10 +314,10 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: desktop-win32-x64
           path: candidate
@@ -298,8 +337,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: desktop-*
           path: release
@@ -307,11 +346,13 @@ jobs:
       - name: Verify the Windows Setup that passed smoke
         working-directory: release
         run: sha256sum -c windows-setup.sha256 && rm windows-setup.sha256
-      # The signed update manifest over every platform's package. Without
-      # the key the release still goes out, with a warning and no manifest.
+      # The signed update manifest over every platform's package. A stable
+      # release fails without the key; a prerelease still goes out, with a
+      # warning and no manifest.
       - name: Sign the update manifest
         env:
           DESKTOP_UPDATE_KEY_PEM: ${{ secrets.DESKTOP_UPDATE_KEY_PEM }}
+          DESKTOP_REQUIRE_SIGNING: ${{ needs.prepare.outputs.require-signing }}
         shell: bash
         run: |
           set -euo pipefail
