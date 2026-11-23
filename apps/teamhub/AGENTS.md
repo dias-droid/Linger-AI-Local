@@ -38,6 +38,12 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
 
 ## Important Conventions
 
+Text bounds on Agent and Document fields count Unicode characters, the unit the
+contract's `maxLength` states: `utf8.RuneCountInString` against the constants in
+`agentregistry` and `document`, and `document.ValidDocumentTitle` for a Document
+title at every entry point. A byte or UTF-16-unit count refuses text the contract
+allows, and a CJK or astral name reaches the bound far sooner.
+
 - The Human's default Another Me Agent is named `Linger`. Changing the Human's
   name updates the delegate description, never the Agent's display name.
   A forward migration renames generated names; custom Agent names stay.
@@ -240,11 +246,6 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
   environment key over one saved in the product (`voice_provider_keys`, sealed
   with `TEAMHUB_SECRET_ENCRYPTION_KEY`), so a save applies without a restart
   on every replica. A save wakes the Node Services voice workers best effort.
-  Only a save checks a key with its provider, never a use. A Soniox key is
-  also probed on the realtime stream (the start request, no audio, five
-  seconds at most), and Soniox's HTTP status gives a refusal its code
-  (`VOICE_KEY_REJECTED`, `VOICE_KEY_NO_BALANCE`,
-  `VOICE_KEY_NO_REALTIME_PERMISSION`, else `VOICE_PROVIDER_UNAVAILABLE`).
 - Web search: `internal/websearch` runs Agent searches and page reads through
   Tavily, Brave, Firecrawl and You.com with deployment-wide keys in
   `web_search_keys` (sealed with `TEAMHUB_SECRET_ENCRYPTION_KEY`, read at each
@@ -275,13 +276,12 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
   (`refreshLocalComputerModels`) forwards an empty-model `refresh` command through
   the same owner/online gate, while `POST .../local-models/{modelId}/actions` acts on
   one model (`refresh` stays invalid there). A connected Computer that has not
-  decided within the action's 30 seconds answers 504
+  decided within the action's 10 seconds answers 504
   `LOCAL_MODEL_ACTION_UNCONFIRMED`: it may still act, and the snapshots show
   the outcome. The Computer's refusal codes map to `LocalModelsErrorCode` in
   `internal/app/handlers_local_models.go` (and `LOAD_NO_ROOM` / `MEMORY_INSUFFICIENT`
-  map to `LOCAL_MODEL_NO_ROOM` and `BYOK_GATEWAY_FAILED` maps to HTTP 502
-  `BYOK_GATEWAY_FAILED` with the Computer's diagnostic message and a `gateway`
-  detail entry in `internal/app/handlers_model_source.go`).
+  on model-source switches map to `LOCAL_MODEL_NO_ROOM` in
+  `internal/app/handlers_model_source.go`).
 - A Computer's model source lives on the Computer
   (`internal/app/handlers_model_source.go`); TeamHub never stores a BYOK key.
   A switch checks for running work, runs `apply` on the Computer, then moves

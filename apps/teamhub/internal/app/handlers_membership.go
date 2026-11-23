@@ -5,10 +5,12 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/collaboration"
+	"github.com/simplexai-labs/linger/apps/teamhub/internal/roomcreation"
 	httpapi "github.com/simplexai-labs/linger/contracts-go/teamhubpublic"
 )
 
@@ -82,11 +84,21 @@ func (a *App) deleteRoomMember(c *gin.Context) {
 	}
 }
 
+// validRoomUpdate reports whether a Room rename changes one field within the
+// character bounds a creation uses.
+func validRoomUpdate(name, description *string) bool {
+	if name == nil && description == nil {
+		return false
+	}
+	if name != nil && (strings.TrimSpace(*name) == "" || utf8.RuneCountInString(*name) > roomcreation.MaxNameRunes) {
+		return false
+	}
+	return description == nil || utf8.RuneCountInString(*description) <= roomcreation.MaxDescriptionRunes
+}
+
 func (a *App) updateRoom(c *gin.Context) {
 	var request httpapi.RoomUpdateRequest
-	if decodeJSON(c, &request) != nil || (request.Name == nil && request.Description == nil) ||
-		(request.Name != nil && (strings.TrimSpace(*request.Name) == "" || len(*request.Name) > 120)) ||
-		(request.Description != nil && len(*request.Description) > 2000) {
+	if decodeJSON(c, &request) != nil || !validRoomUpdate(request.Name, request.Description) {
 		a.writeError(c, http.StatusBadRequest, "INVALID_REQUEST", "room name and description are invalid")
 		return
 	}
