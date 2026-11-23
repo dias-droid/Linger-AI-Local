@@ -1222,7 +1222,8 @@ describe("continuous voice pending HTTP diagnosis", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start recording" }));
     await advance();
     clickStop();
-    await advance(6_000);
+    // The hung Stop times out after 5 s; the next is spaced 5 s later.
+    await advance(11_000);
     expect(keys).toHaveLength(2);
     expect(stopsAccepted).toBe(1);
     expect(screen.getByLabelText("capture-state")).toHaveTextContent(
@@ -1253,7 +1254,7 @@ describe("continuous voice pending HTTP diagnosis", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start recording" }));
     await advance();
     clickStop();
-    for (let step = 0; step < 20; step++) {
+    for (let step = 0; step < 40; step++) {
       await advance(500);
       states.push(screen.getByLabelText("capture-state").textContent ?? "");
     }

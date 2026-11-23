@@ -15,6 +15,9 @@ import { asError } from "@linger/service-kit";
 
 /** Stop attempts that leave the Capture recording before the release gives up. */
 const voiceStopAttempts = 3;
+// Spacing Stop attempts lets a blip of a few seconds pass unreported, while a
+// lasting failure is reported within about 30 seconds.
+const voiceStopRetryDelayMs = 5_000;
 
 /**
  * The Capture kept recording through every Stop attempt, so it was not saved;
@@ -42,10 +45,16 @@ export async function releaseVoiceSession(
     capture?.voice_session_id === session.id &&
     (capture.status === "starting" || capture.status === "recording");
   for (const delay of [0, 250, 500, 1_000, 2_000, 4_000, 8_000, 8_000, 8_000]) {
+    let stopping = false;
     if (Date.now() >= deadline) break;
-    if (delay > 0) await waitForVoiceDelay(delay);
+    const wait =
+      stopFailures > 0 && recording()
+        ? Math.max(delay, voiceStopRetryDelayMs)
+        : delay;
+    if (wait > 0) await waitForVoiceDelay(wait);
     try {
       if (capture && recording()) {
+        stopping = true;
         try {
           const captureId = capture.id;
           capture = await requests.run((signal) =>
@@ -97,8 +106,12 @@ export async function releaseVoiceSession(
           // An unread Capture is still the one this release must stop.
         }
       }
-      // Only a recording Capture fails the release: the error came from Stop.
-      if (recording() && (rejected || ++stopFailures >= voiceStopAttempts))
+      // Only a Stop that left the Capture recording fails the release.
+      if (
+        stopping &&
+        recording() &&
+        (rejected || ++stopFailures >= voiceStopAttempts)
+      )
         throw new VoiceStopError(error);
       if (rejected) throw error;
     }

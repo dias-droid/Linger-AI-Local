@@ -124,21 +124,53 @@ describe("Voice page release", () => {
     expect(fixture.close).toHaveBeenCalledOnce();
   });
 
-  it("gives up after three Stops that leave the Capture recording", async () => {
+  it("reports a Stop that keeps failing within about 30 seconds", async () => {
     vi.useFakeTimers();
     const fixture = clientFixture();
     fixture.stop.mockReturnValue(
       teamHubErrorResponse(503, "UNAVAILABLE", "Unavailable"),
+    );
+    let settled: unknown;
+    void releaseVoiceSession(fixture.client, session, recording).catch(
+      (error: unknown) => (settled = error),
+    );
+    // A blip of a few seconds is not reported.
+    await vi.advanceTimersByTimeAsync(9_000);
+    expect(fixture.stop).toHaveBeenCalledTimes(2);
+    expect(settled).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(21_000);
+    expect(settled).toBeInstanceOf(VoiceStopError);
+    expect(fixture.stop).toHaveBeenCalledTimes(3);
+    expect(fixture.close).not.toHaveBeenCalled();
+  });
+
+  it("stops without an error once a brief outage passes", async () => {
+    vi.useFakeTimers();
+    const fixture = clientFixture();
+    fixture.stop.mockReturnValueOnce(
+      teamHubErrorResponse(503, "UNAVAILABLE", "Unavailable"),
+    );
+    const pending = releaseVoiceSession(fixture.client, session, recording);
+    await vi.advanceTimersByTimeAsync(5_000);
+    await pending;
+    expect(fixture.stop).toHaveBeenCalledTimes(2);
+    expect(fixture.close).toHaveBeenCalledOnce();
+  });
+
+  it("reports a rejected Stop at once", async () => {
+    vi.useFakeTimers();
+    const fixture = clientFixture();
+    fixture.stop.mockReturnValue(
+      teamHubErrorResponse(403, "FORBIDDEN", "Forbidden"),
     );
     const pending = releaseVoiceSession(
       fixture.client,
       session,
       recording,
     ).catch((error: unknown) => error);
-    await vi.runAllTimersAsync();
+    await vi.advanceTimersByTimeAsync(0);
     expect(await pending).toBeInstanceOf(VoiceStopError);
-    expect(fixture.stop).toHaveBeenCalledTimes(3);
-    expect(fixture.close).not.toHaveBeenCalled();
+    expect(fixture.stop).toHaveBeenCalledOnce();
   });
 
   it("keeps stopping a Capture it could not read after a failed Stop", async () => {
