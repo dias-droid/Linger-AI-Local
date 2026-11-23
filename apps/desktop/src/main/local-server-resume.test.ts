@@ -1,4 +1,4 @@
-import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
@@ -9,7 +9,10 @@ import { LocalServerModule } from "./local-server.js";
 import { EventBus, ModuleHost } from "./modules.js";
 import { stubModule, tempDirectory } from "./test-support.js";
 
-function setupResumeFixture(installerScript: string) {
+function setupResumeFixture(
+  installerScript: string,
+  resolveProxy?: (url: string) => Promise<string>,
+) {
   const root = tempDirectory();
   const home = path.join(root, "home");
   const installerDirectory = path.join(root, "installer");
@@ -58,6 +61,7 @@ function setupResumeFixture(installerScript: string) {
     fetch: (async () => {
       throw new Error("offline");
     }) as typeof fetch,
+    resolveProxy,
   });
 
   const host = new ModuleHost(
@@ -85,6 +89,7 @@ function setupResumeFixture(installerScript: string) {
 
   return {
     home,
+    installerDirectory,
     module,
     host,
     logs,
@@ -129,6 +134,66 @@ describe("LocalServerModule resume coordination", () => {
     );
     expect(typeof succeeded?.fields?.total_ms).toBe("number");
     await f.host.stop("quit");
+  });
+
+  it.each([
+    ["PROXY 127.0.0.1:7890; DIRECT", "system", "http://127.0.0.1:7890"],
+    ["DIRECT", "none", ""],
+  ])(
+    "passes the system proxy %s to the resume as LINGER_SYSTEM_HTTPS_PROXY",
+    async (resolution, source, passed) => {
+      vi.stubEnv("HTTPS_PROXY", undefined);
+      vi.stubEnv("https_proxy", undefined);
+      const resolveProxy = vi.fn(async () => resolution);
+      const f = setupResumeFixture(
+        `
+      require("node:fs").writeFileSync(require("node:path").join(__dirname, "proxy.txt"), process.env.LINGER_SYSTEM_HTTPS_PROXY ?? "");
+      process.stdout.write(JSON.stringify({ code: 0, details: { origin: "http://localhost:3000" } }) + "\\n");
+    `,
+        resolveProxy,
+      );
+      try {
+        await f.host.start();
+        await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"));
+        expect(resolveProxy).toHaveBeenCalledWith(
+          "wss://stt-rt.soniox.com/transcribe-websocket",
+        );
+        expect(
+          readFileSync(path.join(f.installerDirectory, "proxy.txt"), "utf8"),
+        ).toBe(passed);
+        expect(
+          f.logs.find((entry) => entry.event === "local_server.system_proxy")
+            ?.fields?.source,
+        ).toBe(source);
+        await f.host.stop("quit");
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    },
+  );
+
+  it("resumes without a proxy when resolving it hangs", async () => {
+    vi.stubEnv("HTTPS_PROXY", undefined);
+    vi.stubEnv("https_proxy", undefined);
+    const f = setupResumeFixture(
+      `
+      process.stdout.write(JSON.stringify({ code: 0, details: { origin: "http://localhost:3000" } }) + "\\n");
+    `,
+      () => new Promise<string>(() => undefined),
+    );
+    try {
+      await f.host.start();
+      await vi.waitFor(() => expect(f.module.status().phase).toBe("ready"), {
+        timeout: 5_000,
+      });
+      expect(
+        f.logs.find((entry) => entry.event === "local_server.system_proxy")
+          ?.fields?.source,
+      ).toBe("unavailable");
+      await f.host.stop("quit");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("logs a BYOK gateway that did not come back and still resumes", async () => {
