@@ -270,7 +270,7 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
   (`refreshLocalComputerModels`) forwards an empty-model `refresh` command through
   the same owner/online gate, while `POST .../local-models/{modelId}/actions` acts on
   one model (`refresh` stays invalid there). A connected Computer that has not
-  decided within the action's 10 seconds answers 504
+  decided within the action's 30 seconds answers 504
   `LOCAL_MODEL_ACTION_UNCONFIRMED`: it may still act, and the snapshots show
   the outcome. The Computer's refusal codes map to `LocalModelsErrorCode` in
   `internal/app/handlers_local_models.go` (and `LOAD_NO_ROOM` / `MEMORY_INSUFFICIENT`

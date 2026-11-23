@@ -189,9 +189,19 @@ model.
   with that code; the model's next accepted job, or a row that moved on,
   drops them. They live in memory, so after a Daemon restart the row shows
   only its code.
-- Pi. The Daemon sets `PI_CODING_AGENT_DIR` on `localmodels` tool calls
-  through `OverlayEnvironment` and `workspace.PiSourceEnvironment` so loaded
-  models land in the profile Pi probes and runs. When a model is loaded on a
+- Pi. The Daemon aligns `PI_CODING_AGENT_DIR` on `localmodels` tool calls with
+  the Pi profile Runtime discovery probes. When `<state>/model-source.json`
+  exists (`byok`, `subscription`, or `local`), it isolates tool calls through
+  the shared `localGatewayPiProfile` resolver (matching `OverlayEnvironment`
+  for `local` mode): passing an existing managed `gateway-home/.pi/agent`
+  profile (preferring `ToolsDirectory(stateDir)` over legacy `stateDir` and an
+  explicitly configured legacy `gateway-home`), and omitting
+  `PI_CODING_AGENT_DIR` otherwise so `localmodels` registers models into this
+  home's `tools/gateway-home/.pi/agent` without colliding with `byok-home` or
+  personal `~/.pi/agent`. When no `model-source.json` exists yet, tool calls
+  follow `workspace.PiSourceEnvironment` on the base environment (excluding any
+  stale `byok-home`) so loaded models land in the same profile Runtime
+  discovery reads. When a model is loaded on a
   Computer with Pi enabled and not yet installed, `internal/localmodels`
   installs the pinned Pi runtime asynchronously in the background under
   `HarnessRoot` (passing the bundled Node binary via `--node` when available,

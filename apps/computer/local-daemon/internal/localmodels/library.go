@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/simplexai-labs/linger/apps/computer/local-daemon/internal/process"
+	"github.com/simplexai-labs/linger/apps/computer/local-daemon/internal/provider/redact"
 	wire "github.com/simplexai-labs/linger/contracts-go/runnergateway"
 )
 
@@ -666,8 +667,13 @@ func (l *Library) superviseJob(action Action, events <-chan libraryEvent, ended 
 	} else if final != nil {
 		outcome = final.Code
 	}
-	slog.Info("local_models.job_finished", "action", action.Name, "model", action.Model,
-		"exit_code", exitCode, "outcome", outcome, "accepted", accepted)
+	attrs := []any{"action", action.Name, "model", action.Model,
+		"exit_code", exitCode, "outcome", outcome, "accepted", accepted}
+	if final != nil && final.Event == "error" && strings.TrimSpace(final.Detail) != "" {
+		// Local diagnostics only: redacted detail aids debugging gateway registration failures.
+		attrs = append(attrs, "detail", redact.Text(clip(strings.TrimSpace(final.Detail), 500)))
+	}
+	slog.Info("local_models.job_finished", attrs...)
 	if !accepted {
 		if answer.missed() {
 			// Nobody heard the refusal; the snapshot is how the owner sees
