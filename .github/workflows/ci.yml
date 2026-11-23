@@ -8,7 +8,9 @@ name: CI
 # checks the paths its whole group changes, on top of the latest main. Pushes
 # to main run every check. scripts/check-plan.mjs maps paths to checks, here
 # and in `make check`. Only jobs that use BASE check out full history. CI runs
-# the computer daemon's Go unit tests; the rest of check-computer (TS and process
+# the computer daemon's Go unit tests, and on Windows builds every daemon
+# package and tests only its Windows launcher, CLI, config, local-model and
+# process packages; the rest of check-computer (TS and process
 # tests) and the heavier suites (node-services, voice-runtime, integration,
 # containers and E2E) stay local: run `make check BASE=<target-ref>` and the
 # targets in the Makefile before you open a pull request.
@@ -267,10 +269,25 @@ jobs:
           restore-keys: |
             go-computer-go-windows-${{ hashFiles('apps/computer/local-daemon/go.sum') }}-
             go-computer-go-windows-
+      # Backdating lets the prune before the save keep only the entries this
+      # run used, as in the Linux Go checks.
+      - if: github.event_name == 'push'
+        run: |
+          cache=$(cygpath -u "$GOCACHE")
+          if [ -d "$cache" ]; then
+            find "$cache" -type f -exec touch -m -d '2 hours ago' {} +
+          fi
       # Builds every package and test for Windows, then runs the packages that
       # hold the Windows launcher, process Job, CLI and overlay path code.
       - run: go test -run '^$' ./...
       - run: go test ./cmd/linger-computer-launcher ./internal/computercli ./internal/computerconfig ./internal/localmodels ./internal/process
+      # A failed run saves unpruned; the next successful push prunes.
+      - if: success() && github.event_name == 'push'
+        run: |
+          cache=$(cygpath -u "$GOCACHE")
+          if [ -d "$cache" ]; then
+            find "$cache" -type f -mmin +60 -delete
+          fi
       - uses: actions/cache/save@v6
         if: always() && github.event_name == 'push'
         with:
