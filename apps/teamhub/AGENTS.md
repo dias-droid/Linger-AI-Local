@@ -75,6 +75,9 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
   card cannot send it again. `GET` reports `sent` whenever the header says so, and
   `can_edit`; only editors may send or decline. While the latest content is
   still rendering these routes answer 503 with `Retry-After`.
+- Personal Profile imports preserve text across DOCX formatting runs and keep
+  paragraph, line-break and content-tab boundaries. The 64 KiB extracted
+  source limit ends on a complete UTF-8 character for every supported format.
 - Live voice write tools that finish a send return a `next` asking the model
   to say it was sent; a result without one can leave the voice silent.
 - Live voice writes need the user's yes from a turn after the question
