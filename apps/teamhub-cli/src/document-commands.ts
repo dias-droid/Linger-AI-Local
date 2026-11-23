@@ -13,7 +13,15 @@ import {
   option,
   requiredOption,
 } from "./command-input.js";
+import { stat } from "node:fs/promises";
+import path from "node:path";
 import { CliError } from "./errors.js";
+import {
+  fileFailure,
+  fileSystemError,
+  inputIssue,
+  invalidInput,
+} from "./input-issues.js";
 import { parseActorReferences } from "./command-mentions.js";
 import { displayText } from "./display-text.js";
 
@@ -415,10 +423,30 @@ export const documentCommandDefinitions: readonly CommandDefinition[] = [
         filename.split(/[/\\]/u).includes("..")
       )
         throw inputError("Provide a local output file path.");
+      const targetPath = reader.localPath(filename);
+      // A missing output folder is the caller's to fix, before any request.
+      const flag =
+        output !== undefined
+          ? "--output"
+          : shortOutput !== undefined
+            ? "-o"
+            : "";
+      const folder = path.dirname(filename);
+      const parent = flag
+        ? await stat(path.dirname(targetPath)).catch((error: unknown) => {
+            if (fileSystemError(error))
+              throw fileFailure(error, flag, folder, true);
+            throw error;
+          })
+        : undefined;
+      if (parent && !parent.isDirectory())
+        throw invalidInput(`The ${flag} path could not be written.`, [
+          inputIssue(flag, "unwritable", `${folder}: not a directory.`),
+        ]);
       return {
         input: {
           name,
-          target_path: reader.localPath(filename),
+          target_path: targetPath,
           ...(format === undefined ? {} : { format }),
           ...(option(args, "--raw") === undefined ? {} : { raw: true }),
         },
