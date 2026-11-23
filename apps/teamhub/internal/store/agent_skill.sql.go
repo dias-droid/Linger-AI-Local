@@ -202,6 +202,65 @@ func (q *Queries) DeleteAgentSkillBinding(ctx context.Context, arg DeleteAgentSk
 	return id, err
 }
 
+const findSkillUploadBinding = `-- name: FindSkillUploadBinding :one
+SELECT binding.id, binding.tenant_id, binding.agent_actor_id, binding.skill_id, binding.manifest_version, binding.enabled, binding.config, binding.binding_version, binding.updated_by_actor_id, binding.updated_at, binding.created_at, binding.deleted_at, reuse.same_package::boolean AS same_package
+FROM agent_skill_bindings binding
+JOIN skills skill ON skill.skill_id=binding.skill_id
+JOIN skill_manifests manifest ON manifest.skill_id=binding.skill_id AND manifest.manifest_version=binding.manifest_version
+CROSS JOIN LATERAL (
+    SELECT COALESCE(manifest.content_hash=$1::bytea AND manifest.state='active'
+        AND (skill.owner_kind='platform' OR skill.access_scope='tenant' OR skill.owner_actor_id=$2::text)
+        AND (skill.owner_kind='tenant' OR skill.latest_manifest_id=manifest.manifest_id), false) AS same_package
+) reuse
+WHERE binding.tenant_id=$3::text AND binding.agent_actor_id=$4::text
+  AND skill.name=$5::text AND cardinality(skill.default_agent_types)=0
+  AND ((skill.owner_kind='tenant' AND skill.tenant_id=binding.tenant_id) OR (skill.owner_kind='platform' AND skill.tenant_id IS NULL))
+  AND manifest.package_state='sealed' AND (binding.deleted_at IS NULL OR reuse.same_package)
+ORDER BY (binding.deleted_at IS NULL) DESC, binding.enabled DESC, reuse.same_package DESC, binding.binding_version DESC, binding.skill_id
+LIMIT 1
+`
+
+type FindSkillUploadBindingParams struct {
+	ReuseHash      []byte `json:"reuse_hash"`
+	SponsorActorID string `json:"sponsor_actor_id"`
+	TenantID       string `json:"tenant_id"`
+	AgentActorID   string `json:"agent_actor_id"`
+	Name           string `json:"name"`
+}
+
+type FindSkillUploadBindingRow struct {
+	AgentSkillBinding AgentSkillBinding `json:"agent_skill_binding"`
+	SamePackage       bool              `json:"same_package"`
+}
+
+// A live binding owns its name. A removed one can only be restored from identical, still-bindable content.
+func (q *Queries) FindSkillUploadBinding(ctx context.Context, arg FindSkillUploadBindingParams) (FindSkillUploadBindingRow, error) {
+	row := q.db.QueryRow(ctx, findSkillUploadBinding,
+		arg.ReuseHash,
+		arg.SponsorActorID,
+		arg.TenantID,
+		arg.AgentActorID,
+		arg.Name,
+	)
+	var i FindSkillUploadBindingRow
+	err := row.Scan(
+		&i.AgentSkillBinding.ID,
+		&i.AgentSkillBinding.TenantID,
+		&i.AgentSkillBinding.AgentActorID,
+		&i.AgentSkillBinding.SkillID,
+		&i.AgentSkillBinding.ManifestVersion,
+		&i.AgentSkillBinding.Enabled,
+		&i.AgentSkillBinding.Config,
+		&i.AgentSkillBinding.BindingVersion,
+		&i.AgentSkillBinding.UpdatedByActorID,
+		&i.AgentSkillBinding.UpdatedAt,
+		&i.AgentSkillBinding.CreatedAt,
+		&i.AgentSkillBinding.DeletedAt,
+		&i.SamePackage,
+	)
+	return i, err
+}
+
 const getAgentSkillBinding = `-- name: GetAgentSkillBinding :one
 SELECT binding.id,binding.tenant_id,binding.agent_actor_id,binding.skill_id,
        binding.manifest_version,binding.enabled,binding.config,
@@ -322,6 +381,35 @@ func (q *Queries) GetExplicitBindableSkillManifest(ctx context.Context, arg GetE
 	return i, err
 }
 
+const getSkillUnbindCardLabels = `-- name: GetSkillUnbindCardLabels :one
+SELECT actor.display_name AS agent_name, skill.name AS skill_name
+FROM agent_skill_bindings binding
+JOIN actors actor ON actor.id=binding.agent_actor_id AND actor.tenant_id=binding.tenant_id
+JOIN skills skill ON skill.skill_id=binding.skill_id
+WHERE binding.tenant_id=$1::text
+  AND binding.agent_actor_id=$2::text
+  AND binding.skill_id=$3::text
+`
+
+type GetSkillUnbindCardLabelsParams struct {
+	TenantID     string `json:"tenant_id"`
+	AgentActorID string `json:"agent_actor_id"`
+	SkillID      string `json:"skill_id"`
+}
+
+type GetSkillUnbindCardLabelsRow struct {
+	AgentName string `json:"agent_name"`
+	SkillName string `json:"skill_name"`
+}
+
+// A removed binding keeps its identity so a retried invocation can replay its card.
+func (q *Queries) GetSkillUnbindCardLabels(ctx context.Context, arg GetSkillUnbindCardLabelsParams) (GetSkillUnbindCardLabelsRow, error) {
+	row := q.db.QueryRow(ctx, getSkillUnbindCardLabels, arg.TenantID, arg.AgentActorID, arg.SkillID)
+	var i GetSkillUnbindCardLabelsRow
+	err := row.Scan(&i.AgentName, &i.SkillName)
+	return i, err
+}
+
 const getUnifiedSkillIdentityForUpdate = `-- name: GetUnifiedSkillIdentityForUpdate :one
 SELECT owner_kind,COALESCE(tenant_id,'')::text AS tenant_id,name,
        access_scope,COALESCE(owner_actor_id,'')::text AS owner_actor_id
@@ -349,6 +437,34 @@ func (q *Queries) GetUnifiedSkillIdentityForUpdate(ctx context.Context, skillID 
 		&i.OwnerActorID,
 	)
 	return i, err
+}
+
+const hasExplicitSkillBindingAtVersion = `-- name: HasExplicitSkillBindingAtVersion :one
+SELECT COALESCE(
+  bool_or(skill_id=$1::text AND deleted_at IS NULL)
+  AND max(binding_version)=$2::bigint, false
+)::boolean
+FROM agent_skill_bindings
+WHERE tenant_id=$3::text AND agent_actor_id=$4::text
+`
+
+type HasExplicitSkillBindingAtVersionParams struct {
+	SkillID                string `json:"skill_id"`
+	ExpectedBindingVersion int64  `json:"expected_binding_version"`
+	TenantID               string `json:"tenant_id"`
+	AgentActorID           string `json:"agent_actor_id"`
+}
+
+func (q *Queries) HasExplicitSkillBindingAtVersion(ctx context.Context, arg HasExplicitSkillBindingAtVersionParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasExplicitSkillBindingAtVersion,
+		arg.SkillID,
+		arg.ExpectedBindingVersion,
+		arg.TenantID,
+		arg.AgentActorID,
+	)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const listAgentSkillBindings = `-- name: ListAgentSkillBindings :many
@@ -526,6 +642,54 @@ func (q *Queries) ListAllowedRequiredPlatformSkillSnapshotPackagesForAgent(ctx c
 			&i.Name,
 			&i.PackageName,
 			&i.ContentHash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listExplicitSkillInventory = `-- name: ListExplicitSkillInventory :many
+SELECT binding.skill_id, skill.name, binding.manifest_version, binding.enabled
+FROM agent_skill_bindings binding
+JOIN skills skill ON skill.skill_id=binding.skill_id
+WHERE binding.tenant_id=$1::text
+  AND binding.agent_actor_id=$2::text
+  AND binding.deleted_at IS NULL
+ORDER BY skill.name, binding.skill_id
+`
+
+type ListExplicitSkillInventoryParams struct {
+	TenantID     string `json:"tenant_id"`
+	AgentActorID string `json:"agent_actor_id"`
+}
+
+type ListExplicitSkillInventoryRow struct {
+	SkillID         string `json:"skill_id"`
+	Name            string `json:"name"`
+	ManifestVersion string `json:"manifest_version"`
+	Enabled         bool   `json:"enabled"`
+}
+
+// Recovery must include disabled bindings and bindings to an inactive Manifest.
+func (q *Queries) ListExplicitSkillInventory(ctx context.Context, arg ListExplicitSkillInventoryParams) ([]ListExplicitSkillInventoryRow, error) {
+	rows, err := q.db.Query(ctx, listExplicitSkillInventory, arg.TenantID, arg.AgentActorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListExplicitSkillInventoryRow{}
+	for rows.Next() {
+		var i ListExplicitSkillInventoryRow
+		if err := rows.Scan(
+			&i.SkillID,
+			&i.Name,
+			&i.ManifestVersion,
+			&i.Enabled,
 		); err != nil {
 			return nil, err
 		}

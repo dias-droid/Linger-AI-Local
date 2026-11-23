@@ -436,6 +436,7 @@ async function activateContextRuntime<TRuntimeSettings>(
     void featurePreparationPromise.catch(() => undefined);
     const {
       executionResources,
+      skillRecovery,
       connectedApps,
       connectedAppKeys,
       connectableAppKeys,
@@ -459,7 +460,12 @@ async function activateContextRuntime<TRuntimeSettings>(
       compactInstructions,
       agent: instructedAgent(
         request,
-        featurePreparation.developerInstructions,
+        skillRecovery
+          ? [
+              ...featurePreparation.developerInstructions,
+              "TeamHub could not load your Skill bindings. Tell the user that Skills are unavailable. To repair them, inspect teamhub skill list --json and request Sponsor approval with teamhub skill unbind for the selected explicit binding. Check the result before retrying publication.",
+            ]
+          : featurePreparation.developerInstructions,
         connectedApps,
         connectedAppKeys,
         connectableAppKeys,
@@ -572,6 +578,7 @@ async function resolveActivationInputs<TRuntimeSettings>({
   contextResolutionRequired,
 }: ActivationInputsRequest<TRuntimeSettings>): Promise<{
   readonly executionResources: ExecutionResources | undefined;
+  readonly skillRecovery: boolean;
   readonly connectedApps: boolean | undefined;
   readonly connectedAppKeys: readonly string[];
   readonly connectableAppKeys: readonly string[];
@@ -579,6 +586,7 @@ async function resolveActivationInputs<TRuntimeSettings>({
   const agentResourcesResolver = options.agentResourcesResolver;
   const mcpContextResolver = options.mcpContextResolver;
   // Read with the Agent's effective resources; renders the instructions.
+  let skillRecovery = false;
   let connectedApps: boolean | undefined;
   let connectedAppKeys: readonly string[] = [];
   let connectableAppKeys: readonly string[] = [];
@@ -587,10 +595,12 @@ async function resolveActivationInputs<TRuntimeSettings>({
     const current = await agentResourcesResolver!.resolve({
       agentId: request.ref.agentId,
       signal: resolveSignal,
+      ...(ordinaryMeta ? { allowSkillRecovery: true as const } : {}),
     });
     logger.log("info", "context_activation.agent_resources_resolved", {
       durationMs: performance.now() - resourcesResolveStartedAt,
     });
+    skillRecovery = current.skillRecovery === true;
     connectedApps = current.connectedApps;
     connectedAppKeys = current.connectedAppKeys;
     connectableAppKeys = current.connectableAppKeys;
@@ -645,6 +655,7 @@ async function resolveActivationInputs<TRuntimeSettings>({
   }
   return {
     executionResources,
+    skillRecovery,
     connectedApps,
     connectedAppKeys,
     connectableAppKeys,
@@ -887,6 +898,7 @@ function createActivatedContextRuntime<TRuntimeSettings>(
       ? {
           async prepareNextRun(nextSignal: AbortSignal): Promise<boolean> {
             const current = await agentResourcesResolver.resolve({
+              allowSkillRecovery: true,
               agentId: request.ref.agentId,
               signal: nextSignal,
             });

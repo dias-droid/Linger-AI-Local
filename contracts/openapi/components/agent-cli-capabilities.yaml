@@ -1,5 +1,65 @@
 components:
   schemas:
+    AgentSkillInventoryItem:
+      type: object
+      additionalProperties: false
+      required: [skill_id, name, manifest_version, is_default, enabled]
+      properties:
+        skill_id:
+          $ref: "./common.yaml#/components/schemas/SkillIdentifier"
+        name:
+          type: string
+        manifest_version:
+          $ref: "./common.yaml#/components/schemas/ManifestVersion"
+        is_default:
+          type: boolean
+        enabled:
+          type: boolean
+    AgentSkillInventory:
+      type: object
+      additionalProperties: false
+      required: [binding_version, items]
+      properties:
+        binding_version:
+          type: integer
+          format: int64
+          minimum: 1
+        issues:
+          type: array
+          description: Current effective-set conflicts in the same inventory snapshot.
+          items:
+            $ref: "./agent-api-errors.yaml#/components/schemas/AgentApiErrorIssue"
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentSkillInventoryItem"
+    AgentSkillUnbindReceipt:
+      type: object
+      additionalProperties: false
+      required: [status, room_id, message_id, interaction_id]
+      properties:
+        status:
+          type: string
+          enum: [submitted]
+        room_id:
+          $ref: "./common.yaml#/components/schemas/Id"
+        message_id:
+          $ref: "./common.yaml#/components/schemas/Id"
+        interaction_id:
+          $ref: "./common.yaml#/components/schemas/Id"
+    AgentSkillUnbindRequest:
+      type: object
+      additionalProperties: false
+      required: [invocation_id, skill_id, expected_binding_version]
+      properties:
+        invocation_id:
+          $ref: "./agent-collaboration.yaml#/components/schemas/AgentInvocationId"
+        skill_id:
+          $ref: "./common.yaml#/components/schemas/SkillIdentifier"
+        expected_binding_version:
+          type: integer
+          format: int64
+          minimum: 1
     AgentKnowledgeSearchRequest:
       type: object
       properties:

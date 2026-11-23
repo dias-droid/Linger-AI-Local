@@ -203,3 +203,49 @@ JOIN skill_manifests manifest
 WHERE registration.actor_id=sqlc.arg(agent_actor_id)::text
   AND registration.status<>'revoked'
 ORDER BY manifest.skill_id COLLATE "C",manifest.manifest_version COLLATE "C";
+
+-- name: ListExplicitSkillInventory :many
+-- Recovery must include disabled bindings and bindings to an inactive Manifest.
+SELECT binding.skill_id, skill.name, binding.manifest_version, binding.enabled
+FROM agent_skill_bindings binding
+JOIN skills skill ON skill.skill_id=binding.skill_id
+WHERE binding.tenant_id=sqlc.arg(tenant_id)::text
+  AND binding.agent_actor_id=sqlc.arg(agent_actor_id)::text
+  AND binding.deleted_at IS NULL
+ORDER BY skill.name, binding.skill_id;
+
+-- name: GetSkillUnbindCardLabels :one
+-- A removed binding keeps its identity so a retried invocation can replay its card.
+SELECT actor.display_name AS agent_name, skill.name AS skill_name
+FROM agent_skill_bindings binding
+JOIN actors actor ON actor.id=binding.agent_actor_id AND actor.tenant_id=binding.tenant_id
+JOIN skills skill ON skill.skill_id=binding.skill_id
+WHERE binding.tenant_id=sqlc.arg(tenant_id)::text
+  AND binding.agent_actor_id=sqlc.arg(agent_actor_id)::text
+  AND binding.skill_id=sqlc.arg(skill_id)::text;
+
+-- name: HasExplicitSkillBindingAtVersion :one
+SELECT COALESCE(
+  bool_or(skill_id=sqlc.arg(skill_id)::text AND deleted_at IS NULL)
+  AND max(binding_version)=sqlc.arg(expected_binding_version)::bigint, false
+)::boolean
+FROM agent_skill_bindings
+WHERE tenant_id=sqlc.arg(tenant_id)::text AND agent_actor_id=sqlc.arg(agent_actor_id)::text;
+
+-- name: FindSkillUploadBinding :one
+-- A live binding owns its name. A removed one can only be restored from identical, still-bindable content.
+SELECT sqlc.embed(binding), reuse.same_package::boolean AS same_package
+FROM agent_skill_bindings binding
+JOIN skills skill ON skill.skill_id=binding.skill_id
+JOIN skill_manifests manifest ON manifest.skill_id=binding.skill_id AND manifest.manifest_version=binding.manifest_version
+CROSS JOIN LATERAL (
+    SELECT COALESCE(manifest.content_hash=sqlc.narg(reuse_hash)::bytea AND manifest.state='active'
+        AND (skill.owner_kind='platform' OR skill.access_scope='tenant' OR skill.owner_actor_id=sqlc.arg(sponsor_actor_id)::text)
+        AND (skill.owner_kind='tenant' OR skill.latest_manifest_id=manifest.manifest_id), false) AS same_package
+) reuse
+WHERE binding.tenant_id=sqlc.arg(tenant_id)::text AND binding.agent_actor_id=sqlc.arg(agent_actor_id)::text
+  AND skill.name=sqlc.arg(name)::text AND cardinality(skill.default_agent_types)=0
+  AND ((skill.owner_kind='tenant' AND skill.tenant_id=binding.tenant_id) OR (skill.owner_kind='platform' AND skill.tenant_id IS NULL))
+  AND manifest.package_state='sealed' AND (binding.deleted_at IS NULL OR reuse.same_package)
+ORDER BY (binding.deleted_at IS NULL) DESC, binding.enabled DESC, reuse.same_package DESC, binding.binding_version DESC, binding.skill_id
+LIMIT 1;

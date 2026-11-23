@@ -66,6 +66,42 @@ trackingItemsList:
               $ref: ../components/agent-cli-capabilities.yaml#/components/schemas/AgentCapabilityResult
       default:
         $ref: ../components/agent-api-errors.yaml#/components/responses/InternalError
+skillBindings:
+  get:
+    operationId: listOwnAgentSkillBindings
+    summary: List the caller's default Skills and explicit bindings, including disabled bindings
+    security:
+      - agentBearer: []
+    responses:
+      "200":
+        description: A consistent inventory and the revision to use for a removal request.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/agent-cli-capabilities.yaml#/components/schemas/AgentSkillInventory
+      default:
+        $ref: ../components/agent-api-errors.yaml#/components/responses/InternalError
+skillUnbindRequest:
+  post:
+    operationId: requestOwnAgentSkillUnbind
+    summary: Ask the caller's Sponsor to remove one explicit binding at the selected revision
+    security:
+      - agentBearer: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../components/agent-cli-capabilities.yaml#/components/schemas/AgentSkillUnbindRequest
+    responses:
+      "200":
+        description: Receipt for the Sponsor's confirmation card.
+        content:
+          application/json:
+            schema:
+              $ref: ../components/agent-cli-capabilities.yaml#/components/schemas/AgentSkillUnbindReceipt
+      default:
+        $ref: ../components/agent-api-errors.yaml#/components/responses/InternalError
 skillPackage:
   post:
     operationId: publishAgentSkillPackage
@@ -73,14 +109,14 @@ skillPackage:
     description: A stable Agent bearer publishes for its Human Sponsor. X-Package-SHA256 is the archive digest and X-TeamHub-Operation-Id is the stable operation identity. Builders must use staged Build Skills followed by Human confirmation.
     security:
       - agentBearer: []
-    requestBody:
+    requestBody: &skillPackageBody
       required: true
       content:
         application/zip:
           schema:
             type: string
             format: binary
-    responses:
+    responses: &skillPackageResponses
       "201":
         description: Immutable package version and ordinary Agent binding.
         content:
@@ -89,6 +125,15 @@ skillPackage:
               $ref: ../components/agent-cli-capabilities.yaml#/components/schemas/AgentCapabilityResult
       default:
         $ref: ../components/agent-api-errors.yaml#/components/responses/InternalError
+profileSkillPackage:
+  post:
+    operationId: installAgentSkillPackage
+    summary: Install or restore a package for this Agent, preserving the version for identical content
+    description: A new operation installs the package. Reusing an operation ID replays its original receipt.
+    security:
+      - agentBearer: []
+    requestBody: *skillPackageBody
+    responses: *skillPackageResponses
 skillPackageDownload:
   parameters:
     - name: manifestId

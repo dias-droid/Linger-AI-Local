@@ -1,8 +1,11 @@
 package typedcard
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+
+	"github.com/simplexai-labs/linger/apps/teamhub/internal/store"
 )
 
 // AgentChangeView is what the sponsor reads on an Agent change decision.
@@ -16,7 +19,7 @@ type AgentChangeView struct {
 
 // AgentChange is one field's current and new value.
 type AgentChange struct {
-	// Field is "name", "description", or "prompt".
+	// Field identifies a profile field.
 	Field  string  `json:"field"`
 	Before *string `json:"before,omitempty"`
 	After  string  `json:"after"`
@@ -28,13 +31,24 @@ type AgentChangeRequest struct {
 	TargetActorID    string `json:"target_actor_id,omitempty"`
 	ExpectedRevision int64  `json:"expected_revision,omitempty"`
 	// Change is the stored profile change, in the shape the app reads.
-	Change any `json:"change"`
+	Change any                   `json:"change,omitempty"`
+	Unbind *SkillUnbindSelection `json:"unbind,omitempty"`
+}
+
+// SkillUnbindSelection pins Sponsor approval to one Skill and inventory revision.
+type SkillUnbindSelection struct {
+	SkillID        string `json:"skill_id"`
+	BindingVersion int64  `json:"binding_version"`
 }
 
 // AgentChangeDecision binds a decision card to the exact change it runs.
 type AgentChangeDecision struct {
 	Request AgentChangeRequest
 	View    AgentChangeView
+	// UnbindView uses the established tool confirmation shape on mixed Web and TeamHub versions.
+	UnbindView *ConnectorWriteView
+	// ValidateNew checks the selected binding after receipt replay and before posting the card.
+	ValidateNew func(context.Context, *store.Queries) error
 }
 
 // agentChangeTitle is the card's title, the same in the Room and in the

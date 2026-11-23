@@ -201,7 +201,7 @@ func assertImportedBuiltinSkillDefaults(t *testing.T, catalog builtinCatalog) {
 		"simplexai_builtin_pdf":             "1.0.1",
 		"simplexai_builtin_pptx":            "1.0.6",
 		"simplexai_builtin_xlsx":            "1.0.0",
-		"simplexai_builtin_skill_installer": "1.0.0",
+		"simplexai_builtin_skill_installer": "1.0.1",
 	}
 	defaulted := map[string]bool{
 		"simplexai_builtin_docx":            true,

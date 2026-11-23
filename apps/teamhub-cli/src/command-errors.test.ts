@@ -67,6 +67,30 @@ it("keeps version-conflict guidance specific to the attempted resource", () => {
   expect(document.message).toContain("Preserve local changes");
 });
 
+it("shows the conflicting Skill and recovery command on a rejected publication", () => {
+  const issue = {
+    path: "skill_bindings.skill_review",
+    code: "managed_default_name",
+    message: "Package name review belongs to a managed default Skill",
+  };
+  const error = formatCommandError(
+    new CliError(
+      "SKILL_SET_CONFLICT",
+      "The Skill could not be bound to this Agent.",
+      {
+        issues: [issue],
+      },
+    ),
+    { command: "profile skill publish", remote: true },
+  );
+  expect(error.details?.issues).toEqual([issue]);
+  const output = renderCommandError(error);
+  expect(output).toContain("teamhub skill list");
+  expect(output).toContain(
+    `Issue: ${issue.path}: ${issue.code}: ${issue.message}`,
+  );
+});
+
 it("tells personal-profile write to reread and merge after a revision conflict", () => {
   const formatted = formatCommandError(
     new CliError("profile_revision_conflict", "server prose", {

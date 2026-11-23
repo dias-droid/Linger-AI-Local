@@ -14,20 +14,23 @@ import (
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/typedcard"
 )
 
+type storedAgentChange struct {
+	TargetActorID    string                          `json:"target_actor_id"`
+	ExpectedRevision int64                           `json:"expected_revision"`
+	Change           AgentChangeRequest              `json:"change"`
+	Unbind           *typedcard.SkillUnbindSelection `json:"unbind"`
+}
+
 // RunAgentChangeDecision runs an approved change idempotently per decision.
 // A created Agent is announced in the card's Room by the transaction that
 // records the result, so a retried job announces it once; an error means the
 // job should retry.
 func (s *Service) RunAgentChangeDecision(ctx context.Context, decision typedcard.ClaimedDecision) (typedcard.DecisionResult, error) {
-	var stored struct {
-		TargetActorID    string             `json:"target_actor_id"`
-		ExpectedRevision int64              `json:"expected_revision"`
-		Change           AgentChangeRequest `json:"change"`
-	}
+	var stored storedAgentChange
 	if err := json.Unmarshal(decision.Request, &stored); err != nil {
 		return typedcard.DecisionResult{}, err
 	}
-	actorID, failure, err := s.applyAgentChangeDecision(ctx, decision, stored.TargetActorID, stored.ExpectedRevision, stored.Change)
+	actorID, failure, err := s.applyAgentChangeDecision(ctx, decision, stored)
 	if err != nil {
 		return typedcard.DecisionResult{}, err
 	}
@@ -54,7 +57,8 @@ func (s *Service) RunAgentChangeDecision(ctx context.Context, decision typedcard
 
 // applyAgentChangeDecision runs the stored change. It returns the created or
 // changed Agent, or why the change could not run.
-func (s *Service) applyAgentChangeDecision(ctx context.Context, decision typedcard.ClaimedDecision, targetActorID string, expectedRevision int64, request AgentChangeRequest) (string, string, error) {
+func (s *Service) applyAgentChangeDecision(ctx context.Context, decision typedcard.ClaimedDecision, stored storedAgentChange) (string, string, error) {
+	targetActorID := stored.TargetActorID
 	sponsor, err := s.queries.GetActor(ctx, store.GetActorParams{ID: decision.DeciderActorID, TenantID: decision.TenantID})
 	if err != nil {
 		return "", "", err
@@ -64,7 +68,7 @@ func (s *Service) applyAgentChangeDecision(ctx context.Context, decision typedca
 	}
 	accountID := sponsor.AccountID.String
 	if targetActorID == "" {
-		actorID, err := s.CreateSponsorAgent(ctx, accountID, decision.TenantID, decision.RequestedByActorID, request.Change(), "agent-change:"+decision.ID)
+		actorID, err := s.CreateSponsorAgent(ctx, accountID, decision.TenantID, decision.RequestedByActorID, stored.Change.Change(), "agent-change:"+decision.ID)
 		switch {
 		case errors.Is(err, ErrAgentLimitReached):
 			return "", "the Sponsor already has 50 Agents.", nil
@@ -104,25 +108,18 @@ func (s *Service) applyAgentChangeDecision(ctx context.Context, decision typedca
 	if _, found, err := idempotency.Lookup(ctx, tx, key, hash); err != nil || found {
 		return targetActorID, "", err
 	}
-	target, err := lockSponsorAgent(ctx, queries, decision.TenantID, decision.DeciderActorID, targetActorID)
-	if errors.Is(err, collaboration.ErrAgentSponsorRequired) || errors.Is(err, pgx.ErrNoRows) {
-		return "", "the Agent no longer exists or is not active.", nil
-	}
-	if err != nil {
-		return "", "", err
-	}
-	if target.registration.ConfigurationRevision != expectedRevision {
-		return "", "the Agent changed after this card was opened. Read it again with teamhub agent get and submit the change again.", nil
-	}
-	// The card's Room announces the change; its lock precedes the change's Accounts.
-	if err := queries.LockTenantDeliveryRooms(ctx, store.LockTenantDeliveryRoomsParams{TenantID: decision.TenantID, RoomIds: []string{decision.RoomID}}); err != nil {
-		return "", "", err
-	}
-	if _, err := ApplyAgentProfileChange(ctx, tx, queries, target.registration, request.Change()); err != nil {
-		return "", "", err
-	}
-	if err := PostAgentProfileNotice(ctx, queries, decision.TenantID, decision.RoomID, decision.RequestedByActorID, target, request.Change()); err != nil {
-		return "", "", err
+	if unbind := stored.Unbind; unbind != nil {
+		err := deleteAgentSkillBindingInTx(ctx, queries, accountID, decision.TenantID, targetActorID, unbind.SkillID, unbind.BindingVersion)
+		switch {
+		case errors.Is(err, ErrAgentSkillBindingConflict):
+			return "", "Skill bindings changed after selection. Run teamhub skill list and select the binding again.", nil
+		case errors.Is(err, pgx.ErrNoRows):
+			return "", "the binding or its Sponsor is no longer available.", nil
+		case err != nil:
+			return "", "", err
+		}
+	} else if failure, err := applyConfirmedAgentProfileChange(ctx, tx, queries, decision, targetActorID, stored.ExpectedRevision, stored.Change); err != nil || failure != "" {
+		return "", failure, err
 	}
 	if err := idempotency.Save(ctx, tx, key, hash, idempotency.Record{ResourceID: targetActorID, Status: http.StatusOK, Body: []byte("{}")}); err != nil {
 		return "", "", err
@@ -131,4 +128,28 @@ func (s *Service) applyAgentChangeDecision(ctx context.Context, decision typedca
 		return "", "", err
 	}
 	return targetActorID, "", nil
+}
+
+func applyConfirmedAgentProfileChange(ctx context.Context, tx pgx.Tx, queries *store.Queries, decision typedcard.ClaimedDecision, targetActorID string, expectedRevision int64, request AgentChangeRequest) (string, error) {
+	target, err := lockSponsorAgent(ctx, queries, decision.TenantID, decision.DeciderActorID, targetActorID)
+	if errors.Is(err, collaboration.ErrAgentSponsorRequired) || errors.Is(err, pgx.ErrNoRows) {
+		return "the Agent no longer exists or is not active.", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if target.registration.ConfigurationRevision != expectedRevision {
+		return "the Agent changed after this card was opened. Read it again with teamhub agent get and submit the change again.", nil
+	}
+	// The card's Room announces the change; its lock precedes the change's Accounts.
+	if err := queries.LockTenantDeliveryRooms(ctx, store.LockTenantDeliveryRoomsParams{TenantID: decision.TenantID, RoomIds: []string{decision.RoomID}}); err != nil {
+		return "", err
+	}
+	if _, err := ApplyAgentProfileChange(ctx, tx, queries, target.registration, request.Change()); err != nil {
+		return "", err
+	}
+	if err := PostAgentProfileNotice(ctx, queries, decision.TenantID, decision.RoomID, decision.RequestedByActorID, target, request.Change()); err != nil {
+		return "", err
+	}
+	return "", nil
 }

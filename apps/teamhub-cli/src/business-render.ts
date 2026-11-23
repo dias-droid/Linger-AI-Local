@@ -386,7 +386,7 @@ export function renderBusinessResult(command: string, result: Json): string {
     ].join("\n");
   }
   if (command === "profile skill publish")
-    return `Published Skill\n${Object.entries(result)
+    return `Skill publication\n${Object.entries(result)
       .map(
         ([key, value]) =>
           `${key}: ${typeof value === "object" ? JSON.stringify(value) : displayText(value)}`,

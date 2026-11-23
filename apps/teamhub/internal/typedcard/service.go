@@ -30,6 +30,7 @@ type CreateResult struct {
 	Status     int
 	Body       []byte
 	Replay     bool
+	RoomID     string
 	MessageID  string
 	DecisionID string
 }

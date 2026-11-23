@@ -54,20 +54,20 @@ func retireDefaultExplicitBindings(ctx context.Context, tx pgx.Tx, agentTypes []
 	return err
 }
 
-func validatePolicyConsumers(ctx context.Context, tx pgx.Tx, skillIDs, agentTypes []string) error {
+func validatePolicyConsumers(ctx context.Context, tx pgx.Tx, skillIDs, agentTypes, selectionTypes []string) error {
 	for _, agentType := range agentTypes {
 		if err := ValidateDefaultBaselineInTx(ctx, tx, agentType); err != nil {
 			return fmt.Errorf("%w: %s defaults: %v", ErrBuiltinSkillConflict, agentType, err) //nolint:errorlint // keep the conflict mapping keyed on the builtin conflict sentinel only
 		}
 	}
-	// Include exact consumers outside the defaults and inactive registrations;
-	// a global change must not make a previously usable Agent unresumable.
-	// Revoked registrations are terminal and never resume.
+	// A new version of an existing default keeps its name and membership. Its
+	// baseline was checked above. Only a changed selection or an explicit
+	// binding can introduce an Agent-specific conflict.
 	rows, err := tx.Query(ctx, `SELECT registration.agent_management_id,registration.actor_id,registration.tenant_id,registration.agent_type
  FROM agent_registrations registration
  WHERE registration.status<>'revoked' AND (registration.agent_type=ANY($1::text[]) OR EXISTS(
-  SELECT 1 FROM agent_skill_bindings binding WHERE binding.agent_actor_id=registration.actor_id AND binding.skill_id=ANY($2::text[])
- )) ORDER BY registration.actor_id FOR SHARE OF registration`, agentTypes, skillIDs)
+  SELECT 1 FROM agent_skill_bindings binding WHERE binding.agent_actor_id=registration.actor_id AND binding.skill_id=ANY($2::text[]) AND binding.enabled AND binding.deleted_at IS NULL
+ )) ORDER BY registration.actor_id FOR SHARE OF registration`, selectionTypes, skillIDs)
 	if err != nil {
 		return err
 	}

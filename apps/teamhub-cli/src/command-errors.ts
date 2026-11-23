@@ -11,6 +11,8 @@ export interface CommandError {
 }
 const singleLine = (value: string) => value.replace(/\p{Cc}/gu, " ");
 const templates: Record<string, string> = {
+  skill_set_conflict:
+    "The Skill could not be bound. Check the reported conflict and use teamhub skill list to inspect the bindings.",
   authorization_required:
     "Waiting for the user to authorize the account; an authorization card is in the chat. End your turn: the card's result wakes you, then run this command again. If the user declines, don't retry.",
   provider_key_required:

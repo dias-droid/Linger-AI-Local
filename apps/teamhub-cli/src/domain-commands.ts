@@ -85,7 +85,7 @@ export function commandOptions(command: CommandDefinition) {
           },
         }),
     ...(!(command.command[0] === "message" && command.readOnly) &&
-    !command.fileRoute &&
+    (!command.fileRoute || command.operationId === true) &&
     command.operationId !== false
       ? {
           "--operation-id": {

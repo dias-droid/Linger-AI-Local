@@ -282,6 +282,60 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/agent/v1/skills/bindings": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List the caller's default Skills and explicit bindings, including disabled bindings */
+    get: operations["listOwnAgentSkillBindings"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/agent/v1/skills/unbind-requests": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /** Ask the caller's Sponsor to remove one explicit binding at the selected revision */
+    post: operations["requestOwnAgentSkillUnbind"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/agent/v1/profile/skills/packages": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Install or restore a package for this Agent, preserving the version for identical content
+     * @description A new operation installs the package. Reusing an operation ID replays its original receipt.
+     */
+    post: operations["installAgentSkillPackage"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/agent/v1/skills/packages": {
     parameters: {
       query?: never;
@@ -1708,6 +1762,7 @@ export interface components {
      * @enum {string}
      */
     AgentApiErrorCode:
+      | "SKILL_SET_CONFLICT"
       | "invalid_request"
       | "invalid_input"
       | "artifact_reference_invalid"
@@ -1944,6 +1999,33 @@ export interface components {
         /** @enum {string} */
         status: "open" | "done";
       };
+    AgentSkillInventoryItem: {
+      skill_id: components["schemas"]["SkillIdentifier"];
+      name: string;
+      manifest_version: components["schemas"]["ManifestVersion"];
+      is_default: boolean;
+      enabled: boolean;
+    };
+    AgentSkillInventory: {
+      /** Format: int64 */
+      binding_version: number;
+      /** @description Current effective-set conflicts in the same inventory snapshot. */
+      issues?: components["schemas"]["AgentApiErrorIssue"][];
+      items: components["schemas"]["AgentSkillInventoryItem"][];
+    };
+    AgentSkillUnbindRequest: {
+      invocation_id: components["schemas"]["AgentInvocationId"];
+      skill_id: components["schemas"]["SkillIdentifier"];
+      /** Format: int64 */
+      expected_binding_version: number;
+    };
+    AgentSkillUnbindReceipt: {
+      /** @enum {string} */
+      status: "submitted";
+      room_id: components["schemas"]["Id"];
+      message_id: components["schemas"]["Id"];
+      interaction_id: components["schemas"]["Id"];
+    };
     /** @description Opaque document identifier. */
     AgentDocumentAuthorityId: string;
     /** @description One Native Document edit, resolved against the frozen mutation state. Action-specific fields are validated before admission and computation. */
@@ -3698,6 +3780,77 @@ export interface operations {
         };
         content: {
           "application/json": components["schemas"]["TrackingItem"];
+        };
+      };
+      default: components["responses"]["InternalError"];
+    };
+  };
+  listOwnAgentSkillBindings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A consistent inventory and the revision to use for a removal request. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AgentSkillInventory"];
+        };
+      };
+      default: components["responses"]["InternalError"];
+    };
+  };
+  requestOwnAgentSkillUnbind: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["AgentSkillUnbindRequest"];
+      };
+    };
+    responses: {
+      /** @description Receipt for the Sponsor's confirmation card. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AgentSkillUnbindReceipt"];
+        };
+      };
+      default: components["responses"]["InternalError"];
+    };
+  };
+  installAgentSkillPackage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/zip": string;
+      };
+    };
+    responses: {
+      /** @description Immutable package version and ordinary Agent binding. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AgentCapabilityResult"];
         };
       };
       default: components["responses"]["InternalError"];

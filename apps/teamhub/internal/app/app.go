@@ -792,6 +792,7 @@ func (a *App) startJobs(ctx context.Context, runs func(Worker) bool) error {
 	river.AddWorker(riverWorkers, &stoppedTaskApprovalsWorker{app: a})
 	river.AddWorker(riverWorkers, a.collaboration.MessageAttachmentExpiryWorker())
 	river.AddWorker(riverWorkers, &decisionRunWorker{app: a})
+	river.AddWorker(riverWorkers, &skillUnbindWorker{app: a})
 	a.mailCanvas.AddWorker(riverWorkers)
 	river.AddWorker(riverWorkers, &decisionExpireWorker{app: a})
 	taskexecution.AddJobWorkers(riverWorkers, a.pool)

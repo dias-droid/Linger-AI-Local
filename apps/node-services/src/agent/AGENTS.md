@@ -93,6 +93,11 @@ take precedence.
   metadata. This metadata is not a resource grant. Contexts other than ordinary
   Meta run one read-only Context resolve before a Run; it issues no session or
   credential.
+- An ordinary Meta chat receiving TeamHub's `SKILL_SET_CONFLICT` can start
+  with no Skill packages or Connected Apps. Its instructions direct the Agent
+  to inspect the bindings and request Sponsor approval for removal. Meta checks
+  the effective digest again before each Run and reloads after repair. Task and
+  Document activation still require successful resource resolution.
 - Fixed Context activation prepares the Context workspace, publishes the
   Context View, configures CLI, and creates or resumes the Provider Runtime.
   When the Computer does not offer the Agent's model or reasoning effort,

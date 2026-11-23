@@ -177,15 +177,31 @@ func (a *App) requestAgentChangeConfirmation(c *gin.Context, auth agentauth.Auth
 		a.writeAgentAPIError(c, http.StatusForbidden, api.AgentApiErrorCodeForbidden, "Run this command from a chat your Sponsor can see to request confirmation")
 		return
 	}
-	hash := sha256.Sum256([]byte(roomID + "\x00" + invocationID))
-	result, err := a.typedCards.CreateDecision(ctx, roomID, auth.AgentID, "agent-change-"+invocationID, hash[:], typedcard.DecisionCommand{
+	digest := sha256.Sum256([]byte(roomID + "\x00" + invocationID))
+	hash := digest[:]
+	key := "agent-change-" + invocationID
+	if change.Request.Unbind != nil {
+		key = "skill-unbind-" + invocationID
+		hash = idempotency.HashRequest(change.Request)
+	}
+	result, err := a.typedCards.CreateDecision(ctx, roomID, auth.AgentID, key, hash, typedcard.DecisionCommand{
 		Principal: auth.Principal, DeciderActorID: auth.SponsorActorID, AgentChange: &change,
 	})
+	if errors.Is(err, agentregistry.ErrAgentSkillBindingConflict) {
+		a.writeAgentAPIErrorWithIssues(c, http.StatusConflict, api.AgentApiErrorCodeVersionConflict, "Skill bindings changed.", []api.AgentApiErrorIssue{
+			{Path: "expected_binding_version", Code: "stale_binding_selection", Message: "Run teamhub skill list and select a current explicit binding."},
+		})
+		return
+	}
 	if a.writeDecisionRequestError(c, err) {
 		return
 	}
 	messageID, decisionID := result.MessageID, result.DecisionID
 	c.Header("Cache-Control", "no-store")
+	if change.Request.Unbind != nil {
+		c.JSON(http.StatusOK, api.AgentSkillUnbindReceipt{Status: "submitted", RoomId: result.RoomID, MessageId: messageID, InteractionId: decisionID})
+		return
+	}
 	c.JSON(http.StatusOK, api.AgentAgentChangeResponse{
 		Status: api.AgentChangeConfirmationPending, RoomId: &roomID, MessageId: &messageID, InteractionId: &decisionID,
 	})

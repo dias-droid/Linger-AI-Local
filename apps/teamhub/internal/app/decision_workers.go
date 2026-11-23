@@ -26,11 +26,24 @@ func (*decisionRunWorker) Timeout(*river.Job[jobs.DecisionRunArgs]) time.Duratio
 }
 
 func (w *decisionRunWorker) Work(ctx context.Context, job *river.Job[jobs.DecisionRunArgs]) error {
-	notice, err := w.app.typedCards.RunDecision(ctx, job.Args.DecisionID)
+	return w.app.runDecisionJob(ctx, job.Args.DecisionID)
+}
+
+type skillUnbindWorker struct {
+	river.WorkerDefaults[jobs.SkillUnbindRunArgs]
+	app *App
+}
+
+func (w *skillUnbindWorker) Work(ctx context.Context, job *river.Job[jobs.SkillUnbindRunArgs]) error {
+	return w.app.runDecisionJob(ctx, job.Args.DecisionID)
+}
+
+func (a *App) runDecisionJob(ctx context.Context, decisionID string) error {
+	notice, err := a.typedCards.RunDecision(ctx, decisionID)
 	if err != nil {
 		return err
 	}
-	return w.app.deliverDecisionNotice(ctx, notice)
+	return a.deliverDecisionNotice(ctx, notice)
 }
 
 // decisionExpireWorker expires a decision nobody made in time; expiring it
@@ -76,6 +89,7 @@ func (a *App) registerDecisionExecutors() {
 			return typedcard.DecisionResult{Status: status, Outcome: outcome, Data: data}, nil
 		},
 	})
+	a.typedCards.RegisterDecisionExecutor(typedcard.DecisionExecutorSkillUnbind, typedcard.DecisionExecutor{Rerun: true, Run: a.agents.RunAgentChangeDecision})
 	// Every Agent change is idempotent per decision, so a retry runs it again.
 	a.typedCards.RegisterDecisionExecutor(typedcard.DecisionKindAgentChange, typedcard.DecisionExecutor{
 		Rerun: true, Run: a.agents.RunAgentChangeDecision,

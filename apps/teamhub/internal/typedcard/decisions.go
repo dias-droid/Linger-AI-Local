@@ -33,8 +33,10 @@ import (
 // any web search key; a Room creation runs in its decision; a Document access
 // card follows the Document access request it shows.
 const (
-	DecisionKindConnectorWrite      = "connector_write"
-	DecisionKindAgentChange         = "agent_change"
+	DecisionKindConnectorWrite = "connector_write"
+	DecisionKindAgentChange    = "agent_change"
+	// DecisionExecutorSkillUnbind runs a first-party Skill removal shown as a tool confirmation.
+	DecisionExecutorSkillUnbind     = "skill_unbind"
 	DecisionKindQuestion            = "question"
 	DecisionKindRuntimePermission   = "runtime_permission"
 	DecisionKindProfileSetupApps    = "profile_setup_apps"
@@ -56,7 +58,7 @@ const decisionTTL = 24 * time.Hour
 // decisionRuns reports whether an approved decision of the kind runs an
 // executor.
 func decisionRuns(kind string) bool {
-	return kind == DecisionKindConnectorWrite || kind == DecisionKindAgentChange
+	return kind == DecisionKindConnectorWrite || kind == DecisionKindAgentChange || kind == DecisionExecutorSkillUnbind
 }
 
 // DecisionCommand opens a decision card for one Human in a Room.
@@ -115,6 +117,10 @@ func (command DecisionCommand) draft() (decisionDraft, error) {
 			request: write.Request, view: write.View, lifetime: decisionTTL}, nil
 	case command.AgentChange != nil:
 		change := command.AgentChange
+		if change.UnbindView != nil {
+			return decisionDraft{kind: DecisionKindConnectorWrite, text: "Approval needed: " + change.UnbindView.Title,
+				request: change.Request, view: *change.UnbindView, lifetime: decisionTTL}, nil
+		}
 		if (change.View.Action == "update") != (change.Request.TargetActorID != "") || len(change.View.Changes) == 0 {
 			return decisionDraft{}, ErrInvalid
 		}
@@ -255,6 +261,9 @@ func (s *Service) CreateDecision(
 		}
 	}
 	operation := "createAgentMessage:" + roomID
+	if change := command.AgentChange; change != nil && change.Request.Unbind != nil {
+		operation = "requestOwnAgentSkillUnbind"
+	}
 	authority, replay, found, err := lockCreateReplayByRoomAgent(ctx, tx, roomID, agentManagementID, operation, idempotencyKey, requestHash)
 	if err != nil {
 		return CreateResult{}, err
@@ -274,12 +283,21 @@ func (s *Service) CreateDecision(
 		}
 	}
 	if found {
-		if replay.DecisionID, err = decisionOfMessage(ctx, tx, replay.MessageID); err != nil {
+		err := tx.QueryRow(ctx, `SELECT id, room_id FROM decisions WHERE message_id=$1`, replay.MessageID).Scan(&replay.DecisionID, &replay.RoomID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return CreateResult{}, ErrIdempotencyConflict
+		}
+		if err != nil {
 			return CreateResult{}, err
 		}
 		return replay, tx.Commit(ctx)
 	}
 	queries := store.New(tx)
+	if change := command.AgentChange; change != nil && change.ValidateNew != nil {
+		if err := change.ValidateNew(ctx, queries); err != nil {
+			return CreateResult{}, err
+		}
+	}
 	author := actorFromRoomAgent(authority)
 	decider, err := queries.GetHumanRoomMemberActor(ctx, store.GetHumanRoomMemberActorParams{
 		RoomID: authority.RoomID, ActorID: command.DeciderActorID, TenantID: authority.TenantID, Kind: "human",
@@ -361,17 +379,8 @@ func (s *Service) CreateDecision(
 		return CreateResult{}, err
 	}
 	return CreateResult{
-		Status: http.StatusCreated, Body: published.Payload, MessageID: published.Message.ID, DecisionID: insert.ID,
+		Status: http.StatusCreated, Body: published.Payload, MessageID: published.Message.ID, DecisionID: insert.ID, RoomID: insert.RoomID,
 	}, nil
-}
-
-func decisionOfMessage(ctx context.Context, tx pgx.Tx, messageID string) (string, error) {
-	var id string
-	err := tx.QueryRow(ctx, `SELECT id FROM decisions WHERE message_id=$1`, messageID).Scan(&id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", ErrIdempotencyConflict
-	}
-	return id, err
 }
 
 func optionalText(value string) pgtype.Text {
@@ -638,7 +647,8 @@ func (s *Service) claimDecision(ctx context.Context, decisionID string) (Claimed
 	defer tx.Rollback(ctx)
 	claim := ClaimedDecision{ID: decisionID}
 	var status string
-	err = tx.QueryRow(ctx, `SELECT kind, tenant_id, room_id, requested_by_actor_id, decider_actor_id, request, status
+	err = tx.QueryRow(ctx, `SELECT CASE WHEN kind='connector_write' AND request ? 'unbind' THEN 'skill_unbind' ELSE kind END,
+ tenant_id, room_id, requested_by_actor_id, decider_actor_id, request, status
  FROM decisions WHERE id=$1 FOR UPDATE`, decisionID).Scan(
 		&claim.Kind, &claim.TenantID, &claim.RoomID, &claim.RequestedByActorID, &claim.DeciderActorID, &claim.Request, &status)
 	if errors.Is(err, pgx.ErrNoRows) {

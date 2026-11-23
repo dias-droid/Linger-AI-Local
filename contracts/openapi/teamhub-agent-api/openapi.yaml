@@ -69,6 +69,12 @@ paths:
     $ref: "../paths/tracking-items.yaml#/update"
   /api/agent/v1/tracking-items/done:
     $ref: "../paths/tracking-items.yaml#/done"
+  /api/agent/v1/skills/bindings:
+    $ref: "../paths/agent-cli-capabilities.yaml#/skillBindings"
+  /api/agent/v1/skills/unbind-requests:
+    $ref: "../paths/agent-cli-capabilities.yaml#/skillUnbindRequest"
+  /api/agent/v1/profile/skills/packages:
+    $ref: "../paths/agent-cli-capabilities.yaml#/profileSkillPackage"
   /api/agent/v1/skills/packages:
     $ref: "../paths/agent-cli-capabilities.yaml#/skillPackage"
   /api/agent/v1/skills/packages/{manifestId}:

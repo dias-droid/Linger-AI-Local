@@ -43,7 +43,7 @@ async function invoke(
   };
 }
 describe("redesigned CLI surface", () => {
-  it("lists only the ten public root entries offline", async () => {
+  it("lists the public command groups offline", async () => {
     const result = await invoke(["--help"]);
     expect(result.code).toBe(0);
     for (const name of [
@@ -56,11 +56,12 @@ describe("redesigned CLI surface", () => {
       "task",
       "routine",
       "profile",
+      "skill",
       "help",
     ])
       expect(result.output).toMatch(new RegExp(`^  ${name}$`, "m"));
     expect(result.output).not.toMatch(
-      /teamhub (commands|human|build|publish|skill|update)/,
+      /teamhub (commands|human|build|publish|update)/,
     );
     expect(result.output).not.toMatch(/^ {2}agents$/m);
     expect(result.fetch).not.toHaveBeenCalled();
@@ -253,7 +254,7 @@ describe("redesigned CLI surface", () => {
     expect(result.fetch).not.toHaveBeenCalled();
     expect(JSON.parse(result.output)).toHaveProperty("cli.options.--content");
   });
-  it.each(["human", "build", "commands", "publish", "update", "skill"])(
+  it.each(["human", "build", "commands", "publish", "update"])(
     "rejects retired %s root before configuration",
     async (root) => {
       const result = await invoke([root, "--json"]);

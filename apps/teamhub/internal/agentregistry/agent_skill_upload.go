@@ -63,7 +63,8 @@ func (s *Service) uploadAgentSkillPackageTx(ctx context.Context, caller skillUpl
 		return idempotency.Result{}, false, err
 	}
 	defer tx.Rollback(ctx)
-	if principal, ok := agentcredential.PrincipalFromContext(ctx); ok {
+	principal, agentUpload := agentcredential.PrincipalFromContext(ctx)
+	if agentUpload {
 		if principal.TenantID != tenantID || principal.AgentID != agentID {
 			return idempotency.Result{}, false, pgx.ErrNoRows
 		}
@@ -101,34 +102,44 @@ func (s *Service) uploadAgentSkillPackageTx(ctx context.Context, caller skillUpl
 	if err != nil {
 		return idempotency.Result{}, false, err
 	}
-	bindings, err := q.ListAgentSkillBindings(ctx, store.ListAgentSkillBindingsParams{AgentActorID: actorID, TenantID: tenantID})
-	if err != nil {
+	var reuseHash []byte
+	if agentUpload {
+		reuseHash = pkg.SHA256[:]
+	}
+	match, err := q.FindSkillUploadBinding(ctx, store.FindSkillUploadBindingParams{
+		TenantID: tenantID, AgentActorID: actorID, SponsorActorID: authority.CallerActorID, Name: pkg.Name, ReuseHash: reuseHash,
+	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return idempotency.Result{}, false, err
 	}
-	var matched *store.AgentSkillBinding
-	for index := range bindings {
-		identity, identityErr := q.GetUnifiedSkillIdentityForUpdate(ctx, bindings[index].SkillID)
-		if identityErr != nil {
-			return idempotency.Result{}, false, identityErr
-		}
-		if identity.Name == pkg.Name {
-			matched = &bindings[index]
-			break
-		}
-	}
-	if matched == nil {
+	matched := match.AgentSkillBinding
+	if matched.ID == "" || matched.DeletedAt.Valid {
 		defaults, defaultErr := q.ListAllowedRequiredPlatformSkillSnapshotPackagesForAgent(ctx, actorID)
 		if defaultErr != nil {
 			return idempotency.Result{}, false, defaultErr
 		}
 		for _, item := range defaults {
 			if item.PackageName == pkg.Name || item.Name == pkg.Name {
-				return idempotency.Result{}, false, ErrSkillDefaultNameConflict
+				return idempotency.Result{}, false, fmt.Errorf("%w: %w", ErrSkillDefaultNameConflict, skill.ManagedDefaultConflict(pkg.Name, item.SkillID))
 			}
 		}
 	}
 	var record store.AgentSkillBinding
-	if matched != nil {
+	status := http.StatusCreated
+	switch {
+	case match.SamePackage && matched.Enabled && !matched.DeletedAt.Valid:
+		status = http.StatusOK
+		record = matched
+		err = validateAgentSkillSet(ctx, tx, tenantID, actorID, registration.AgentType)
+	case match.SamePackage:
+		config, configErr := decodeJSONObject(matched.Config)
+		if configErr != nil {
+			return idempotency.Result{}, false, configErr
+		}
+		record, err = writeAgentSkillBindingInTx(ctx, tx, q, tenantID, actorID, matched.SkillID, authority.CallerActorID,
+			registration.AgentType, revision+1, httpapi.AgentSkillBindingPutRequest{ExpectedBindingVersion: revision,
+				ManifestVersion: matched.ManifestVersion, Enabled: true, Config: config})
+	case matched.ID != "":
 		nextVersion, versionErr := nextUploadedManifestVersion(ctx, q, matched.SkillID, matched.ManifestVersion, pkg)
 		if versionErr != nil {
 			return idempotency.Result{}, false, versionErr
@@ -139,7 +150,7 @@ func (s *Service) uploadAgentSkillPackageTx(ctx context.Context, caller skillUpl
 			ManifestVersion:        nextVersion,
 			Package:                pkg,
 		}, files)
-	} else {
+	default:
 		record, err = s.publishNewAgentSkillPackageInTx(ctx, tx, q, authority, registration, tenantID, actorID, revision, pkg, files)
 	}
 	if err != nil {
@@ -149,13 +160,13 @@ func (s *Service) uploadAgentSkillPackageTx(ctx context.Context, caller skillUpl
 	if err != nil {
 		return idempotency.Result{}, false, err
 	}
-	if err = idempotency.Save(ctx, tx, idempotency.AccountKey(accountID, operation, key), requestHash, idempotency.Record{ResourceID: record.ID, Status: http.StatusCreated, Body: body}); err != nil {
+	if err = idempotency.Save(ctx, tx, idempotency.AccountKey(accountID, operation, key), requestHash, idempotency.Record{ResourceID: record.ID, Status: status, Body: body}); err != nil {
 		return idempotency.Result{}, false, err
 	}
 	if err = tx.Commit(ctx); err != nil {
-		return idempotency.Result{}, true, errors.Join(errSkillCommitOutcomeUnknown, err)
+		return idempotency.Result{}, !match.SamePackage, errors.Join(errSkillCommitOutcomeUnknown, err)
 	}
-	return idempotency.Result{Status: http.StatusCreated, Body: body}, true, nil
+	return idempotency.Result{Status: status, Body: body}, !match.SamePackage, nil
 }
 
 func (s *Service) publishNewAgentSkillPackageInTx(ctx context.Context, tx pgx.Tx, q *store.Queries, authority store.AuthorizeAgentSkillBindingWriteRow, registration store.GetSkillAgentForShareRow, tenantID, agentID string, expectedRevision int64, pkg skill.Package, files []storedSkillPackageFile) (store.AgentSkillBinding, error) {

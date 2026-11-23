@@ -43,9 +43,10 @@ type skillPolicyPlan struct {
 // latestAdvanced means an existing latest moved to the catalog bootstrap
 // Manifest, so its explicit bindings must follow it.
 type builtinSkillChange struct {
-	changed        bool
-	latestAdvanced bool
-	agentTypes     []string
+	changed                 bool
+	latestAdvanced          bool
+	defaultSelectionChanged bool
+	agentTypes              []string
 }
 
 type persistedPackageFile struct {
@@ -183,8 +184,7 @@ func ensureCatalog(
 		}
 	}
 
-	changedAgentTypes := make(map[string]struct{})
-	var changedSkillIDs []string
+	var changedSkillIDs, agentTypes, selectionTypes []string
 	var repoints []skillRepoint
 	for _, skill := range catalog.Skills {
 		if _, err := tx.Exec(ctx, `
@@ -196,24 +196,25 @@ func ensureCatalog(
 		if err != nil {
 			return err
 		}
-		if change.changed {
-			changedSkillIDs = append(changedSkillIDs, skill.SkillID)
+		if !change.changed {
+			continue
 		}
+		changedSkillIDs = append(changedSkillIDs, skill.SkillID)
 		if change.latestAdvanced {
 			repoints = append(repoints, skillRepoint{skillID: skill.SkillID, manifestID: skill.BootstrapManifestID})
 		}
-		for _, agentType := range change.agentTypes {
-			changedAgentTypes[agentType] = struct{}{}
+		agentTypes = mergeAgentTypes(agentTypes, change.agentTypes)
+		if change.defaultSelectionChanged {
+			selectionTypes = mergeAgentTypes(selectionTypes, change.agentTypes)
 		}
 	}
 	if err := repointExplicitBindings(ctx, tx, repoints); err != nil {
 		return fmt.Errorf("re-point explicit bindings of advanced Skills: %w", err)
 	}
-	agentTypes := orderedAgentTypes(changedAgentTypes)
 	if err := retireDefaultExplicitBindings(ctx, tx, agentTypes); err != nil {
 		return fmt.Errorf("retire explicit bindings of default Skills: %w", err)
 	}
-	if err := validatePolicyConsumers(ctx, tx, changedSkillIDs, agentTypes); err != nil {
+	if err := validatePolicyConsumers(ctx, tx, changedSkillIDs, agentTypes, selectionTypes); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -373,9 +374,10 @@ func ensureBuiltinSkill(
 		return builtinSkillChange{}, nil
 	}
 	return builtinSkillChange{
-		changed:        true,
-		latestAdvanced: plan.setLatest && current.latestVersion != "",
-		agentTypes:     mergeAgentTypes(current.defaultAgentTypes, skill.DefaultAgentTypes),
+		changed:                 true,
+		latestAdvanced:          plan.setLatest && current.latestVersion != "",
+		defaultSelectionChanged: current.latestVersion == "" || plan.setDefaults,
+		agentTypes:              mergeAgentTypes(current.defaultAgentTypes, skill.DefaultAgentTypes),
 	}, nil
 }
 

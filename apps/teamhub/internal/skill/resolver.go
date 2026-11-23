@@ -167,18 +167,18 @@ func validateResolvedItems(candidates []Item) ([]Item, error) {
 	seenNames := make(map[string]string, len(candidates))
 	for _, item := range candidates {
 		if _, exists := seenIDs[item.SkillID]; exists {
-			return nil, newPolicyConflict("duplicate Skill selection", item.SkillID)
+			return nil, newPolicyConflict("duplicate_skill_id", "duplicate Skill selection", item.SkillID)
 		}
 		foldedName := strings.ToLower(item.Name)
 		if previous, exists := seenNames[foldedName]; exists {
-			return nil, newPolicyConflict("Skills share a Runtime name", previous, item.SkillID)
+			return nil, newPolicyConflict("duplicate_runtime_name", fmt.Sprintf("Skills share a Runtime name %q", item.Name), previous, item.SkillID)
 		}
 		seenIDs[item.SkillID] = item.Source
 		seenNames[foldedName] = item.SkillID
 		items = append(items, item)
 	}
 	if len(items) > maxSkills {
-		return nil, newPolicyConflict(fmt.Sprintf("effective Skill count %d exceeds %d", len(items), maxSkills))
+		return nil, newPolicyConflict("capacity_exceeded", fmt.Sprintf("effective Skill count %d exceeds %d", len(items), maxSkills))
 	}
 	sort.Slice(items, func(left, right int) bool { return items[left].SkillID < items[right].SkillID })
 	return items, nil
@@ -191,7 +191,7 @@ func queryItems(ctx context.Context, tx pgx.Tx, query string, args ...any) ([]It
 	}
 	defer rows.Close()
 	var items []Item
-	var unavailable []string
+	var unavailable, unavailableIDs []string
 	for rows.Next() {
 		var item Item
 		var rawConfig []byte
@@ -204,14 +204,15 @@ func queryItems(ctx context.Context, tx pgx.Tx, query string, args ...any) ([]It
 		}
 		if problem != "" {
 			unavailable = append(unavailable, problem)
+			unavailableIDs = append(unavailableIDs, item.SkillID)
 			continue
 		}
 		if err := json.Unmarshal(rawConfig, &item.Config); err != nil || item.Config == nil {
-			return nil, newPolicyConflict("invalid Skill configuration", item.SkillID)
+			return nil, newPolicyConflict("invalid_configuration", "invalid Skill configuration", item.SkillID)
 		}
 		compiled, err := ValidateManifest(item.configSchema)
 		if err != nil || ValidateConfig(compiled, rawConfig) != nil {
-			return nil, newPolicyConflict("invalid Skill configuration", item.SkillID)
+			return nil, newPolicyConflict("invalid_configuration", "invalid Skill configuration", item.SkillID)
 		}
 		items = append(items, item)
 	}
@@ -219,7 +220,7 @@ func queryItems(ctx context.Context, tx pgx.Tx, query string, args ...any) ([]It
 		return nil, err
 	}
 	if len(unavailable) > 0 {
-		return nil, newPolicyConflict("invalid Skill references", unavailable...)
+		return nil, fmt.Errorf("%w: %s", newPolicyConflict("unavailable_binding", "Selected Skills have unavailable references", unavailableIDs...), strings.Join(unavailable, ", "))
 	}
 	return items, nil
 }

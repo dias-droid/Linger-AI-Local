@@ -96,6 +96,18 @@ Go service owning Human HTTP/SSE, Agent callbacks, and active product state.
   `every_n_hours` + `interval_hours` for whole-hour intervals and uses
   `every_n_minutes` + `interval_minutes` for non-whole-hour intervals.
 
+- `teamhub skill list` reads a consistent inventory of the calling Agent's defaults
+  and explicit bindings. Skill package conflicts carry a policy code and affected
+  identities in the Agent API error issues. `teamhub skill unbind` posts a Sponsor
+  confirmation card. Approval compares the saved binding revision and commits the
+  removal and its decision receipt together. The card uses the established tool
+  confirmation view. Migration 00888 routes its decision job to
+  `decision.skill_unbind`, including approvals handled by older API replicas.
+  Older workers skip that kind and a rescue by an older leader preserves its
+  remaining attempts. Apply migrations before enabling the new TeamHub binaries.
+  A version-only default Skill upgrade checks the default set. Changing which
+  defaults an Agent receives also checks its combined set of Skills.
+
 - Room input acceptance: Runtime State validates canonical
   conversation/targeted agent_runtime inputs atomically with Local Run and cursor.
   Document reads are live-latest and mutations retain CAS. CLI business

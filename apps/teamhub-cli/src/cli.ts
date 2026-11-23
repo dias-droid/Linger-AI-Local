@@ -289,7 +289,11 @@ export async function runCli(
         const { executeFileCommand } = await import("./file-executor.js");
         remote = true;
         await executeFileCommand(
-          { route: selected!.fileRoute, body: input },
+          {
+            route: selected!.fileRoute,
+            body: input,
+            operationId: normalized.operationId,
+          },
           client,
           emit,
           dependencies.timing,

@@ -220,7 +220,7 @@ func authorizeAgentPrincipal(ctx context.Context, tx pgx.Tx, token, action strin
 func businessAction(action string) bool {
 	switch action {
 	case "apply_document_semantic_mutation", "ask_user", "check_task", "create_document", "create_task", "create_room", "create_routine", "create_team_md", "delete_routine", "enable_routine", "get_document_comment_thread", "hand_off_to_room", "list_available_agents", "list_routines", "pause_routine", "replace_document_comment_text", "reply_document_comment", "run_routine", "send_direct_message", "send_emoji", "send_message", "send_message_sequence", "send_task", "show_fragment", "stop_task", "upload_artifact_tree", "upload_artifacts",
-		"add_room_member", "create_agent", "get_agent", "update_agent", "list_connected_apps", "search_app_tools", "execute_app_tool", "manage_auto_reminders",
+		"list_skill_bindings", "request_skill_unbind", "add_room_member", "create_agent", "get_agent", "update_agent", "list_connected_apps", "search_app_tools", "execute_app_tool", "manage_auto_reminders",
 		"get_personal_profile", "write_personal_profile", "start_personal_profile_build", "get_account_profile", "update_account_profile",
 		"request_browser_connection", "read_computer_permissions", "request_computer_permission", "web_search":
 		return true
@@ -248,7 +248,7 @@ func businessCapability(i Authorization, action string) bool {
 		return false
 	}
 	switch action {
-	case "list_available_agents", "get_agent", "create_agent", "update_agent":
+	case "request_skill_unbind", "list_available_agents", "get_agent", "create_agent", "update_agent":
 		// Any meta Context; an alter_ego cannot manage Agents.
 		return i.ParticipantTaskID == "" && i.Target.Kind != "document"
 	case "get_personal_profile", "write_personal_profile", "start_personal_profile_build", "get_account_profile", "update_account_profile":

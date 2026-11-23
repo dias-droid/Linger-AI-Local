@@ -43,7 +43,7 @@ func NormalizeAgentSkillRegistrations(input []httpapi.AgentSkillRegistration) ([
 		skill := &skills[index]
 		skill.Name = strings.TrimSpace(skill.Name)
 		if skill.Name == "" || len([]rune(skill.Name)) > 120 ||
-			!skillIDPattern.MatchString(skill.SkillId) ||
+			!SkillIDPattern.MatchString(skill.SkillId) ||
 			!SkillManifestVersionPattern.MatchString(skill.ManifestVersion) ||
 			contains(seenSkillIDs, skill.SkillId) {
 			return nil, ErrInvalidAgentSkillRegistration

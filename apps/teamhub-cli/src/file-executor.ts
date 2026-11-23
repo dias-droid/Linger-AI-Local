@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { realpath } from "node:fs/promises";
 import path from "node:path";
 import { isExcludedPublicationEntry } from "./files/publication-filter.js";
@@ -7,7 +8,11 @@ import { CliError } from "./errors.js";
 import type { CliTiming } from "./timing.js";
 
 export async function executeFileCommand(
-  command: { route: string; body: Record<string, unknown> },
+  command: {
+    route: string;
+    body: Record<string, unknown>;
+    operationId?: string | undefined;
+  },
   client: TeamHubHttpClient,
   emit: (result: Record<string, unknown>) => Promise<void>,
   timing?: CliTiming,
@@ -121,19 +126,27 @@ export async function executeFileCommand(
         folderPath: path.basename(targetPath),
         signal,
       });
-      const response = await client.request("/api/agent/v1/skills/packages", {
-        method: "POST",
-        headers: {
-          "content-type": "application/zip",
-          "x-package-sha256": packed.archiveSha256,
-          "idempotency-key": packed.packageSha256,
-          "x-teamhub-operation-id": packed.packageSha256,
+      const operationId = command.operationId ?? randomUUID();
+      const response = await client.request(
+        "/api/agent/v1/profile/skills/packages",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/zip",
+            "x-package-sha256": packed.archiveSha256,
+            "idempotency-key": operationId,
+            "x-teamhub-operation-id": operationId,
+          },
+          body: Uint8Array.from(packed.archive),
         },
-        body: Uint8Array.from(packed.archive),
-      });
+      );
       const result = (await response.json()) as Record<string, unknown>;
       await emit({
-        status: result.replayed ? "unchanged" : "published",
+        status: result.replayed
+          ? "replayed"
+          : result.unchanged
+            ? "unchanged"
+            : "published",
         ...result,
       });
       return;

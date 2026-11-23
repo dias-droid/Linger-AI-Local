@@ -132,6 +132,8 @@ export const commandExamples: Record<string, string[]> = {
   web_open: ["https://example.com/page", "--backend", "tavily"],
   list_web_backends: ["--backend", "you"],
   connect_web_backend: ["tavily"],
+  list_skill_bindings: [],
+  request_skill_unbind: ["skill_one", "--binding-version", "2"],
   read_computer_permissions: [],
   request_computer_permission: ["--permissions", "screen_recording"],
   list_auto_reminders: [],

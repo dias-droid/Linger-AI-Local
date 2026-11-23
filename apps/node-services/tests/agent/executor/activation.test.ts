@@ -32,6 +32,7 @@ import {
 import { createTaskInputFeature } from "../../../src/agent/agent-features/task-input/feature.js";
 import type { RuntimeViewPlan } from "../../../src/agent/executor/workspace.js";
 import type { GhostResources } from "../../../src/agent/executor/ghost.js";
+import { createTeamHubAgentResourcesResolver } from "../../../src/agent/executor/teamhub-context-resolvers.js";
 import type {
   AgentEffectiveResources,
   AgentResourcesResolver,
@@ -1874,6 +1875,64 @@ describe("Skills of Contexts resolved by TeamHub", () => {
       }),
     };
   };
+
+  it("activates a repair chat, rechecks the same conflict, and reloads after the binding is removed", async () => {
+    let repaired = false;
+    const resolveResources = createTeamHubAgentResourcesResolver({
+      baseUrl: "https://teamhub.example",
+      serviceToken: "service",
+      fetch: async () =>
+        repaired
+          ? Response.json({
+              effective_sha256: "a".repeat(64),
+              skills: [],
+              connected_apps: true,
+              connected_app_keys: [],
+              connectable_app_keys: [],
+            })
+          : Response.json(
+              { error: { code: "SKILL_SET_CONFLICT" } },
+              { status: 409 },
+            ),
+    }).resolve;
+    const ref = metaRef();
+    const harness = sessionHarness({
+      ref,
+      resolveResources,
+      resolveMcpContext: async () => mcpResolution(),
+    });
+    const request = {
+      ref,
+      tenantId: "tenant-test",
+      actorId: "actor-test",
+      mode: "start" as const,
+      agent: { name: "Test Agent", instructions: "base" },
+      runtime: { type: "local" },
+      resources: ghostResources(),
+    };
+    const active = await harness.activator.activate(request);
+    const signal = new AbortController().signal;
+    try {
+      expect(harness.requests[0]!.agent.developerInstructions).toContain(
+        "teamhub skill unbind",
+      );
+      expect(active.executionResources?.skills).toEqual([]);
+      expect(await active.prepareNextRun!(signal)).toBe(true);
+      repaired = true;
+      expect(await active.prepareNextRun!(signal)).toBe(false);
+    } finally {
+      await active.deactivate();
+    }
+    const healthy = await harness.activator.activate(request);
+    try {
+      expect(
+        harness.requests[1]!.agent.developerInstructions ?? "",
+      ).not.toContain("teamhub skill unbind");
+      expect(healthy.executionResources?.effectiveSha256).toBe("a".repeat(64));
+    } finally {
+      await healthy.deactivate();
+    }
+  });
 
   it.each(sessionContexts)(
     "reads the $name Skills while TeamHub resolves the Context",

@@ -130,15 +130,15 @@ func writeAgentSkillBindingInTx(ctx context.Context, tx pgx.Tx, queries *store.Q
 	if err != nil {
 		return store.AgentSkillBinding{}, err
 	}
-	if err := skill.ValidateEffectiveInTx(ctx, tx, skill.Identity{
-		AgentActorID: agentID, TenantID: tenantID, AgentType: agentType,
-	}); err != nil {
-		if errors.Is(err, skill.ErrConflict) || errors.Is(err, skill.ErrDependency) {
-			return store.AgentSkillBinding{}, fmt.Errorf("%w: %v", ErrAgentSkillEffectiveSetInvalid, err) //nolint:errorlint // inner Skill errors must not match the effective-set sentinel branches ahead of this sentinel
-		}
-		return store.AgentSkillBinding{}, err
+	return record, validateAgentSkillSet(ctx, tx, tenantID, agentID, agentType)
+}
+
+func validateAgentSkillSet(ctx context.Context, tx pgx.Tx, tenantID, agentID, agentType string) error {
+	err := skill.ValidateEffectiveInTx(ctx, tx, skill.Identity{AgentActorID: agentID, TenantID: tenantID, AgentType: agentType})
+	if errors.Is(err, skill.ErrConflict) || errors.Is(err, skill.ErrDependency) {
+		return fmt.Errorf("%w: %w", ErrAgentSkillEffectiveSetInvalid, err)
 	}
-	return record, nil
+	return err
 }
 
 // ListAgentSkillBindings lists an Agent's Skill bindings for its Sponsor.
@@ -196,7 +196,13 @@ func (s *Service) DeleteAgentSkillBinding(ctx context.Context, accountID, tenant
 		return err
 	}
 	defer tx.Rollback(ctx)
-	q := store.New(tx)
+	if err := deleteAgentSkillBindingInTx(ctx, store.New(tx), accountID, tenantID, agentID, skillID, expected); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func deleteAgentSkillBindingInTx(ctx context.Context, q *store.Queries, accountID, tenantID, agentID, skillID string, expected int64) error {
 	if err := q.AcquireUnifiedSkillPolicyExclusiveLock(ctx); err != nil {
 		return err
 	}
@@ -222,5 +228,5 @@ func (s *Service) DeleteAgentSkillBinding(ctx context.Context, accountID, tenant
 	}); err != nil {
 		return err
 	}
-	return tx.Commit(ctx)
+	return nil
 }

@@ -21,3 +21,9 @@ func (DecisionRunArgs) Kind() string { return "decision.run" }
 func (DecisionRunArgs) InsertOpts() river.InsertOpts {
 	return river.InsertOpts{Queue: QueueDefault, MaxAttempts: 5}
 }
+
+// SkillUnbindRunArgs routes a Skill removal exclusively to workers that implement it.
+type SkillUnbindRunArgs struct{ DecisionRunArgs }
+
+// Kind names the job shared with the database routing trigger.
+func (SkillUnbindRunArgs) Kind() string { return "decision.skill_unbind" }

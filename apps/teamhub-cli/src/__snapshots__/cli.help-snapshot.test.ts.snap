@@ -2808,6 +2808,7 @@ Options:
   --json  Return machine-readable JSON.
   --help  Show this offline command reference.
   -h  Show help.
+  --operation-id <value>  Stable operation identity for recovery.
 ",
     "schema": "exit 2
 {"error":{"code":"usage","message":"Unknown option: --schema. Run this command with --help.","command":"profile skill publish"}}
@@ -3049,6 +3050,41 @@ Options:
 ",
     "schema": "exit 0
 {"command":["routine","run"],"description":"Publish a Routine instruction once; this does not prove Agent work completed.","read_only":false,"input_schema":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"routine_id":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9][A-Za-z0-9_-]*$","description":"Id of a Routine in this room, from list_routines or create_routine."}},"required":["routine_id"],"additionalProperties":false,"description":"The Routine to change."},"output_schema":{"$schema":"http://json-schema.org/draft-07/schema#","type":"object","properties":{"id":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9][A-Za-z0-9_-]*$","description":"Stable Routine id."},"name":{"type":"string","minLength":1,"maxLength":120,"description":"Routine name."},"instruction":{"type":"string","minLength":1,"maxLength":50000,"description":"Message posted when the Routine fires."},"mention_actor_id":{"type":"string","minLength":1,"maxLength":64,"pattern":"^[A-Za-z0-9][A-Za-z0-9_-]*$","description":"Omit to post plain text. Use \\"self\\" to wake yourself. Otherwise pass the actor id of an Agent still in this room."},"schedule":{"oneOf":[{"type":"object","properties":{"kind":{"type":"string","const":"daily","description":"Post once every day."},"time":{"type":"string","pattern":"^(?:[01]\\\\d|2[0-3]):[0-5]\\\\d$","description":"Local 24-hour time as HH:MM, for example 09:00."},"timezone":{"type":"string","minLength":1,"maxLength":255,"description":"IANA timezone for the clock time, such as America/New_York. Use the timezone the user stated."}},"required":["kind","time","timezone"],"additionalProperties":false,"description":"Post once a day at a local clock time."},{"type":"object","properties":{"kind":{"type":"string","const":"weekly","description":"Post on selected weekdays each week."},"weekdays":{"minItems":1,"maxItems":7,"type":"array","items":{"type":"string","enum":["monday","tuesday","wednesday","thursday","friday","saturday","sunday"],"description":"One selected local weekday."},"uniqueItems":true,"description":"Selected local weekdays. Use one Routine for multiple days at the same time, e.g. Monday through Friday."},"time":{"type":"string","pattern":"^(?:[01]\\\\d|2[0-3]):[0-5]\\\\d$","description":"Local 24-hour time as HH:MM, for example 09:00."},"timezone":{"type":"string","minLength":1,"maxLength":255,"description":"IANA timezone for the clock time, such as America/New_York. Use the timezone the user stated."}},"required":["kind","weekdays","time","timezone"],"additionalProperties":false,"description":"Post on one or more selected weekdays at the same local clock time."},{"type":"object","properties":{"kind":{"type":"string","const":"every_n_minutes","description":"Repeat a fixed number of minutes on a fixed grid."},"interval_minutes":{"type":"integer","minimum":10,"maximum":10080,"multipleOf":10,"description":"How many minutes between posts, from 10 to 10080 in 10-minute increments."}},"required":["kind","interval_minutes"],"additionalProperties":false,"description":"Repeat every N minutes, starting from now."},{"type":"object","properties":{"kind":{"type":"string","const":"every_n_hours","description":"Repeat a fixed number of whole hours on a fixed grid."},"interval_hours":{"type":"integer","minimum":1,"maximum":168,"description":"How many whole hours between posts, from 1 to 168 (compatibility alias for every_n_minutes)."}},"required":["kind","interval_hours"],"additionalProperties":false,"description":"Repeat every N hours, starting from now."},{"type":"object","properties":{"kind":{"type":"string","const":"once","description":"Post a single time, then stop."},"run_at":{"type":"string","format":"date-time","pattern":"^(?:(?:\\\\d\\\\d[2468][048]|\\\\d\\\\d[13579][26]|\\\\d\\\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\\\d|30)|(?:02)-(?:0[1-9]|1\\\\d|2[0-8])))T(?:(?:[01]\\\\d|2[0-3]):[0-5]\\\\d(?::[0-5]\\\\d(?:\\\\.\\\\d+)?)?(?:Z|([+-](?:[01]\\\\d|2[0-3]):[0-5]\\\\d)))$","description":"The future moment to post, RFC 3339 with offset, for example 2026-10-22T14:30:00-04:00."},"timezone":{"type":"string","minLength":1,"maxLength":255,"description":"IANA timezone for the clock time, such as America/New_York. Use the timezone the user stated."}},"required":["kind","run_at"],"additionalProperties":false,"description":"Post once at a set time, for example a check before a meeting; the Routine is done afterwards."}],"description":"When the Routine posts. daily and weekly use a clock time and timezone. every_n_minutes (or compatibility alias every_n_hours) repeats from now. once posts a single time at run_at."},"listener":{"description":"Present instead of schedule on an app listener. It can only be paused and enabled, and goes away when the Human revokes your access to the app.","type":"object","properties":{"app":{"type":"string","enum":["gmail","outlook","google_calendar","outlook_calendar","slack"],"description":"Connected app whose new events the Routine hands to proactive judgement."}},"required":["app"],"additionalProperties":false},"enabled":{"type":"boolean","description":"Whether the Routine will post on schedule."},"next_run_at":{"description":"UTC time of the next scheduled post. Absent while paused.","type":"string","minLength":1},"tracking_item_id":{"description":"Tracking Item this Routine serves, when it serves one.","type":"string"}},"required":["id","name","instruction","enabled"],"additionalProperties":false,"description":"One Routine in the current room."},"cli":{"usage":["teamhub routine run [flags]"],"arguments":["<routine-id>"],"options":{"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true},"--operation-id":{"description":"Stable operation identity for recovery."}},"notes":[]}}
+",
+  },
+  "skill list": {
+    "help": "exit 0
+teamhub skill list [--json]
+List your default Skills and explicit bindings, including disabled bindings.
+
+Options:
+  --json  Return machine-readable JSON.
+  --help  Show this offline command reference.
+  -h  Show help.
+  --schema  Show offline input and output schemas.
+",
+    "schema": "exit 0
+{"command":["skill","list"],"description":"List your default Skills and explicit bindings, including disabled bindings.","read_only":true,"input_schema":{"type":"object","properties":{},"additionalProperties":false},"output_schema":{"type":"object","required":["binding_version","items"],"properties":{"binding_version":{"type":"integer","minimum":1},"issues":{"type":"array","items":{"type":"object","required":["path","code","message"],"properties":{"path":{"type":"string"},"code":{"type":"string"},"message":{"type":"string"}}}},"items":{"type":"array","items":{"type":"object","required":["skill_id","name","manifest_version","enabled","is_default"],"properties":{"skill_id":{"type":"string"},"name":{"type":"string"},"manifest_version":{"type":"string"},"enabled":{"type":"boolean"},"is_default":{"type":"boolean"}}}}}},"cli":{"usage":["teamhub skill list [--json]"],"arguments":[],"options":{"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true}},"notes":[]}}
+",
+  },
+  "skill unbind": {
+    "help": "exit 0
+teamhub skill unbind <skill-id> --binding-version <version>
+Ask your Sponsor to remove an explicit Skill binding. Approval applies only to the selected revision.
+
+Arguments:
+  <skill-id>
+
+Options:
+  --binding-version <value>  Binding version from teamhub skill list.
+  --json  Return machine-readable JSON.
+  --help  Show this offline command reference.
+  -h  Show help.
+  --schema  Show offline input and output schemas.
+  --operation-id <value>  Stable operation identity for recovery.
+",
+    "schema": "exit 0
+{"command":["skill","unbind"],"description":"Ask your Sponsor to remove an explicit Skill binding. Approval applies only to the selected revision.","read_only":false,"input_schema":{"type":"object","additionalProperties":false,"properties":{"skill_id":{"type":"string"},"expected_binding_version":{"type":"integer","minimum":1}},"required":["skill_id","expected_binding_version"]},"output_schema":{"type":"object","properties":{"status":{"const":"submitted"},"room_id":{"type":"string"},"message_id":{"type":"string"},"interaction_id":{"type":"string"}},"required":["status","room_id","message_id","interaction_id"]},"cli":{"usage":["teamhub skill unbind <skill-id> --binding-version <version>"],"arguments":["<skill-id>"],"options":{"--binding-version":{"description":"Binding version from teamhub skill list."},"--json":{"description":"Return machine-readable JSON.","boolean":true},"--help":{"description":"Show this offline command reference.","boolean":true},"-h":{"description":"Show help.","boolean":true},"--schema":{"description":"Show offline input and output schemas.","boolean":true},"--operation-id":{"description":"Stable operation identity for recovery."}},"notes":[]}}
 ",
   },
   "slack channels": {
@@ -3588,6 +3624,7 @@ Commands:
   profile
   room
   routine
+  skill
   slack
   task
   tracking-items
@@ -4435,6 +4472,7 @@ Options:
   --json  Return machine-readable JSON.
   --help  Show this offline command reference.
   -h  Show help.
+  --operation-id <value>  Stable operation identity for recovery.
 ",
   "room": "exit 0
 teamhub room create [flags]
@@ -4598,6 +4636,30 @@ Arguments:
   <routine-id>
 
 Options:
+  --json  Return machine-readable JSON.
+  --help  Show this offline command reference.
+  -h  Show help.
+  --schema  Show offline input and output schemas.
+  --operation-id <value>  Stable operation identity for recovery.
+",
+  "skill": "exit 0
+teamhub skill list [--json]
+List your default Skills and explicit bindings, including disabled bindings.
+
+Options:
+  --json  Return machine-readable JSON.
+  --help  Show this offline command reference.
+  -h  Show help.
+  --schema  Show offline input and output schemas.
+
+teamhub skill unbind <skill-id> --binding-version <version>
+Ask your Sponsor to remove an explicit Skill binding. Approval applies only to the selected revision.
+
+Arguments:
+  <skill-id>
+
+Options:
+  --binding-version <value>  Binding version from teamhub skill list.
   --json  Return machine-readable JSON.
   --help  Show this offline command reference.
   -h  Show help.

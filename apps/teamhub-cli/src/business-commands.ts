@@ -25,6 +25,7 @@ import {
 } from "./connector-runtime.js";
 import { renderBusinessResult } from "./business-render.js";
 import { accountIdentityText, displayText } from "./display-text.js";
+import { skillBindingCommands } from "./skill-binding-commands.js";
 import { computerPermissionCommandDefinitions } from "./computer-permission-commands.js";
 
 type Json = Record<string, unknown>;
@@ -729,7 +730,7 @@ const skillPublish = definition(
   },
   {
     schema: false,
-    operationId: false,
+    operationId: true,
     fileRoute: "skill/publish",
     arguments: ["<folder>"],
   },
@@ -1303,6 +1304,7 @@ export const businessCommandDefinitions: readonly CommandDefinition[] = [
   appsConnect,
   browserConnect,
   ...computerPermissionCommandDefinitions,
+  ...skillBindingCommands,
   appsAutoRemindersList,
   appsAutoRemindersSet,
   appsSearch,

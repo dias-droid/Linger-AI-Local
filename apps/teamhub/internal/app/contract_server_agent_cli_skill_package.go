@@ -14,6 +14,7 @@ import (
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/config"
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/idempotency"
 	"github.com/simplexai-labs/linger/apps/teamhub/internal/skill"
+	api "github.com/simplexai-labs/linger/contracts-go/teamhubagentapi"
 )
 
 // agentCLISkillPackageResult names the immutable version that was published and
@@ -26,6 +27,7 @@ type agentCLISkillPackageResult struct {
 	ManifestVersion string `json:"manifest_version"`
 	BindingVersion  int64  `json:"binding_version"`
 	Replayed        bool   `json:"replayed"`
+	Unchanged       bool   `json:"unchanged,omitempty"`
 }
 
 // publishAgentCLISkillPackage publishes a package an Agent assembled in its own
@@ -66,7 +68,7 @@ func (a *App) publishAgentCLISkillPackage(c *gin.Context, tenantID, agentID, ope
 	}
 	c.JSON(http.StatusCreated, agentCLISkillPackageResult{
 		SkillID: binding.Skill.SkillID, Name: pkg.Name, ManifestVersion: binding.Skill.ManifestVersion,
-		BindingVersion: binding.BindingVersion, Replayed: result.Replay,
+		BindingVersion: binding.BindingVersion, Replayed: result.Replay, Unchanged: result.Status == http.StatusOK,
 	})
 }
 
@@ -114,7 +116,7 @@ func (a *App) writeAgentSkillPackageRuntimeError(c *gin.Context, err error) {
 	case errors.Is(err, agentregistry.ErrSkillIdentityConflict):
 		a.writeError(c, http.StatusConflict, "SKILL_IDENTITY_CONFLICT", "SKILL.md name must match the original Skill identity")
 	case errors.Is(err, agentregistry.ErrSkillDefaultNameConflict), errors.Is(err, agentregistry.ErrAgentSkillEffectiveSetInvalid):
-		a.writeError(c, http.StatusConflict, "SKILL_SET_CONFLICT", "The resulting Skill set has a name, identity, availability, or capacity conflict")
+		a.writeAgentAPIErrorWithIssues(c, http.StatusConflict, api.AgentApiErrorCodeSKILLSETCONFLICT, "The Skill could not be bound to this Agent.", agentregistry.SkillBindingIssues(err))
 	case errors.Is(err, agentregistry.ErrSkillInvalid):
 		a.writeError(c, http.StatusBadRequest, "INVALID_SKILL_CONFIG", "The saved configuration is not valid for this Skill")
 	case errors.Is(err, agentregistry.ErrSkillManifestInactive):

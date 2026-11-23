@@ -2,19 +2,31 @@ package skill
 
 import "strings"
 
-// policyConflict contains only diagnostic policy facts, never config values or credentials.
-type policyConflict struct{ description string }
+// PolicyConflict identifies the failed Skill policy and the records involved, without configuration values.
+type PolicyConflict struct {
+	Code       string
+	References []string
+	Reason     string
+}
 
-func (e *policyConflict) Error() string { return e.description }
-func (e *policyConflict) Unwrap() error { return ErrConflict }
+func (e *PolicyConflict) Error() string {
+	description := "Skill configuration requires repair: " + e.Reason
+	if len(e.References) > 0 {
+		description += " (" + strings.Join(e.References, ", ") + ")"
+	}
+	return description
+}
 
-func newPolicyConflict(reason string, references ...string) error {
+func (e *PolicyConflict) Unwrap() error { return ErrConflict }
+
+func newPolicyConflict(code, reason string, references ...string) error {
 	if len(references) > 10 {
 		references = references[:10]
 	}
-	description := "Skill configuration requires repair: " + reason
-	if len(references) > 0 {
-		description += " (" + strings.Join(references, ", ") + ")"
-	}
-	return &policyConflict{description: description}
+	return &PolicyConflict{Code: code, References: references, Reason: reason}
+}
+
+// ManagedDefaultConflict identifies the platform default that reserves a package name.
+func ManagedDefaultConflict(name, skillID string) error {
+	return newPolicyConflict("managed_default_name", "Package name "+name+" belongs to a managed default Skill", skillID)
 }

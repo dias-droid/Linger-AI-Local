@@ -4,6 +4,7 @@ components:
       type: string
       description: Stable machine-readable failure classification.
       enum:
+        - SKILL_SET_CONFLICT
         - invalid_request
         - invalid_input
         - artifact_reference_invalid

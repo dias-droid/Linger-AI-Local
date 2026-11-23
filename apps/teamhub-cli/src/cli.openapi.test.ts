@@ -269,9 +269,27 @@ async function respond(request: Request): Promise<Response> {
       actor_id: "actor_agent",
       room_id: "room_one",
     });
-  if (endpoint.endsWith("/agents/updates"))
+  if (endpoint.endsWith("/skills/bindings"))
     return Response.json({
-      status: "confirmation_pending",
+      binding_version: 2,
+      items: [
+        {
+          skill_id: "skill_one",
+          name: "review",
+          manifest_version: "1.0.0",
+          is_default: false,
+          enabled: true,
+        },
+      ],
+    });
+  if (
+    endpoint.endsWith("/agents/updates") ||
+    endpoint.endsWith("/skills/unbind-requests")
+  )
+    return Response.json({
+      status: endpoint.endsWith("/skills/unbind-requests")
+        ? "submitted"
+        : "confirmation_pending",
       room_id: "room_one",
       message_id: "message_one",
       interaction_id: "interaction_one",
@@ -620,6 +638,29 @@ async function fixture(
 }
 
 describe("actual CLI HTTP exchanges against TeamHub OpenAPI", () => {
+  it("assigns a new Skill publication ID per install and preserves one supplied for a retry", async () => {
+    const f = await fixture();
+    const args = [
+      "profile",
+      "skill",
+      "publish",
+      "playground/skill/release-check",
+    ];
+    await f.run(args);
+    await f.run(args);
+    const [first, second] = f.requests;
+    const header = "x-teamhub-operation-id";
+    const firstId = first!.headers.get(header)!;
+    expect(firstId).toBeTruthy();
+    expect(second!.headers.get(header)).not.toBe(firstId);
+    await f.run([...args, "--operation-id", firstId]);
+    expect(f.requests[2]!.headers.get(header)).toBe(firstId);
+    expect(f.requests[2]!.headers.get("idempotency-key")).toBe(firstId);
+    expect(f.requests[2]!.headers.get("x-package-sha256")).toBe(
+      first!.headers.get("x-package-sha256"),
+    );
+  });
+
   it("uses the default Room for live reads and explicit Thread membership without changing the target", async () => {
     const f = await fixture();
     await f.run(["room", "members"]);

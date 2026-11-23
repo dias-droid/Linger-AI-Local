@@ -16,6 +16,7 @@ import type { ExecutionContextRef } from "./context-ref.js";
 
 /** Current Agent configuration, with no Context resource authorization session. */
 export interface AgentEffectiveResources {
+  readonly skillRecovery?: true;
   /** Covers the Skills and connectedApps. */
   readonly effectiveSha256: string;
   readonly skills: ExecutionResources["skills"];
@@ -29,6 +30,7 @@ export interface AgentEffectiveResources {
 
 export interface AgentResourcesResolver {
   resolve(request: {
+    readonly allowSkillRecovery?: true;
     readonly agentId: string;
     readonly signal: AbortSignal;
   }): Promise<AgentEffectiveResources>;
@@ -40,7 +42,7 @@ export const createTeamHubAgentResourcesResolver = (options: {
   readonly fetch?: TeamHubAgentCallbackFetch;
   readonly requestTimeoutMs?: number;
 }): AgentResourcesResolver => ({
-  async resolve({ agentId, signal }) {
+  async resolve({ agentId, signal, allowSkillRecovery }) {
     const response = await getTeamHubAgentEffectiveResources({
       baseUrl: options.baseUrl,
       serviceToken: options.serviceToken,
@@ -52,10 +54,35 @@ export const createTeamHubAgentResourcesResolver = (options: {
       ]),
     });
     if (!response.ok) {
-      await response.body?.cancel();
-      throw new Error(
-        `Agent resource configuration could not be read (HTTP ${response.status})`,
-      );
+      const message = `Agent resource configuration could not be read (HTTP ${response.status})`;
+      if (allowSkillRecovery && response.status === 409) {
+        const failure: unknown = await response
+          .json()
+          .catch((cause: unknown) => {
+            if (cause instanceof SyntaxError)
+              throw new Error(message, { cause });
+            throw cause;
+          });
+        if (
+          isRecord(failure) &&
+          isRecord(failure.error) &&
+          failure.error.code === "SKILL_SET_CONFLICT"
+        ) {
+          return {
+            skillRecovery: true,
+            effectiveSha256: createHash("sha256")
+              .update("teamhub.skill-binding-recovery.v1")
+              .digest("hex"),
+            skills: [],
+            connectedApps: false,
+            connectedAppKeys: [],
+            connectableAppKeys: [],
+          };
+        }
+      } else {
+        await response.body?.cancel();
+      }
+      throw new Error(message);
     }
     const parsed = parseAgentEffectiveResources(await response.json());
     signal.throwIfAborted();

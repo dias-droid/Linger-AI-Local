@@ -24,6 +24,42 @@ const response = () => ({
 });
 
 describe("Agent effective resources", () => {
+  it("lets a chat repair conflicting bindings and resolves healthy Skills after cleanup", async () => {
+    let code = "SKILL_SET_CONFLICT";
+    const reader = createTeamHubAgentResourcesResolver({
+      baseUrl: "https://teamhub.example/",
+      serviceToken: "service",
+      fetch: async () =>
+        code
+          ? Response.json({ error: { code } }, { status: 409 })
+          : Response.json(response()),
+    });
+    const request = {
+      agentId: "agent-1",
+      signal: new AbortController().signal,
+    };
+    await expect(reader.resolve(request)).rejects.toThrow("HTTP 409");
+    const recovery = await reader.resolve({
+      ...request,
+      allowSkillRecovery: true,
+    });
+    expect(recovery).toMatchObject({
+      skillRecovery: true,
+      skills: [],
+      connectedApps: false,
+    });
+    code = "VERSION_CONFLICT";
+    await expect(
+      reader.resolve({ ...request, allowSkillRecovery: true }),
+    ).rejects.toThrow("HTTP 409");
+    code = "";
+    const repaired = await reader.resolve({
+      ...request,
+      allowSkillRecovery: true,
+    });
+    expect(repaired.skills).toHaveLength(1);
+    expect(repaired.effectiveSha256).not.toBe(recovery.effectiveSha256);
+  });
   it("reads current Agent configuration without a Context or session capability", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async (_url, _init) =>
       Response.json(response()),

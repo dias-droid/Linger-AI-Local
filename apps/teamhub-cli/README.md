@@ -90,3 +90,26 @@ teamhub web connect tavily
   Relative links and images use the page's first `<base href>` when it resolves to an HTTP(S) URL; otherwise they use the final page URL.
 - `web list` shows each backend's commands, filters, readiness and live quota; `web connect <backend>` posts a key card unless that backend is ready.
 - A backend never falls back to another one. When the requested backend, or the default one, has no key, a rejected key or no keyless searches left, TeamHub posts a key card in the chat and the command exits 4 with `search_key_requested`, the backend and the card in `details`. The Agent ends its turn: a key saved from the card reruns the request and wakes the Agent with its results. A used-up quota (`search_quota_exhausted`) or rate limit (`provider_rate_limited`) lists `ready_backends` to choose from.
+
+### Recover a Skill publication
+
+Run `teamhub skill list --json` to inspect this Agent's platform defaults and
+explicit bindings, including disabled bindings. The optional `issues` list identifies
+conflicting bindings by Skill ID even when the Runtime cannot load any Skills. A publication returning
+`SKILL_SET_CONFLICT` identifies the failed policy in its issues. For a managed
+default name, choose a distinct name in the package's root `SKILL.md`.
+
+To remove an explicit binding, run
+`teamhub skill unbind <skill-id> --binding-version <binding_version>` with
+the revision from the list. TeamHub posts the exact selection to the Sponsor.
+Approval removes the binding only if the revision is still current. After the
+decision, list again to confirm the result before publishing the corrected
+folder with `teamhub profile skill publish <folder>`. A package may contain
+up to 256 files. Running publish again starts a new installation. Identical
+installed content keeps its version. After an unbind, publishing the original
+package restores its active immutable version. To recover an unknown network
+outcome, retry with the operation ID from the error (`--operation-id <id>`);
+that receipt describes the original attempt. The unbind receipt points to the
+same Room decision before and after it is resolved. During a rolling upgrade,
+a new CLI needs an updated TeamHub replica to publish. An older replica returns
+HTTP 404 before changing any bindings.

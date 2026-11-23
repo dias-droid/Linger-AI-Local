@@ -65,6 +65,7 @@ const (
 	AgentApiErrorCodeProviderKeyRequired        AgentApiErrorCode = "provider_key_required"
 	AgentApiErrorCodeProviderRateLimited        AgentApiErrorCode = "provider_rate_limited"
 	AgentApiErrorCodeProviderUnavailable        AgentApiErrorCode = "provider_unavailable"
+	AgentApiErrorCodeSKILLSETCONFLICT           AgentApiErrorCode = "SKILL_SET_CONFLICT"
 	AgentApiErrorCodeSearchKeyRequested         AgentApiErrorCode = "search_key_requested"
 	AgentApiErrorCodeSearchQuotaExhausted       AgentApiErrorCode = "search_quota_exhausted"
 	AgentApiErrorCodeTaskFinishConflict         AgentApiErrorCode = "task_finish_conflict"
@@ -134,6 +135,8 @@ func (e AgentApiErrorCode) Valid() bool {
 	case AgentApiErrorCodeProviderRateLimited:
 		return true
 	case AgentApiErrorCodeProviderUnavailable:
+		return true
+	case AgentApiErrorCodeSKILLSETCONFLICT:
 		return true
 	case AgentApiErrorCodeSearchKeyRequested:
 		return true
@@ -782,6 +785,21 @@ func (e AgentSendTaskResponseDelivery) Valid() bool {
 	case AgentTaskDeliveryStarted:
 		return true
 	case AgentTaskDeliverySteered:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentSkillUnbindReceiptStatus.
+const (
+	Submitted AgentSkillUnbindReceiptStatus = "submitted"
+)
+
+// Valid indicates whether the value is a known member of the AgentSkillUnbindReceiptStatus enum.
+func (e AgentSkillUnbindReceiptStatus) Valid() bool {
+	switch e {
+	case Submitted:
 		return true
 	default:
 		return false
@@ -2894,6 +2912,55 @@ type AgentSetDocumentTitleSemanticOperation struct {
 	Title string `json:"title"`
 }
 
+// AgentSkillInventory defines model for AgentSkillInventory.
+type AgentSkillInventory struct {
+	BindingVersion int64 `json:"binding_version"`
+
+	// Issues Current effective-set conflicts in the same inventory snapshot.
+	Issues *[]AgentApiErrorIssue     `json:"issues,omitempty"`
+	Items  []AgentSkillInventoryItem `json:"items"`
+}
+
+// AgentSkillInventoryItem defines model for AgentSkillInventoryItem.
+type AgentSkillInventoryItem struct {
+	Enabled   bool `json:"enabled"`
+	IsDefault bool `json:"is_default"`
+
+	// ManifestVersion Immutable strict Semantic Version for a Skill Manifest.
+	ManifestVersion ManifestVersion `json:"manifest_version"`
+	Name            string          `json:"name"`
+
+	// SkillId Stable, case-sensitive logical Skill identifier.
+	SkillId SkillIdentifier `json:"skill_id"`
+}
+
+// AgentSkillUnbindReceipt defines model for AgentSkillUnbindReceipt.
+type AgentSkillUnbindReceipt struct {
+	// InteractionId Opaque, case-sensitive identifier. Clients must not infer type or time from it.
+	InteractionId Id `json:"interaction_id"`
+
+	// MessageId Opaque, case-sensitive identifier. Clients must not infer type or time from it.
+	MessageId Id `json:"message_id"`
+
+	// RoomId Opaque, case-sensitive identifier. Clients must not infer type or time from it.
+	RoomId Id                            `json:"room_id"`
+	Status AgentSkillUnbindReceiptStatus `json:"status"`
+}
+
+// AgentSkillUnbindReceiptStatus defines model for AgentSkillUnbindReceipt.Status.
+type AgentSkillUnbindReceiptStatus string
+
+// AgentSkillUnbindRequest defines model for AgentSkillUnbindRequest.
+type AgentSkillUnbindRequest struct {
+	ExpectedBindingVersion int64 `json:"expected_binding_version"`
+
+	// InvocationId Stable SHA-256 operation identity derived by the CLI from the Agent identity, command, and caller operation ID. Credential rotation and Runtime restarts do not change it.
+	InvocationId AgentInvocationId `json:"invocation_id"`
+
+	// SkillId Stable, case-sensitive logical Skill identifier.
+	SkillId SkillIdentifier `json:"skill_id"`
+}
+
 // AgentStopTaskRequest defines model for AgentStopTaskRequest.
 type AgentStopTaskRequest struct {
 	// InvocationId Stable SHA-256 operation identity derived by the CLI from the Agent identity, command, and caller operation ID. Credential rotation and Runtime restarts do not change it.
@@ -3953,6 +4020,9 @@ type ListAgentRoutinesJSONRequestBody = AgentRoutineCommandRequest
 
 // RunAgentRoutineJSONRequestBody defines body for RunAgentRoutine for application/json ContentType.
 type RunAgentRoutineJSONRequestBody = AgentRoutineIdRequest
+
+// RequestOwnAgentSkillUnbindJSONRequestBody defines body for RequestOwnAgentSkillUnbind for application/json ContentType.
+type RequestOwnAgentSkillUnbindJSONRequestBody = AgentSkillUnbindRequest
 
 // CreateAgentTaskJSONRequestBody defines body for CreateAgentTask for application/json ContentType.
 type CreateAgentTaskJSONRequestBody = AgentCreateTaskRequest

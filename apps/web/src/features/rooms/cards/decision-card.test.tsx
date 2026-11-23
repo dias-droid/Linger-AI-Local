@@ -167,6 +167,28 @@ function openSummary() {
 }
 
 describe("DecisionCard", () => {
+  it("names the exact Skill before the Sponsor decides whether to remove it", () => {
+    renderCard(
+      connectorCard({
+        kind: "change",
+        app: "teamhub",
+        account: "Nova",
+        title: "Remove Skill review-helper",
+        tool: "teamhub skill unbind",
+        input: '{"skill_id":"skill_review","binding_version":7}',
+        fields: [
+          { label: "Skill to remove", value: "review-helper (skill_review)" },
+        ],
+      }),
+    );
+    expect(screen.getByText("Remove Skill review-helper")).toBeVisible();
+    openSummary();
+    expect(screen.getByText("Skill to remove")).toBeInTheDocument();
+    expect(
+      screen.getByText("review-helper (skill_review)"),
+    ).toBeInTheDocument();
+  });
+
   it("shows the subject and recipient once and expands into a complete email", () => {
     renderCard(
       connectorCard(
