@@ -20,10 +20,6 @@ const (
 	voiceMediaStopRecoveryDelay           = 35 * time.Second
 	voiceRuntimeDispatchReconcileInterval = 5 * time.Second
 	voiceRuntimeDispatchReconcileTimeout  = 5 * time.Second
-	// voiceMediaStopReconcileMaxFailures bounds the failed reconciliations an
-	// epoch gets after its Capture's Stop. Failures are jobErrorWait apart, so
-	// this is about five minutes of a recorder that cannot settle.
-	voiceMediaStopReconcileMaxFailures = 60
 )
 
 // stopCaptureStep stops the last recorder of a Capture whose stop committed,
@@ -246,14 +242,21 @@ func (s *Service) reconcileCaptureEpoch(ctx context.Context, captureID string) (
 		return false, err
 	}
 	row := rows[0]
-	if row.CaptureStatus == "finalizing" && row.StopReconcileFailures >= voiceMediaStopReconcileMaxFailures {
+	if row.CaptureStatus == "finalizing" && row.StopReconcileFailures >= voiceRetryMaxAttempts {
 		// Until the Capture ends, its voice session stays closing and the
 		// recording stays finishing on screen.
-		return true, s.failUnsettledCapture(ctx, row)
+		ended, err := s.failUnsettledCapture(ctx, row)
+		if ended || err != nil {
+			return true, err
+		}
 	}
 	defer func() {
 		if err != nil {
-			_ = s.queries.DeferVoiceMediaEpochReconcile(context.WithoutCancel(ctx), store.DeferVoiceMediaEpochReconcileParams{ID: row.ID, Failed: true})
+			// A shutdown's cancellation says nothing about the recorder.
+			_ = s.queries.DeferVoiceMediaEpochReconcile(context.WithoutCancel(ctx), store.DeferVoiceMediaEpochReconcileParams{
+				ID: row.ID, Failed: ctx.Err() == nil,
+				RetryDelay: durationInterval(voiceRetryDelay(row.StopReconcileFailures + 1)),
+			})
 		}
 	}()
 	if row.EpochIndex > 0 && !row.FirstArchivedMs.Valid {
@@ -411,39 +414,40 @@ func (s *Service) reconcileCaptureEpoch(ctx context.Context, captureID string) (
 	}
 }
 
-// failUnsettledCapture fails a stopped Capture whose recorder never settled,
-// together with its unsettled epochs.
-func (s *Service) failUnsettledCapture(ctx context.Context, row store.ListVoiceMediaEpochsForReconcileRow) error {
+// failUnsettledCapture fails a stopped Capture together with its epoch that
+// used up its settle budget. It reports false, leaving the epoch to ordinary
+// reconciliation, when the epoch does not qualify.
+func (s *Service) failUnsettledCapture(ctx context.Context, row store.ListVoiceMediaEpochsForReconcileRow) (bool, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer tx.Rollback(ctx)
 	queries := s.queries.WithTx(tx)
 	if _, err = queries.LockVoiceSession(ctx, row.VoiceSessionID); err != nil {
-		return err
+		return false, err
 	}
-	failed, err := queries.FailUnsettledVoiceCapture(ctx, row.CaptureSessionID)
+	failed, err := queries.FailUnsettledVoiceCapture(ctx, row.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil
+		return false, nil
 	}
 	if err != nil {
-		return err
+		return false, err
 	}
 	err = roomevent.AppendCaptureSessionChanged(ctx, queries, failed.TenantID, failed.RoomID, failed.CreatedByActorID, failed.ID, "failed")
 	// A Room under deletion accepts no events but must still end the Capture.
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return err
+		return false, err
 	}
 	if err = enqueue(ctx, tx, StagingCleanupArgs{CaptureSessionID: failed.ID}); err != nil {
-		return err
+		return false, err
 	}
 	if err = tx.Commit(ctx); err != nil {
-		return err
+		return false, err
 	}
 	slog.ErrorContext(ctx, "voice.capture_stop_unsettled", "capture_session_id", failed.ID, "epoch_id", row.ID,
-		"observed_state", row.ObservedState, "last_failure_code", row.LastFailureCode.String)
-	return nil
+		"recorder_state", row.RecorderState.String, "last_failure_code", row.LastFailureCode.String)
+	return true, nil
 }
 
 func voiceMediaFinalizingWithoutEgressExpired(
