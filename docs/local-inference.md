@@ -4,13 +4,13 @@
 
 ![Agents, runtimes, gateway, models and assets: the whole stack on one machine](../assets/feature-local-stack.jpg)
 
-Claude Code, Codex and Pi run as they always do, while a local gateway points
+Claude Code, Codex, Pi and Antigravity run as they always do, while a local gateway points
 them at models on your own machine, with Gemini CLI, OpenCode and Hermes coming
 next. Your wiki, memory, sessions and files stay on your disk, and a remote
 model or the subscription you already pay for joins only when you ask. One
 install sets up a language model, and it stays quick even on a fanless laptop.
 
-How agents, approvals and background work share a model is in
+Antigravity signs in to its own account over ACP rather than taking models from this gateway, so its install and sign-in live in [the Computer README](../apps/computer/README.md#antigravity). How agents, approvals and background work share a model is in
 [Model scheduling](model-scheduling.md).
 
 ## Model source
@@ -19,11 +19,11 @@ Each computer serves all of its agents from one source at a time. Setup asks
 for it, and **Settings › Models** switches it later to Local model or BYOK; it
 does not offer a switch to Subscription.
 
-| Source       | Runtime                  | Where the model runs                                                                       |
-| ------------ | ------------------------ | ------------------------------------------------------------------------------------------ |
-| Local model  | Pi                       | A model loaded on this computer, through the local gateway                                 |
-| Subscription | Claude Code or Codex     | The plan the runtime is signed in to, with its own settings                                |
-| BYOK         | Claude Code, Codex or Pi | Your own OpenAI-compatible or Anthropic endpoint, key and model, through the local gateway |
+| Source       | Runtime                           | Where the model runs                                                                       |
+| ------------ | --------------------------------- | ------------------------------------------------------------------------------------------ |
+| Local model  | Pi                                | A model loaded on this computer, through the local gateway                                 |
+| Subscription | Claude Code, Codex or Antigravity | The plan the runtime is signed in to, with its own settings                                |
+| BYOK         | Claude Code, Codex or Pi          | Your own OpenAI-compatible or Anthropic endpoint, key and model, through the local gateway |
 
 For BYOK you enter the base URL and key, and optionally a path and an
 endpoint. Requests go to base URL + path + endpoint: the path defaults to
