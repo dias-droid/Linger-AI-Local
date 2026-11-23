@@ -57,7 +57,5 @@ jobs:
             --label "linger.dockerfile.sha256=$sha" \
             --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
             -t "$remote:$sha" \
-            -t "$remote:latest" \
             "$DOCKER_DIR"
           docker push "$remote:$sha"
-          docker push "$remote:latest"
