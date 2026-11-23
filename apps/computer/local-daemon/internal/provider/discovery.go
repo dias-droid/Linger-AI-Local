@@ -146,7 +146,7 @@ func discoverResolved(ctx context.Context, options DiscoveryOptions) DiscoveryRe
 		})
 	}
 	workers.Wait()
-	return DiscoveryResult{Diagnostics: observations, Installations: installationsFromDiagnostics(observations)}
+	return DiscoveryResult{Diagnostics: observations, Installations: InstallationsFromDiagnostics(observations)}
 }
 
 func diagnose(ctx context.Context, kind, executable, protocol string, options DiscoveryOptions, budget time.Duration) RuntimeDiagnostic {
@@ -276,9 +276,23 @@ func catalogModels(catalog native.ModelList, err error) ([]RuntimeModel, string)
 }
 
 func normalizeRuntimeModels(catalog []native.ModelOption) []RuntimeModel {
-	result := make([]RuntimeModel, 0, min(100, len(catalog)))
-	seen := make(map[string]bool)
+	// Retain default entries before applying the 100-model wire limit so a
+	// configured gateway or local default near the end of a large catalog is
+	// not dropped before overlay shaping runs.
+	ordered := make([]native.ModelOption, 0, len(catalog))
 	for _, entry := range catalog {
+		if entry.Default {
+			ordered = append(ordered, entry)
+		}
+	}
+	for _, entry := range catalog {
+		if !entry.Default {
+			ordered = append(ordered, entry)
+		}
+	}
+	result := make([]RuntimeModel, 0, min(100, len(ordered)))
+	seen := make(map[string]bool)
+	for _, entry := range ordered {
 		id := strings.TrimSpace(entry.ID)
 		if id == "" || len([]rune(id)) > 160 || seen[id] {
 			continue

@@ -161,13 +161,13 @@ func run(args []string) (resultErr error) {
 			Environment:      currentProviderEnvironment(),
 		}
 	}
+	shapeDiscovered := func(result provider.DiscoveryResult) provider.DiscoveryResult {
+		return shapeDiscoveredResult(result, localModelsStateDir, localModels != nil && localModels.PiProvisionFailed())
+	}
 	discover := func(ctx context.Context, options provider.DiscoveryOptions) (provider.DiscoveryResult, error) {
 		result, err := provider.Discover(ctx, options)
 		if err == nil {
-			result.Diagnostics = byokRuntimeCatalogs(result.Diagnostics, localmodels.ReadOverlay(localModelsStateDir))
-			if localModels != nil {
-				result.Diagnostics = withPiProvisionStatus(result.Diagnostics, localModels.PiProvisionFailed())
-			}
+			result = shapeDiscovered(result)
 		}
 		return result, err
 	}
@@ -481,8 +481,8 @@ func run(args []string) (resultErr error) {
 		monitorDone <- provider.MonitorRuntimeDiagnostics(ctx, provider.RuntimeMonitorOptions{
 			Initial:               discovered,
 			Discovery:             currentDiscoveryOptions(),
-			Discover:              discover,
 			ResolveDiscovery:      currentDiscoveryOptions,
+			Shape:                 shapeDiscovered,
 			RefreshInterval:       15 * time.Second,
 			FullRefreshEveryTicks: 4,
 			FullRefreshAllowed: func() bool {
@@ -902,6 +902,18 @@ func runtimeModelCatalogs(diagnostics []provider.RuntimeDiagnostic) map[string][
 		catalogs[diagnostic.Type] = models
 	}
 	return catalogs
+}
+
+// shapeDiscoveredResult applies the persisted BYOK catalog overlay and managed
+// Pi provisioning status without mutating the input, and rebuilds Installations
+// so provider lookup sees the same shaped catalog.
+func shapeDiscoveredResult(result provider.DiscoveryResult, localModelsStateDir string, piProvisionFailed bool) provider.DiscoveryResult {
+	diagnostics := byokRuntimeCatalogs(result.Diagnostics, localmodels.ReadOverlay(localModelsStateDir))
+	diagnostics = withPiProvisionStatus(diagnostics, piProvisionFailed)
+	return provider.DiscoveryResult{
+		Diagnostics:   diagnostics,
+		Installations: provider.InstallationsFromDiagnostics(diagnostics),
+	}
 }
 
 // byokRuntimeCatalogs shows a BYOK source as the one model the person entered.
