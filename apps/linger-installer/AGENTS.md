@@ -94,7 +94,10 @@ long for Pi without long paths; `RUNTIME_ACTION_FAILED`;
 `RUNTIME_EXTENSIONS_FAILED`), otherwise `INSTALL_FAILED`. With
 `--external-computer`, a successful outcome carries `runtime`, the same instance runtime as
 `GET /api/instances/{name}/runtime` (runtime and localmodels tool paths), so
-the desktop's Computer follows them.
+the desktop's Computer follows them. That lookup logs one `Runtime lookup
+timings (ms)` line on stderr for config reads, runtime discovery, localmodels
+environment and tool paths; the desktop already captures that stream. Neither
+the route's response nor the resume outcome carries these timings.
 
 `--stop` (with `--instance`) is the desktop uninstall's and Windows setup's: it stops the
 manager the desktop started for that instance (its `/api/stop` cancels a

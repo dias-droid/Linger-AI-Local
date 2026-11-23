@@ -31,7 +31,14 @@ import { readSetupChoice } from "@linger/local-installation/setup-selection";
 import { readByokEnvironment } from "@linger/local-installation/byok-source";
 import { localModelsEnvironment } from "@linger/local-installation/local-models";
 import { managedRuntimeEnvironment } from "@linger/local-installation/managed-codex";
-import { instanceRuntime } from "./instance-runtime.js";
+import { localmodelsComputerTool } from "@linger/local-installation/localmodels-computer";
+import {
+  formatRuntimeLookupTimings,
+  instanceRuntime,
+  type RuntimeLookupTimings,
+} from "./instance-runtime.js";
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -80,5 +87,52 @@ test("falls back to managedRuntimeEnvironment when no descriptors are supplied",
   expect(managedRuntimeEnvironment).toHaveBeenCalledWith(
     "/home",
     "/home/instances/local",
+  );
+});
+
+test("reports separate stage timings for a runtime lookup", async () => {
+  const timings: RuntimeLookupTimings[] = [];
+  vi.mocked(readByokEnvironment).mockImplementation(async () => {
+    await delay(5);
+    return undefined;
+  });
+  vi.mocked(managedRuntimeEnvironment).mockImplementation(async () => {
+    await delay(10);
+    return { LINGER_PI_PATH: "/probed/pi" };
+  });
+  vi.mocked(localmodelsComputerTool).mockImplementation(async () => {
+    await delay(5);
+    return undefined as never;
+  });
+
+  await instanceRuntime("/home", "local", {
+    onTimings: (value) => timings.push(value),
+  });
+
+  expect(timings).toHaveLength(1);
+  expect(Object.keys(timings[0]!)).toEqual([
+    "config",
+    "runtime",
+    "localModels",
+    "tool",
+    "total",
+  ]);
+  expect(timings[0]!.config).toBeGreaterThanOrEqual(4);
+  expect(timings[0]!.runtime).toBeGreaterThanOrEqual(9);
+  expect(timings[0]!.tool).toBeGreaterThanOrEqual(4);
+  expect(timings[0]!.total).toBeGreaterThanOrEqual(timings[0]!.runtime);
+});
+
+test("formats runtime lookup timings as one log line", () => {
+  expect(
+    formatRuntimeLookupTimings("desktop", {
+      config: 1,
+      runtime: 2,
+      localModels: 3,
+      tool: 4,
+      total: 10,
+    }),
+  ).toBe(
+    "Runtime lookup timings (ms) for desktop: config=1 runtime=2 localModels=3 tool=4 total=10\n",
   );
 });
