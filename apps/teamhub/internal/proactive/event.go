@@ -139,7 +139,7 @@ func (s *Service) HandleEvent(ctx context.Context, event Event) (Outcome, error)
 		return Outcome{}, ErrNoJudge
 	}
 	// The account label lets the Agent tell the Human which mailbox; the
-	// connection ID alone still selects it when the label is gone.
+	// connection ID stands in for it when the connection has none.
 	accountLabel, err := queries.GetExternalConnectionIdentityLabel(ctx, event.Grant.ConnectionID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return Outcome{}, err
@@ -194,7 +194,7 @@ func (s *Service) HandleEvent(ctx context.Context, event Event) (Outcome, error)
 			instructions += "\n" + reminder.Prompt(reminder.EventTrackOnly, nil)
 		}
 	}
-	err = s.wake(ctx, owner, candidate, eventText(instructions+"\n"+reminder.Prompt(reminder.Arranging, nil), event, accountLabel), outcome.Skipped == "", event.Grant)
+	err = s.wake(ctx, owner, candidate, eventText(instructions+"\n"+reminder.Prompt(reminder.Arranging, nil), event, accountLabel, now), outcome.Skipped == "", event.Grant)
 	if errors.Is(err, reminder.ErrGrantRevoked) {
 		outcome.Skipped = "authorization_revoked"
 		return outcome, nil
@@ -258,29 +258,40 @@ func (s *Service) wake(ctx context.Context, owner Owner, candidate Candidate, bo
 	return tx.Commit(ctx)
 }
 
+// eventTimeLayout is how a wake writes every time: local, with its offset, so
+// times in one event compare at a glance.
+const eventTimeLayout = "2006-01-02 15:04 -07:00"
+
 // eventText fences the event and marks it as outside data, never instructions.
-// A granted event names its account so the Agent can select it with
-// --account; accountLabel is empty when the connection has none.
-func eventText(label string, event Event, accountLabel string) string {
-	facts := []string{"source: " + event.Source, "kind: " + event.Kind}
-	if event.State != "" {
-		facts = append(facts, "state: "+event.State)
-	}
-	if event.OccursAt != nil {
-		facts = append(facts, "time: "+event.OccursAt.In(time.Local).Format("2006-01-02 15:04 -07:00"))
-	}
+// The block opens with the app, the account the Agent passes to --account (the
+// connection's label, or its ID when it has none) and when TeamHub received
+// the event. The wake normally follows within minutes of receipt, so the
+// Agent can compare the event's times with it as now.
+func eventText(label string, event Event, accountLabel string, receivedAt time.Time) string {
+	lines := []string{"App: " + appName(event.Source)}
 	if event.Grant != nil {
+		account := event.Grant.ConnectionID
 		if accountLabel != "" {
-			facts = append(facts, "account: "+accountLabel)
+			account = accountLabel
 			// An Outlook label is the Microsoft account's sign-in name, which can
-			// belong to another mail provider; the account value itself stays
-			// exact so it can be passed to --account.
+			// belong to another mail provider.
 			if event.Source == reminder.ListenerOutlook || event.Source == reminder.ListenerOutlookCalendar {
-				facts = append(facts, "account note: Microsoft sign-in name, the mailbox address may differ")
+				account += " (Microsoft sign-in name; the mailbox address may differ)"
 			}
 		}
-		facts = append(facts, "connection: "+event.Grant.ConnectionID)
+		lines = append(lines, "Account: "+account)
 	}
-	return label + "\n" + strings.Join(facts, "; ") + "\n<event>\n" + strings.TrimSpace(event.Summary) +
-		"\n</event>\n" + reminder.Prompt(reminder.EventData, nil)
+	lines = append(lines, "Received: "+receivedAt.In(time.Local).Format(eventTimeLayout), strings.TrimSpace(event.Summary))
+	return label + "\n<event>\n" + strings.Join(lines, "\n") + "\n</event>\n" + reminder.Prompt(reminder.EventData, nil)
+}
+
+// ManualEventSummary is the block content of an event handed in by hand in
+// place of a connector: what changed, when it happens if it has a time, then
+// what it says.
+func ManualEventSummary(kind string, occursAt *time.Time, text string) string {
+	lines := []string{"Change: " + kind}
+	if occursAt != nil {
+		lines = append(lines, "Time: "+occursAt.In(time.Local).Format(eventTimeLayout))
+	}
+	return strings.Join(append(lines, strings.TrimSpace(text)), "\n")
 }
