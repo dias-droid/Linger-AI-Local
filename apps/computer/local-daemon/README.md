@@ -132,12 +132,25 @@ tool: `python`, `module_directory` (the sealed kit, used as `PYTHONPATH` and
 working directory), `state_directory` (`LOCALMODELS_STATE`) and
 `base_directory` (`--base-dir`). From `state_directory`, the Daemon derives
 sibling `tools` (`LOCALMODELS_TOOLS_DIR`), `bifrost`
-(`LOCALMODELS_BIFROST_DIR`), and `bifrost-addr` (`LOCALMODELS_BIFROST_ADDR`,
-preferring `<tools>/owned.json`'s `gateway.bifrost.addr` and allocating a free
-loopback port on start/apply calls when `127.0.0.1:18480` is occupied) while
-stripping inherited `LOCALMODELS_*` overrides. `packages/local-installation`
-writes it for the CLI Computer and the Desktop app for its own; a Computer
-without it, or whose interpreter is gone, reports `available: false` with
+(`LOCALMODELS_BIFROST_DIR`), and `bifrost-addr` (`LOCALMODELS_BIFROST_ADDR`).
+The Daemon prefers the address in `<tools>/owned.json`. On start and apply
+calls, it checks port availability on loopback and local interfaces before
+choosing an unowned address. The default address is `127.0.0.1:18480`.
+Gateway registration failures can rotate the unowned address for the next
+attempt.
+
+The Daemon clears inherited values for these `LOCALMODELS_*` variables before
+setting them on tool calls. If the home lacks a per-home Bifrost ownership
+record, the Daemon can locate a legacy gateway through the profile in
+`model-source.json` in local mode or the platform's default legacy tools directory.
+It checks the legacy ownership record, any local-mode gateway URL, and the
+Bifrost configuration for a provider registered by a loaded library model.
+While that verification succeeds, the tool uses the legacy gateway and
+local-mode Runtime discovery prefers its existing `gateway-home` Pi profile.
+
+`packages/local-installation` writes the `local_models` config for the CLI
+Computer. The Desktop app writes it for its own Computer. A Computer without
+this config, or whose interpreter is gone, reports `available: false` with
 `TOOL_NOT_INSTALLED`. `internal/localmodels` owns the tool calls; the Daemon
 only routes `execute` (kind `local_models`) to it and sends what it publishes.
 The Daemon executes the actions the Computer owner chose; it never picks a
@@ -212,15 +225,15 @@ model.
   exists (`byok`, `subscription`, or `local`), it isolates tool calls through
   the shared `localGatewayPiProfile` resolver (matching `OverlayEnvironment`
   for `local` mode): passing an existing managed `gateway-home/.pi/agent`
-  profile (preferring `ToolsDirectory(stateDir)` over legacy `stateDir` and an
-  explicitly configured legacy `gateway-home`), and omitting
+  profile (the verified legacy profile while models are loaded on that
+  gateway, then `ToolsDirectory(stateDir)`, `stateDir`, and an explicitly
+  configured legacy `gateway-home`), and omitting
   `PI_CODING_AGENT_DIR` otherwise so `localmodels` registers models into this
   home's `tools/gateway-home/.pi/agent` without colliding with `byok-home` or
-  personal `~/.pi/agent`. When no `model-source.json` exists yet, tool calls
-  follow `workspace.PiSourceEnvironment` on the base environment (excluding any
-  stale `byok-home`) so loaded models land in the same profile Runtime
-  discovery reads. When a model is loaded on a
-  Computer with Pi enabled and not yet installed, `internal/localmodels`
+  personal `~/.pi/agent`. Without an applicable legacy profile or
+  `model-source.json`, tool calls follow `workspace.PiSourceEnvironment`
+  on the base environment (excluding any stale `byok-home`). When a model is
+  loaded on a Computer with Pi enabled and not yet installed, `internal/localmodels`
   installs the pinned Pi runtime asynchronously in the background under
   `HarnessRoot` (passing the bundled Node binary via `--node` when available,
   matching the installer's 2 m status/plan and 20 m apply budgets, and backing

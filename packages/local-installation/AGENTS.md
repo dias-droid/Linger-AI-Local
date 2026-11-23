@@ -183,9 +183,10 @@ the `LINGER_LOCALMODELS_*` keys of the installer's instance runtime. Every
 `LOCALMODELS_BIFROST_ADDR` per installation home, stripping inherited values.
 The Bifrost address comes from `<tools>/owned.json` (`gateway.bifrost.addr`)
 when present, else `<home>/runtime/localmodels/bifrost-addr`, and on commands
-that may plan or start Bifrost defaults to `127.0.0.1:18480` when free or
-allocates and persists a free loopback port when `127.0.0.1:18480` is held by
-another process; stop and read-only calls never probe or allocate a port.
+that may plan or start Bifrost defaults to `127.0.0.1:18480` when free across
+loopback and local interfaces or allocates and persists an ephemeral port free
+across local interfaces when `18480` is held by another process; stop and
+read-only calls never probe or allocate a port.
 
 Setup sets the Computer's model source through `localmodels source apply`
 (`byok-source.ts`): BYOK after the Runtime is ready, a local model after the
