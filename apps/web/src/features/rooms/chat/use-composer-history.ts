@@ -17,14 +17,21 @@ export interface ComposerHistoryInput {
 interface HistoryBrowsing {
   entries: RoomComposerHistoryEntry[];
   index: number;
-  /** The unsent draft that stepping past the newest entry brings back. */
-  saved: RoomComposerHistoryEntry;
 }
+
+const emptyEntry: RoomComposerHistoryEntry = {
+  body: "",
+  documentReferences: [],
+  mentions: [],
+  skillReferences: [],
+};
 
 /**
  * Steps through the messages sent in one Room or Thread, as a shell steps
- * through earlier commands. Editing a recalled message makes it an ordinary
- * draft: browsing holds only while the body is the entry it showed.
+ * through earlier commands. Browsing starts only from an empty draft, so a
+ * recalled message never replaces unsent text. Editing a recalled message
+ * makes it an ordinary draft: browsing holds only while the body is the entry
+ * it showed.
  */
 export function useComposerHistory({ draft, scope }: ComposerHistoryInput) {
   const [browsing, setBrowsing] = useState<HistoryBrowsing | null>(null);
@@ -47,7 +54,7 @@ export function useComposerHistory({ draft, scope }: ComposerHistoryInput) {
    * caret movement otherwise.
    */
   function step(direction: -1 | 1, textarea: HTMLTextAreaElement) {
-    if (!scope) return false;
+    if (!scope || (!active && draft.body)) return false;
     const { selectionEnd, selectionStart, value } = textarea;
     if (selectionStart !== selectionEnd) return false;
     const offLine =
@@ -60,16 +67,7 @@ export function useComposerHistory({ draft, scope }: ComposerHistoryInput) {
       const entries = active?.entries ?? readRoomComposerHistory(scope);
       const index = (active?.index ?? entries.length) - 1;
       if (index < 0) return false;
-      setBrowsing({
-        entries,
-        index,
-        saved: active?.saved ?? {
-          body: draft.body,
-          documentReferences: draft.selectedDocumentsRef.current,
-          mentions: draft.selectedMentionsRef.current,
-          skillReferences: draft.selectedSkillsRef.current,
-        },
-      });
+      setBrowsing({ entries, index });
       show(entries[index]!);
       return true;
     }
@@ -78,7 +76,7 @@ export function useComposerHistory({ draft, scope }: ComposerHistoryInput) {
     const index = active.index + 1;
     if (index >= active.entries.length) {
       setBrowsing(null);
-      show(active.saved);
+      show(emptyEntry);
       return true;
     }
     setBrowsing({ ...active, index });

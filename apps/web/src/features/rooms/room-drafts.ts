@@ -10,6 +10,9 @@ const composerDraftFormat = "linger-composer-draft-v3";
 const roomComposerHistoryPrefix = "linger.room-composer-history:";
 const composerHistoryFormat = "linger-composer-history-v1";
 const composerHistoryLimit = 50;
+// Pasted logs and documents stay out of history, so a scope holds at most
+// about 100K characters and history cannot crowd drafts out of storage.
+const composerHistoryEntryMaxLength = 2_000;
 
 export interface RoomDraftScope {
   accountId: string;
@@ -171,24 +174,32 @@ export function readRoomComposerHistory(
   }
 }
 
-/** Records a sent message; repeating the latest one adds nothing. */
+/**
+ * Records a sent message. Repeating the latest one, or a message longer than
+ * history keeps, adds nothing.
+ */
 export function appendRoomComposerHistory(
   scope: RoomDraftScope,
   entry: RoomComposerHistoryEntry,
 ) {
-  if (!entry.body.trim()) return;
+  if (!entry.body.trim() || entry.body.length > composerHistoryEntryMaxLength) {
+    return;
+  }
   const entries = readRoomComposerHistory(scope);
   if (entries.at(-1)?.body === entry.body) return;
-  try {
-    resolveLocalStorage()?.setItem(
-      roomScopeKey(roomComposerHistoryPrefix, scope),
-      JSON.stringify({
-        entries: [...entries, entry].slice(-composerHistoryLimit),
-        format: composerHistoryFormat,
-      }),
-    );
-  } catch {
-    // Without browser storage the composer simply has no history.
+  let kept = [...entries, entry].slice(-composerHistoryLimit);
+  while (kept.length) {
+    try {
+      resolveLocalStorage()?.setItem(
+        roomScopeKey(roomComposerHistoryPrefix, scope),
+        JSON.stringify({ entries: kept, format: composerHistoryFormat }),
+      );
+      return;
+    } catch {
+      // A full storage quota drops the older half rather than the new
+      // message; without browser storage the composer has no history.
+      kept = kept.slice(Math.ceil(kept.length / 2));
+    }
   }
 }
 

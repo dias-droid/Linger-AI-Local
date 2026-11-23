@@ -2104,12 +2104,11 @@ describe("MessageComposer history", () => {
     editor.setSelectionRange(offset, offset);
   }
 
-  it("steps through sent messages and brings the unsent draft back", async () => {
+  it("steps through sent messages from an empty draft and back to empty", async () => {
     render(<MessageComposer historyScope={historyScope()} onSend={vi.fn()} />);
     const editor = screen.getByLabelText<HTMLTextAreaElement>("Message Room");
     await sendText(editor, "First message");
     await sendText(editor, "Second message");
-    fireEvent.change(editor, { target: { value: "Unsent" } });
 
     fireEvent.keyDown(editor, { key: "ArrowUp" });
     expect(editor).toHaveValue("Second message");
@@ -2126,6 +2125,19 @@ describe("MessageComposer history", () => {
     fireEvent.keyDown(editor, { key: "ArrowDown" });
     expect(editor).toHaveValue("Second message");
     fireEvent.keyDown(editor, { key: "ArrowDown" });
+    expect(editor).toHaveValue("");
+    expect(screen.queryByText(/^History/)).not.toBeInTheDocument();
+  });
+
+  it("never replaces unsent text with a recalled message", async () => {
+    render(<MessageComposer historyScope={historyScope()} onSend={vi.fn()} />);
+    const editor = screen.getByLabelText<HTMLTextAreaElement>("Message Room");
+    await sendText(editor, "Sent");
+
+    fireEvent.change(editor, { target: { value: "Unsent" } });
+    caretAt(editor, 3);
+    fireEvent.keyDown(editor, { key: "ArrowUp" });
+
     expect(editor).toHaveValue("Unsent");
     expect(screen.queryByText(/^History/)).not.toBeInTheDocument();
   });
@@ -2143,7 +2155,7 @@ describe("MessageComposer history", () => {
     expect(editor).toHaveValue("Recalled, edited");
   });
 
-  it("keeps arrows for the caret inside a multiline draft and for an open picker", async () => {
+  it("keeps arrows for the caret inside a multiline recalled message and for an open picker", async () => {
     const alice = {
       display_name: "Alice",
       id: "actor-alice",
@@ -2159,14 +2171,19 @@ describe("MessageComposer history", () => {
     );
     const editor = screen.getByLabelText<HTMLTextAreaElement>("Message Room");
     await sendText(editor, "Sent");
+    await sendText(editor, "Line one\nLine two");
 
-    fireEvent.change(editor, { target: { value: "Line one\nLine two" } });
+    fireEvent.keyDown(editor, { key: "ArrowUp" });
+    expect(editor).toHaveValue("Line one\nLine two");
     caretAt(editor, "Line one\nLi".length);
     fireEvent.keyDown(editor, { key: "ArrowUp" });
     expect(editor).toHaveValue("Line one\nLine two");
     caretAt(editor, 2);
     fireEvent.keyDown(editor, { key: "ArrowDown" });
     expect(editor).toHaveValue("Line one\nLine two");
+    caretAt(editor, 2);
+    fireEvent.keyDown(editor, { key: "ArrowUp" });
+    expect(editor).toHaveValue("Sent");
 
     fireEvent.change(editor, { target: { selectionStart: 1, value: "@" } });
     expect(screen.getByRole("option", { name: /Alice/ })).toBeVisible();

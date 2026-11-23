@@ -101,6 +101,33 @@ describe("Room drafts", () => {
     );
   });
 
+  it("leaves long messages out of history and drops older entries when storage is full", () => {
+    appendRoomComposerHistory(firstRoom, historyEntry("x".repeat(2_001)));
+    expect(readRoomComposerHistory(firstRoom)).toEqual([]);
+
+    for (let index = 1; index <= 8; index += 1) {
+      appendRoomComposerHistory(firstRoom, historyEntry(`message ${index}`));
+    }
+    const storage = window.localStorage;
+    const setItem = storage.setItem.bind(storage);
+    const full = vi
+      .spyOn(storage, "setItem")
+      .mockImplementation((key, value) => {
+        // Room for only a handful of entries is left.
+        if (value.length > 400) {
+          throw new DOMException("Quota exceeded", "QuotaExceededError");
+        }
+        setItem(key, value);
+      });
+
+    appendRoomComposerHistory(firstRoom, historyEntry("newest"));
+    full.mockRestore();
+
+    const bodies = readRoomComposerHistory(firstRoom).map(({ body }) => body);
+    expect(bodies.at(-1)).toBe("newest");
+    expect(bodies.length).toBeLessThan(9);
+  });
+
   it("round-trips structured Composer references", () => {
     const draft = {
       documentContexts: [],
