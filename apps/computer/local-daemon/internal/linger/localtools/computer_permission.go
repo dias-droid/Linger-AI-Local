@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os/exec"
 	"sync"
+	"time"
 )
 
 // macOS privacy permission vocabulary of ComputerPermissionStatus.
@@ -137,14 +138,24 @@ type ComputerPermissions struct {
 	// for. check_permissions reports only granted or not, and macOS shows each
 	// prompt once, so a permission still missing after its prompt is denied.
 	cuaPrompted map[string]bool
+	// cuaRestartedAt is when the shared CuaDriver service was last restarted
+	// to pick up a Screen Recording grant.
+	cuaRestartedAt time.Time
+	// now reads the clock; tests replace it to drive the restart interval.
+	now func() time.Time
 }
+
+// cuaRestartInterval bounds how often a denied CuaDriver reading may restart
+// the shared service. A permission card polls status while a Run may be using
+// that service, so an unthrottled restart kills the Run's calls.
+const cuaRestartInterval = 30 * time.Second
 
 // NewComputerPermissions returns the Computer's permission service.
 func NewComputerPermissions(options ComputerPermissionOptions) *ComputerPermissions {
 	if options.Open == nil {
 		options.Open = openURL
 	}
-	return &ComputerPermissions{options: options, cuaPrompted: map[string]bool{}}
+	return &ComputerPermissions{options: options, cuaPrompted: map[string]bool{}, now: time.Now}
 }
 
 func openURL(ctx context.Context, url string) error {
@@ -191,7 +202,7 @@ func (p *ComputerPermissions) ComputerPermission(ctx context.Context, action, su
 	}
 	status.Subjects = append(status.Subjects, lingerGroup(linger, answered))
 	if cua == nil {
-		cua = p.cuaStatus(ctx)
+		cua = p.cuaStatus(ctx, linger, answered)
 	}
 	status.Subjects = append(status.Subjects, p.cuaGroup(cua))
 	return status, nil
@@ -338,7 +349,7 @@ func (p *ComputerPermissions) cuaAction(ctx context.Context, action, permission 
 }
 
 // cuaStatus reads CuaDriver's permissions, or nil when it is unavailable.
-func (p *ComputerPermissions) cuaStatus(ctx context.Context) *CuaPermissionReading {
+func (p *ComputerPermissions) cuaStatus(ctx context.Context, linger []LingerPermission, lingerAnswered bool) *CuaPermissionReading {
 	if p.options.Cua == nil {
 		return nil
 	}
@@ -349,7 +360,8 @@ func (p *ComputerPermissions) cuaStatus(ctx context.Context) *CuaPermissionReadi
 		}
 		return nil
 	}
-	if !reading.ScreenRecording {
+	if !reading.ScreenRecording && p.cuaRestartDue(linger, lingerAnswered) {
+		p.cuaRestartedAt = p.now()
 		// CuaDriver caches its Screen Recording preflight for the life of
 		// the process, so only a new process sees a grant made since.
 		if err := p.options.Cua.RestartCua(); err != nil {
@@ -357,6 +369,28 @@ func (p *ComputerPermissions) cuaStatus(ctx context.Context) *CuaPermissionReadi
 		}
 	}
 	return &reading
+}
+
+// cuaRestartDue reports whether a denied CuaDriver reading is the stale grant
+// a restart can clear. Without a grant in the Desktop app or a prompt from this
+// process, another restart only kills the shared service under a running call.
+func (p *ComputerPermissions) cuaRestartDue(linger []LingerPermission, lingerAnswered bool) bool {
+	if p.now().Sub(p.cuaRestartedAt) < cuaRestartInterval {
+		return false
+	}
+	if p.cuaPrompted[PermissionScreenRecording] {
+		return true
+	}
+	if !lingerAnswered {
+		return false
+	}
+	for _, permission := range linger {
+		if permission.ID == PermissionScreenRecording &&
+			permission.State == permissionGranted {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *ComputerPermissions) cuaGroup(reading *CuaPermissionReading) ComputerPermissionGroup {
