@@ -50,7 +50,10 @@ later, without counting it as a failed try. A Computer before release 0.53.0
 cannot stop one call, so there the waiting work waits for it. Otherwise the
 work asks the lowest-priority running Run below it on that endpoint or
 Computer to yield. A recording question can swap out a chat, a chat can swap
-out a routine, and any conversation Run can swap out a Task. Work of one
+out a routine, and any conversation Run can swap out a Task. Routines and
+proactive Runs rank above Tasks on purpose: a routine that comes due or a
+reminder the user asked for runs on time instead of waiting for a long Task,
+and the Task gives up its current turn for it. Work of one
 priority never swaps out its own kind. A Run can yield once the Runtime has a
 resumable native session. On Codex, the Run must also have produced model
 output, its thinking included, or a tool event so that its original input is

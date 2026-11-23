@@ -985,7 +985,7 @@ components:
           type: boolean
         has_pending_work:
           type: boolean
-        queued_run_origins:
+        next_run_origins:
           type: array
           description: >-
             Distinct scheduling metadata of the initial inputs of every

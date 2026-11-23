@@ -447,7 +447,7 @@ describe("TeamHub Context Runtime state", () => {
     const getWorkState = vi.fn(async () => ({
       has_queued_runs: true,
       has_pending_work: true,
-      queued_run_origins: origins,
+      next_run_origins: origins,
     }));
     const client = createTeamHubRuntimeStateClientFake({
       getWorkState,

@@ -2806,8 +2806,8 @@ type AgentRuntimeWorkState struct {
 	// MessageSteers Present on the work-state read. Steers a Message transaction queued for this Context that the Agent Service has not settled, in input order: a targeted Message for the running Run that reads its Inbox, or a native question's answer assigned to the Run that asked it.
 	MessageSteers *[]StoredAgentRuntimeInput `json:"message_steers,omitempty"`
 
-	// QueuedRunOrigins Distinct scheduling metadata of the initial inputs of every claimable queued Run. The Run claimed next serves them all, so it waits as the most urgent of them.
-	QueuedRunOrigins *[]AgentRunInputOrigin `json:"queued_run_origins,omitempty"`
+	// NextRunOrigins Distinct scheduling metadata of the initial inputs of every claimable queued Run. The Run claimed next serves them all, so it waits as the most urgent of them.
+	NextRunOrigins *[]AgentRunInputOrigin `json:"next_run_origins,omitempty"`
 }
 
 // AgentRuntimeWorkingStatusChangedEvent defines model for AgentRuntimeWorkingStatusChangedEvent.

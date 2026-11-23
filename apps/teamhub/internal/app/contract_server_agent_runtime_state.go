@@ -444,7 +444,7 @@ func (a *App) getAgentRuntimeWorkState(c *gin.Context) {
 		})
 	}
 	c.JSON(http.StatusOK, teamhubinternal.AgentRuntimeWorkState{
-		HasPendingWork: pending, HasQueuedRuns: len(origins) > 0, QueuedRunOrigins: &origins, MessageSteers: &messageSteers,
+		HasPendingWork: pending, HasQueuedRuns: len(origins) > 0, NextRunOrigins: &origins, MessageSteers: &messageSteers,
 	})
 }
 

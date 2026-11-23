@@ -753,7 +753,7 @@ class TeamHubContextRuntimeState implements ContextRuntimeStatePort {
   async queuedMetaKind(signal: AbortSignal): Promise<RunKind> {
     if (this.#queuedKind) return this.#queuedKind;
     const state = await this.#client.getWorkState(this.#contextKey, signal);
-    return queuedMetaRunKind(state.queued_run_origins ?? []);
+    return queuedMetaRunKind(state.next_run_origins ?? []);
   }
 
   hasQueuedRuns(): boolean {
@@ -915,7 +915,7 @@ class TeamHubContextRuntimeState implements ContextRuntimeStatePort {
     const queuedMeanwhile = mark !== this.#queuedWorkMark;
     this.#queuedKind = queuedMeanwhile
       ? undefined
-      : queuedMetaRunKind(state.queued_run_origins ?? []);
+      : queuedMetaRunKind(state.next_run_origins ?? []);
     this.#hasQueuedRuns = state.has_queued_runs || queuedMeanwhile;
     this.#hasPendingWork = state.has_pending_work || queuedMeanwhile;
     const steers = (state.message_steers ?? []).flatMap((input) =>
